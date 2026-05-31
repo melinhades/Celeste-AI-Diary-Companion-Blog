@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--MyBatis配置文件-->
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Config 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.mszlu.blog.dao.mapper.TagMapper">
+
+    <sql id="all">
+        id,avatar,tag_name as tagName
+    </sql>
+    <select id="findTagsByTagIds" parameterType="list" resultType="com.mszlu.blog.dao.pojo.Tag">
+        select <include refid="all" />  from ms_tag where id in
+        <foreach collection="tagIds" item="tagId" separator="," open="(" close=")">
+            #{tagId}
+        </foreach>
+    </select>
+    <select id="findHotsTagIds" parameterType="int" resultType="string">
+        select tag_id from ms_article_tag at group by tag_id order by count(1) desc limit #{limit}
+    </select>
+    <select id="findTagsByArticleId" resultType="com.mszlu.blog.dao.pojo.Tag">
+        select t.id,t.avatar,t.tag_name as tagName from ms_tag t
+        left join ms_article_tag at on t.id = at.tag_id
+        where at.article_id = #{articleId}
+    </select>
+
+</mapper>

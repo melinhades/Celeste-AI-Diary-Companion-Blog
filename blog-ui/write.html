@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>写文章 - mszlu博客</title>
+    <link rel="stylesheet" href="css/common.css">
+    <style>
+        .write-layout { padding: 20px; max-width: 900px; margin: 0 auto; }
+        .write-title-input {
+            width: 100%; font-size: 26px; font-weight: 700; border: none; outline: none;
+            padding: 16px 0; border-bottom: 2px solid #eee; margin-bottom: 16px;
+            background: transparent; font-family: inherit; color: #222;
+        }
+        .write-title-input::placeholder { color: #ccc; }
+        .write-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; align-items: center; }
+        .toolbar-btn {
+            padding: 6px 12px; border: 1px solid #ddd; background: #fff;
+            border-radius: 6px; cursor: pointer; font-size: 13px; color: #555;
+            transition: all 0.2s;
+        }
+        .toolbar-btn:hover { border-color: #4f46e5; color: #4f46e5; background: #f8f7ff; }
+        .write-body {
+            width: 100%; min-height: 420px; padding: 16px; border: 1px solid #eee;
+            border-radius: 10px; font-size: 15px; outline: none; resize: vertical;
+            font-family: 'Courier New', monospace; line-height: 1.8; color: #444;
+            background: #fafafa; transition: border-color 0.2s;
+        }
+        .write-body:focus { border-color: #4f46e5; background: #fff; }
+        .write-meta { display: flex; gap: 16px; margin: 16px 0; flex-wrap: wrap; }
+        .write-meta select, .write-meta input {
+            padding: 9px 14px; border: 1px solid #ddd; border-radius: 8px;
+            font-size: 14px; outline: none; background: #fff; font-family: inherit;
+            transition: border-color 0.2s;
+        }
+        .write-meta select:focus, .write-meta input:focus { border-color: #4f46e5; }
+        .write-meta select { min-width: 140px; }
+        .write-meta input { flex: 1; min-width: 200px; }
+        .write-footer { display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px; padding-top: 16px; border-top: 1px solid #eee; }
+        .char-count { font-size: 12px; color: #bbb; text-align: right; margin-top: 6px; }
+    </style>
+</head>
+<body>
+<header class="header">
+    <div class="container header-inner">
+        <a href="index.html" class="logo">📝 mszlu博客</a>
+        <nav class="nav">
+            <a href="index.html" class="nav-link">首页</a>
+            <a href="archives.html" class="nav-link">归档</a>
+        </nav>
+        <div class="header-right" id="headerRight"></div>
+    </div>
+</header>
+
+<div class="container write-layout">
+    <input class="write-title-input" type="text" id="articleTitle" placeholder="请输入文章标题...">
+
+    <div class="write-meta">
+        <select id="categorySelect">
+            <option value="">选择分类</option>
+        </select>
+        <input type="text" id="tagsInput" placeholder="标签，用逗号分隔，如：Java,Spring">
+        <input type="text" id="summaryInput" placeholder="文章摘要（可选）">
+    </div>
+
+    <div class="write-toolbar">
+        <button class="toolbar-btn" onclick="insertMd('**','**')"><b>B</b></button>
+        <button class="toolbar-btn" onclick="insertMd('*','*')"><i>I</i></button>
+        <button class="toolbar-btn" onclick="insertMd('## ','')">H2</button>
+        <button class="toolbar-btn" onclick="insertMd('### ','')">H3</button>
+        <button class="toolbar-btn" onclick="insertMd('`','`')">Code</button>
+        <button class="toolbar-btn" onclick="insertMd('\n```\n','\n```\n')">代码块</button>
+        <button class="toolbar-btn" onclick="insertMd('> ','')">引用</button>
+        <button class="toolbar-btn" onclick="insertMd('[链接文字](',')')">链接</button>
+        <button class="toolbar-btn" onclick="insertMd('- ','')">列表</button>
+    </div>
+
+    <textarea class="write-body" id="articleBody" placeholder="开始写作... 支持 Markdown 格式" oninput="updateCount()"></textarea>
+    <div class="char-count" id="charCount">0 字</div>
+
+    <div class="write-footer">
+        <button class="btn btn-outline" onclick="history.back()">取消</button>
+        <button class="btn btn-primary" onclick="publishArticle()" id="publishBtn">发布文章</button>
+    </div>
+</div>
+
+<footer class="footer">
+    <div class="container">© 2024 mszlu博客 · Powered by Spring Boot</div>
+</footer>
+
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script>
+    // 未登录跳转
+    if (!localStorage.getItem('token')) {
+        showToast('请先登录', 'error');
+        setTimeout(() => location.href = 'login.html', 800);
+    }
+
+    initHeader();
+    loadCategories();
+
+    function loadCategories() {
+        api('/categorys', 'GET').then(res => {
+            if (!res.success) return;
+            const sel = document.getElementById('categorySelect');
+            (res.data || []).forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = c.categoryName || c.name;
+                sel.appendChild(opt);
+            });
+        });
+    }
+
+    function insertMd(before, after) {
+        const ta = document.getElementById('articleBody');
+        const start = ta.selectionStart, end = ta.selectionEnd;
+        const selected = ta.value.substring(start, end);
+        const replacement = before + selected + after;
+        ta.value = ta.value.substring(0, start) + replacement + ta.value.substring(end);
+        ta.focus();
+        ta.selectionStart = start + before.length;
+        ta.selectionEnd = start + before.length + selected.length;
+        updateCount();
+    }
+
+    function updateCount() {
+        const len = document.getElementById('articleBody').value.length;
+        document.getElementById('charCount').textContent = `${len} 字`;
+    }
+
+    function publishArticle() {
+        const title = document.getElementById('articleTitle').value.trim();
+        const body = document.getElementById('articleBody').value.trim();
+        const categoryId = document.getElementById('categorySelect').value;
+        const summary = document.getElementById('summaryInput').value.trim();
+        const tagsRaw = document.getElementById('tagsInput').value.trim();
+
+        if (!title) { showToast('请输入文章标题', 'error'); return; }
+        if (!body) { showToast('请输入文章内容', 'error'); return; }
+
+        const tags = tagsRaw ? tagsRaw.split(',').map(t => ({ tagName: t.trim() })).filter(t => t.tagName) : [];
+
+        const payload = {
+            title,
+            summary,
+            body: { content: body },
+            tags,
+        };
+        if (categoryId) payload.category = { id: categoryId };
+
+        const btn = document.getElementById('publishBtn');
+        btn.disabled = true; btn.textContent = '发布中...';
+
+        api('/articles/publish', 'POST', payload).then(res => {
+            btn.disabled = false; btn.textContent = '发布文章';
+            if (res.success) {
+                showToast('发布成功', 'success');
+                setTimeout(() => location.href = res.data?.id ? `article.html?id=${res.data.id}` : 'index.html', 1000);
+            } else {
+                showToast(res.msg || '发布失败', 'error');
+            }
+        });
+    }
+</script>
+</body>
+</html>

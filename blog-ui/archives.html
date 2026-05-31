@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>归档 - mszlu博客</title>
+    <link rel="stylesheet" href="css/common.css">
+    <style>
+        .archives-layout { padding: 24px 20px; }
+        .archives-title { font-size: 22px; font-weight: 700; color: #333; margin-bottom: 24px; }
+        .year-group { margin-bottom: 32px; }
+        .year-label { font-size: 20px; font-weight: 700; color: #4f46e5; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
+        .year-label::after { content: ''; flex: 1; height: 1px; background: #e8e7ff; }
+        .archive-item {
+            display: flex; align-items: center; gap: 16px;
+            padding: 12px 20px; background: #fff; border-radius: 8px;
+            margin-bottom: 8px; cursor: pointer;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+            transition: all 0.2s; border-left: 3px solid transparent;
+        }
+        .archive-item:hover { border-left-color: #4f46e5; transform: translateX(4px); }
+        .archive-date { font-size: 13px; color: #aaa; width: 80px; flex-shrink: 0; }
+        .archive-title { font-size: 15px; color: #333; flex: 1; }
+        .archive-item:hover .archive-title { color: #4f46e5; }
+        .archive-count { font-size: 12px; color: #aaa; background: #f5f5f5; padding: 2px 8px; border-radius: 10px; }
+    </style>
+</head>
+<body>
+<header class="header">
+    <div class="container header-inner">
+        <a href="index.html" class="logo">📝 mszlu博客</a>
+        <nav class="nav">
+            <a href="index.html" class="nav-link">首页</a>
+            <a href="archives.html" class="nav-link active">归档</a>
+        </nav>
+        <div class="header-right" id="headerRight"></div>
+    </div>
+</header>
+
+<div class="container archives-layout">
+    <div class="archives-title">📚 文章归档</div>
+    <div id="archiveContent"><div class="loading">加载中...</div></div>
+</div>
+
+<footer class="footer">
+    <div class="container">© 2024 mszlu博客 · Powered by Spring Boot</div>
+</footer>
+
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script>
+    initHeader();
+
+    api('/articles/listArchives', 'POST').then(res => {
+        if (!res.success || !res.data || res.data.length === 0) {
+            document.getElementById('archiveContent').innerHTML = '<div class="empty">暂无归档</div>';
+            return;
+        }
+
+        // 按年份分组
+        const groups = {};
+        res.data.forEach(item => {
+            const year = item.year || (item.createDate ? new Date(item.createDate).getFullYear() : '未知');
+            if (!groups[year]) groups[year] = [];
+            groups[year].push(item);
+        });
+
+        const years = Object.keys(groups).sort((a, b) => b - a);
+        let html = '';
+        years.forEach(year => {
+            const items = groups[year];
+            html += `<div class="year-group">
+                <div class="year-label">${year} 年 <span class="archive-count">${items.length} 篇</span></div>`;
+            items.forEach(item => {
+                const month = item.month ? String(item.month).padStart(2, '0') : '';
+                html += `<div class="archive-item" onclick="location.href='article.html?id=${item.id}'">
+                    <span class="archive-date">${month ? year + '-' + month : formatDate(item.createDate)}</span>
+                    <span class="archive-title">${escHtml(item.title)}</span>
+                </div>`;
+            });
+            html += '</div>';
+        });
+        document.getElementById('archiveContent').innerHTML = html;
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - mszlu博客</title>
+    <link rel="stylesheet" href="css/common.css">
+    <style>
+        body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .login-box { background: #fff; border-radius: 14px; padding: 48px 40px; width: 400px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+        .login-box h2 { text-align: center; font-size: 24px; color: #333; margin-bottom: 6px; }
+        .login-box p { text-align: center; color: #999; font-size: 14px; margin-bottom: 32px; }
+        .login-box .btn { width: 100%; padding: 13px; font-size: 15px; margin-top: 4px; }
+        .login-footer { text-align: center; margin-top: 20px; font-size: 14px; color: #888; }
+        .login-footer a { color: #4f46e5; }
+    </style>
+</head>
+<body>
+<div class="login-box">
+    <h2>欢迎回来</h2>
+    <p>登录你的 mszlu 博客账号</p>
+    <div class="form-group">
+        <label>账号</label>
+        <input class="form-control" type="text" id="account" placeholder="请输入账号" autofocus>
+    </div>
+    <div class="form-group">
+        <label>密码</label>
+        <input class="form-control" type="password" id="password" placeholder="请输入密码" onkeyup="if(event.key==='Enter')doLogin()">
+    </div>
+    <div class="form-error" id="errMsg"></div>
+    <button class="btn btn-primary" onclick="doLogin()" id="loginBtn">登 录</button>
+    <div class="login-footer">还没有账号？<a href="register.html">立即注册</a></div>
+</div>
+<script src="js/api.js"></script>
+<script>
+    // 已登录直接跳首页
+    if (localStorage.getItem('token')) location.href = 'index.html';
+
+    function doLogin() {
+        const account = document.getElementById('account').value.trim();
+        const password = document.getElementById('password').value.trim();
+        const errEl = document.getElementById('errMsg');
+        errEl.style.display = 'none';
+        if (!account) { showErr('请输入账号'); return; }
+        if (!password) { showErr('请输入密码'); return; }
+
+        const btn = document.getElementById('loginBtn');
+        btn.disabled = true; btn.textContent = '登录中...';
+
+        api('/login', 'POST', { account, password }).then(res => {
+            btn.disabled = false; btn.textContent = '登 录';
+            if (res.success) {
+                localStorage.setItem('token', res.data.token);
+                localStorage.setItem('nickname', res.data.nickname || account);
+                showToast('登录成功', 'success');
+                setTimeout(() => location.href = 'index.html', 800);
+            } else {
+                showErr(res.msg || '账号或密码错误');
+            }
+        });
+    }
+
+    function showErr(msg) {
+        const el = document.getElementById('errMsg');
+        el.textContent = msg; el.style.display = 'block';
+    }
+</script>
+</body>
+</html>

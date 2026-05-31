@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>注册 - mszlu博客</title>
+    <link rel="stylesheet" href="css/common.css">
+    <style>
+        body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .register-box { background: #fff; border-radius: 14px; padding: 48px 40px; width: 400px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+        .register-box h2 { text-align: center; font-size: 24px; color: #333; margin-bottom: 6px; }
+        .register-box p { text-align: center; color: #999; font-size: 14px; margin-bottom: 32px; }
+        .register-box .btn { width: 100%; padding: 13px; font-size: 15px; margin-top: 4px; }
+        .register-footer { text-align: center; margin-top: 20px; font-size: 14px; color: #888; }
+        .register-footer a { color: #4f46e5; }
+    </style>
+</head>
+<body>
+<div class="register-box">
+    <h2>创建账号</h2>
+    <p>加入 mszlu 博客社区</p>
+    <div class="form-group">
+        <label>账号</label>
+        <input class="form-control" type="text" id="account" placeholder="请输入账号（字母/数字）" autofocus>
+    </div>
+    <div class="form-group">
+        <label>密码</label>
+        <input class="form-control" type="password" id="password" placeholder="请输入密码（至少6位）">
+    </div>
+    <div class="form-group">
+        <label>确认密码</label>
+        <input class="form-control" type="password" id="password2" placeholder="再次输入密码" onkeyup="if(event.key==='Enter')doRegister()">
+    </div>
+    <div class="form-error" id="errMsg"></div>
+    <button class="btn btn-primary" onclick="doRegister()" id="regBtn">注 册</button>
+    <div class="register-footer">已有账号？<a href="login.html">立即登录</a></div>
+</div>
+<script src="js/api.js"></script>
+<script>
+    if (localStorage.getItem('token')) location.href = 'index.html';
+
+    function doRegister() {
+        const account = document.getElementById('account').value.trim();
+        const password = document.getElementById('password').value.trim();
+        const password2 = document.getElementById('password2').value.trim();
+        document.getElementById('errMsg').style.display = 'none';
+
+        if (!account) { showErr('请输入账号'); return; }
+        if (account.length < 3) { showErr('账号至少3个字符'); return; }
+        if (!password) { showErr('请输入密码'); return; }
+        if (password.length < 6) { showErr('密码至少6位'); return; }
+        if (password !== password2) { showErr('两次密码不一致'); return; }
+
+        const btn = document.getElementById('regBtn');
+        btn.disabled = true; btn.textContent = '注册中...';
+
+        api('/register', 'POST', { account, password }).then(res => {
+            btn.disabled = false; btn.textContent = '注 册';
+            if (res.success) {
+                showToast('注册成功，请登录', 'success');
+                setTimeout(() => location.href = 'login.html', 1000);
+            } else {
+                showErr(res.msg || '注册失败，账号可能已存在');
+            }
+        });
+    }
+
+    function showErr(msg) {
+        const el = document.getElementById('errMsg');
+        el.textContent = msg; el.style.display = 'block';
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>博客管理后台</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; color: #333; }
+
+        /* 顶部导航 */
+        .header {
+            background: #fff;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+            position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+        }
+        .header .logo { font-size: 18px; font-weight: 600; color: #667eea; }
+        .header .user-info { display: flex; align-items: center; gap: 16px; font-size: 14px; color: #666; }
+        .btn-logout {
+            padding: 6px 16px; background: #fff; border: 1px solid #ddd;
+            border-radius: 6px; cursor: pointer; font-size: 13px; color: #666;
+            transition: all 0.2s;
+        }
+        .btn-logout:hover { border-color: #e74c3c; color: #e74c3c; }
+
+        /* 侧边栏 */
+        .sidebar {
+            width: 200px; background: #fff; position: fixed;
+            top: 56px; left: 0; bottom: 0;
+            box-shadow: 1px 0 4px rgba(0,0,0,0.06);
+            padding: 16px 0;
+        }
+        .nav-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 12px 24px; cursor: pointer; font-size: 14px; color: #555;
+            transition: all 0.2s; border-left: 3px solid transparent;
+        }
+        .nav-item:hover { background: #f5f7ff; color: #667eea; }
+        .nav-item.active { background: #f5f7ff; color: #667eea; border-left-color: #667eea; font-weight: 500; }
+        .nav-icon { font-size: 16px; }
+
+        /* 主内容区 */
+        .main { margin-left: 200px; margin-top: 56px; padding: 24px; min-height: calc(100vh - 56px); }
+
+        /* 页面标题 */
+        .page-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .page-title { font-size: 20px; font-weight: 600; color: #333; }
+
+        /* 卡片 */
+        .card {
+            background: #fff; border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06); padding: 20px;
+        }
+
+        /* 搜索栏 */
+        .search-bar { display: flex; gap: 12px; margin-bottom: 20px; }
+        .search-bar input {
+            flex: 1; max-width: 300px; padding: 9px 14px;
+            border: 1px solid #ddd; border-radius: 7px; font-size: 14px; outline: none;
+            transition: border-color 0.2s;
+        }
+        .search-bar input:focus { border-color: #667eea; }
+
+        /* 按钮 */
+        .btn {
+            padding: 9px 18px; border: none; border-radius: 7px;
+            font-size: 14px; cursor: pointer; transition: all 0.2s;
+        }
+        .btn-primary { background: #667eea; color: #fff; }
+        .btn-primary:hover { background: #5a6fd6; }
+        .btn-success { background: #27ae60; color: #fff; }
+        .btn-success:hover { background: #219a52; }
+        .btn-danger { background: #fff; color: #e74c3c; border: 1px solid #e74c3c; padding: 5px 12px; font-size: 13px; }
+        .btn-danger:hover { background: #e74c3c; color: #fff; }
+        .btn-edit { background: #fff; color: #667eea; border: 1px solid #667eea; padding: 5px 12px; font-size: 13px; }
+        .btn-edit:hover { background: #667eea; color: #fff; }
+
+        /* 表格 */
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #fafafa; padding: 12px 16px; text-align: left; font-size: 13px; color: #888; font-weight: 500; border-bottom: 1px solid #f0f0f0; }
+        td { padding: 14px 16px; font-size: 14px; border-bottom: 1px solid #f5f5f5; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: #fafbff; }
+
+        /* 分页 */
+        .pagination { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+        .page-btn {
+            width: 32px; height: 32px; border: 1px solid #ddd; background: #fff;
+            border-radius: 6px; cursor: pointer; font-size: 13px; display: flex;
+            align-items: center; justify-content: center; transition: all 0.2s;
+        }
+        .page-btn:hover, .page-btn.active { background: #667eea; color: #fff; border-color: #667eea; }
+        .page-info { font-size: 13px; color: #888; }
+
+        /* 弹窗 */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.4); z-index: 200;
+            align-items: center; justify-content: center;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal {
+            background: #fff; border-radius: 12px; padding: 28px 32px;
+            width: 480px; box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+        }
+        .modal h3 { font-size: 17px; margin-bottom: 24px; color: #333; }
+        .form-group { margin-bottom: 18px; }
+        .form-group label { display: block; font-size: 13px; color: #666; margin-bottom: 6px; }
+        .form-group input, .form-group textarea {
+            width: 100%; padding: 10px 14px; border: 1px solid #ddd;
+            border-radius: 7px; font-size: 14px; outline: none; transition: border-color 0.2s;
+            font-family: inherit;
+        }
+        .form-group input:focus, .form-group textarea:focus { border-color: #667eea; }
+        .form-group textarea { resize: vertical; min-height: 80px; }
+        .modal-footer { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }
+        .btn-cancel { background: #f5f5f5; color: #666; }
+        .btn-cancel:hover { background: #eee; }
+
+        /* 提示 */
+        .toast {
+            position: fixed; top: 72px; right: 24px; z-index: 300;
+            padding: 12px 20px; border-radius: 8px; font-size: 14px;
+            color: #fff; box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+            transform: translateX(120%); transition: transform 0.3s;
+        }
+        .toast.show { transform: translateX(0); }
+        .toast.success { background: #27ae60; }
+        .toast.error { background: #e74c3c; }
+
+        /* 空状态 */
+        .empty { text-align: center; padding: 48px; color: #bbb; font-size: 14px; }
+
+        /* 加载 */
+        .loading { text-align: center; padding: 32px; color: #aaa; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+<!-- 顶部导航 -->
+<div class="header">
+    <div class="logo">📝 博客管理后台</div>
+    <div class="user-info">
+        <span>欢迎，管理员</span>
+        <button class="btn-logout" onclick="logout()">退出登录</button>
+    </div>
+</div>
+
+<!-- 侧边栏 -->
+<div class="sidebar">
+    <div class="nav-item active" onclick="showPage('permission')">
+        <span class="nav-icon">🔑</span> 权限管理
+    </div>
+</div>
+
+<!-- 主内容 -->
+<div class="main">
+    <!-- 权限管理页 -->
+    <div id="page-permission">
+        <div class="page-header">
+            <div class="page-title">权限管理</div>
+            <button class="btn btn-primary" onclick="openAddModal()">+ 新增权限</button>
+        </div>
+        <div class="card">
+            <div class="search-bar">
+                <input type="text" id="searchInput" placeholder="搜索权限名称..." onkeyup="onSearchKeyup(event)">
+                <button class="btn btn-primary" onclick="loadPermissions(1)">搜索</button>
+                <button class="btn btn-cancel btn" onclick="clearSearch()">重置</button>
+            </div>
+            <div id="tableContainer">
+                <div class="loading">加载中...</div>
+            </div>
+            <div class="pagination" id="pagination"></div>
+        </div>
+    </div>
+</div>
+
+<!-- 新增/编辑弹窗 -->
+<div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+        <h3 id="modalTitle">新增权限</h3>
+        <div class="form-group">
+            <label>权限名称 <span style="color:#e74c3c">*</span></label>
+            <input type="text" id="fieldName" placeholder="如：查看文章">
+        </div>
+        <div class="form-group">
+            <label>权限路径 <span style="color:#e74c3c">*</span></label>
+            <input type="text" id="fieldPath" placeholder="如：/article/list">
+        </div>
+        <div class="form-group">
+            <label>描述</label>
+            <textarea id="fieldDesc" placeholder="权限描述（可选）"></textarea>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-cancel" onclick="closeModal()">取消</button>
+            <button class="btn btn-primary" onclick="submitForm()">确认</button>
+        </div>
+    </div>
+</div>
+
+<!-- 提示 -->
+<div class="toast" id="toast"></div>
+
+<script>
+    const PAGE_SIZE = 10;
+    let currentPage = 1;
+    let totalPages = 1;
+    let editingId = null;
+
+    // 初始化
+    loadPermissions(1);
+
+    function loadPermissions(page) {
+        currentPage = page;
+        const query = document.getElementById('searchInput').value.trim();
+        document.getElementById('tableContainer').innerHTML = '<div class="loading">加载中...</div>';
+
+        fetch('/permission/permissionList', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ currentPage: page, pageSize: PAGE_SIZE, queryString: query })
+        })
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                renderTable(res.data.list);
+                renderPagination(res.data.total);
+            } else {
+                showToast(res.msg || '加载失败', 'error');
+                document.getElementById('tableContainer').innerHTML = '<div class="empty">加载失败，请刷新重试</div>';
+            }
+        })
+        .catch(() => {
+            showToast('网络错误', 'error');
+            document.getElementById('tableContainer').innerHTML = '<div class="empty">网络错误，请刷新重试</div>';
+        });
+    }
+
+    function renderTable(list) {
+        if (!list || list.length === 0) {
+            document.getElementById('tableContainer').innerHTML = '<div class="empty">暂无数据</div>';
+            return;
+        }
+        let html = `<table>
+            <thead><tr>
+                <th>ID</th><th>权限名称</th><th>权限路径</th><th>描述</th><th>操作</th>
+            </tr></thead><tbody>`;
+        list.forEach(item => {
+            html += `<tr>
+                <td>${item.id}</td>
+                <td>${escHtml(item.name)}</td>
+                <td><code style="background:#f5f5f5;padding:2px 6px;border-radius:4px;font-size:13px">${escHtml(item.path)}</code></td>
+                <td>${escHtml(item.description || '-')}</td>
+                <td style="display:flex;gap:8px">
+                    <button class="btn btn-edit" onclick="openEditModal(${item.id},'${escAttr(item.name)}','${escAttr(item.path)}','${escAttr(item.description||'')}')">编辑</button>
+                    <button class="btn btn-danger" onclick="deletePermission(${item.id})">删除</button>
+                </td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+        document.getElementById('tableContainer').innerHTML = html;
+    }
+
+    function renderPagination(total) {
+        totalPages = Math.ceil(total / PAGE_SIZE) || 1;
+        const el = document.getElementById('pagination');
+        if (totalPages <= 1) { el.innerHTML = `<span class="page-info">共 ${total} 条</span>`; return; }
+
+        let html = `<span class="page-info">共 ${total} 条</span>`;
+        html += `<button class="page-btn" onclick="loadPermissions(${Math.max(1,currentPage-1)})" ${currentPage===1?'disabled':''}>‹</button>`;
+        for (let i = 1; i <= totalPages; i++) {
+            if (totalPages > 7 && i > 2 && i < totalPages - 1 && Math.abs(i - currentPage) > 1) {
+                if (i === 3 || i === totalPages - 2) html += `<span style="padding:0 4px;color:#aaa">…</span>`;
+                continue;
+            }
+            html += `<button class="page-btn ${i===currentPage?'active':''}" onclick="loadPermissions(${i})">${i}</button>`;
+        }
+        html += `<button class="page-btn" onclick="loadPermissions(${Math.min(totalPages,currentPage+1)})" ${currentPage===totalPages?'disabled':''}>›</button>`;
+        el.innerHTML = html;
+    }
+
+    function openAddModal() {
+        editingId = null;
+        document.getElementById('modalTitle').textContent = '新增权限';
+        document.getElementById('fieldName').value = '';
+        document.getElementById('fieldPath').value = '';
+        document.getElementById('fieldDesc').value = '';
+        document.getElementById('modalOverlay').classList.add('show');
+        document.getElementById('fieldName').focus();
+    }
+
+    function openEditModal(id, name, path, desc) {
+        editingId = id;
+        document.getElementById('modalTitle').textContent = '编辑权限';
+        document.getElementById('fieldName').value = name;
+        document.getElementById('fieldPath').value = path;
+        document.getElementById('fieldDesc').value = desc;
+        document.getElementById('modalOverlay').classList.add('show');
+        document.getElementById('fieldName').focus();
+    }
+
+    function closeModal() {
+        document.getElementById('modalOverlay').classList.remove('show');
+    }
+
+    function submitForm() {
+        const name = document.getElementById('fieldName').value.trim();
+        const path = document.getElementById('fieldPath').value.trim();
+        const description = document.getElementById('fieldDesc').value.trim();
+
+        if (!name) { showToast('请输入权限名称', 'error'); return; }
+        if (!path) { showToast('请输入权限路径', 'error'); return; }
+
+        const url = editingId ? '/permission/update' : '/permission/add';
+        const body = editingId ? { id: editingId, name, path, description } : { name, path, description };
+
+        fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        })
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                showToast(editingId ? '更新成功' : '新增成功', 'success');
+                closeModal();
+                loadPermissions(editingId ? currentPage : 1);
+            } else {
+                showToast(res.msg || '操作失败', 'error');
+            }
+        })
+        .catch(() => showToast('网络错误', 'error'));
+    }
+
+    function deletePermission(id) {
+        if (!confirm('确定要删除该权限吗？')) return;
+        fetch(`/permission/delete/${id}`)
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                showToast('删除成功', 'success');
+                loadPermissions(currentPage);
+            } else {
+                showToast(res.msg || '删除失败', 'error');
+            }
+        })
+        .catch(() => showToast('网络错误', 'error'));
+    }
+
+    function clearSearch() {
+        document.getElementById('searchInput').value = '';
+        loadPermissions(1);
+    }
+
+    function onSearchKeyup(e) {
+        if (e.key === 'Enter') loadPermissions(1);
+    }
+
+    function logout() {
+        if (confirm('确定退出登录？')) {
+            fetch('/logout', { method: 'POST' }).finally(() => location.href = '/login.html');
+        }
+    }
+
+    function showToast(msg, type) {
+        const el = document.getElementById('toast');
+        el.textContent = msg;
+        el.className = `toast ${type} show`;
+        setTimeout(() => el.classList.remove('show'), 2500);
+    }
+
+    // 点击遮罩关闭弹窗
+    document.getElementById('modalOverlay').addEventListener('click', function(e) {
+        if (e.target === this) closeModal();
+    });
+
+    function escHtml(str) {
+        return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    function escAttr(str) {
+        return String(str).replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    }
+</script>
+</body>
+</html>

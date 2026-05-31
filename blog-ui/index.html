@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>mszlu 博客</title>
+    <link rel="stylesheet" href="css/common.css">
+    <link rel="stylesheet" href="css/index.css">
+</head>
+<body>
+<!-- 顶部导航 -->
+<header class="header">
+    <div class="container header-inner">
+        <a href="index.html" class="logo">📝 mszlu博客</a>
+        <nav class="nav">
+            <a href="index.html" class="nav-link active">首页</a>
+            <a href="archives.html" class="nav-link">归档</a>
+        </nav>
+        <div class="header-right" id="headerRight">
+            <a href="login.html" class="btn btn-outline">登录</a>
+            <a href="register.html" class="btn btn-primary">注册</a>
+        </div>
+    </div>
+</header>
+
+<div class="container main-layout">
+    <!-- 左侧文章列表 -->
+    <main class="content">
+        <!-- 分类筛选 -->
+        <div class="filter-bar" id="categoryBar">
+            <span class="filter-item active" data-id="">全部</span>
+        </div>
+
+        <div id="articleList"><div class="loading">加载中...</div></div>
+
+        <div class="pagination" id="pagination"></div>
+    </main>
+
+    <!-- 右侧边栏 -->
+    <aside class="sidebar">
+        <!-- 热门文章 -->
+        <div class="widget">
+            <div class="widget-title">🔥 热门文章</div>
+            <div id="hotList"><div class="loading">加载中...</div></div>
+        </div>
+        <!-- 热门标签 -->
+        <div class="widget">
+            <div class="widget-title">🏷️ 热门标签</div>
+            <div class="tag-cloud" id="tagCloud"><div class="loading">加载中...</div></div>
+        </div>
+    </aside>
+</div>
+
+<footer class="footer">
+    <div class="container">© 2024 mszlu博客 · Powered by Spring Boot</div>
+</footer>
+
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script>
+    const PAGE_SIZE = 10;
+    let currentPage = 1;
+    let currentCategory = '';
+
+    // 初始化
+    initHeader();
+    loadCategories();
+    loadArticles(1);
+    loadHotArticles();
+    loadHotTags();
+
+    function loadCategories() {
+        api('/categorys', 'GET').then(res => {
+            if (!res.success) return;
+            const bar = document.getElementById('categoryBar');
+            res.data.forEach(c => {
+                const span = document.createElement('span');
+                span.className = 'filter-item';
+                span.dataset.id = c.id;
+                span.textContent = c.categoryName || c.name;
+                span.onclick = () => {
+                    document.querySelectorAll('.filter-item').forEach(el => el.classList.remove('active'));
+                    span.classList.add('active');
+                    currentCategory = c.id;
+                    loadArticles(1);
+                };
+                bar.appendChild(span);
+            });
+        });
+    }
+
+    function loadArticles(page) {
+        currentPage = page;
+        document.getElementById('articleList').innerHTML = '<div class="loading">加载中...</div>';
+        const body = { page: page, pageSize: PAGE_SIZE };
+        if (currentCategory) body.categoryId = currentCategory;
+        api('/articles', 'POST', body).then(res => {
+            if (!res.success) { document.getElementById('articleList').innerHTML = '<div class="empty">加载失败</div>'; return; }
+            renderArticles(res.data.records || res.data);
+            renderPagination(res.data.total || 0, page);
+        });
+    }
+
+    function renderArticles(list) {
+        if (!list || list.length === 0) {
+            document.getElementById('articleList').innerHTML = '<div class="empty">暂无文章</div>';
+            return;
+        }
+        const html = list.map(a => `
+            <article class="article-card" onclick="location.href='article.html?id=${a.id}'">
+                <div class="article-meta">
+                    <span class="meta-author">✍️ ${escHtml(a.author?.nickname || a.author?.username || '匿名')}</span>
+                    <span class="meta-date">📅 ${formatDate(a.createDate)}</span>
+                    <span class="meta-views">👁 ${a.viewCounts || 0}</span>
+                    ${a.category ? `<span class="meta-category">${escHtml(a.category.categoryName || a.category.name)}</span>` : ''}
+                </div>
+                <h2 class="article-title">${escHtml(a.title)}</h2>
+                <p class="article-summary">${escHtml(a.summary || '')}</p>
+                <div class="article-tags">
+                    ${(a.tags || []).map(t => `<span class="tag">${escHtml(t.tagName || t.name)}</span>`).join('')}
+                </div>
+            </article>
+        `).join('');
+        document.getElementById('articleList').innerHTML = html;
+    }
+
+    function loadHotArticles() {
+        api('/articles/hot', 'POST').then(res => {
+            if (!res.success) return;
+            const html = (res.data || []).map((a, i) => `
+                <div class="hot-item" onclick="location.href='article.html?id=${a.id}'">
+                    <span class="hot-rank rank-${i+1}">${i+1}</span>
+                    <span class="hot-title">${escHtml(a.title)}</span>
+                </div>
+            `).join('');
+            document.getElementById('hotList').innerHTML = html || '<div class="empty">暂无数据</div>';
+        });
+    }
+
+    function loadHotTags() {
+        api('/tags/hot', 'GET').then(res => {
+            if (!res.success) return;
+            const html = (res.data || []).map(t =>
+                `<span class="tag tag-link" onclick="filterByTag(${t.id})">${escHtml(t.tagName || t.name)}</span>`
+            ).join('');
+            document.getElementById('tagCloud').innerHTML = html || '<div class="empty">暂无标签</div>';
+        });
+    }
+
+    function filterByTag(tagId) {
+        // 按标签筛选（传给文章列表）
+        currentCategory = '';
+        document.querySelectorAll('.filter-item').forEach(el => el.classList.remove('active'));
+        document.querySelector('.filter-item[data-id=""]').classList.add('active');
+        loadArticles(1);
+    }
+
+    function renderPagination(total, page) {
+        const totalPages = Math.ceil(total / PAGE_SIZE) || 1;
+        const el = document.getElementById('pagination');
+        if (totalPages <= 1) { el.innerHTML = ''; return; }
+        let html = '';
+        if (page > 1) html += `<button class="page-btn" onclick="loadArticles(${page-1})">‹ 上一页</button>`;
+        html += `<span class="page-info">第 ${page} / ${totalPages} 页</span>`;
+        if (page < totalPages) html += `<button class="page-btn" onclick="loadArticles(${page+1})">下一页 ›</button>`;
+        el.innerHTML = html;
+    }
+</script>
+</body>
+</html>
