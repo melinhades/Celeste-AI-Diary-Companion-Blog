@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Celeste Journal · Demo</title>
+<style>
+    @font-face { font-family:'Renogare'; src:url('celeste-font-en/Renogare-Regular.ttf') format('truetype'); font-display:swap; }
+    @font-face { font-family:'CelesteZH'; src:url('fonts/NotoSansCJKsc-Medium.otf') format('opentype'); font-display:swap; }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+        min-height:100vh;
+        background:radial-gradient(ellipse at 50% 18%, #24345c, #0c0f1e 75%);
+        display:flex; flex-direction:column; align-items:center;
+        font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif;
+        color:#fff; padding:28px 16px 190px;
+    }
+    h1 { font-size:14px; letter-spacing:3px; color:#ffe36d; margin-bottom:20px; text-shadow:0 0 10px rgba(255,227,109,.4); }
+    .stage { width:min(94vw, 1080px); }
+    .book { position:relative; width:100%; perspective:2600px; }
+    .page {
+        position:relative; width:100%;
+        transition:transform .7s cubic-bezier(.45,.05,.25,1), opacity .7s ease;
+        filter:drop-shadow(0 18px 32px rgba(0,0,0,.55));
+        backface-visibility:hidden;
+    }
+    .page img { width:100%; display:block; }
+    .page textarea {
+        position:absolute; border:none; outline:none; resize:none;
+        background:transparent; overflow:hidden;
+        font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif;
+        font-size:15px; line-height:1.85; color:rgba(64,58,66,.92);
+        caret-color:#e6517c;
+    }
+    .page textarea::placeholder { color:rgba(64,58,66,.3); }
+    .page .shade {
+        position:absolute; inset:0; pointer-events:none; opacity:0;
+        background:linear-gradient(90deg, rgba(10,12,24,.55), transparent 60%);
+        transition:opacity .6s;
+    }
+    .nav { display:flex; align-items:center; justify-content:center; gap:22px; margin-top:24px; }
+    .nav button {
+        border:2px solid #ffe36d; background:rgba(22,34,60,.85); color:#ffe36d;
+        width:42px; height:42px; border-radius:50%; font-size:16px; cursor:pointer;
+        box-shadow:0 0 8px rgba(255,230,109,.35); transition:transform .2s;
+    }
+    .nav button:hover { transform:scale(1.1); }
+    .dots { display:flex; gap:10px; }
+    .dots span { width:9px; height:9px; border-radius:50%; background:rgba(255,255,255,.25); transition:all .3s; }
+    .dots span.on { background:#ffe36d; box-shadow:0 0 8px rgba(255,227,109,.7); transform:scale(1.25); }
+    .panel {
+        position:fixed; left:50%; bottom:14px; transform:translateX(-50%);
+        background:rgba(12,15,30,.92); border:1px solid rgba(255,227,109,.35);
+        border-radius:10px; padding:12px 18px; z-index:50;
+        display:flex; flex-direction:column; gap:6px; width:min(94vw, 640px);
+        font-size:12px;
+    }
+    .panel .row { display:flex; align-items:center; gap:10px; }
+    .panel label { width:70px; color:#ffe36d; flex-shrink:0; }
+    .panel input[type=range] { flex:1; accent-color:#ffe36d; }
+    .panel select, .panel b { color:#fff; }
+    .panel .vals { color:rgba(255,255,255,.55); font-family:monospace; }
+</style>
+</head>
+<body>
+<h1>CELESTE JOURNAL · 翻页 Demo</h1>
+<div class="stage">
+    <div class="book" id="book"></div>
+    <div class="nav">
+        <button id="prevBtn">◀</button>
+        <div class="dots" id="dots"></div>
+        <button id="nextBtn">▶</button>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="row">
+        <label>调节目标</label>
+        <select id="modeSel">
+            <option value="crop">裁切范围（去背景）</option>
+            <option value="write">写字区</option>
+        </select>
+        <span class="vals" id="valOut"></span>
+    </div>
+    <div class="row"><label>X / 左</label><input type="range" id="rX" min="0" max="100"></div>
+    <div class="row"><label>Y / 上</label><input type="range" id="rY" min="0" max="100"></div>
+    <div class="row"><label>宽</label><input type="range" id="rW" min="1" max="100"></div>
+    <div class="row"><label>高</label><input type="range" id="rH" min="1" max="100"></div>
+</div>
+
+<script>
+    const PAGES = [
+        {
+            src: 'celeste-journal/spread1.webp',
+            crop: { x: .045, y: .10, w: .91, h: .72 },
+            write: [
+                { x: .07, y: .30, w: .40, h: .34 },
+                { x: .54, y: .20, w: .41, h: .58 }
+            ]
+        },
+        {
+            src: 'celeste-journal/spread2.webp',
+            crop: { x: .045, y: .10, w: .91, h: .72 },
+            write: [
+                { x: .07, y: .28, w: .40, h: .34 },
+                { x: .54, y: .18, w: .41, h: .60 }
+            ]
+        },
+        {
+            src: 'celeste-journal/spread3.webp',
+            crop: { x: .045, y: .10, w: .91, h: .72 },
+            write: [
+                { x: .07, y: .24, w: .40, h: .38 },
+                { x: .54, y: .20, w: .41, h: .40 }
+            ]
+        }
+    ];
+
+    const book = document.getElementById('book');
+    const dotsEl = document.getElementById('dots');
+    let cur = 0, busy = false, pageEl = null;
+    const imgCache = {};
+
+    PAGES.forEach((_, i) => {
+        const d = document.createElement('span');
+        d.addEventListener('click', () => goto(i, i > cur ? 1 : -1));
+        dotsEl.appendChild(d);
+    });
+
+    function updateNav() {
+        [...dotsEl.children].forEach((d, i) => d.classList.toggle('on', i === cur));
+    }
+
+    function loadImage(src) {
+        return new Promise((res, rej) => {
+            const i = new Image();
+            i.onload = () => res(i);
+            i.onerror = rej;
+            i.src = src;
+        });
+    }
+
+    function cropToDataURL(img, c) {
+        const cv = document.createElement('canvas');
+        const sw = Math.round(img.naturalWidth * c.w), sh = Math.round(img.naturalHeight * c.h);
+        cv.width = sw; cv.height = sh;
+        cv.getContext('2d').drawImage(img,
+            Math.round(img.naturalWidth * c.x), Math.round(img.naturalHeight * c.y), sw, sh,
+            0, 0, sw, sh);
+        return cv.toDataURL('image/png');
+    }
+
+    async function buildPage(idx) {
+        const p = PAGES[idx];
+        if (!imgCache[p.src]) imgCache[p.src] = await loadImage(p.src);
+        const el = document.createElement('div');
+        el.className = 'page';
+        const img = document.createElement('img');
+        img.src = cropToDataURL(imgCache[p.src], p.crop);
+        el.appendChild(img);
+        p.write.forEach((w, wi) => {
+            const ta = document.createElement('textarea');
+            ta.style.left = (w.x * 100) + '%';
+            ta.style.top = (w.y * 100) + '%';
+            ta.style.width = (w.w * 100) + '%';
+            ta.style.height = (w.h * 100) + '%';
+            ta.placeholder = '在这里写……';
+            ta.value = localStorage.getItem('journal-demo-' + idx + '-' + wi) || '';
+            ta.addEventListener('input', () => localStorage.setItem('journal-demo-' + idx + '-' + wi, ta.value));
+            el.appendChild(ta);
+        });
+        const shade = document.createElement('div');
+        shade.className = 'shade';
+        el.appendChild(shade);
+        return el;
+    }
+
+    async function goto(idx, dir) {
+        if (busy || idx === cur || idx < 0 || idx >= PAGES.length) return;
+        busy = true;
+        const oldEl = pageEl;
+        cur = idx;
+        updateNav();
+        syncPanel();
+        const newEl = await buildPage(idx);
+        book.appendChild(newEl);
+        pageEl = newEl;
+        oldEl.style.position = 'absolute';
+        oldEl.style.top = '0'; oldEl.style.left = '0'; oldEl.style.width = '100%';
+        oldEl.style.zIndex = 5;
+        oldEl.style.transformOrigin = dir > 0 ? 'left center' : 'right center';
+        oldEl.querySelector('.shade').style.opacity = '1';
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+            oldEl.style.transform = 'rotateY(' + (dir > 0 ? -98 : 98) + 'deg)';
+            oldEl.style.opacity = '.35';
+        }));
+        setTimeout(() => { oldEl.remove(); busy = false; }, 730);
+    }
+
+    const modeSel = document.getElementById('modeSel');
+    const rX = document.getElementById('rX'), rY = document.getElementById('rY'),
+          rW = document.getElementById('rW'), rH = document.getElementById('rH');
+    const valOut = document.getElementById('valOut');
+    let rebuildTimer = null;
+
+    function currentRegion() {
+        const p = PAGES[cur];
+        return modeSel.value === 'crop' ? p.crop : p.write[0];
+    }
+
+    function syncPanel() {
+        const r = currentRegion();
+        rX.value = Math.round(r.x * 100);
+        rY.value = Math.round(r.y * 100);
+        rW.value = Math.round(r.w * 100);
+        rH.value = Math.round(r.h * 100);
+        valOut.textContent = JSON.stringify(r);
+    }
+
+    function onSlide() {
+        const r = currentRegion();
+        r.x = rX.value / 100; r.y = rY.value / 100;
+        r.w = rW.value / 100; r.h = rH.value / 100;
+        valOut.textContent = JSON.stringify(r);
+        if (modeSel.value === 'write') {
+            const tas = pageEl.querySelectorAll('textarea');
+            const ta = tas[0], w = PAGES[cur].write[0];
+            ta.style.left = (w.x * 100) + '%'; ta.style.top = (w.y * 100) + '%';
+            ta.style.width = (w.w * 100) + '%'; ta.style.height = (w.h * 100) + '%';
+        } else {
+            clearTimeout(rebuildTimer);
+            rebuildTimer = setTimeout(async () => {
+                const fresh = await buildPage(cur);
+                book.replaceChild(fresh, pageEl);
+                pageEl = fresh;
+            }, 150);
+        }
+    }
+    [rX, rY, rW, rH].forEach(r => r.addEventListener('input', onSlide));
+    modeSel.addEventListener('change', syncPanel);
+
+    document.getElementById('prevBtn').addEventListener('click', () => goto(cur - 1, -1));
+    document.getElementById('nextBtn').addEventListener('click', () => goto(cur + 1, 1));
+    window.addEventListener('keydown', e => {
+        if (document.activeElement && document.activeElement.tagName === 'TEXTAREA') return;
+        if (e.key === 'ArrowLeft') goto(cur - 1, -1);
+        if (e.key === 'ArrowRight') goto(cur + 1, 1);
+    });
+
+    (async function init() {
+        updateNav();
+        syncPanel();
+        pageEl = await buildPage(0);
+        book.appendChild(pageEl);
+    })();
+</script>
+</body>
+</html>

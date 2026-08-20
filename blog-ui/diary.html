@@ -1,0 +1,2191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="icon/OIP.webp" type="image/webp">
+    <title>Madeline - 写日记</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Patrick+Hand&display=swap" rel="stylesheet">
+    <style>
+:root {
+  --c-bg-night:    #1B2A4A;
+  --c-bg-panel:    #2C3E50;
+  --c-sky:         #A8E6CF;
+  --c-teal:        #7DCFFF;
+  --c-yellow:      #FFEB3B;
+  --c-pink:        #FF6B6B;
+  --c-text:        #E0E0E0;
+  --c-text-dim:    #B0B0B0;
+  --c-border:      #111111;
+  --chat-font: 'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+  --pixel-font: 'Press Start 2P', monospace;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeInRight {
+  from { opacity: 0; transform: translateX(-30px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+body.emotion-default   .title-input,
+body.emotion-default   .content-editor { border-color: var(--c-teal); }
+body.emotion-calm      .title-input,
+body.emotion-calm      .content-editor { border-color: #4A90E2; }
+body.emotion-happy     .title-input,
+body.emotion-happy     .content-editor { border-color: #7ED321; }
+body.emotion-sad       .title-input,
+body.emotion-sad       .content-editor { border-color: #9B59B6; }
+body.emotion-angry     .title-input,
+body.emotion-angry     .content-editor { border-color: #E74C3C; }
+body.emotion-surprised .title-input,
+body.emotion-surprised .content-editor { border-color: #1ABC9C; }
+body.emotion-lonely    .title-input,
+body.emotion-lonely    .content-editor { border-color: #8E44AD; }
+body.emotion-content   .title-input,
+body.emotion-content   .content-editor { border-color: #16A085; }
+body.emotion-hopeful   .title-input,
+body.emotion-hopeful   .content-editor { border-color: #3498DB; }
+
+/* ===== 情绪场景背景图 ===== */
+#emotion-bg {
+  position:fixed;
+  inset:0;
+  z-index:0;
+  background-size:cover;
+  background-position:center bottom;
+  background-repeat:no-repeat;
+  opacity:0;
+  transition:opacity 1.2s ease;
+  pointer-events:none;
+}
+#emotion-bg.show {
+  opacity:0.35;
+}
+
+/* ... existing code ... */
+body.emotion-default   {
+    background:
+            linear-gradient(rgba(15,23,42,.35), rgba(15,23,42,.55)),
+            url('celeste-gui/diary-bg.jpg') center / cover no-repeat fixed;
+}
+/* ... existing code ... */
+body.emotion-calm      { background: linear-gradient(135deg, #0F3460, #1E3A8A); }
+body.emotion-happy     { background: linear-gradient(135deg, #2E3A17, #166534); }
+body.emotion-sad       { background: linear-gradient(135deg, #2C1A47, #4C1D95); }
+body.emotion-angry     { background: linear-gradient(135deg, #4A1A1A, #991B1B); }
+body.emotion-surprised { background: linear-gradient(135deg, #1A374D, #0E7490); }
+body.emotion-lonely    { background: linear-gradient(135deg, #3A2A4A, #581C87); }
+body.emotion-content   { background: linear-gradient(135deg, #1A3A2E, #0F766E); }
+body.emotion-hopeful   { background: linear-gradient(135deg, #1A2E3A, #0369A1); }
+
+body.emotion-default   { --c-sky: #A8E6CF; --c-teal: #7DCFFF; --c-yellow: #FFEB3B; --c-pink: #FF6B6B; }
+body.emotion-calm      { --c-sky: #87CEEB; --c-teal: #4A90E2; --c-yellow: #F0E68C; --c-pink: #FFB6C1; }
+body.emotion-happy     { --c-sky: #98FB98; --c-teal: #7ED321; --c-yellow: #FFFF99; --c-pink: #FF69B4; }
+body.emotion-sad       { --c-sky: #D8BFD8; --c-teal: #9B59B6; --c-yellow: #DDA0DD; --c-pink: #EE82EE; }
+body.emotion-angry     { --c-sky: #F08080; --c-teal: #E74C3C; --c-yellow: #F4A460; --c-pink: #FF6347; }
+body.emotion-surprised { --c-sky: #AFEEEE; --c-teal: #1ABC9C; --c-yellow: #98FB98; --c-pink: #00CED1; }
+body.emotion-lonely    { --c-sky: #DDA0DD; --c-teal: #8E44AD; --c-yellow: #E6E6FA; --c-pink: #D8BFD8; }
+body.emotion-content   { --c-sky: #2E8B57; --c-teal: #16A085; --c-yellow: #9ACD32; --c-pink: #3CB371; }
+body.emotion-hopeful   { --c-sky: #87CEEB; --c-teal: #3498DB; --c-yellow: #ADD8E6; --c-pink: #B0E0E6; }
+
+* { margin:0; padding:0; box-sizing:border-box; }
+html,body {
+  height:100%;
+  font-family: var(--pixel-font);
+  background:var(--c-bg-night);
+  color:var(--c-text);
+  overflow-x:hidden;
+  scrollbar-width:none;
+}
+/* ... existing code ... */
+body {
+    display:flex;
+    flex-direction:column;
+    padding:10px 16px 8px;
+}
+/* ... existing code ... */
+body::-webkit-scrollbar { display:none; }
+
+body::before {
+  content:"";
+  position:fixed; inset:0;
+  background:repeating-linear-gradient(0deg, rgba(0,0,0,0), rgba(0,0,0,0.08) 1px, transparent 2px);
+  pointer-events:none;
+  z-index:9999;
+}
+
+
+/* ... existing code ... */
+.editor-wrapper {
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    max-width:1120px;
+    margin:0 auto 8px auto;
+    width:100%;
+    animation:fadeInUp 0.6s ease-out forwards;
+    opacity:0;
+    position:relative;
+    z-index:4;
+}
+/* ... existing code ... */
+/* ... existing code ... */
+.title-input,.content-editor {
+  width:100%; padding:10px;
+  border:2px solid var(--c-teal);
+  border-radius:4px;
+  background:var(--c-bg-panel);
+  color:var(--c-text);
+    font-family: 'Renogare', 'CelesteZH', 'Microsoft YaHei', sans-serif;
+    font-size:16px;
+    line-height:1.9;
+    outline: none;
+}
+.title-input::placeholder,.content-editor::placeholder { color:var(--c-text-dim); }
+.content-editor { min-height:320px; resize:vertical; }
+.title-input {
+    background: url('celeste-gui/card-top.png') center / 100% 100% no-repeat;
+    color: #2b2018;
+    border: none;
+    border-radius: 0;
+    padding: 12px 22px 12px 48px;
+    margin-bottom: -12px;
+    position: relative;
+    z-index: 2;
+}
+.content-editor {
+    background: url('celeste-gui/card.png') center / 100% 100% no-repeat;
+    color: #3a2e2a;
+    border: none;
+    border-radius: 0;
+    padding: 24px 30px 48px 38px;
+}
+.title-input::placeholder,.content-editor::placeholder { color: rgba(58,46,42,.4); }
+
+.save-btn {
+  width:100%; padding:10px; border:none; border-radius:4px;
+  background:var(--c-teal); color:#fff;
+  font-family: var(--pixel-font); font-size:14px;
+  cursor:pointer;
+  box-shadow:inset 0 -2px var(--c-border);
+  transition:background .2s;
+}
+/* ... existing code ... */
+.diary-actions {
+    display:flex;
+    gap:16px;
+    margin-top:12px;
+}
+.diary-actions .save-btn {
+    flex:3;
+    padding:15px;
+    border-radius:8px;
+    font-size:17px;
+}
+#testEmotionBtn {
+    flex:2;
+    padding:15px;
+    border:none;
+    border-radius:8px;
+    background:#ff9800;
+    color:#fff;
+    font-family:var(--pixel-font);
+    font-size:16px;
+    cursor:pointer;
+    box-shadow:inset 0 -2px rgba(0,0,0,.25);
+    transition:filter .2s;
+}
+/* ... existing code ... */
+#testEmotionBtn:hover { filter:brightness(1.1); }
+.save-btn:hover:not(:disabled) { background:var(--c-yellow); }
+.save-btn:disabled { background:#555; cursor:not-allowed; }
+
+/* ===== Madeline 聊天组件 ===== */
+#madeline-wrapper {
+  position:fixed;
+  bottom:12px; right:12px;
+  display:flex; flex-direction:row-reverse;
+  align-items:flex-end;
+  z-index:1000; gap:8px;
+  opacity:0;
+  animation:fadeInRight 0.6s ease-out 0.2s forwards;
+}
+#madeline-wrapper.dragging {
+  animation:none; opacity:1;
+}
+
+#madeline-float-button {
+  width:48px; height:48px; border-radius:50%;
+  border:2px solid var(--c-yellow);
+  background:var(--c-bg-panel);
+  display:flex; align-items:center; justify-content:center;
+  cursor:grab; overflow:hidden;
+  transition:transform .2s ease;
+  box-shadow:0 0 6px rgba(255,230,109,.4);
+  flex-shrink:0;
+  user-select:none;
+  touch-action:none;
+}
+#madeline-float-button:active { cursor:grabbing; }
+#madeline-float-button .avatar-wrap {
+  width:48px; height:48px; overflow:hidden; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+}
+#madeline-float-button .avatar-wrap img {
+  width:100%; height:100%; object-fit:cover; display:block;
+}
+#madeline-float-button.notification { animation:pulse 1.5s infinite; }
+@keyframes pulse {
+  0%   { transform:scale(1); }
+  50%  { transform:scale(1.1); }
+  100% { transform:scale(1); }
+}
+
+#madeline-chat-dialog {
+    width: 420px;
+    height: 500px;
+    background: url('celeste-gui/card.png') top / 100% 123% no-repeat;
+    border: none;
+    border-radius: 0;
+    display:flex; flex-direction:column;
+    opacity:0; pointer-events:none;
+    transform: perspective(1200px) rotateY(32deg) rotateX(8deg) scale(0.85);
+    transform-origin: 100% 100%;
+    transition: opacity .3s ease, transform .45s cubic-bezier(0.34,1.3,0.64,1);
+    z-index:1000;
+    box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    overflow:hidden;
+}
+#madeline-chat-dialog.show {
+    opacity:1; pointer-events:all;
+    transform: perspective(1200px) rotateY(0) rotateX(0) scale(1);
+}
+.chat-header {
+    padding: 14px 16px 8px 42px;
+    display:flex; align-items:center; gap:10px;
+    border-bottom: 1px dashed rgba(58,46,42,.35);
+    background: transparent;
+    flex-shrink:0;
+}
+#chat-madeline-avatar-wrap {
+  width:32px; height:32px; border-radius:50%; overflow:hidden;
+    border:2px solid #2b2018; flex-shrink:0; display:block;
+}
+#chat-madeline-avatar-wrap img {
+  width:100%; height:100%; object-fit:cover; display:block;
+}
+.chat-header .chat-title {
+  font-family: var(--pixel-font);
+  font-size:12px;
+    color: #2b2018;
+  flex:1;
+}
+.chat-header .close-btn {
+  width:24px; height:24px;
+  border:none; border-radius:50%;
+  background:transparent;
+    color: rgba(43,32,24,.55);
+  font-size:16px;
+  cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  flex-shrink:0;
+  transition:color .2s;
+}
+.chat-header .close-btn:hover {  color:#2b2018; }
+
+.chat-messages {
+  flex:1;
+  overflow-y:auto;
+    padding:14px 16px 10px 42px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  min-height:0;
+}
+.chat-messages::-webkit-scrollbar { width:4px; }
+.chat-messages::-webkit-scrollbar-thumb { background:rgba(58,46,42,.4); border-radius:2px; }
+
+/* 消息气泡 */
+.msg-row {
+  display:flex;
+  align-items:flex-end;
+  gap:8px;
+  max-width:90%;
+}
+.msg-row.madeline-row { align-self:flex-start; }
+.msg-row.user-row { align-self:flex-end; flex-direction:row-reverse; }
+
+.msg-avatar-wrap {
+  width:28px; height:28px; border-radius:50%; overflow:hidden;
+  border:1px solid var(--c-yellow); flex-shrink:0; display:block;
+}
+.msg-avatar-wrap img {
+  width:100%; height:100%; object-fit:cover; display:block;
+}
+
+.msg-bubble {
+  padding:8px 12px;
+  border-radius:12px;
+  font-family: var(--chat-font);
+  font-size:13px;
+  line-height:1.6;
+  word-break:break-word;
+  max-width:260px;
+}
+.msg-row.madeline-row .msg-bubble {
+    background: transparent;
+    color: #3a2e2a;
+    border: none;
+    padding-left: 2px;
+}
+.msg-row.user-row .msg-bubble {
+    background: rgba(74,144,226,.14);
+    color: #2b3a52;
+    border: 1px solid rgba(74,144,226,.4);
+}
+
+/* 输入区 */
+.chat-input {
+    margin-top: auto;
+    display:flex; gap:8px;
+    padding: 8px 10px 5px 10px;
+    border-bottom: 1px dashed rgba(58,46,42,.35);
+    background: transparent;
+    flex-shrink:0;
+}
+.chat-input input {
+  flex:1;
+  padding:8px 10px;
+  border-radius:6px;
+    background: rgba(255,255,255,.55);
+    color: #3a2e2a;
+    border: 1px solid rgba(58,46,42,.35);
+  font-family: var(--chat-font);
+  font-size:13px;
+  outline:none;
+}
+.chat-input input:focus { border-color:var(--c-teal); }
+.chat-input input::placeholder { color:rgba(58,46,42,.45);; }
+.chat-input button {
+  padding:8px 14px;
+  border:none; border-radius:6px;
+  background:var(--c-yellow); color:#111;
+    font-family: 'Renogare', sans-serif;
+    font-size: 14px;
+    letter-spacing: 1px;
+  cursor:pointer;
+  box-shadow:inset 0 -2px var(--c-border);
+  transition:background .2s;
+  flex-shrink:0;
+}
+.chat-input button:hover:not(:disabled) { background:#ffeb85; }
+.chat-input button:disabled { background:#555; color:#999; cursor:not-allowed; }
+
+/* 快速输入 */
+.quick-input-container {
+  width:200px; max-width:250px;
+  background:var(--c-bg-panel);
+  border:2px solid var(--c-yellow);
+  border-radius:6px; padding:4px;
+  display:flex; flex-direction:column; gap:4px;
+}
+#quickInput {
+  flex:0 0 auto; width:100%; font-size:10px;
+  padding:4px; border:1px solid var(--c-yellow);
+  border-radius:4px; background:var(--c-bg-panel);
+  color:var(--c-text); font-family: var(--pixel-font);
+}
+#quickSendBtn {
+  width:100%; height:24px; font-size:10px;
+  border-radius:4px; background:var(--c-yellow);
+  color:#111; cursor:pointer; border:none;
+  font-family: var(--pixel-font);
+}
+
+/* ===== 每日明信片开场动画 ===== */
+#postcard-overlay {
+  position:fixed; inset:0;
+  background:rgba(5,5,20,0.95);
+  z-index:10000;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  flex-direction:column;
+}
+#postcard-overlay.show { display:flex; }
+
+#snowCanvas {
+  position:absolute; inset:0;
+  width:100%; height:100%;
+  pointer-events:none;
+  z-index:1;
+}
+
+#postcard-container {
+  position:relative;
+  z-index:2;
+  width:min(90vw, 720px);
+  aspect-ratio:1.5/1;
+  opacity:0;
+  transform:translateX(-120%) rotate(-8deg);
+  transition:opacity 0.8s ease, transform 1s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+#postcard-container.slide-in {
+  opacity:1;
+  transform:translateX(0) rotate(0deg);
+}
+
+#postcard-bg {
+  width:100%; height:100%;
+  object-fit:contain;
+  filter:drop-shadow(0 8px 32px rgba(0,0,0,0.6));
+}
+
+#postcard-to {
+  position:absolute;
+  top:12%; left:12%;
+  font-family:'Patrick Hand', cursive;
+  font-size:clamp(16px, 3vw, 28px);
+  color:#5a3e36;
+  letter-spacing:1px;
+}
+#postcard-to .name {
+  font-weight:bold;
+  color:#3a2018;
+  border-bottom:2px solid #c4a882;
+  padding:0 8px;
+}
+
+#postcard-message {
+  position:absolute;
+  top:28%; left:10%; right:10%; bottom:15%;
+  font-family:'Patrick Hand', cursive;
+  font-size:clamp(14px, 2.5vw, 24px);
+  color:#4a3530;
+  line-height:2;
+  overflow:hidden;
+}
+
+#postcard-close {
+  position:absolute;
+  bottom:4%; right:6%;
+  z-index:3;
+  padding:8px 20px;
+  border:2px solid #c4a882;
+  border-radius:4px;
+  background:rgba(255,248,240,0.8);
+  color:#5a3e36;
+  font-family:'Patrick Hand', cursive;
+  font-size:clamp(12px, 2vw, 18px);
+  cursor:pointer;
+  opacity:0;
+  transition:opacity 0.5s ease;
+}
+#postcard-close.show { opacity:1; }
+#postcard-close:hover {
+  background:#c4a882;
+  color:#fff;
+}
+@font-face {
+    font-family: 'Renogare';
+    src: url('celeste-font-en/Renogare-Regular.otf') format('opentype');
+}
+
+#postcard-to,
+#postcard-message,
+#postcard-close {
+    font-family: 'Renogare', 'Segoe UI', sans-serif;
+    letter-spacing: 1px;
+}
+@font-face {
+    font-family: 'CelesteZH';
+    src: url('fonts/NotoSansCJKsc-Medium.otf') format('opentype');
+    font-display: swap;
+}
+
+.madeline-row .msg-bubble,
+.user-row .msg-bubble {
+    font-family: 'Renogare', 'CelesteZH', 'Microsoft YaHei', sans-serif;
+}
+/* ===== Madeline 冒泡气泡 ===== */
+#madeline-bubble {
+  position:fixed;
+  bottom:70px; right:70px;
+  max-width:260px;
+  padding:12px 16px;
+  background:#fff;
+  color:#222;
+  border:2px solid var(--c-yellow);
+  border-radius:16px;
+  border-bottom-right-radius:4px;
+  font-family:var(--chat-font);
+  font-size:13px;
+  line-height:1.6;
+  box-shadow:0 4px 20px rgba(0,0,0,.3), 0 0 12px rgba(255,235,59,.3);
+  z-index:1001;
+  opacity:0;
+  transform:scale(0.6) translateY(20px);
+  transform-origin:bottom right;
+  transition:opacity .4s ease, transform .5s cubic-bezier(0.34,1.56,0.64,1);
+  pointer-events:none;
+  display:none;
+}
+#madeline-bubble.show {
+  opacity:1;
+  transform:scale(1) translateY(0);
+  pointer-events:auto;
+  display:block;
+}
+#madeline-bubble .bubble-avatar {
+  width:24px; height:24px;
+  border-radius:50%;
+  border:1px solid var(--c-yellow);
+  position:absolute;
+  bottom:-8px; right:-8px;
+  overflow:hidden;
+}
+#madeline-bubble .bubble-avatar img {
+  width:100%; height:100%; object-fit:cover; display:block;
+}
+
+/* 冒泡时隐藏快速输入框 */
+#quickInputBox.bubble-active {
+  opacity:0;
+  transform:translateX(20px);
+  pointer-events:none;
+}
+
+/* 快速输入框收起过渡 */
+.quick-input-container {
+  transition:opacity .3s ease, transform .3s ease;
+}
+
+/* ===== Madeline 正在看 indicator ===== */
+#madeline-peeking {
+  position:fixed;
+  bottom:70px; right:20px;
+  background:rgba(44,62,80,0.92);
+  border:1px solid var(--c-yellow);
+  border-radius:12px;
+  padding:6px 14px;
+  font-family:var(--chat-font);
+  font-size:12px;
+  color:var(--c-yellow);
+  display:none;
+  align-items:center;
+  gap:8px;
+  z-index:999;
+  backdrop-filter:blur(4px);
+  animation:peekFadeIn .3s ease;
+}
+#madeline-peeking.show { display:flex; }
+@keyframes peekFadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+.peeking-dots { display:inline-flex; gap:3px; }
+.peeking-dots span {
+  width:5px; height:5px; border-radius:50%;
+  background:var(--c-yellow);
+  animation:dotBounce 1.2s infinite;
+}
+.peeking-dots span:nth-child(2) { animation-delay:.2s; }
+.peeking-dots span:nth-child(3) { animation-delay:.4s; }
+@keyframes dotBounce {
+  0%,80%,100%{transform:translateY(0);opacity:.4}
+  40%{transform:translateY(-6px);opacity:1}
+}
+
+/* ===== 情绪分析条 ===== */
+#emotion-analysis-bar {
+  max-width:700px;
+  margin:0 auto 12px auto;
+  width:100%;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:8px 14px;
+  background:var(--c-bg-panel);
+  border:1px solid var(--c-yellow);
+  border-radius:8px;
+  font-family:var(--chat-font);
+  font-size:12px;
+  color:var(--c-text-dim);
+  opacity:0;
+  transition:opacity .4s ease;
+}
+#emotion-analysis-bar.show { opacity:1; }
+.emotion-label { flex-shrink:0; color:var(--c-yellow); font-size:11px; }
+.emotion-track {
+  flex:1; height:6px;
+  background:rgba(255,255,255,.08);
+  border-radius:3px;
+  overflow:hidden;
+  position:relative;
+}
+.emotion-fill {
+  height:100%;
+  border-radius:3px;
+  transition:width .6s ease, background .6s ease;
+  width:0%;
+}
+.emotion-tags { display:flex; gap:4px; flex-wrap:wrap; }
+.emotion-tag {
+  padding:2px 8px;
+  border-radius:10px;
+  font-size:10px;
+  background:rgba(255,255,255,.06);
+  color:var(--c-text-dim);
+  transition:all .3s ease;
+}
+.emotion-tag.active {
+  background:var(--c-yellow);
+  color:#111;
+  font-weight:bold;
+}
+.emotion-intensity {
+  flex-shrink:0;
+  font-size:11px;
+  min-width:40px;
+  text-align:right;
+}
+
+/* ===== 新消息高亮 ===== */
+@keyframes msgGlow {
+  0% { box-shadow:0 0 12px rgba(255,235,59,.5); }
+  100% { box-shadow:none; }
+}
+.msg-row.glow .msg-bubble {
+  animation:msgGlow 1.5s ease-out;
+}
+
+/* ===== 实时情绪波形 ===== */
+#emotion-wave {
+  max-width:700px;
+  margin:0 auto 8px auto;
+  width:100%;
+  height:30px;
+  overflow:hidden;
+  opacity:0;
+  transition:opacity .4s ease;
+}
+#emotion-wave.show { opacity:1; }
+#emotion-wave canvas {
+  width:100%;
+  height:100%;
+}
+/* ===== 背景景深雪层 ===== */
+#bg-snow-back {
+  position:fixed; inset:0;
+  background:url('celeste-areas/snow-back.png') repeat 0 0 / 600px auto;
+  opacity:.22; pointer-events:none; z-index:1;
+  animation:snowDriftSlow 90s linear infinite;
+}
+#bg-snow-front {
+  position:fixed; left:0; right:0; bottom:0; height:90px;
+  background:url('celeste-areas/snow-front.png') repeat-x left bottom / 240px auto;
+  opacity:.5; pointer-events:none; z-index:3;
+  animation:snowDriftFast 40s linear infinite;
+}
+@keyframes snowDriftSlow { from{background-position:0 0} to{background-position:-600px 40px} }
+@keyframes snowDriftFast { from{background-position-x:0} to{background-position-x:-480px} }
+#madeline-float-button, #madeline-wrapper .quick-input-container { display: none !important; }
+#pixelMadeline {
+    position: fixed;
+    left: 0; top: 0;
+    width: 56px;
+    z-index: 800;
+    image-rendering: pixelated;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+.madeline-row .msg-bubble {
+    border-radius: 0;
+    background: rgba(24, 12, 38, 0.92);
+    border: 12px solid transparent;
+    border-image: url('celeste-portraits/textbox/madeline.png') 30 fill round;
+    padding: 8px 16px;
+    box-shadow: none;
+}
+@font-face {
+    font-family: 'CelesteZH';
+    src: url('fonts/NotoSansCJKsc-Medium.otf') format('opentype');
+    font-display: swap;
+}
+#gameDialog {
+    position: fixed;
+    left: 50%;
+    bottom: 26px;
+    transform: translateX(-50%) translateY(24px);
+    width: min(94vw, 900px);
+    min-height: 128px;
+    z-index: 950;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 20px 30px;
+    background: url('celeste-portraits/textbox/madeline.png') center / 100% 100% no-repeat;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s ease, transform .25s ease;
+}
+#gameDialog.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+#gameDialog.portrait-right { flex-direction: row-reverse; }
+#gameDialogPortrait {
+    width: 84px; height: 84px;
+    flex-shrink: 0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+#gameDialogPortrait img { width: 100%; height: 100%; object-fit: cover; display: block; }
+#gameDialogBody { flex: 1; min-width: 0; }
+#gameDialogName {
+    font-family: var(--pixel-font);
+    color: var(--c-yellow);
+    font-size: 13px;
+    margin-bottom: 5px;
+}
+#gameDialogText {
+    font-family: 'Renogare', 'CelesteZH', 'Microsoft YaHei', sans-serif;
+    color: #fff;
+    font-size: 14px;
+    line-height: 1.7;
+    word-break: break-word;
+}
+@keyframes pageIn {
+    from { transform: perspective(800px) rotateX(-38deg) translateY(-8px); opacity: 0; }
+    to { transform: none; opacity: 1; }
+}
+.msg-row {
+    transform-origin: top center;
+    animation: pageIn .4s ease-out;
+}
+#homePosterBtn {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    z-index: 900;
+    width: 104px;
+    height: 140px;
+    padding: 0;
+    border: 2px solid var(--c-yellow);
+    border-radius: 6px;
+    overflow: hidden;
+    cursor: pointer;
+    background: transparent;
+    box-shadow: 0 0 8px rgba(255,230,109,.45);
+    transition: transform .2s, box-shadow .2s;
+}
+#homePosterBtn img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+#homePosterBtn:hover {
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 0 16px rgba(255,230,109,.7);
+}
+/* ===== Celeste 日记本 ===== */
+/* ... existing code ... */
+/* ... existing code ... */
+/* ... existing code ... */
+/* ... existing code ... */
+#journalStage { width:min(100%, 1080px, calc((100vh - 300px) * 2)); margin:0 auto; position:relative; }
+/* ... existing code ... */
+/* ... existing code ... */
+#journalBook { position:relative; width:100%; perspective:1800px; }
+.book-page {
+    position:relative; width:100%;
+    transition:transform .55s cubic-bezier(.3,.7,.25,1), opacity .5s ease;
+    filter:drop-shadow(0 18px 32px rgba(0,0,0,.45));
+    will-change:transform, opacity;
+}
+.book-page img { width:100%; display:block; }
+/* ... existing code ... */
+.book-page textarea, .book-page input {
+    position:absolute; border:none; outline:none; background:transparent; overflow:hidden;
+    font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif;
+    font-size:clamp(11px, 1.2vw, 15px); line-height:1.9;
+    color:rgba(64,58,66,.92); caret-color:#e6517c;
+}
+.book-page textarea { resize:none; }
+.book-page textarea::placeholder, .book-page input::placeholder { color:rgba(64,58,66,.3); }
+.book-page .gridzone { position:absolute; display:grid; }
+.book-page .gridzone i { cursor:pointer; border-radius:2px; transition:background .25s, box-shadow .25s; }
+.book-page .gridzone i.on { background:rgba(255,214,90,.7); box-shadow:0 0 6px rgba(255,227,109,.8); }
+.book-arrow {
+    position:absolute; top:50%; transform:translateY(-50%); z-index:10;
+    border:2px solid var(--c-yellow); background:rgba(22,34,60,.85); color:var(--c-yellow);
+    width:40px; height:40px; border-radius:50%; cursor:pointer;
+    box-shadow:0 0 8px rgba(255,230,109,.35); transition:transform .2s, filter .2s;
+    font-size:14px; line-height:1;
+}
+#bookPrev { left:-20px; }
+#bookNext { right:-20px; }
+.book-arrow:hover { transform:translateY(-50%) scale(1.12); filter:brightness(1.2); }
+/* ... existing code ... */
+.book-dots { display:flex; justify-content:center; gap:7px; margin-top:8px; }
+/* ... existing code ... */
+.book-dots span { width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,.25); transition:all .3s; cursor:pointer; }
+.book-dots span.on { background:var(--c-yellow); box-shadow:0 0 8px rgba(255,227,109,.7); transform:scale(1.25); }
+/* ... existing code ... */
+</style>
+</head>
+<body>
+    <!-- 情绪场景背景 -->
+    <div id="emotion-bg"></div>
+    <div id="bg-snow-back"></div>
+    <div id="bg-snow-front"></div>
+    <button id="homePosterBtn" title="回到主页 · Discover Celeste Mountain" onclick="location.href='index.html'">
+        <img src="celeste-gui/mountain-poster.png" alt="Celeste Mountain">
+    </button>
+    <!-- 金羽毛游戏入口（右上角） -->
+    <img id="pixelMadeline" src="celeste-gui/bounceline.gif" alt="Madeline" title="点我聊天">
+    <div id="gameDialog">
+        <div id="gameDialogPortrait"><img id="gameDialogPortraitImg" src="celeste-portraits/madeline/normal00.png" alt="Madeline"></div>
+        <div id="gameDialogBody">
+            <div id="gameDialogName">Madeline</div>
+            <div id="gameDialogText"></div>
+        </div>
+    </div>
+    <button id="featherGameBtn" title="金羽毛" style="position:fixed; top:16px; right:16px; z-index:900; width:44px; height:44px; padding:7px; background:rgba(22,34,60,.85); border:2px solid var(--c-yellow); border-radius:50%; cursor:pointer; box-shadow:0 0 8px rgba(255,230,109,.45); transition:transform .2s;">
+        <img src="celeste-feather/feather0.png" alt="金羽毛" style="width:100%; height:100%; object-fit:contain; display:block;">
+    </button>
+    <!-- BGM 播放器（隐藏，自动播放） -->
+    <audio id="bgmPlayer" loop autoplay>
+        <source src="bgm/exhale.mp3" type="audio/mpeg">
+    </audio>
+
+    <!-- 每日明信片开场动画 -->
+    <div id="postcard-overlay">
+        <canvas id="snowCanvas"></canvas>
+        <div id="postcard-container">
+            <img id="postcard-bg" src="celeste-gui/postcard.png" alt="Postcard">
+            <div id="postcard-to"><span class="name" id="postcardName"></span></div>
+            <div id="postcard-message"></div>
+            <button id="postcard-close">Keep ♥</button>
+        </div>
+    </div>
+
+    <!-- Madeline 浮动按钮 + 聊天 -->
+    <div id="madeline-wrapper">
+        <div id="madeline-float-button">
+            <div class="avatar-wrap">
+                <img id="floatAvatar" src="celeste-portraits/madeline/normal00.png" alt="Madeline">
+            </div>
+        </div>
+        <div class="quick-input-container" id="quickInputBox">
+            <input type="text" id="quickInput" placeholder="想对 Madeline 说...">
+        </div>
+        <div id="madeline-chat-dialog">
+            <div class="chat-header">
+                <div id="chat-madeline-avatar-wrap">
+                    <img id="chatAvatar" src="celeste-portraits/madeline/normal00.png" alt="Madeline">
+                </div>
+                <span class="chat-title">Madeline</span>
+                <button class="close-btn" id="closeChatBtn">✕</button>
+            </div>
+            <div class="chat-messages" id="chatMessages"></div>
+            <div class="chat-input">
+                <input type="text" id="chatInput" placeholder="跟 Madeline 说点什么...">
+                <button id="chatSendBtn">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ... existing code ... -->
+    <!-- 日记编辑区 -->
+    <div class="editor-wrapper">
+        <!-- ... existing code ... -->
+        <img src="celeste-gui/journal.png" alt="Journal" style="display:block; margin:0 auto 6px auto; height:72px; filter:drop-shadow(0 0 6px rgba(255,235,59,0.4));">
+        <!-- ... existing code ... -->
+        <div id="emotion-wave"><canvas id="waveCanvas"></canvas></div>
+        <div id="emotion-analysis-bar">
+            <span class="emotion-label">Madeline 感知到</span>
+            <div class="emotion-track"><div class="emotion-fill" id="emotionFill"></div></div>
+            <div class="emotion-tags" id="emotionTags"></div>
+            <span class="emotion-intensity" id="emotionIntensity"></span>
+        </div>
+        <div id="journalStage">
+            <button class="book-arrow" id="bookPrev" type="button">◀</button>
+            <div id="journalBook"></div>
+            <button class="book-arrow" id="bookNext" type="button">▶</button>
+            <div class="book-dots" id="bookDots"></div>
+        </div>
+        <div class="diary-actions">
+            <button class="save-btn" id="saveBtn">保存日记</button>
+            <button id="testEmotionBtn">测试情绪检测</button>
+        </div>
+        <div id="emotionResult" style="margin-top:10px; padding:10px; background:var(--c-bg-panel); border-radius:4px; display:none; font-family:var(--chat-font); font-size:12px;"></div>
+    </div>
+    <!-- ... existing code ... -->
+
+    <div id="madeline-peeking">
+        <span>Madeline 正在看...</span>
+        <div class="peeking-dots"><span></span><span></span><span></span></div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/feather-game.js"></script>
+    <script>
+(function() {
+    // ===== Celeste 日记本 =====
+    // ... existing code ...
+    const BOOK_PAGES = [
+        { src: 'celeste-journal/spread1.jpg', fields: [
+                { kind: 'line', id: 'titleInput', x: .104, y: .518, w: .364, h: .144 },
+                { kind: 'area', id: 'contentInput', x: .104, y: .244, w: .364, h: .230 },
+                { kind: 'area', x: .527, y: .230, w: .182, h: .396 },
+                { kind: 'area', x: .737, y: .230, w: .173, h: .396 } ] },
+        { src: 'celeste-journal/spread2.jpg', fields: [
+                { kind: 'area', x: .104, y: .244, w: .364, h: .230 },
+                { kind: 'area', x: .104, y: .518, w: .364, h: .144 },
+                { kind: 'line', x: .536, y: .197, w: .364, h: .036 },
+                { kind: 'line', x: .536, y: .255, w: .364, h: .036 },
+                { kind: 'grid', x: .536, y: .309, w: .378, h: .396, cols: 12, rows: 10 } ] },
+        { src: 'celeste-journal/spread3.jpg', fields: [
+                { kind: 'area', x: .104, y: .230, w: .364, h: .216 },
+                { kind: 'area', x: .104, y: .482, w: .364, h: .122 },
+                { kind: 'area', x: .536, y: .215, w: .373, h: .216 },
+                { kind: 'cols', x: .536, y: .532, w: .373, h: .094, n: 3 } ] }
+    ];
+// ... existing code ...
+    const bookEl = document.getElementById('journalBook');
+    const dotsBox = document.getElementById('bookDots');
+    const pageEls = [];
+    let bookCur = 0, bookBusy = false;
+
+    BOOK_PAGES.forEach((p, pi) => {
+        const el = document.createElement('div');
+        el.className = 'book-page';
+        const img = document.createElement('img');
+        img.src = p.src;
+        img.alt = '日记本第 ' + (pi + 1) + ' 页';
+        el.appendChild(img);
+        p.fields.forEach((f, fi) => {
+            const key = 'jbook-' + pi + '-' + fi;
+            const pos = node => {
+                node.style.left = (f.x * 100) + '%';
+                node.style.top = (f.y * 100) + '%';
+                node.style.width = (f.w * 100) + '%';
+                node.style.height = ((f.h || .04) * 100) + '%';
+            };
+            let node;
+            if (f.kind === 'area' || f.kind === 'line') {
+                node = document.createElement(f.kind === 'area' ? 'textarea' : 'input');
+                pos(node);
+                if (f.id === 'titleInput') node.placeholder = '今天的标题...';
+                else if (f.id === 'contentInput') node.placeholder = '今天发生了什么...';
+                else {
+                    node.value = localStorage.getItem(key) || '';
+                    node.addEventListener('input', () => localStorage.setItem(key, node.value));
+                }
+            } else if (f.kind === 'grid') {
+                node = document.createElement('div');
+                node.className = 'gridzone';
+                pos(node);
+                node.style.gridTemplateColumns = 'repeat(' + f.cols + ',1fr)';
+                node.style.gridTemplateRows = 'repeat(' + f.rows + ',1fr)';
+                const saved = JSON.parse(localStorage.getItem(key) || '[]');
+                for (let i = 0; i < f.cols * f.rows; i++) {
+                    const cell = document.createElement('i');
+                    if (saved.includes(i)) cell.classList.add('on');
+                    cell.addEventListener('click', () => {
+                        cell.classList.toggle('on');
+                        const on = [...node.children].map((c, ci) => c.classList.contains('on') ? ci : -1).filter(v => v >= 0);
+                        localStorage.setItem(key, JSON.stringify(on));
+                    });
+                    node.appendChild(cell);
+                }
+            } else if (f.kind === 'cols') {
+                node = document.createElement('div');
+                node.style.cssText = 'position:absolute; display:flex; gap:1.5%;';
+                pos(node);
+                for (let i = 0; i < f.n; i++) {
+                    const inp = document.createElement('input');
+                    inp.style.cssText = 'flex:1; position:static; width:auto; height:100%; border:none; outline:none; background:transparent; font:inherit; color:rgba(64,58,66,.92); caret-color:#e6517c;';
+                    inp.value = localStorage.getItem(key + '-' + i) || '';
+                    inp.addEventListener('input', () => localStorage.setItem(key + '-' + i, inp.value));
+                    node.appendChild(inp);
+                }
+            }
+            if (f.id) node.id = f.id;
+            el.appendChild(node);
+        });
+        if (pi > 0) el.style.display = 'none';
+        bookEl.appendChild(el);
+        pageEls.push(el);
+        const d = document.createElement('span');
+        d.addEventListener('click', () => bookGoto(pi));
+        dotsBox.appendChild(d);
+    });
+    dotsBox.children[0].classList.add('on');
+
+    function bookGoto(idx) {
+        if (bookBusy || idx === bookCur || idx < 0 || idx >= pageEls.length) return;
+        const dir = idx > bookCur ? 1 : -1;
+        bookBusy = true;
+        const oldEl = pageEls[bookCur], newEl = pageEls[idx];
+        bookCur = idx;
+        [...dotsBox.children].forEach((d, i) => d.classList.toggle('on', i === idx));
+        newEl.style.display = '';
+        newEl.style.position = 'absolute';
+        newEl.style.top = '0'; newEl.style.left = '0'; newEl.style.width = '100%';
+        newEl.style.zIndex = 2;
+        newEl.style.opacity = '0';
+        newEl.style.transform = dir > 0 ? 'translateX(8%) scale(.96) rotateY(-7deg)' : 'translateX(-8%) scale(.96) rotateY(7deg)';
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+            newEl.style.opacity = '1';
+            newEl.style.transform = 'none';
+            oldEl.style.opacity = '0';
+            oldEl.style.transform = dir > 0 ? 'translateX(-8%) scale(.96) rotateY(7deg)' : 'translateX(8%) scale(.96) rotateY(-7deg)';
+        }));
+        setTimeout(() => {
+            oldEl.style.display = 'none';
+            oldEl.style.position = ''; oldEl.style.opacity = '';
+            oldEl.style.transform = ''; oldEl.style.zIndex = '';
+            newEl.style.position = ''; newEl.style.zIndex = '';
+            bookBusy = false;
+        }, 580);
+    }
+
+    document.getElementById('bookPrev').addEventListener('click', () => bookGoto(bookCur - 1));
+    document.getElementById('bookNext').addEventListener('click', () => bookGoto(bookCur + 1));
+    const avatarMap = {
+        '默认': 'celeste-portraits/madeline/normal00.png',
+        '不安': 'celeste-portraits/madeline/panic00.png',
+        '惊讶': 'celeste-portraits/madeline/surprised00.png',
+        '怨恨': 'celeste-portraits/madeline/angry00.png',
+        '不开心': 'celeste-portraits/madeline/sad00.png',
+        '可爱': 'celeste-portraits/madeline/peaceful00.png',
+        '无语': 'celeste-portraits/madeline/deadpan00.png'
+    };
+    const emotionBgMap = {
+        '默认': 'celeste-areas/bg_default.png',
+        '平静': 'celeste-areas/bg_calm.png',
+        '开心': 'celeste-areas/bg_happy.png',
+        '悲伤': 'celeste-areas/bg_sad.png',
+        '愤怒': 'celeste-areas/bg_angry.png',
+        '惊讶': 'celeste-areas/bg_surprised.png',
+        '孤独': 'celeste-areas/bg_lonely.png',
+        '满足': 'celeste-areas/bg_content.png',
+        '希望': 'celeste-areas/bg_hopeful.png'
+    };
+    // ===== v2 情绪 → 场景主题映射 =====
+    const emotionSceneMap = {
+        '默认': '默认',
+        '不安': '孤独',
+        '惊讶': '惊讶',
+        '怨恨': '愤怒',
+        '不开心': '悲伤',
+        '可爱': '开心',
+        '无语': '平静'
+    };
+    const sceneClassMap = {
+        '默认': 'default',
+        '平静': 'calm',
+        '开心': 'happy',
+        '悲伤': 'sad',
+        '愤怒': 'angry',
+        '惊讶': 'surprised',
+        '孤独': 'lonely',
+        '满足': 'content',
+        '希望': 'hopeful'
+    };
+
+    function updateThemeByEmotion(emotion) {
+        const scene = emotionSceneMap[emotion] || emotion || '默认';
+        document.body.className = 'emotion-' + (sceneClassMap[scene] || 'default');
+        setAvatar(emotion);
+        const bgSrc = emotionBgMap[scene] || emotionBgMap['默认'];
+        emotionBg.style.backgroundImage = `url('${bgSrc}')`;
+        emotionBg.classList.add('show');
+    }
+
+    // ===== DOM 引用 =====
+    const wrapper = document.getElementById('madeline-wrapper');
+    const floatButton = document.getElementById('madeline-float-button');
+    const chatDialog = document.getElementById('madeline-chat-dialog');
+    const chatMessages = document.getElementById('chatMessages');
+    const chatInput = document.getElementById('chatInput');
+    const chatSendBtn = document.getElementById('chatSendBtn');
+    const closeChatBtn = document.getElementById('closeChatBtn');
+    const quickInputBox = document.getElementById('quickInputBox');
+    const quickInput = document.getElementById('quickInput');
+    const emotionBg = document.getElementById('emotion-bg');
+    const titleInput = document.getElementById('titleInput');
+    const contentInput = document.getElementById('contentInput');
+    const saveBtn = document.getElementById('saveBtn');
+    const floatAvatar = document.getElementById('floatAvatar');
+    const chatAvatar = document.getElementById('chatAvatar');
+
+    let currentEmotion = '默认';
+    let chatOpen = false;
+    let isTyping = false;
+    let companionTimer = null;
+
+    function setAvatar(emotion) {
+        const src = avatarMap[emotion] || avatarMap['默认'];
+        floatAvatar.src = src;
+        chatAvatar.src = src;
+        currentEmotion = emotion;
+        localStorage.setItem('lastEmotion', emotion);
+    }
+
+    function splitSpeak(text) {
+        const parts = String(text || '').split(/(?<=[。！？!?…\n])/).map(s => s.trim()).filter(Boolean);
+        const merged = [];
+        for (const p of parts) {
+            const last = merged[merged.length - 1];
+            if (last !== undefined && last.length < 12 && last.length + p.length <= 26) merged[merged.length - 1] = last + p;
+            else merged.push(p);
+        }
+        const out = [];
+        for (const s of merged) {
+            if (s.length <= 42) { out.push(s); continue; }
+            let buf = '';
+            for (const piece of s.split(/(?<=[，,；;：:])/)) {
+                if ((buf + piece).length > 42 && buf) { out.push(buf); buf = piece; }
+                else buf += piece;
+            }
+            if (buf) out.push(buf);
+        }
+        return out.length ? out : [String(text)];
+    }
+
+    function splitIntoMessages(text) {
+        const parts = String(text || '').split(/(?<=[。！？!?…\n])/).map(s => s.trim()).filter(Boolean);
+        const msgs = [];
+        let buf = '';
+        for (const p of parts) {
+            buf += p;
+            if (buf.length >= 45) { msgs.push(buf); buf = ''; }
+        }
+        if (buf) msgs.push(buf);
+        return msgs.length ? msgs : [String(text)];
+    }
+
+    function newMadelineRow(emotion) {
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.alignItems = 'flex-start';
+        row.className = 'msg-row madeline-row';
+        const avWrap = document.createElement('div');
+        avWrap.className = 'msg-avatar-wrap';
+        const avImg = document.createElement('img');
+        avImg.src = avatarMap[emotion] || avatarMap['默认'];
+        avWrap.appendChild(avImg);
+        const bubble = document.createElement('div');
+        bubble.className = 'msg-bubble';
+        row.appendChild(avWrap);
+        row.appendChild(bubble);
+        chatMessages.appendChild(row);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        return bubble;
+    }
+    const gameDialog = document.getElementById('gameDialog');
+    const gameDialogPortraitImg = document.getElementById('gameDialogPortraitImg');
+    const gameDialogText = document.getElementById('gameDialogText');
+    let gameDialogHideTimer = null;
+
+    function openGameDialog(emotion) {
+        gameDialogPortraitImg.src = avatarMap[emotion] || avatarMap['默认'];
+        const pmCenter = pmState.x + pm.offsetWidth / 2;
+        gameDialog.classList.toggle('portrait-right', pmCenter > window.innerWidth / 2);
+        gameDialog.classList.add('show');
+    }
+
+    function scheduleGameDialogHide() {
+        clearTimeout(gameDialogHideTimer);
+        gameDialogHideTimer = setTimeout(() => gameDialog.classList.remove('show'), 6000);
+    }
+    gameDialog.addEventListener('click', () => {
+        clearTimeout(gameDialogHideTimer);
+        gameDialog.classList.remove('show');
+    });
+    let msgQueue = Promise.resolve();
+    function addMadelineMessage(text, emotion) {
+        msgQueue = msgQueue.then(() => doAddMadelineMessage(text, emotion)).catch(e => console.warn('说话失败:', e));
+    }
+
+    async function doAddMadelineMessage(text, emotion) {
+        text = String(text || '').replace(/[（(][^（）()]*[）)]/g, '').trim();
+        if (!text) return;
+        if (emotion) setAvatar(emotion);
+        const messages = splitIntoMessages(text);
+        const useGameDialog = !chatOpen;
+        if (useGameDialog) {
+            clearTimeout(gameDialogHideTimer);
+            openGameDialog(emotion);
+        }
+        for (const msg of messages) {
+            const histBubble = newMadelineRow(emotion);
+            histBubble.textContent = msg;
+            if (useGameDialog) {
+                gameDialogText.textContent = '';
+                let speakCount = 0;
+                for (const ch of msg) {
+                    gameDialogText.textContent += ch;
+                    if (!/[\s。！？!?…，,、；;：:（）()*]/.test(ch)) {
+                        speakCount++;
+                        if (speakCount % 3 === 1) playSpeakSound(emotion);
+                    }
+                    await sleep(45 + Math.random() * 20);
+                }
+                if (messages.length > 1) await sleep(1000 + Math.random() * 600);
+            } else {
+                histBubble.textContent = '';
+                let speakCount = 0;
+                for (const ch of msg) {
+                    histBubble.textContent += ch;
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                    if (!/[\s。！？!?…，,、；;：:（）()*]/.test(ch)) {
+                        speakCount++;
+                        if (speakCount % 3 === 1) playSpeakSound(emotion);
+                    }
+                    await sleep(45 + Math.random() * 20);
+                }
+                if (messages.length > 1) await sleep(240 + Math.random() * 200);
+            }
+        }
+        if (useGameDialog) scheduleGameDialogHide();
+    }
+    function addUserMessage(text) {
+        const row = document.createElement('div');
+        row.className = 'msg-row user-row';
+        const bubble = document.createElement('div');
+        bubble.className = 'msg-bubble';
+        bubble.textContent = text;
+        row.appendChild(bubble);
+        chatMessages.appendChild(row);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    // ===== 快速输入框发送 =====
+    async function sendQuickMessage() {
+        const text = quickInput.value.trim();
+        if (!text) return;
+        quickInput.value = '';
+        addUserMessage(text);
+        chatOpen = true;
+        chatDialog.classList.add('show');
+        quickInputBox.style.display = 'none';
+        chatInput.focus();
+
+        try {
+            const res = await api('/chat', 'POST', { content: text });
+            if (res.success && res.data) {
+                addMadelineMessage(res.data.content || '...', '默认');
+            } else {
+                addMadelineMessage('Hmm... I didn\'t catch that. Say it again?', '默认');
+            }
+        } catch (e) {
+            addMadelineMessage('Network issue... try again?', '默认');
+        }
+    }
+
+    quickInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendQuickMessage(); });
+
+    function showQuickInput(show) {
+        if (show) {
+            quickInputBox.style.display = 'flex';
+            quickInputBox.classList.remove('bubble-active');
+        } else {
+            quickInputBox.classList.add('bubble-active');
+        }
+    }
+
+    // ===== 聊天发送 =====
+    async function sendChatMessage() {
+        const text = chatInput.value.trim();
+        if (!text || isTyping) return;
+        chatInput.value = '';
+        addUserMessage(text);
+        isTyping = true;
+        chatSendBtn.disabled = true;
+
+        try {
+            const res = await api('/chat', 'POST', { content: text });
+            if (res.success && res.data) {
+                const reply = res.data.content || '...';
+                addMadelineMessage(reply, '默认');
+            } else {
+                addMadelineMessage('Hmm... I didn\'t catch that. Say it again?', '默认');
+            }
+        } catch (e) {
+            addMadelineMessage('Network issue... try again?', '默认');
+        }
+        isTyping = false;
+        chatSendBtn.disabled = false;
+    }
+
+    chatSendBtn.addEventListener('click', sendChatMessage);
+    chatInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') sendChatMessage();
+    });
+
+    // ===== 聊天开关（统一入口） =====
+    function toggleChat(force) {
+        chatOpen = (force === undefined) ? !chatOpen : force;
+        chatDialog.classList.toggle('show', chatOpen);
+        if (chatOpen) {
+            quickInputBox.style.display = 'none';
+            chatInput.focus();
+        } else {
+            showQuickInput(true);
+        }
+    }
+    closeChatBtn.addEventListener('click', () => toggleChat(false));
+
+    // ===== 浮动按钮拖拽（点击切换 / 拖拽移动，互不干扰） =====
+    let isDragging = false;
+    let dragMoved = false;
+    let dragStartX, dragStartY;
+    let btnStartLeft, btnStartTop;
+    let wrapBtnDx = 0, wrapBtnDy = 0;
+
+    function clampBtnPos(x, y) {
+        return {
+            x: Math.max(4, Math.min(x, window.innerWidth - 60)),
+            y: Math.max(4, Math.min(y, window.innerHeight - 60))
+        };
+    }
+
+    function applyButtonPos(btnX, btnY) {
+        wrapper.style.position = 'fixed';
+        wrapper.style.left = (btnX - wrapBtnDx) + 'px';
+        wrapper.style.top = (btnY - wrapBtnDy) + 'px';
+        wrapper.style.right = 'auto';
+        wrapper.style.bottom = 'auto';
+    }
+
+    function resetButtonPos() {
+        wrapper.style.left = '';
+        wrapper.style.top = '';
+        wrapper.style.right = '12px';
+        wrapper.style.bottom = '12px';
+    }
+
+    floatButton.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        isDragging = true;
+        dragMoved = false;
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+        const btnRect = floatButton.getBoundingClientRect();
+        const wrapRect = wrapper.getBoundingClientRect();
+        btnStartLeft = btnRect.left;
+        btnStartTop = btnRect.top;
+        wrapBtnDx = btnRect.left - wrapRect.left;
+        wrapBtnDy = btnRect.top - wrapRect.top;
+        wrapper.classList.add('dragging');
+        floatButton.setPointerCapture(e.pointerId);
+    });
+
+    floatButton.addEventListener('pointermove', e => {
+        if (!isDragging) return;
+        const dx = e.clientX - dragStartX;
+        const dy = e.clientY - dragStartY;
+        if (!dragMoved && Math.sqrt(dx * dx + dy * dy) < 5) return;
+        dragMoved = true;
+        const pos = clampBtnPos(btnStartLeft + dx, btnStartTop + dy);
+        applyButtonPos(pos.x, pos.y);
+    });
+
+    floatButton.addEventListener('pointerup', () => {
+        if (!isDragging) return;
+        isDragging = false;
+        if (!dragMoved) {
+            wrapper.classList.remove('dragging');
+            toggleChat();
+        }
+    });
+
+    // 双击按钮 → 复位到右下角（防丢保险）
+    floatButton.addEventListener('dblclick', resetButtonPos);
+
+    // 窗口缩放后按钮若跑出可视区 → 自动回位
+    window.addEventListener('resize', () => {
+        const rect = floatButton.getBoundingClientRect();
+        if (rect.right < 0 || rect.bottom < 0 || rect.left > window.innerWidth || rect.top > window.innerHeight) {
+            resetButtonPos();
+        }
+    });
+
+    // ===== 雪花粒子系统 =====
+    const snowCanvas = document.getElementById('snowCanvas');
+    const snowCtx = snowCanvas.getContext('2d');
+    let snowflakes = [];
+    let snowAnimFrame = null;
+
+    function resizeSnowCanvas() {
+        snowCanvas.width = window.innerWidth;
+        snowCanvas.height = window.innerHeight;
+    }
+
+    function createSnowflake() {
+        return {
+            x: Math.random() * snowCanvas.width,
+            y: -10,
+            r: Math.random() * 3 + 1,
+            speed: Math.random() * 1.5 + 0.5,
+            wind: Math.random() * 0.5 - 0.25,
+            opacity: Math.random() * 0.6 + 0.2,
+            swing: Math.random() * Math.PI * 2,
+            swingSpeed: Math.random() * 0.02 + 0.01
+        };
+    }
+
+    function initSnowflakes() {
+        snowflakes = [];
+        for (let i = 0; i < 80; i++) {
+            const f = createSnowflake();
+            f.y = Math.random() * snowCanvas.height;
+            snowflakes.push(f);
+        }
+    }
+
+    function drawSnowflakes() {
+        snowCtx.clearRect(0, 0, snowCanvas.width, snowCanvas.height);
+        for (const f of snowflakes) {
+            f.y += f.speed;
+            f.swing += f.swingSpeed;
+            f.x += Math.sin(f.swing) * 0.5 + f.wind;
+            if (f.y > snowCanvas.height + 10) { f.y = -10; f.x = Math.random() * snowCanvas.width; }
+            if (f.x > snowCanvas.width + 10) f.x = -10;
+            if (f.x < -10) f.x = snowCanvas.width + 10;
+            snowCtx.beginPath();
+            snowCtx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+            snowCtx.fillStyle = `rgba(255,255,255,${f.opacity})`;
+            snowCtx.fill();
+        }
+        snowAnimFrame = requestAnimationFrame(drawSnowflakes);
+    }
+
+    function startSnow() { resizeSnowCanvas(); initSnowflakes(); drawSnowflakes(); }
+    function stopSnow() { if (snowAnimFrame) cancelAnimationFrame(snowAnimFrame); snowCtx.clearRect(0, 0, snowCanvas.width, snowCanvas.height); }
+
+    // ===== 明信片打字机 =====
+    async function typewritePostcard(el, text) {
+        el.textContent = '';
+        for (const ch of text) { el.textContent += ch; await sleep(60); }
+    }
+
+    // ===== 每日明信片主流程 =====
+    async function showDailyPostcard() {
+        const overlay = document.getElementById('postcard-overlay');
+        const container = document.getElementById('postcard-container');
+        const nameEl = document.getElementById('postcardName');
+        const msgEl = document.getElementById('postcard-message');
+        const closeBtn = document.getElementById('postcard-close');
+
+        overlay.classList.add('show');
+        startSnow();
+
+        try {
+            const res = await api('/diary/daily-postcard', 'GET');
+            if (res.success && res.data) {
+                nameEl.textContent = res.data.userName || 'Traveler';
+                await sleep(800);
+                container.classList.add('slide-in');
+                await sleep(1200);
+                await typewritePostcard(msgEl, res.data.message || 'A new day begins. Take it slow.');
+                await sleep(500);
+                closeBtn.classList.add('show');
+            } else {
+                nameEl.textContent = 'Traveler';
+                container.classList.add('slide-in');
+                await sleep(1000);
+                await typewritePostcard(msgEl, 'A brand new day. Be gentle with yourself.');
+                closeBtn.classList.add('show');
+            }
+        } catch (e) {
+            nameEl.textContent = 'Traveler';
+            container.classList.add('slide-in');
+            await sleep(1000);
+            await typewritePostcard(msgEl, 'Keep going, one step at a time. — Madeline');
+            closeBtn.classList.add('show');
+        }
+
+        closeBtn.onclick = () => {
+            document.getElementById('bgmPlayer').play().catch(() => {});
+            overlay.style.opacity = '0';
+            overlay.style.transition = 'opacity 0.6s ease';
+            stopSnow();
+            setTimeout(() => {
+                overlay.classList.remove('show');
+                overlay.style.opacity = '';
+                overlay.style.transition = '';
+                container.classList.remove('slide-in');
+                closeBtn.classList.remove('show');
+            }, 600);
+            localStorage.setItem('postcardDate', new Date().toDateString());
+        };
+    }
+
+    // ================================================================
+    // ===== Madeline 主动冒泡系统 =====
+    // ================================================================
+    let bubbleTimer = null;
+    let isBubbling = false;
+    let bubbleEl = null;
+
+    ['pointerdown', 'keydown'].forEach(ev =>
+        window.addEventListener(ev, () => { window.__audioGestured = true; }, { once: true })
+    );
+
+
+    function playBubbleSound() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, ctx.currentTime);
+            osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.08);
+            osc.frequency.setValueAtTime(1320, ctx.currentTime + 0.15);
+            gain.gain.setValueAtTime(0.15, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.4);
+            setTimeout(() => ctx.close(), 500);
+        } catch (e) { /* 无声降级 */ }
+    }
+
+
+
+    const VOICE_DIRS = {
+        '默认': 'determined',
+        '不安': 'upset',
+        '惊讶': 'surprised',
+        '怨恨': 'angry',
+        '不开心': Math.random() < 0.5 ? 'sad' : 'sadder',
+        '可爱': 'determined',
+        '无语': 'deadpan',
+        '冒泡': 'distracted'
+    };
+    const VOICE_VARIANTS = ['mid_A', 'mid_B', 'mid_C', 'per'];
+
+    const blipAudio = new Audio();
+    function playSpeakSound(emotion) {
+        if (!window.__audioGestured) return;
+        let voice = VOICE_DIRS[emotion] || VOICE_DIRS['冒泡'];
+        if (emotion === '不开心') voice = Math.random() < 0.5 ? 'sad' : 'sadder';
+        const variant = VOICE_VARIANTS[Math.floor(Math.random() * VOICE_VARIANTS.length)];
+        const num = String(Math.floor(Math.random() * 10) + 1).padStart(2, '0');
+        const src = 'celeste-sounds/' + voice + '/' + variant + '/' + voice + '_' + variant + '_' + num + '.wav';
+        try {
+            const a = blipAudio;
+            a.src = src;
+            a.volume = 0.8;
+            a.playbackRate = 0.94 + Math.random() * 0.12;
+            a.currentTime = 0;
+            a.play().catch(() => {});
+        } catch (e) { /* 无声降级 */ }
+    }
+
+    function createBubbleElement() {
+        if (bubbleEl) bubbleEl.remove();
+        bubbleEl = document.createElement('div');
+        bubbleEl.id = 'madeline-bubble';
+        const av = document.createElement('div');
+        av.className = 'bubble-avatar';
+        const img = document.createElement('img');
+        img.src = avatarMap['默认'];
+        av.appendChild(img);
+        bubbleEl.appendChild(av);
+        document.body.appendChild(bubbleEl);
+    }
+
+    async function showBubble(text, emotion) {
+        if (isBubbling) return;
+        isBubbling = true;
+
+        createBubbleElement();
+        const em = emotion || '默认';
+        bubbleEl.querySelector('img').src = avatarMap[em] || avatarMap['默认'];
+
+        // 清空内容但保留 avatar
+        const avHtml = bubbleEl.querySelector('.bubble-avatar').outerHTML;
+        bubbleEl.innerHTML = '';
+        bubbleEl.innerHTML = avHtml;
+
+        quickInputBox.classList.add('bubble-active');
+        playBubbleSound();
+
+        bubbleEl.style.display = 'block';
+        await sleep(50);
+        bubbleEl.classList.add('show');
+
+        const textNode = document.createTextNode('');
+        bubbleEl.insertBefore(textNode, bubbleEl.firstChild);
+
+        for (const ch of text) {
+            textNode.textContent += ch;
+            await sleep(50 + Math.random() * 30);
+        }
+
+        await sleep(5000);
+
+        bubbleEl.classList.remove('show');
+        await sleep(500);
+        bubbleEl.remove();
+        bubbleEl = null;
+
+        if (!chatOpen) {
+            showQuickInput(true);
+        }
+        isBubbling = false;
+    }
+
+    async function proactiveBubble() {
+        if (chatOpen || companionState.isTyping || contentInput.value.trim()) {
+            scheduleNextBubble();
+            return;
+        }
+        try {
+            const res = await api('/diary/bubble', 'GET');
+            if (res.success && res.data && res.data.message) {
+                await addMadelineMessage(res.data.message, res.data.emotion || '默认');
+            }
+        } catch (e) {
+            console.warn('主动对话失败:', e);
+        }
+        scheduleNextBubble();
+    }
+    function scheduleNextBubble() {
+        const delay = (40 + Math.random() * 50) * 1000;
+        bubbleTimer = setTimeout(proactiveBubble, delay);
+    }
+
+    // ================================================================
+    // ===== 实时日记伴侣引擎 v2 — Madeline 实时陪写系统 =====
+    // ================================================================
+
+    // ===== 配置常量 =====
+    const REALTIME_CONFIG = {
+        MIN_CHARS_FOR_AI: 8,
+        MIN_NEW_CHARS_FOR_AI: 12,
+        MIN_NEW_CHARS_FOR_QUICK: 6,
+        SENTENCE_ENDERS: ['。', '！', '？', '…', '...', '!', '?', '\n'],
+        EMOTION_WORDS: {
+            '不安': ['担心','焦虑','害怕','紧张','不安','忐忑','恐慌','患得患失','迷茫','彷徨','不知所措','心慌'],
+            '惊讶': ['惊讶','意外','震惊','吃惊','惊喜','诧异','惊愕','目瞪口呆','没想到','居然','竟然','万万没想到'],
+            '怨恨': ['怨恨','愤怒','生气','恨','憎恨','嫌弃','失望','郁闷','不公','凭什么','可恶','恼火'],
+            '不开心': ['悲伤','难过','痛苦','忧郁','沮丧','颓废','消极','不开心','哭','泪','崩溃','绝望','孤独','寂寞'],
+            '可爱': ['可爱','甜','暖心','感动','温馨','幸福','开心','快乐','棒','好极了','太棒了','感恩','满足'],
+            '无语': ['无语','哑然','沉默','冷场','尴尬','不知道说什么','呵呵','算了','无言','服了','离谱']
+        },
+        EMOTION_COLORS: {
+            '默认': '#A8E6CF', '不安': '#FF6B6B', '惊讶': '#7DCFFF',
+            '怨恨': '#FF4444', '不开心': '#9B59B6', '可爱': '#FF69B4', '无语': '#B0B0B0'
+        },
+        EMOTION_WEIGHTS: { '不安':1.2, '惊讶':1.0, '怨恨':1.3, '不开心':1.2, '可爱':1.0, '无语':0.8 },
+        COOLDOWN_AFTER_AI: 2000,
+        MAX_LOCAL_REACTIONS: 3
+    };
+
+    // ===== 状态管理 =====
+    const companionState = {
+        lastAnalyzedText: '',
+        lastAnalyzedLen: 0,
+        currentEmotion: '默认',
+        previousEmotion: '默认',
+        emotionHistory: [],
+        localReactionCount: 0,
+        lastAiTime: 0,
+        isAiPending: false,
+        isTyping: false,
+        typeTimer: null,
+        peakEmotion: null,
+        peakIntensity: 0
+    };
+
+    // ===== DOM 引用 =====
+    const peekingEl = document.getElementById('madeline-peeking');
+    const emotionBar = document.getElementById('emotion-analysis-bar');
+    const emotionFill = document.getElementById('emotionFill');
+    const emotionTagsEl = document.getElementById('emotionTags');
+    const emotionIntensityEl = document.getElementById('emotionIntensity');
+    const emotionWaveEl = document.getElementById('emotion-wave');
+    const waveCanvas = document.getElementById('waveCanvas');
+
+    // ===== 情绪波形可视化 =====
+    const waveCtx = waveCanvas.getContext('2d');
+    let waveAnimFrame = null;
+
+    function initWaveCanvas() {
+        waveCanvas.width = waveCanvas.offsetWidth * 2;
+        waveCanvas.height = waveCanvas.offsetHeight * 2;
+        waveCtx.scale(2, 2);
+    }
+    initWaveCanvas();
+
+    function drawWave() {
+        const w = waveCanvas.offsetWidth;
+        const h = waveCanvas.offsetHeight;
+        waveCtx.clearRect(0, 0, w, h);
+        const color = REALTIME_CONFIG.EMOTION_COLORS[companionState.currentEmotion] || '#A8E6CF';
+        const intensity = companionState.peakIntensity / 10;
+        const amplitude = h * 0.3 * Math.max(0.2, intensity);
+        const now = Date.now() / 1000;
+        const speed = companionState.isTyping ? 3 : 1;
+
+        waveCtx.beginPath();
+        waveCtx.moveTo(0, h / 2);
+        for (let x = 0; x < w; x++) {
+            const t = x / w;
+            const y = h / 2 + Math.sin(t * 6 + now * speed) * amplitude
+                + Math.sin(t * 10 + now * speed * 1.5) * amplitude * 0.3
+                + Math.sin(t * 15 + now * speed * 0.7) * amplitude * 0.15;
+            waveCtx.lineTo(x, y);
+        }
+        waveCtx.strokeStyle = color;
+        waveCtx.lineWidth = 1.5;
+        waveCtx.globalAlpha = 0.6;
+        waveCtx.stroke();
+        waveCtx.globalAlpha = 1;
+
+        waveAnimFrame = requestAnimationFrame(drawWave);
+    }
+    drawWave();
+
+    // ===== 本地快速情绪分析（每次输入都触发） =====
+    function analyzeLocalEmotion(text) {
+        const scores = {};
+        let totalHits = 0;
+        for (const [emotion, keywords] of Object.entries(REALTIME_CONFIG.EMOTION_WORDS)) {
+            scores[emotion] = 0;
+            for (const kw of keywords) {
+                let idx = 0;
+                let count = 0;
+                while ((idx = text.indexOf(kw, idx)) !== -1) {
+                    count++;
+                    idx += kw.length;
+                }
+                if (count > 0) {
+                    const weight = REALTIME_CONFIG.EMOTION_WEIGHTS[emotion] || 1;
+                    scores[emotion] += count * weight;
+                    totalHits += count;
+                }
+            }
+        }
+        let maxEmotion = '默认';
+        let maxScore = 0;
+        for (const [emotion, score] of Object.entries(scores)) {
+            if (score > maxScore) {
+                maxScore = score;
+                maxEmotion = emotion;
+            }
+        }
+        const intensity = Math.min(10, Math.round((maxScore / Math.max(1, totalHits)) * 5 + maxScore));
+        const sorted = Object.entries(scores)
+            .filter(([, s]) => s > 0)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 3)
+            .map(([e]) => e);
+        return { emotion: maxEmotion, intensity, scores, topEmotions: sorted };
+    }
+
+    // ===== 更新情绪分析条 UI =====
+    function updateEmotionBar(analysis) {
+        emotionBar.classList.add('show');
+        emotionWaveEl.classList.add('show');
+        const pct = (analysis.intensity / 10) * 100;
+        const color = REALTIME_CONFIG.EMOTION_COLORS[analysis.emotion] || '#A8E6CF';
+        emotionFill.style.width = pct + '%';
+        emotionFill.style.background = color;
+        emotionIntensityEl.textContent = analysis.emotion + ' ' + analysis.intensity + '/10';
+        emotionIntensityEl.style.color = color;
+
+        const allEmotions = ['默认','不安','惊讶','怨恨','不开心','可爱','无语'];
+        emotionTagsEl.innerHTML = '';
+        for (const em of allEmotions) {
+            const tag = document.createElement('span');
+            tag.className = 'emotion-tag';
+            if (analysis.topEmotions.includes(em) || em === analysis.emotion) {
+                tag.classList.add('active');
+                if (em === analysis.emotion) {
+                    tag.style.background = color;
+                    tag.style.color = '#111';
+                }
+            }
+            tag.textContent = em;
+            emotionTagsEl.appendChild(tag);
+        }
+    }
+
+    // ===== 检测新增的句子 =====
+    function getNewSentences(oldText, newText) {
+        if (newText.length <= oldText.length) return [];
+        const addedPart = newText.substring(oldText.length);
+        const sentences = [];
+        for (const ender of REALTIME_CONFIG.SENTENCE_ENDERS) {
+            let idx = addedPart.indexOf(ender);
+            if (idx !== -1) {
+                const ctxStart = Math.max(0, oldText.length - 20);
+                const sentenceText = newText.substring(ctxStart, oldText.length + idx + ender.length);
+                sentences.push(sentenceText.trim());
+            }
+        }
+        return sentences;
+    }
+
+    // ===== 显示 "Madeline 正在看..." =====
+    function showPeeking(show) {
+        if (show) {
+            peekingEl.classList.add('show');
+        } else {
+            peekingEl.classList.remove('show');
+        }
+    }
+
+    // ===== 本地快速反应（不等 AI，即时反馈） =====
+    function localReact(analysis, newText) {
+        if (companionState.localReactionCount >= REALTIME_CONFIG.MAX_LOCAL_REACTIONS) return;
+        const prevEmotion = companionState.currentEmotion;
+        const newEmotion = analysis.emotion;
+
+        if (newEmotion !== prevEmotion && newEmotion !== '默认') {
+            companionState.localReactionCount++;
+            companionState.currentEmotion = newEmotion;
+            updateThemeByEmotion(newEmotion);
+
+            const reactions = {
+                '不安': ['…怎么了？', '感觉到你有点不安…', '慢慢写，我在。'],
+                '惊讶': ['哦？发生了什么！', '然后呢？！', '哇…'],
+                '怨恨': ['…', '深呼吸…', '我听着呢。'],
+                '不开心': ['…我在。', '写出来会好一些。', '嗯，继续写。'],
+                '可爱': ['♥', '嗯嗯！', '看到你开心我也开心。'],
+                '无语': ['…嗯。', '有时候就是会这样。', '无语也没关系。']
+            };
+            const pool = reactions[newEmotion] || ['…'];
+            const reaction = pool[Math.floor(Math.random() * pool.length)];
+            addMadelineMessage(reaction, '默认');
+        }
+
+        companionState.peakIntensity = Math.max(companionState.peakIntensity, analysis.intensity);
+    }
+
+    // ===== 触发 AI 分析 =====
+    async function triggerAiAnalysis(text, triggerType) {
+        if (companionState.isAiPending) return;
+        companionState.isAiPending = true;
+        companionState.lastAnalyzedText = text;
+        companionState.lastAnalyzedLen = text.length;
+        showPeeking(true);
+
+        try {
+            const res = await api('/diary/companion', 'POST', { draft: text });
+            if (res.success && res.data) {
+                const feedback = res.data.feedback || '';
+                const emotion = res.data.emotion || '默认';
+                const userEmotion = res.data.userEmotion || emotion;
+                showPeeking(false);
+                if (feedback) addMadelineMessage(feedback, emotion);
+                updateThemeByEmotion(userEmotion);
+                companionState.currentEmotion = userEmotion;
+                companionState.previousEmotion = userEmotion;
+                companionState.localReactionCount = 0;
+                companionState.lastAiTime = Date.now();
+
+                const analysis = analyzeLocalEmotion(text);
+                updateEmotionBar(analysis);
+
+                companionState.emotionHistory.push({
+                    emotion: userEmotion, time: Date.now(), trigger: triggerType
+                });
+                if (companionState.emotionHistory.length > 50) {
+                    companionState.emotionHistory = companionState.emotionHistory.slice(-50);
+                }
+            } else {
+                showPeeking(false);
+            }
+        } catch (e) {
+            console.warn('AI 分析失败:', e);
+            showPeeking(false);
+        } finally {
+            companionState.isAiPending = false;
+        }
+    }
+
+    // ===== 核心：输入事件处理 =====
+    contentInput.addEventListener('input', () => {
+        const text = contentInput.value.trim();
+
+        companionState.isTyping = true;
+        clearTimeout(companionState.typeTimer);
+        companionState.typeTimer = setTimeout(() => {
+            companionState.isTyping = false;
+        }, 500);
+
+        if (text.length < REALTIME_CONFIG.MIN_CHARS_FOR_AI) {
+            emotionBar.classList.remove('show');
+            emotionWaveEl.classList.remove('show');
+            return;
+        }
+
+        const analysis = analyzeLocalEmotion(text);
+        updateEmotionBar(analysis);
+
+        const newSentences = getNewSentences(companionState.lastAnalyzedText, text);
+        const newChars = text.length - companionState.lastAnalyzedLen;
+        const hasSentenceEnd = newSentences.length > 0;
+        const enoughNewChars = newChars >= REALTIME_CONFIG.MIN_NEW_CHARS_FOR_AI;
+        const quickTrigger = newChars >= REALTIME_CONFIG.MIN_NEW_CHARS_FOR_QUICK && hasSentenceEnd;
+        const timeSinceLastAi = Date.now() - companionState.lastAiTime;
+        const pastCooldown = timeSinceLastAi > REALTIME_CONFIG.COOLDOWN_AFTER_AI;
+
+        localReact(analysis, text);
+
+        if (!companionState.isAiPending && pastCooldown) {
+            if (quickTrigger || enoughNewChars) {
+                triggerAiAnalysis(text, hasSentenceEnd ? 'sentence' : 'threshold');
+            }
+        }
+    });
+
+    // ===== 标题也监听（轻量） =====
+    titleInput.addEventListener('input', () => {
+        const title = titleInput.value.trim();
+        const content = contentInput.value.trim();
+        if (title.length > 2 && content.length > REALTIME_CONFIG.MIN_CHARS_FOR_AI) {
+            const combined = title + '。' + content;
+            const analysis = analyzeLocalEmotion(combined);
+            updateEmotionBar(analysis);
+        }
+    });
+
+    // ===== 保存日记（含最终分析 + 状态重置） =====
+    async function saveDiary() {
+        const title = titleInput.value.trim();
+        const content = contentInput.value.trim();
+        if (!content) { showToast('写点什么再保存吧~', 'error'); return; }
+        saveBtn.disabled = true;
+        saveBtn.textContent = '保存中...';
+        try {
+            const res = await api('/diary', 'POST', { title: title || '无题', content });
+            if (res.success) {
+                companionState.lastAnalyzedText = '';
+                companionState.lastAnalyzedLen = 0;
+                companionState.localReactionCount = 0;
+                companionState.emotionHistory = [];
+                companionState.peakIntensity = 0;
+                updateThemeByEmotion('默认');
+
+                const companionRes = await api('/diary/companion', 'POST', { draft: content });
+                if (companionRes.success && companionRes.data) {
+                    const feedback = companionRes.data.feedback || '';
+                    const emotion = companionRes.data.emotion || '默认';
+                    addMadelineMessage(feedback, emotion);
+                    updateThemeByEmotion(emotion);
+                }
+
+                showToast('保存成功！', 'success');
+                titleInput.value = '';
+                contentInput.value = '';
+                emotionBar.classList.remove('show');
+                emotionWaveEl.classList.remove('show');
+            } else {
+                showToast(res.msg || '保存失败', 'error');
+            }
+        } catch (e) {
+            showToast('网络错误', 'error');
+        }
+        saveBtn.disabled = false;
+        saveBtn.textContent = '保存日记';
+    }
+    saveBtn.addEventListener('click', saveDiary);
+
+    // ===== 测试情绪检测按钮 =====
+    const testBtn = document.getElementById('testEmotionBtn');
+    const emotionResult = document.getElementById('emotionResult');
+    testBtn.addEventListener('click', () => {
+        const text = contentInput.value.trim();
+        if (!text) { emotionResult.style.display = 'none'; return; }
+        const analysis = analyzeLocalEmotion(text);
+        emotionResult.style.display = 'block';
+        emotionResult.innerHTML =
+            '<strong>情绪:</strong> ' + analysis.emotion + '<br>' +
+            '<strong>强度:</strong> ' + analysis.intensity + '/10<br>' +
+            '<strong>Top 情绪:</strong> ' + analysis.topEmotions.join(', ') + '<br>' +
+            '<strong>详细得分:</strong> ' + (Object.entries(analysis.scores).filter(function(p){ return p[1] > 0; }).map(function(p){ return p[0] + ':' + p[1]; }).join(', ') || '无');
+    });
+
+    // ================================================================
+    // ===== 初始化 =====
+    // ================================================================
+    // ===== 像素 Madeline 行为树 v2 =====
+    const pm = document.getElementById('pixelMadeline');
+    const PM_MOVE_SRC = 'celeste-gui/madeline-move.gif';
+    const PM_FUN_SRC = 'celeste-gui/madeline-fun.gif';
+    const pmState = {
+        x: window.innerWidth * 0.3,
+        y: window.innerHeight - 80,
+        dir: 1,
+        mode: 'walk',
+        modeUntil: 0,
+        targetX: null,
+        targetY: null,
+        hopT: -1,
+        funUntil: 0
+    };
+
+    function blockedAt(tx, ty) {
+        const m = 20;
+        const zones = [];
+        if (gameDialog.classList.contains('show')) zones.push(gameDialog.getBoundingClientRect());
+        const ed = document.querySelector('.editor-wrapper');
+        if (ed) zones.push(ed.getBoundingClientRect());
+        for (const r of zones) {
+            if (!r || (r.width === 0 && r.height === 0)) continue;
+            if (tx < r.right + m && tx + pm.offsetWidth > r.left - m &&
+                ty < r.bottom + m && ty + pm.offsetHeight > r.top - m) return true;
+        }
+        return false;
+    }
+
+    function pmPickTarget() {
+        const maxX = window.innerWidth - pm.offsetWidth - 8;
+        const maxY = window.innerHeight - pm.offsetHeight - 8;
+        for (let i = 0; i < 12; i++) {
+            const tx = 8 + Math.random() * (maxX - 16);
+            const ty = 70 + Math.random() * (maxY - 78);
+            if (!blockedAt(tx, ty)) return { x: tx, y: ty };
+        }
+        return { x: window.innerWidth * 0.2, y: maxY };
+    }
+
+    function pmThink(now) {
+        if (companionState.isTyping) {
+            if (pmState.mode !== 'peek') {
+                pmState.mode = 'peek';
+                const ed = document.querySelector('.editor-wrapper');
+                const rect = ed ? ed.getBoundingClientRect() : null;
+                pmState.targetX = rect ? Math.max(8, rect.left - pm.offsetWidth - 14) : window.innerWidth * 0.2;
+                pmState.targetY = window.innerHeight - pm.offsetHeight - 8;
+            }
+            return;
+        }
+        if (pmState.mode === 'peek') { pmState.mode = 'idle'; pmState.modeUntil = 0; }
+
+        if (now >= pmState.modeUntil) {
+            if (Math.random() < 0.3) {
+                pmState.mode = 'idle';
+                pmState.modeUntil = now + 1200 + Math.random() * 2200;
+                const onGround = pmState.y > window.innerHeight - pm.offsetHeight - 48;
+                if (onGround && now >= pmState.funUntil && Math.random() < 0.3) {
+                    pm.src = PM_FUN_SRC;
+                    pmState.funUntil = now + 1800;
+                }
+            } else {
+                pmState.mode = 'walk';
+                const t = pmPickTarget();
+                pmState.targetX = t.x;
+                pmState.targetY = t.y;
+                pmState.modeUntil = now + 6000 + Math.random() * 6000;
+                if (Math.random() < 0.4) pmState.hopT = 0;
+            }
+        }
+    }
+
+    let pmLast = performance.now();
+    function pmLoop(now) {
+        const dt = Math.min(0.05, (now - pmLast) / 1000);
+        pmLast = now;
+
+        if (pmState.funUntil > 0 && now >= pmState.funUntil) {
+            pm.src = PM_MOVE_SRC;
+            pmState.funUntil = 0;
+        }
+        const isFunning = pmState.funUntil > 0 && now < pmState.funUntil;
+        const onGroundNow = pmState.y > window.innerHeight - pm.offsetHeight - 48;
+        if (!onGroundNow && pm.src.indexOf('madeline-move.gif') === -1) pm.src = PM_MOVE_SRC;
+
+        if (!chatOpen) {
+            pmThink(now);
+            const speed = 85;
+            if (!isFunning && (pmState.mode === 'peek' || pmState.mode === 'walk') && pmState.targetX !== null) {
+                const dx = pmState.targetX - pmState.x;
+                const dy = pmState.targetY - pmState.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > 5) {
+                    if (dx > 0.5) pmState.dir = 1;
+                    else if (dx < -0.5) pmState.dir = -1;
+                    pmState.x += (dx / dist) * speed * dt;
+                    pmState.y += (dy / dist) * speed * dt;
+                } else if (pmState.mode === 'walk') {
+                    pmState.mode = 'idle';
+                    pmState.modeUntil = now + 800 + Math.random() * 1800;
+                }
+            }
+            pmState.x = Math.max(4, Math.min(pmState.x, window.innerWidth - pm.offsetWidth - 4));
+            pmState.y = Math.max(60, Math.min(pmState.y, window.innerHeight - pm.offsetHeight - 8));
+            if (pmState.mode !== 'peek' && blockedAt(pmState.x, pmState.y)) {
+                pmState.targetX = pmState.x;
+                pmState.targetY = window.innerHeight - pm.offsetHeight - 8;
+                pmState.mode = 'walk';
+                pmState.modeUntil = now + 3000;
+            }
+        }
+
+        let hopOffset = 0;
+        if (pmState.hopT >= 0 && !isFunning) {
+            pmState.hopT += dt;
+            if (pmState.hopT >= 0.5) pmState.hopT = -1;
+            else hopOffset = Math.sin((pmState.hopT / 0.5) * Math.PI) * 26;
+        }
+
+        pm.style.transform = 'translate(' + pmState.x + 'px,' + (pmState.y - hopOffset) + 'px)' + (pmState.dir < 0 ? ' scaleX(-1)' : '');
+        requestAnimationFrame(pmLoop);
+    }
+    requestAnimationFrame(pmLoop);
+    window.addEventListener('feather-finished', () => {
+        addMadelineMessage('回来啦。刚才跟着羽毛的那一会儿，心里是不是安静了一点？', '可爱');
+    });
+    pm.addEventListener('click', () => toggleChat());
+
+
+    (async function init() {
+        if (!localStorage.getItem('token')) {
+            alert('请先登录');
+            location.href = 'login.html';
+            return;
+        }
+
+        // BGM
+        const bgmPlayer = document.getElementById('bgmPlayer');
+        const savedDiaryTime = parseFloat(localStorage.getItem('bgmTimeDiary') || '0');
+        if (savedDiaryTime > 0) bgmPlayer.currentTime = savedDiaryTime;
+        bgmPlayer.volume = 0.3;
+        bgmPlayer.play().catch(() => {});
+        setInterval(() => { localStorage.setItem('bgmTimeDiary', bgmPlayer.currentTime); }, 2000);
+        function tryPlayBGM() { bgmPlayer.play().then(() => { document.removeEventListener('click', tryPlayBGM); document.removeEventListener('keydown', tryPlayBGM); }).catch(() => {}); }
+        document.addEventListener('click', tryPlayBGM);
+        document.addEventListener('keydown', tryPlayBGM);
+
+        const savedEmotion = localStorage.getItem('lastEmotion') || '默认';
+        updateThemeByEmotion(savedEmotion);
+        addMadelineMessage('Hey! I\'m Madeline. Let\'s record life together.', '默认');
+
+        showQuickInput(true);
+        scheduleNextBubble();
+
+        // 每日明信片（每天只弹一次）
+        const today = new Date().toDateString();
+        const lastShown = localStorage.getItem('postcardDate');
+        if (lastShown !== today) {
+            await showDailyPostcard();
+        }
+    })();
+})();
+    </script>
+</body>
+</html>
