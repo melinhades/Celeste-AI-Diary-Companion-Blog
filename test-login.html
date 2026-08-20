@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>测试登录</title>
+</head>
+<body>
+    <h2>测试登录接口</h2>
+    <button onclick="testLogin()">测试登录</button>
+    <pre id="result"></pre>
+
+    <script>
+    async function testLogin() {
+        const result = document.getElementById('result');
+        result.textContent = '正在测试...';
+
+        try {
+            const response = await fetch('http://localhost:8888/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    account: 'test999',
+                    password: 'pass123'
+                })
+            });
+
+            const data = await response.json();
+            result.textContent = `状态码: ${response.status}\n响应: ${JSON.stringify(data, null, 2)}`;
+        } catch (error) {
+            result.textContent = `错误: ${error.message}`;
+        }
+    }
+    </script>
+</body>
+</html>

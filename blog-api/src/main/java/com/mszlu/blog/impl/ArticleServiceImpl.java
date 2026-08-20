@@ -7,8 +7,10 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.mszlu.blog.dao.dos.Archives;
 import com.mszlu.blog.dao.mapper.ArticleBodyMapper;
 import com.mszlu.blog.dao.mapper.ArticleMapper;
+import com.mszlu.blog.dao.mapper.TagMapper;
 import com.mszlu.blog.dao.pojo.Article;
 import com.mszlu.blog.dao.pojo.ArticleBody;
+import com.mszlu.blog.dao.pojo.Tag;
 import com.mszlu.blog.vo.params.ArticleTag;
 import com.mszlu.blog.dao.pojo.Category;
 import com.mszlu.blog.dao.pojo.SysUser;
@@ -41,6 +43,10 @@ public class ArticleServiceImpl implements ArticleService {
     private TagService tagService;
     @Autowired
     private ArticleTagMapper articleTagMapper;
+    @Autowired
+    private TagMapper tagMapper;
+    @Autowired
+    private ArticleBodyMapper articleBodyMapper;
     @Autowired
     private CategoryService categoryService;
 
@@ -136,21 +142,24 @@ public class ArticleServiceImpl implements ArticleService {
         2.根据bodyId和categoryId 去做关联查询
          */
         Article article = this.articleMapper.selectById(articleId);
+        if (article == null) {
+            return Result.fail(404, "文章不存在");
+        }
         ArticleVo articleVo =copy(article,true,true,true,true);
         //查看完文章增加阅读数后更新时有写加锁，导致性能降低
         //线程池 可以把更新操作扔到线程池中去执行，和主线程就不相关了
         threadService.updateArticleViewCount(articleMapper,article);
         return Result.success(articleVo);
     }
-    @Autowired
-    private ArticleBodyMapper articleBodyMapper;
 
     @Autowired
     private ThreadService threadService;
     private ArticleBodyVo findArticleBodyById(String bodyId) {
         ArticleBody articleBody = articleBodyMapper.selectById(bodyId);
         ArticleBodyVo articleBodyVo = new ArticleBodyVo();
-        articleBodyVo.setContent(articleBody.getContent());
+        if (articleBody != null) {
+            articleBodyVo.setContent(articleBody.getContent());
+        }
         return articleBodyVo;
     }
 
@@ -170,20 +179,36 @@ public class ArticleServiceImpl implements ArticleService {
         article.setTitle(articleParam.getTitle());
         article.setSummary(articleParam.getSummary());
         article.setCreateDate(System.currentTimeMillis());
-        article.setCategoryId(articleParam.getCategory().getId());
+        // 处理分类，如果没有选择分类则设置为null
+        if (articleParam.getCategory() != null && articleParam.getCategory().getId() != null) {
+            article.setCategoryId(articleParam.getCategory().getId());
+        }
 
         //插入之后 会生成一个文章id
         this.articleMapper.insert(article);
 
-        //tag
+        //tag - 处理标签，如果标签没有ID则先创建标签
         List<TagVo> tags = articleParam.getTags();
         if(tags != null) {
             for (TagVo tag : tags) {
                 String articleId = article.getId();
-                ArticleTag articleTag = new ArticleTag();
-                articleTag.setTagId(tag.getId());
-                articleTag.setArticleId(articleId);
-                articleTagMapper.insert(articleTag);
+                String tagId = tag.getId();
+
+                // 如果标签没有ID，说明是新标签，需要先创建
+                if (tagId == null && tag.getTagName() != null) {
+                    Tag newTag = new Tag();
+                    newTag.setTagName(tag.getTagName());
+                    newTag.setAvatar("/static/img/logo.b3a48c0.png");
+                    tagMapper.insert(newTag);
+                    tagId = newTag.getId();
+                }
+
+                if (tagId != null) {
+                    ArticleTag articleTag = new ArticleTag();
+                    articleTag.setTagId(tagId);
+                    articleTag.setArticleId(articleId);
+                    articleTagMapper.insert(articleTag);
+                }
             }
         }
         //body

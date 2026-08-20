@@ -1,69 +1,72 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<title>Celeste Journal · Demo</title>
-<style>
-    @font-face { font-family:'Renogare'; src:url('celeste-font-en/Renogare-Regular.ttf') format('truetype'); font-display:swap; }
-    @font-face { font-family:'CelesteZH'; src:url('fonts/NotoSansCJKsc-Medium.otf') format('opentype'); font-display:swap; }
-    * { margin:0; padding:0; box-sizing:border-box; }
-    body {
-        min-height:100vh;
-        background:radial-gradient(ellipse at 50% 18%, #24345c, #0c0f1e 75%);
-        display:flex; flex-direction:column; align-items:center;
-        font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif;
-        color:#fff; padding:28px 16px 190px;
-    }
-    h1 { font-size:14px; letter-spacing:3px; color:#ffe36d; margin-bottom:20px; text-shadow:0 0 10px rgba(255,227,109,.4); }
-    .stage { width:min(94vw, 1080px); }
-    .book { position:relative; width:100%; perspective:2600px; }
-    .page {
-        position:relative; width:100%;
-        transition:transform .7s cubic-bezier(.45,.05,.25,1), opacity .7s ease;
-        filter:drop-shadow(0 18px 32px rgba(0,0,0,.55));
-        backface-visibility:hidden;
-    }
-    .page img { width:100%; display:block; }
-    .page textarea {
-        position:absolute; border:none; outline:none; resize:none;
-        background:transparent; overflow:hidden;
-        font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif;
-        font-size:15px; line-height:1.85; color:rgba(64,58,66,.92);
-        caret-color:#e6517c;
-    }
-    .page textarea::placeholder { color:rgba(64,58,66,.3); }
-    .page .shade {
-        position:absolute; inset:0; pointer-events:none; opacity:0;
-        background:linear-gradient(90deg, rgba(10,12,24,.55), transparent 60%);
-        transition:opacity .6s;
-    }
-    .nav { display:flex; align-items:center; justify-content:center; gap:22px; margin-top:24px; }
-    .nav button {
-        border:2px solid #ffe36d; background:rgba(22,34,60,.85); color:#ffe36d;
-        width:42px; height:42px; border-radius:50%; font-size:16px; cursor:pointer;
-        box-shadow:0 0 8px rgba(255,230,109,.35); transition:transform .2s;
-    }
-    .nav button:hover { transform:scale(1.1); }
-    .dots { display:flex; gap:10px; }
-    .dots span { width:9px; height:9px; border-radius:50%; background:rgba(255,255,255,.25); transition:all .3s; }
-    .dots span.on { background:#ffe36d; box-shadow:0 0 8px rgba(255,227,109,.7); transform:scale(1.25); }
-    .panel {
-        position:fixed; left:50%; bottom:14px; transform:translateX(-50%);
-        background:rgba(12,15,30,.92); border:1px solid rgba(255,227,109,.35);
-        border-radius:10px; padding:12px 18px; z-index:50;
-        display:flex; flex-direction:column; gap:6px; width:min(94vw, 640px);
-        font-size:12px;
-    }
-    .panel .row { display:flex; align-items:center; gap:10px; }
-    .panel label { width:70px; color:#ffe36d; flex-shrink:0; }
-    .panel input[type=range] { flex:1; accent-color:#ffe36d; }
-    .panel select, .panel b { color:#fff; }
-    .panel .vals { color:rgba(255,255,255,.55); font-family:monospace; }
-</style>
+    <meta charset="UTF-8">
+    <title>Celeste Journal · Demo</title>
+    <style>
+        @font-face { font-family:'Renogare'; src:url('celeste-font-en/Renogare-Regular.otf') format('opentype'); font-display:swap; }
+        @font-face { font-family:'CelesteZH'; src:url('fonts/NotoSansCJKsc-Medium.otf') format('opentype'); font-display:swap; }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            min-height:100vh;
+            background:radial-gradient(ellipse at 50% 18%, #24345c, #0c0f1e 75%);
+            display:flex; flex-direction:column; align-items:center;
+            font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif;
+            color:#fff; padding:28px 16px 150px;
+        }
+        h1 { font-size:14px; letter-spacing:3px; color:#ffe36d; margin-bottom:20px; text-shadow:0 0 10px rgba(255,227,109,.4); }
+        .stage { width:min(94vw, 600px); transition:width .25s ease; }
+        .book { position:relative; width:100%; perspective:1800px; }
+        .page {
+            position:relative; width:100%;
+            transition:transform .55s cubic-bezier(.3,.7,.25,1), opacity .5s ease;
+            filter:drop-shadow(0 18px 32px rgba(0,0,0,.55));
+            will-change:transform, opacity;
+        }
+        .page img { width:100%; display:block; }
+        .page textarea, .page input {
+            position:absolute; border:none; outline:none;
+            background:transparent; overflow:hidden;
+            font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif;
+            font-size:clamp(11px, 1.28vw, 15px); line-height:1.9;
+            color:rgba(64,58,66,.92);
+            caret-color:#e6517c;
+        }
+        .page textarea { resize:none; }
+        .page .gridzone {
+            position:absolute; display:grid;
+            grid-template-columns:repeat(10, 1fr); grid-template-rows:repeat(10, 1fr);
+        }
+        .page .gridzone i { cursor:pointer; border-radius:2px; transition:background .25s, box-shadow .25s; }
+        .page .gridzone i.on { background:rgba(255,214,90,.75); box-shadow:0 0 6px rgba(255,227,109,.8); }
+        .nav { display:flex; align-items:center; justify-content:center; gap:22px; margin-top:24px; }
+        .nav button {
+            border:2px solid #ffe36d; background:rgba(22,34,60,.85); color:#ffe36d;
+            width:42px; height:42px; border-radius:50%; font-size:16px; cursor:pointer;
+            box-shadow:0 0 8px rgba(255,230,109,.35); transition:transform .2s;
+        }
+        .nav button:hover { transform:scale(1.1); }
+        .dots { display:flex; gap:8px; }
+        .dots span { width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,.25); transition:all .3s; cursor:pointer; }
+        .dots span.on { background:#ffe36d; box-shadow:0 0 8px rgba(255,227,109,.7); transform:scale(1.25); }
+        .panel {
+            position:fixed; left:50%; bottom:14px; transform:translateX(-50%);
+            background:rgba(12,15,30,.92); border:1px solid rgba(255,227,109,.35);
+            border-radius:10px; padding:10px 18px; z-index:50;
+            width:min(94vw, 480px); font-size:12px;
+            display:flex; flex-direction:column; gap:5px;
+        }
+        .panel .row { display:flex; align-items:center; gap:12px; }
+        .panel label { width:64px; color:#ffe36d; flex-shrink:0; }
+        .panel input[type=range] { flex:1; accent-color:#ffe36d; }
+        .panel select { flex:1; background:rgba(22,34,60,.9); color:#fff; border:1px solid rgba(255,227,109,.4); border-radius:4px; }
+        .panel .mini { border:1px solid #ffe36d; background:transparent; color:#ffe36d; border-radius:4px; padding:3px 10px; cursor:pointer; font-size:11px; }
+        #cfgOut { font-family:monospace; color:rgba(255,255,255,.55); font-size:11px; }
+    </style>
 </head>
 <body>
-<h1>CELESTE JOURNAL · 翻页 Demo</h1>
-<div class="stage">
+<h1>CELESTE JOURNAL</h1>
+<div class="stage" id="stage">
     <div class="book" id="book"></div>
     <div class="nav">
         <button id="prevBtn">◀</button>
@@ -71,48 +74,43 @@
         <button id="nextBtn">▶</button>
     </div>
 </div>
-
 <div class="panel">
-    <div class="row">
-        <label>调节目标</label>
-        <select id="modeSel">
-            <option value="crop">裁切范围（去背景）</option>
-            <option value="write">写字区</option>
-        </select>
-        <span class="vals" id="valOut"></span>
+    <div class="row"><label>本子大小</label><input type="range" id="sizeR" min="0" max="100" value="40"></div>
+    <div class="row" style="padding-top:6px; border-top:1px dashed rgba(255,227,109,.25);">
+        <label>调框</label>
+        <select id="fieldSel"></select>
+        <button id="copyCfg" class="mini">复制配置</button>
     </div>
-    <div class="row"><label>X / 左</label><input type="range" id="rX" min="0" max="100"></div>
-    <div class="row"><label>Y / 上</label><input type="range" id="rY" min="0" max="100"></div>
-    <div class="row"><label>宽</label><input type="range" id="rW" min="1" max="100"></div>
-    <div class="row"><label>高</label><input type="range" id="rH" min="1" max="100"></div>
+    <div class="row"><label>X</label><input type="range" id="fX" min="0" max="95"></div>
+    <div class="row"><label>Y</label><input type="range" id="fY" min="0" max="95"></div>
+    <div class="row"><label>宽</label><input type="range" id="fW" min="2" max="95"></div>
+    <div class="row"><label>高</label><input type="range" id="fH" min="1" max="90"></div>
+    <div class="row"><span id="cfgOut"></span></div>
 </div>
-
 <script>
     const PAGES = [
-        {
-            src: 'celeste-journal/spread1.webp',
-            crop: { x: .045, y: .10, w: .91, h: .72 },
-            write: [
-                { x: .07, y: .30, w: .40, h: .34 },
-                { x: .54, y: .20, w: .41, h: .58 }
-            ]
-        },
-        {
-            src: 'celeste-journal/spread2.webp',
-            crop: { x: .045, y: .10, w: .91, h: .72 },
-            write: [
-                { x: .07, y: .28, w: .40, h: .34 },
-                { x: .54, y: .18, w: .41, h: .60 }
-            ]
-        },
-        {
-            src: 'celeste-journal/spread3.webp',
-            crop: { x: .045, y: .10, w: .91, h: .72 },
-            write: [
-                { x: .07, y: .24, w: .40, h: .38 },
-                { x: .54, y: .20, w: .41, h: .40 }
-            ]
-        }
+        { src: 'celeste-journal/spread1.jpg', crop: { x: 0, y: 0, w: 1, h: 1 },
+            fields: [
+                { kind: 'area', x: .104, y: .244, w: .364, h: .230 },
+                { kind: 'area', x: .104, y: .518, w: .364, h: .144 },
+                { kind: 'area', x: .527, y: .230, w: .182, h: .396 },
+                { kind: 'area', x: .737, y: .230, w: .173, h: .396 }
+            ] },
+        { src: 'celeste-journal/spread2.jpg', crop: { x: 0, y: 0, w: 1, h: 1 },
+            fields: [
+                { kind: 'area', x: .104, y: .244, w: .364, h: .230 },
+                { kind: 'area', x: .104, y: .518, w: .364, h: .144 },
+                { kind: 'line', x: .536, y: .197, w: .364, h: .036 },
+                { kind: 'line', x: .536, y: .255, w: .364, h: .036 },
+                { kind: 'grid', x: .536, y: .309, w: .378, h: .396 }
+            ] },
+        { src: 'celeste-journal/spread3.jpg', crop: { x: 0, y: 0, w: 1, h: 1 },
+            fields: [
+                { kind: 'area', x: .104, y: .230, w: .364, h: .216 },
+                { kind: 'area', x: .104, y: .482, w: .364, h: .122 },
+                { kind: 'area', x: .536, y: .215, w: .373, h: .216 },
+                { kind: 'cols', x: .536, y: .532, w: .373, h: .094, n: 3 }
+            ] }
     ];
 
     const book = document.getElementById('book');
@@ -131,15 +129,19 @@
     }
 
     function loadImage(src) {
-        return new Promise((res, rej) => {
+        return new Promise((res) => {
             const i = new Image();
             i.onload = () => res(i);
-            i.onerror = rej;
+            i.onerror = () => {
+                console.error('素材加载失败，检查文件是否已复制:', src);
+                res(null);
+            };
             i.src = src;
         });
     }
 
     function cropToDataURL(img, c) {
+        if (!img) return '';
         const cv = document.createElement('canvas');
         const sw = Math.round(img.naturalWidth * c.w), sh = Math.round(img.naturalHeight * c.h);
         cv.width = sw; cv.height = sh;
@@ -149,6 +151,52 @@
         return cv.toDataURL('image/png');
     }
 
+    function buildField(f, fi) {
+        const key = 'jd-' + cur + '-' + fi;
+        const common = el => {
+            el.style.left = (f.x * 100) + '%';
+            el.style.top = (f.y * 100) + '%';
+            el.style.width = (f.w * 100) + '%';
+            el.style.height = ((f.h || .036) * 100) + '%';
+        };
+        if (f.kind === 'area' || f.kind === 'line') {
+            const el = document.createElement(f.kind === 'area' ? 'textarea' : 'input');
+            common(el);
+            el.value = localStorage.getItem(key) || '';
+            el.addEventListener('input', () => localStorage.setItem(key, el.value));
+            return el;
+        }
+        if (f.kind === 'grid') {
+            const wrap = document.createElement('div');
+            wrap.className = 'gridzone';
+            common(wrap);
+            const saved = JSON.parse(localStorage.getItem(key) || '[]');
+            for (let i = 0; i < 100; i++) {
+                const cell = document.createElement('i');
+                if (saved.includes(i)) cell.classList.add('on');
+                cell.addEventListener('click', () => {
+                    cell.classList.toggle('on');
+                    const on = [...wrap.children].map((c, ci) => c.classList.contains('on') ? ci : -1).filter(v => v >= 0);
+                    localStorage.setItem(key, JSON.stringify(on));
+                });
+                wrap.appendChild(cell);
+            }
+            return wrap;
+        }
+        if (f.kind === 'cols') {
+            const wrap = document.createElement('div');
+            wrap.style.cssText = 'position:absolute; display:flex; gap:1.5%;';
+            common(wrap);
+            for (let i = 0; i < f.n; i++) {
+                const inp = document.createElement('input');
+                inp.style.cssText = 'flex:1; position:static; width:auto; height:100%; border:none; outline:none; background:transparent; font:inherit; color:rgba(64,58,66,.92); caret-color:#e6517c;';
+                inp.value = localStorage.getItem(key + '-' + i) || '';
+                inp.addEventListener('input', () => localStorage.setItem(key + '-' + i, inp.value));
+                wrap.appendChild(inp);
+            }
+            return wrap;
+        }
+    }
     async function buildPage(idx) {
         const p = PAGES[idx];
         if (!imgCache[p.src]) imgCache[p.src] = await loadImage(p.src);
@@ -157,20 +205,7 @@
         const img = document.createElement('img');
         img.src = cropToDataURL(imgCache[p.src], p.crop);
         el.appendChild(img);
-        p.write.forEach((w, wi) => {
-            const ta = document.createElement('textarea');
-            ta.style.left = (w.x * 100) + '%';
-            ta.style.top = (w.y * 100) + '%';
-            ta.style.width = (w.w * 100) + '%';
-            ta.style.height = (w.h * 100) + '%';
-            ta.placeholder = '在这里写……';
-            ta.value = localStorage.getItem('journal-demo-' + idx + '-' + wi) || '';
-            ta.addEventListener('input', () => localStorage.setItem('journal-demo-' + idx + '-' + wi, ta.value));
-            el.appendChild(ta);
-        });
-        const shade = document.createElement('div');
-        shade.className = 'shade';
-        el.appendChild(shade);
+        p.fields.forEach((f, fi) => el.appendChild(buildField(f, fi)));
         return el;
     }
 
@@ -180,77 +215,110 @@
         const oldEl = pageEl;
         cur = idx;
         updateNav();
-        syncPanel();
+        rebuildFieldSel();
         const newEl = await buildPage(idx);
+        newEl.style.position = 'absolute';
+        newEl.style.top = '0'; newEl.style.left = '0'; newEl.style.width = '100%';
+        newEl.style.zIndex = 2;
+        newEl.style.opacity = '0';
+        newEl.style.transform = dir > 0
+            ? 'translateX(8%) scale(.96) rotateY(-7deg)'
+            : 'translateX(-8%) scale(.96) rotateY(7deg)';
         book.appendChild(newEl);
-        pageEl = newEl;
-        oldEl.style.position = 'absolute';
-        oldEl.style.top = '0'; oldEl.style.left = '0'; oldEl.style.width = '100%';
-        oldEl.style.zIndex = 5;
-        oldEl.style.transformOrigin = dir > 0 ? 'left center' : 'right center';
-        oldEl.querySelector('.shade').style.opacity = '1';
         requestAnimationFrame(() => requestAnimationFrame(() => {
-            oldEl.style.transform = 'rotateY(' + (dir > 0 ? -98 : 98) + 'deg)';
-            oldEl.style.opacity = '.35';
+            newEl.style.opacity = '1';
+            newEl.style.transform = 'none';
+            oldEl.style.opacity = '0';
+            oldEl.style.transform = dir > 0
+                ? 'translateX(-8%) scale(.96) rotateY(7deg)'
+                : 'translateX(8%) scale(.96) rotateY(-7deg)';
         }));
-        setTimeout(() => { oldEl.remove(); busy = false; }, 730);
+        setTimeout(() => {
+            oldEl.remove();
+            newEl.style.position = 'relative';
+            newEl.style.zIndex = '';
+            pageEl = newEl;
+            busy = false;
+        }, 580);
     }
 
-    const modeSel = document.getElementById('modeSel');
-    const rX = document.getElementById('rX'), rY = document.getElementById('rY'),
-          rW = document.getElementById('rW'), rH = document.getElementById('rH');
-    const valOut = document.getElementById('valOut');
-    let rebuildTimer = null;
+    const sizeR = document.getElementById('sizeR');
+    const stage = document.getElementById('stage');
+    function applySize() {
+        stage.style.width = 'min(94vw, ' + (520 + sizeR.value * 8) + 'px)';
+    }
+    sizeR.addEventListener('input', applySize);
+    applySize();
 
-    function currentRegion() {
-        const p = PAGES[cur];
-        return modeSel.value === 'crop' ? p.crop : p.write[0];
+    const fieldSel = document.getElementById('fieldSel');
+    const fX = document.getElementById('fX'), fY = document.getElementById('fY'),
+        fW = document.getElementById('fW'), fH = document.getElementById('fH');
+    const cfgOut = document.getElementById('cfgOut');
+    let sel = 0;
+
+    function fieldEl(i) { return pageEl ? pageEl.children[1 + i] : null; }
+
+    function syncFieldSliders() {
+        const f = PAGES[cur].fields[sel];
+        if (!f) return;
+        fX.value = Math.round(f.x * 100);
+        fY.value = Math.round(f.y * 100);
+        fW.value = Math.round(f.w * 100);
+        fH.value = Math.round((f.h || .036) * 100);
+        cfgOut.textContent = 'x:' + f.x.toFixed(3) + ' y:' + f.y.toFixed(3) + ' w:' + f.w.toFixed(3) + ' h:' + (f.h || .036).toFixed(3);
     }
 
-    function syncPanel() {
-        const r = currentRegion();
-        rX.value = Math.round(r.x * 100);
-        rY.value = Math.round(r.y * 100);
-        rW.value = Math.round(r.w * 100);
-        rH.value = Math.round(r.h * 100);
-        valOut.textContent = JSON.stringify(r);
+    function rebuildFieldSel() {
+        fieldSel.innerHTML = '';
+        PAGES[cur].fields.forEach((f, i) => {
+            const o = document.createElement('option');
+            o.value = String(i);
+            o.textContent = '字段' + (i + 1) + ' · ' + f.kind;
+            fieldSel.appendChild(o);
+        });
+        sel = 0;
+        syncFieldSliders();
     }
 
-    function onSlide() {
-        const r = currentRegion();
-        r.x = rX.value / 100; r.y = rY.value / 100;
-        r.w = rW.value / 100; r.h = rH.value / 100;
-        valOut.textContent = JSON.stringify(r);
-        if (modeSel.value === 'write') {
-            const tas = pageEl.querySelectorAll('textarea');
-            const ta = tas[0], w = PAGES[cur].write[0];
-            ta.style.left = (w.x * 100) + '%'; ta.style.top = (w.y * 100) + '%';
-            ta.style.width = (w.w * 100) + '%'; ta.style.height = (w.h * 100) + '%';
-        } else {
-            clearTimeout(rebuildTimer);
-            rebuildTimer = setTimeout(async () => {
-                const fresh = await buildPage(cur);
-                book.replaceChild(fresh, pageEl);
-                pageEl = fresh;
-            }, 150);
+    function onFieldSlide() {
+        const f = PAGES[cur].fields[sel];
+        if (!f) return;
+        f.x = fX.value / 100; f.y = fY.value / 100;
+        f.w = fW.value / 100; f.h = fH.value / 100;
+        const el = fieldEl(sel);
+        if (el) {
+            el.style.left = (f.x * 100) + '%';
+            el.style.top = (f.y * 100) + '%';
+            el.style.width = (f.w * 100) + '%';
+            el.style.height = (f.h * 100) + '%';
         }
+        cfgOut.textContent = 'x:' + f.x.toFixed(3) + ' y:' + f.y.toFixed(3) + ' w:' + f.w.toFixed(3) + ' h:' + f.h.toFixed(3);
     }
-    [rX, rY, rW, rH].forEach(r => r.addEventListener('input', onSlide));
-    modeSel.addEventListener('change', syncPanel);
+    [fX, fY, fW, fH].forEach(r => r.addEventListener('input', onFieldSlide));
+    fieldSel.addEventListener('change', () => { sel = parseInt(fieldSel.value, 10); syncFieldSliders(); });
+
+    document.getElementById('copyCfg').addEventListener('click', () => {
+        navigator.clipboard.writeText(JSON.stringify(PAGES.map(p => p.fields), null, 1)).then(() => {
+            const btn = document.getElementById('copyCfg');
+            btn.textContent = '已复制!';
+            setTimeout(() => { btn.textContent = '复制配置'; }, 1200);
+        });
+    });
 
     document.getElementById('prevBtn').addEventListener('click', () => goto(cur - 1, -1));
     document.getElementById('nextBtn').addEventListener('click', () => goto(cur + 1, 1));
     window.addEventListener('keydown', e => {
-        if (document.activeElement && document.activeElement.tagName === 'TEXTAREA') return;
+        const t = document.activeElement && document.activeElement.tagName;
+        if (t === 'TEXTAREA' || t === 'INPUT') return;
         if (e.key === 'ArrowLeft') goto(cur - 1, -1);
         if (e.key === 'ArrowRight') goto(cur + 1, 1);
     });
 
     (async function init() {
         updateNav();
-        syncPanel();
         pageEl = await buildPage(0);
         book.appendChild(pageEl);
+        rebuildFieldSel();
     })();
 </script>
 </body>

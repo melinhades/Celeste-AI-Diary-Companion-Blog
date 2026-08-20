@@ -3,57 +3,94 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>归档 - mszlu博客</title>
+    <link rel="icon" href="icon/OIP.webp" type="image/webp">
+    <title>Archives - Celeste Blog</title>
     <link rel="stylesheet" href="css/common.css">
     <style>
-        .archives-layout { padding: 24px 20px; }
-        .archives-title { font-size: 22px; font-weight: 700; color: #333; margin-bottom: 24px; }
+    .nav-diary-btn {
+        display:inline-block;
+        cursor:pointer;
+        transition:transform .2s, filter .2s;
+        vertical-align:middle;
+    }
+    .nav-diary-btn:hover {
+        transform:scale(1.15);
+    }
+    .nav-diary-btn img {
+        height:36px;
+        width:auto;
+        display:block;
+        filter:drop-shadow(0 0 10px rgba(255,235,59,0.7));
+    }
+    .archives-layout { padding: 24px 20px; }
+        .archives-title { font-size: 22px; font-weight: 700; color: #e8e8f0; margin-bottom: 24px; }
         .year-group { margin-bottom: 32px; }
-        .year-label { font-size: 20px; font-weight: 700; color: #4f46e5; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
-        .year-label::after { content: ''; flex: 1; height: 1px; background: #e8e7ff; }
+        .year-label { font-size: 20px; font-weight: 700; color: #a78bfa; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; text-shadow: 0 0 10px rgba(138, 43, 226, 0.5); }
+        .year-label::after { content: ''; flex: 1; height: 1px; background: rgba(138, 43, 226, 0.3); }
         .archive-item {
             display: flex; align-items: center; gap: 16px;
-            padding: 12px 20px; background: #fff; border-radius: 8px;
+            padding: 12px 20px; background: rgba(30, 27, 75, 0.6); border-radius: 8px;
             margin-bottom: 8px; cursor: pointer;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.05);
-            transition: all 0.2s; border-left: 3px solid transparent;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            transition: all 0.3s; border-left: 3px solid transparent;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(138, 43, 226, 0.2);
         }
-        .archive-item:hover { border-left-color: #4f46e5; transform: translateX(4px); }
-        .archive-date { font-size: 13px; color: #aaa; width: 80px; flex-shrink: 0; }
-        .archive-title { font-size: 15px; color: #333; flex: 1; }
-        .archive-item:hover .archive-title { color: #4f46e5; }
-        .archive-count { font-size: 12px; color: #aaa; background: #f5f5f5; padding: 2px 8px; border-radius: 10px; }
+        .archive-item:hover { border-left-color: #a78bfa; transform: translateX(8px); box-shadow: 0 4px 20px rgba(138, 43, 226, 0.4); }
+        .archive-date { font-size: 13px; color: #8b8ba0; width: 80px; flex-shrink: 0; }
+        .archive-title { font-size: 15px; color: #e8e8f0; flex: 1; transition: all 0.3s; }
+        .archive-item:hover .archive-title { color: #a78bfa; text-shadow: 0 0 10px rgba(138, 43, 226, 0.5); }
+        .archive-count { font-size: 12px; color: #a78bfa; background: rgba(138, 43, 226, 0.2); padding: 2px 8px; border-radius: 10px; border: 1px solid rgba(138, 43, 226, 0.3); }
     </style>
 </head>
 <body>
+    <!-- BGM 播放器 -->
+    <audio id="bgmPlayer" loop>
+        <source src="bgm/postcard.mp3" type="audio/mpeg">
+    </audio>
+
 <header class="header">
     <div class="container header-inner">
-        <a href="index.html" class="logo">📝 mszlu博客</a>
+        <a href="index.html" class="logo"><img src="celeste-gui/logo.png" alt="Celeste"></a>
         <nav class="nav">
-            <a href="index.html" class="nav-link">首页</a>
-            <a href="archives.html" class="nav-link active">归档</a>
+            <a href="index.html" class="nav-link">Home</a>
+            <a href="archives.html" class="nav-link active">Archives</a>
+            <a href="diary.html" class="nav-link nav-diary-btn" title="Diary with Madeline">
+                <img src="celeste-gui/journal.png" alt="Diary">
+            </a>
         </nav>
         <div class="header-right" id="headerRight"></div>
     </div>
 </header>
 
 <div class="container archives-layout">
-    <div class="archives-title">📚 文章归档</div>
-    <div id="archiveContent"><div class="loading">加载中...</div></div>
+    <div class="archives-title"> Archives</div>
+    <div id="archiveContent"><div class="loading">Loading...</div></div>
 </div>
 
 <footer class="footer">
-    <div class="container">© 2024 mszlu博客 · Powered by Spring Boot</div>
+    <div class="container">© 2024 Celeste Blog System · Explore the Knowledge Ocean</div>
 </footer>
 
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
 <script>
+    // BGM
+    const bgmPlayer = document.getElementById('bgmPlayer');
+    const savedTime = parseFloat(localStorage.getItem('bgmTime') || '0');
+    if (savedTime > 0) bgmPlayer.currentTime = savedTime;
+    bgmPlayer.volume = 0.25;
+    bgmPlayer.play().catch(() => {});
+    setInterval(() => { localStorage.setItem('bgmTime', bgmPlayer.currentTime); }, 2000);
+    function tryPlayBGM() { bgmPlayer.play().then(() => { document.removeEventListener('click', tryPlayBGM); document.removeEventListener('keydown', tryPlayBGM); }).catch(() => {}); }
+    document.addEventListener('click', tryPlayBGM);
+    document.addEventListener('keydown', tryPlayBGM);
+
     initHeader();
 
     api('/articles/listArchives', 'POST').then(res => {
         if (!res.success || !res.data || res.data.length === 0) {
-            document.getElementById('archiveContent').innerHTML = '<div class="empty">暂无归档</div>';
+            document.getElementById('archiveContent').innerHTML = '<div class="empty">No archives</div>';
             return;
         }
 
@@ -70,7 +107,7 @@
         years.forEach(year => {
             const items = groups[year];
             html += `<div class="year-group">
-                <div class="year-label">${year} 年 <span class="archive-count">${items.length} 篇</span></div>`;
+                <div class="year-label">${year} <span class="archive-count">${items.length} posts</span></div>`;
             items.forEach(item => {
                 const month = item.month ? String(item.month).padStart(2, '0') : '';
                 html += `<div class="archive-item" onclick="location.href='article.html?id=${item.id}'">

@@ -3,25 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>注册 - mszlu博客</title>
+    <link rel="icon" href="icon/OIP.webp" type="image/webp">
+    <title>Register - Celeste Blog</title>
     <link rel="stylesheet" href="css/common.css">
     <style>
-        body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-        .register-box { background: #fff; border-radius: 14px; padding: 48px 40px; width: 400px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
-        .register-box h2 { text-align: center; font-size: 24px; color: #333; margin-bottom: 6px; }
-        .register-box p { text-align: center; color: #999; font-size: 14px; margin-bottom: 32px; }
-        .register-box .btn { width: 100%; padding: 13px; font-size: 15px; margin-top: 4px; }
-        .register-footer { text-align: center; margin-top: 20px; font-size: 14px; color: #888; }
-        .register-footer a { color: #4f46e5; }
+        body { display:flex; align-items:center; justify-content:center; min-height:100vh; }
+        body::after {
+            content:''; position:fixed; inset:0;
+            background:url('celeste-areas/ForsakenCity01.png') center/cover no-repeat;
+            opacity:.25; pointer-events:none; z-index:0;
+        }
+        .register-box {
+            background:rgba(22,34,60,.92);
+            border:2px solid #ffe36d;
+            border-radius:10px;
+            padding:36px;
+            width:400px;
+            box-shadow:0 8px 40px rgba(0,0,0,.6), 0 0 24px rgba(255,227,109,.15);
+            position:relative; z-index:1;
+        }
+        .register-box h2 {
+            text-align:center; font-size:20px; color:#ffe36d;
+            font-family:'Courier New', monospace; letter-spacing:2px; margin-bottom:6px;
+        }
+        .register-box .sub { text-align:center; color:#7788aa; font-size:13px; margin-bottom:22px; }
+        .register-madeline { display:block; width:64px; height:64px; border-radius:50%; margin:0 auto 14px; border:2px solid #ffe36d; box-shadow:0 0 14px rgba(255,227,109,.4); }
+        .register-box .form-group { margin-bottom:14px; }
+        .register-box .form-group label { color:#aab8d0; font-size:13px; }
+        .register-box .form-control { background:#0f1830; border:1px solid #3a4a6a; color:#e8e8f0; }
+        .register-box .form-control:focus { border-color:#ffe36d; box-shadow:0 0 10px rgba(255,227,109,.3); background:#141f3a; }
+        .register-box .btn-primary {
+            width:100%; padding:13px; font-size:15px; margin-top:6px;
+            background:#ffe36d; color:#111; font-weight:bold;
+            border-radius:6px; box-shadow:inset 0 -3px #c9a93f;
+            font-family:'Courier New', monospace; letter-spacing:4px;
+        }
+        .register-box .btn-primary:hover { background:#ffeb85; transform:none; box-shadow:inset 0 -3px #c9a93f, 0 0 14px rgba(255,227,109,.5); }
+        .register-footer { text-align:center; margin-top:16px; font-size:13px; color:#7788aa; }
+        .register-footer a { color:#ffe36d; }
+        .register-footer a:hover { text-shadow:0 0 8px rgba(255,227,109,.6); }
     </style>
 </head>
 <body>
 <div class="register-box">
-    <h2>创建账号</h2>
-    <p>加入 mszlu 博客社区</p>
+    <img class="register-madeline" src="celeste-portraits/madeline/peaceful00.png" alt="Madeline">
+    <h2>NEW TRAVELER</h2>
+    <p class="sub">Start your climb up the mountain.</p>
     <div class="form-group">
         <label>账号</label>
         <input class="form-control" type="text" id="account" placeholder="请输入账号（字母/数字）" autofocus>
+    </div>
+    <div class="form-group">
+        <label>昵称</label>
+        <input class="form-control" type="text" id="nickname" placeholder="请输入昵称">
     </div>
     <div class="form-group">
         <label>密码</label>
@@ -41,12 +75,14 @@
 
     function doRegister() {
         const account = document.getElementById('account').value.trim();
+        const nickname = document.getElementById('nickname').value.trim();
         const password = document.getElementById('password').value.trim();
         const password2 = document.getElementById('password2').value.trim();
         document.getElementById('errMsg').style.display = 'none';
 
         if (!account) { showErr('请输入账号'); return; }
         if (account.length < 3) { showErr('账号至少3个字符'); return; }
+        if (!nickname) { showErr('请输入昵称'); return; }
         if (!password) { showErr('请输入密码'); return; }
         if (password.length < 6) { showErr('密码至少6位'); return; }
         if (password !== password2) { showErr('两次密码不一致'); return; }
@@ -54,7 +90,7 @@
         const btn = document.getElementById('regBtn');
         btn.disabled = true; btn.textContent = '注册中...';
 
-        api('/register', 'POST', { account, password }).then(res => {
+        api('/register', 'POST', { account, password, nickname }).then(res => {
             btn.disabled = false; btn.textContent = '注 册';
             if (res.success) {
                 showToast('注册成功，请登录', 'success');

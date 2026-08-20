@@ -3,22 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>登录 - mszlu博客</title>
+    <link rel="icon" href="icon/OIP.webp" type="image/webp">
+    <title>Login - Celeste Blog</title>
     <link rel="stylesheet" href="css/common.css">
-    <style>
-        body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-        .login-box { background: #fff; border-radius: 14px; padding: 48px 40px; width: 400px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
-        .login-box h2 { text-align: center; font-size: 24px; color: #333; margin-bottom: 6px; }
-        .login-box p { text-align: center; color: #999; font-size: 14px; margin-bottom: 32px; }
-        .login-box .btn { width: 100%; padding: 13px; font-size: 15px; margin-top: 4px; }
-        .login-footer { text-align: center; margin-top: 20px; font-size: 14px; color: #888; }
-        .login-footer a { color: #4f46e5; }
+    <style>        body { display:flex; align-items:center; justify-content:center; min-height:100vh; }
+    body::after {
+        content:''; position:fixed; inset:0;
+        background:url('celeste-areas/ForsakenCity01.png') center/cover no-repeat;
+        opacity:.25; pointer-events:none; z-index:0;
+    }
+    .login-box {
+        background:rgba(22,34,60,.92);
+        border:2px solid #ffe36d;
+        border-radius:10px;
+        padding:40px 36px;
+        width:400px;
+        box-shadow:0 8px 40px rgba(0,0,0,.6), 0 0 24px rgba(255,227,109,.15);
+        position:relative; z-index:1;
+    }
+    .login-box h2 {
+        text-align:center; font-size:20px; color:#ffe36d;
+        font-family:'Courier New', monospace; letter-spacing:2px; margin-bottom:6px;
+    }
+    .login-box .sub { text-align:center; color:#7788aa; font-size:13px; margin-bottom:26px; }
+    .login-madeline { display:block; width:64px; height:64px; border-radius:50%; margin:0 auto 14px; border:2px solid #ffe36d; box-shadow:0 0 14px rgba(255,227,109,.4); }
+    .login-box .form-group label { color:#aab8d0; font-size:13px; }
+    .login-box .form-control {
+        background:#0f1830; border:1px solid #3a4a6a; color:#e8e8f0;
+    }
+    .login-box .form-control:focus {
+        border-color:#ffe36d; box-shadow:0 0 10px rgba(255,227,109,.3); background:#141f3a;
+    }
+    .login-box .btn-primary {
+        width:100%; padding:13px; font-size:15px; margin-top:6px;
+        background:#ffe36d; color:#111; font-weight:bold;
+        border-radius:6px; box-shadow:inset 0 -3px #c9a93f;
+        font-family:'Courier New', monospace; letter-spacing:4px;
+    }
+    .login-box .btn-primary:hover { background:#ffeb85; transform:none; box-shadow:inset 0 -3px #c9a93f, 0 0 14px rgba(255,227,109,.5); }
+    .login-footer { text-align:center; margin-top:18px; font-size:13px; color:#7788aa; }
+    .login-footer a { color:#ffe36d; }
+    .login-footer a:hover { text-shadow:0 0 8px rgba(255,227,109,.6); }
+    .login-deco { display:block; height:30px; margin:0 auto 10px; filter:drop-shadow(0 0 6px rgba(255,235,59,.4)); }
     </style>
 </head>
 <body>
 <div class="login-box">
-    <h2>欢迎回来</h2>
-    <p>登录你的 mszlu 博客账号</p>
+    <img class="login-madeline" src="celeste-portraits/madeline/normal00.png" alt="Madeline">
+    <h2>WELCOME BACK</h2>
+    <p class="sub">This is Madeline. Let's climb together.</p>
     <div class="form-group">
         <label>账号</label>
         <input class="form-control" type="text" id="account" placeholder="请输入账号" autofocus>
@@ -32,38 +65,36 @@
     <div class="login-footer">还没有账号？<a href="register.html">立即注册</a></div>
 </div>
 <script src="js/api.js"></script>
-<script>
-    // 已登录直接跳首页
-    if (localStorage.getItem('token')) location.href = 'index.html';
+<script>    if (localStorage.getItem('token')) location.href = 'index.html';
 
-    function doLogin() {
-        const account = document.getElementById('account').value.trim();
-        const password = document.getElementById('password').value.trim();
-        const errEl = document.getElementById('errMsg');
-        errEl.style.display = 'none';
-        if (!account) { showErr('请输入账号'); return; }
-        if (!password) { showErr('请输入密码'); return; }
+function doLogin() {
+    const account = document.getElementById('account').value.trim();
+    const password = document.getElementById('password').value.trim();
+    const errEl = document.getElementById('errMsg');
+    errEl.style.display = 'none';
+    if (!account) { showErr('请输入账号'); return; }
+    if (!password) { showErr('请输入密码'); return; }
 
-        const btn = document.getElementById('loginBtn');
-        btn.disabled = true; btn.textContent = '登录中...';
+    const btn = document.getElementById('loginBtn');
+    btn.disabled = true; btn.textContent = '登录中...';
 
-        api('/login', 'POST', { account, password }).then(res => {
-            btn.disabled = false; btn.textContent = '登 录';
-            if (res.success) {
-                localStorage.setItem('token', res.data.token);
-                localStorage.setItem('nickname', res.data.nickname || account);
-                showToast('登录成功', 'success');
-                setTimeout(() => location.href = 'index.html', 800);
-            } else {
-                showErr(res.msg || '账号或密码错误');
-            }
-        });
-    }
+    api('/login', 'POST', { account, password }).then(res => {
+        btn.disabled = false; btn.textContent = '登 录';
+        if (res.success) {
+            localStorage.setItem('token', res.data);
+            localStorage.setItem('nickname', account);
+            showToast('登录成功', 'success');
+            setTimeout(() => location.href = 'index.html', 800);
+        } else {
+            showErr(res.msg || '账号或密码错误');
+        }
+    });
+}
 
-    function showErr(msg) {
-        const el = document.getElementById('errMsg');
-        el.textContent = msg; el.style.display = 'block';
-    }
+function showErr(msg) {
+    const el = document.getElementById('errMsg');
+    el.textContent = msg; el.style.display = 'block';
+}
 </script>
 </body>
 </html>

@@ -78,6 +78,7 @@
                 }
             }
             if (f.id) node.id = f.id;
+            node.dataset.tk = key;
             el.appendChild(node);
         });
         if (pi > 0) el.style.display = 'none';
@@ -88,6 +89,87 @@
         dotsBox.appendChild(d);
     });
     dotsBox.children[0].classList.add('on');
+
+    // ===== 调框模式（可视化面板：左下角按钮开关） =====
+    const tuneStore = JSON.parse(localStorage.getItem('jbookTune') || '{}');
+    document.querySelectorAll('#journalBook [data-tk]').forEach(n => {
+        const t = tuneStore[n.dataset.tk];
+        if (!t) return;
+        if (t.l !== undefined) n.style.left = t.l + '%';
+        if (t.t !== undefined) n.style.top = t.t + '%';
+        if (t.w !== undefined) n.style.width = t.w + '%';
+        if (t.h !== undefined) n.style.height = t.h + '%';
+    });
+    let tuneSel = null;
+
+    const tuneBtn = document.createElement('button');
+    tuneBtn.id = 'tuneToggle';
+    tuneBtn.textContent = '🔧 调框';
+    document.body.appendChild(tuneBtn);
+
+    const tunePanel = document.createElement('div');
+    tunePanel.id = 'tunePanel';
+    tunePanel.innerHTML =
+        '<div class="tp-title">点选一个文本框，再用下面按钮微调</div>' +
+        '<div class="tp-row"><button data-act="left">◀ 左</button><button data-act="up">▲ 上</button><button data-act="down">▼ 下</button><button data-act="right">▶ 右</button></div>' +
+        '<div class="tp-row"><button data-act="wMinus">宽 −</button><button data-act="wPlus">宽 ＋</button><button data-act="hMinus">高 −</button><button data-act="hPlus">高 ＋</button></div>' +
+        '<div class="tp-row"><button data-act="resetOne">重置此框</button><button data-act="resetAll">全部重置</button><button data-act="done">完成</button></div>' +
+        '<div class="tp-tip">按住按钮可连续移动 · 自动保存</div>';
+    document.body.appendChild(tunePanel);
+
+    function tuneSave(n) {
+        tuneStore[n.dataset.tk] = {
+            l: +parseFloat(n.style.left).toFixed(2),
+            t: +parseFloat(n.style.top).toFixed(2),
+            w: +parseFloat(n.style.width).toFixed(2),
+            h: +parseFloat(n.style.height).toFixed(2)
+        };
+        localStorage.setItem('jbookTune', JSON.stringify(tuneStore));
+    }
+    function tuneApply(act) {
+        if (!tuneSel) return;
+        const step = 0.3, s = tuneSel.style;
+        if (act === 'left') s.left = (parseFloat(s.left) - step) + '%';
+        else if (act === 'right') s.left = (parseFloat(s.left) + step) + '%';
+        else if (act === 'up') s.top = (parseFloat(s.top) - step) + '%';
+        else if (act === 'down') s.top = (parseFloat(s.top) + step) + '%';
+        else if (act === 'wMinus') s.width = (parseFloat(s.width) - step) + '%';
+        else if (act === 'wPlus') s.width = (parseFloat(s.width) + step) + '%';
+        else if (act === 'hMinus') s.height = (parseFloat(s.height) - step) + '%';
+        else if (act === 'hPlus') s.height = (parseFloat(s.height) + step) + '%';
+        else if (act === 'resetOne') { delete tuneStore[tuneSel.dataset.tk]; localStorage.setItem('jbookTune', JSON.stringify(tuneStore)); location.reload(); return; }
+        else if (act === 'resetAll') { localStorage.removeItem('jbookTune'); location.reload(); return; }
+        else if (act === 'done') { tuneBtn.click(); return; }
+        else return;
+        tuneSave(tuneSel);
+    }
+    tuneBtn.addEventListener('click', () => {
+        document.body.classList.toggle('tune-mode');
+        const on = document.body.classList.contains('tune-mode');
+        tunePanel.style.display = on ? 'block' : 'none';
+        tuneBtn.textContent = on ? '❌ 退出调框' : '🔧 调框';
+        if (!on && tuneSel) { tuneSel.classList.remove('tune-sel'); tuneSel = null; }
+    });
+    tunePanel.querySelectorAll('button').forEach(b => {
+        let timer = null;
+        b.addEventListener('mousedown', ev => {
+            ev.preventDefault();
+            tuneApply(b.dataset.act);
+            timer = setInterval(() => tuneApply(b.dataset.act), 60);
+        });
+        b.addEventListener('mouseup', () => clearInterval(timer));
+        b.addEventListener('mouseleave', () => clearInterval(timer));
+    });
+    bookEl.addEventListener('mousedown', ev => {
+        if (!document.body.classList.contains('tune-mode')) return;
+        const n = ev.target.closest('[data-tk]');
+        if (!n) return;
+        ev.preventDefault(); ev.stopPropagation();
+        if (tuneSel) tuneSel.classList.remove('tune-sel');
+        tuneSel = n;
+        n.classList.add('tune-sel');
+        if (n.blur) n.blur();
+    }, true);
 
     function bookGoto(idx) {
         if (bookBusy || idx === bookCur || idx < 0 || idx >= pageEls.length) return;

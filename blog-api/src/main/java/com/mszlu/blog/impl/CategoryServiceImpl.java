@@ -22,8 +22,10 @@ public class CategoryServiceImpl implements CategoryService {
     public CategoryVo findCategoryById(String categoryId){
          Category category = categoryMapper.selectById(categoryId);
          CategoryVo categoryVo = new CategoryVo();
-         BeanUtils.copyProperties(category,categoryVo);
-         categoryVo.setId(category.getId());
+         if (category != null) {
+             BeanUtils.copyProperties(category,categoryVo);
+             categoryVo.setId(category.getId());
+         }
          return categoryVo;
     }
     @Override
@@ -46,7 +48,9 @@ public class CategoryServiceImpl implements CategoryService {
     }
     public CategoryVo copy(Category category){
         CategoryVo categoryVo = new CategoryVo();
-        BeanUtils.copyProperties(category,categoryVo);
+        if (category != null) {
+            BeanUtils.copyProperties(category,categoryVo);
+        }
         return categoryVo;
     }
     public List<CategoryVo> copyList(List<Category> categoryList){

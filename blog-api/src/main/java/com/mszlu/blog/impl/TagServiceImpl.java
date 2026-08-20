@@ -22,13 +22,19 @@ public class TagServiceImpl implements TagService {
 
     public TagVo copy(Tag tag){
         TagVo tagVo = new TagVo();
-        BeanUtils.copyProperties(tag,tagVo);
+        if (tag != null) {
+            BeanUtils.copyProperties(tag,tagVo);
+        }
         return tagVo;
     }
     public List<TagVo> copyList(List<Tag> tagList){
         List<TagVo> tagVoList = new ArrayList<>();
-        for (Tag tag : tagList) {
-            tagVoList.add(copy(tag));
+        if (tagList != null) {
+            for (Tag tag : tagList) {
+                if (tag != null) {
+                    tagVoList.add(copy(tag));
+                }
+            }
         }
         return tagVoList;
     }

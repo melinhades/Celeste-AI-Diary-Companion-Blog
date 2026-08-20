@@ -813,3 +813,16 @@ body::before {
 .book-dots span { width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,.25); transition:all .3s; cursor:pointer; }
 .book-dots span.on { background:var(--c-yellow); box-shadow:0 0 8px rgba(255,227,109,.7); transform:scale(1.25); }
 /* ... existing code ... */
+
+/* ===== 调框模式 ===== */
+.tune-mode .book-page [data-tk] { outline: 1px dashed rgba(230,81,124,.7); background: rgba(230,81,124,.06); }
+.tune-mode .book-page .tune-sel { outline: 2px solid #e6517c; background: rgba(230,81,124,.14); }
+
+/* ===== 调框面板 ===== */
+#tuneToggle { position:fixed; left:16px; bottom:16px; z-index:960; padding:8px 14px; background:rgba(22,34,60,.9); color:var(--c-yellow); border:2px solid var(--c-yellow); border-radius:6px; cursor:pointer; font-size:13px; box-shadow:0 0 8px rgba(255,230,109,.35); }
+#tunePanel { display:none; position:fixed; left:16px; bottom:66px; z-index:960; width:250px; background:rgba(15,23,42,.95); border:2px solid var(--c-yellow); border-radius:8px; padding:10px; }
+#tunePanel .tp-title { color:#ffe36d; font-size:12px; margin-bottom:8px; line-height:1.5; }
+#tunePanel .tp-row { display:flex; gap:6px; margin-bottom:6px; }
+#tunePanel button { flex:1; padding:7px 0; background:rgba(22,34,60,.9); color:#fff; border:1px solid var(--c-yellow); border-radius:4px; cursor:pointer; font-size:12px; }
+#tunePanel button:hover { background:rgba(255,227,109,.25); }
+#tunePanel .tp-tip { color:rgba(255,255,255,.5); font-size:11px; text-align:center; }

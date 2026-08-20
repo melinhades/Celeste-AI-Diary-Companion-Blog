@@ -1,6 +1,9 @@
 package com.mszlu.blog.config;
 
 import com.mszlu.blog.handler.LoginIntercepter;
+import com.mszlu.blog.config.UTF8EncodingFilter;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
@@ -18,13 +21,32 @@ public class WebMVCConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         //解决跨域配置
-        registry.addMapping("/**").allowedOrigins("http://localhost:8080");
+        registry.addMapping("/**")
+                .allowedOrigins("http://localhost:8080", "http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:63342", "file://")
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                .allowedHeaders("*")
+                .allowCredentials(true)
+                .maxAge(3600);
     }
     public void addInterceptors(InterceptorRegistry registry) {
-        //拦截test接口，后续实际遇到需要拦截的接口是，再配置为真正的接口
         registry.addInterceptor(loginIntercepter)
                 .addPathPatterns("/test")
                 .addPathPatterns("/comments/create/change")
-                .addPathPatterns("/article/publish");
+                .addPathPatterns("/articles/publish")
+                .addPathPatterns("/chat/**")
+                .addPathPatterns("/persona/**")
+                .addPathPatterns("/memory/**")
+                .addPathPatterns("/proactive/**")
+                .addPathPatterns("/diary/**")
+                .excludePathPatterns("/chat/test-ai");
+    }
+
+    @Bean
+    public FilterRegistrationBean<UTF8EncodingFilter> utf8EncodingFilterRegistrationBean() {
+        FilterRegistrationBean<UTF8EncodingFilter> registrationBean = new FilterRegistrationBean<>();
+        registrationBean.setFilter(new UTF8EncodingFilter());
+        registrationBean.addUrlPatterns("/*"); // 应用于所有路径
+        registrationBean.setOrder(1); // 设置过滤器顺序，数字越小优先级越高
+        return registrationBean;
     }
 }

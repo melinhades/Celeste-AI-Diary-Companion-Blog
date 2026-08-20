@@ -3,64 +3,91 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>写文章 - mszlu博客</title>
+    <link rel="icon" href="icon/OIP.webp" type="image/webp">
+    <title>Write - Celeste Blog</title>
     <link rel="stylesheet" href="css/common.css">
     <style>
-        .write-layout { padding: 20px; max-width: 900px; margin: 0 auto; }
-        .write-title-input {
-            width: 100%; font-size: 26px; font-weight: 700; border: none; outline: none;
-            padding: 16px 0; border-bottom: 2px solid #eee; margin-bottom: 16px;
-            background: transparent; font-family: inherit; color: #222;
-        }
-        .write-title-input::placeholder { color: #ccc; }
-        .write-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; align-items: center; }
-        .toolbar-btn {
-            padding: 6px 12px; border: 1px solid #ddd; background: #fff;
-            border-radius: 6px; cursor: pointer; font-size: 13px; color: #555;
-            transition: all 0.2s;
-        }
-        .toolbar-btn:hover { border-color: #4f46e5; color: #4f46e5; background: #f8f7ff; }
-        .write-body {
-            width: 100%; min-height: 420px; padding: 16px; border: 1px solid #eee;
-            border-radius: 10px; font-size: 15px; outline: none; resize: vertical;
-            font-family: 'Courier New', monospace; line-height: 1.8; color: #444;
-            background: #fafafa; transition: border-color 0.2s;
-        }
-        .write-body:focus { border-color: #4f46e5; background: #fff; }
-        .write-meta { display: flex; gap: 16px; margin: 16px 0; flex-wrap: wrap; }
-        .write-meta select, .write-meta input {
-            padding: 9px 14px; border: 1px solid #ddd; border-radius: 8px;
-            font-size: 14px; outline: none; background: #fff; font-family: inherit;
-            transition: border-color 0.2s;
-        }
-        .write-meta select:focus, .write-meta input:focus { border-color: #4f46e5; }
-        .write-meta select { min-width: 140px; }
-        .write-meta input { flex: 1; min-width: 200px; }
-        .write-footer { display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px; padding-top: 16px; border-top: 1px solid #eee; }
-        .char-count { font-size: 12px; color: #bbb; text-align: right; margin-top: 6px; }
+    .nav-diary-btn {
+        display:inline-block;
+        cursor:pointer;
+        transition:transform .2s, filter .2s;
+        vertical-align:middle;
+    }
+    .nav-diary-btn:hover {
+        transform:scale(1.15);
+    }
+    .nav-diary-btn img {
+        height:36px;
+        width:auto;
+        display:block;
+        filter:drop-shadow(0 0 10px rgba(255,235,59,0.7));
+    }
+    .write-layout { padding: 20px; max-width: 900px; margin: 0 auto; position: relative; z-index: 1; }
+    .write-title-input {
+        width: 100%; font-size: 26px; font-weight: 700; border: none; outline: none;
+        padding: 16px 0; border-bottom: 2px solid rgba(138, 43, 226, 0.3); margin-bottom: 16px;
+        background: transparent; font-family: inherit; color: #e8e8f0;
+    }
+    .write-title-input::placeholder { color: #6b6b80; }
+    .write-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; align-items: center; }
+    .toolbar-btn {
+        padding: 6px 12px; border: 1px solid rgba(138, 43, 226, 0.3);
+        background: rgba(30, 27, 75, 0.6); backdrop-filter: blur(10px);
+        border-radius: 6px; cursor: pointer; font-size: 13px; color: #b8b8d0;
+        transition: all 0.3s;
+    }
+    .toolbar-btn:hover { border-color: #a78bfa; color: #a78bfa; background: rgba(138, 43, 226, 0.2); box-shadow: 0 0 10px rgba(138, 43, 226, 0.3); }
+    .write-body {
+        width: 100%; min-height: 420px; padding: 16px;
+        border: 1px solid rgba(138, 43, 226, 0.3);
+        border-radius: 10px; font-size: 15px; outline: none; resize: vertical;
+        font-family: 'Courier New', monospace; line-height: 1.8; color: #e8e8f0;
+        background: rgba(30, 27, 75, 0.4); transition: all 0.3s;
+    }
+    .write-body:focus { border-color: #a78bfa; background: rgba(30, 27, 75, 0.6); box-shadow: 0 0 15px rgba(138, 43, 226, 0.3); }
+    .write-meta { display: flex; gap: 16px; margin: 16px 0; flex-wrap: wrap; }
+    .write-meta select, .write-meta input {
+        padding: 9px 14px; border: 1px solid rgba(138, 43, 226, 0.3); border-radius: 8px;
+        font-size: 14px; outline: none; background: rgba(30, 27, 75, 0.4);
+        color: #e8e8f0; font-family: inherit;
+        transition: all 0.3s;
+    }
+    .write-meta select:focus, .write-meta input:focus { border-color: #a78bfa; background: rgba(30, 27, 75, 0.6); box-shadow: 0 0 15px rgba(138, 43, 226, 0.3); }
+    .write-meta select { min-width: 140px; }
+    .write-meta input { flex: 1; min-width: 200px; }
+    .write-footer { display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(138, 43, 226, 0.2); }
+    .char-count { font-size: 12px; color: #8b8ba0; text-align: right; margin-top: 6px; }
     </style>
 </head>
 <body>
+    <!-- BGM 播放器 -->
+    <audio id="bgmPlayer" loop>
+        <source src="bgm/postcard.mp3" type="audio/mpeg">
+    </audio>
+
 <header class="header">
     <div class="container header-inner">
-        <a href="index.html" class="logo">📝 mszlu博客</a>
+        <a href="index.html" class="logo"><img src="celeste-gui/logo.png" alt="Celeste"></a>
         <nav class="nav">
-            <a href="index.html" class="nav-link">首页</a>
-            <a href="archives.html" class="nav-link">归档</a>
+            <a href="index.html" class="nav-link">Home</a>
+            <a href="archives.html" class="nav-link">Archives</a>
+            <a href="diary.html" class="nav-link nav-diary-btn" title="Diary with Madeline">
+                <img src="celeste-gui/journal.png" alt="Diary">
+            </a>
         </nav>
         <div class="header-right" id="headerRight"></div>
     </div>
 </header>
 
 <div class="container write-layout">
-    <input class="write-title-input" type="text" id="articleTitle" placeholder="请输入文章标题...">
+    <input class="write-title-input" type="text" id="articleTitle" placeholder="Article title...">
 
     <div class="write-meta">
         <select id="categorySelect">
-            <option value="">选择分类</option>
+            <option value="">Select category</option>
         </select>
-        <input type="text" id="tagsInput" placeholder="标签，用逗号分隔，如：Java,Spring">
-        <input type="text" id="summaryInput" placeholder="文章摘要（可选）">
+        <input type="text" id="tagsInput" placeholder="Tags, comma separated: Java,Spring">
+        <input type="text" id="summaryInput" placeholder="Summary (optional)">
     </div>
 
     <div class="write-toolbar">
@@ -69,34 +96,35 @@
         <button class="toolbar-btn" onclick="insertMd('## ','')">H2</button>
         <button class="toolbar-btn" onclick="insertMd('### ','')">H3</button>
         <button class="toolbar-btn" onclick="insertMd('`','`')">Code</button>
-        <button class="toolbar-btn" onclick="insertMd('\n```\n','\n```\n')">代码块</button>
-        <button class="toolbar-btn" onclick="insertMd('> ','')">引用</button>
-        <button class="toolbar-btn" onclick="insertMd('[链接文字](',')')">链接</button>
-        <button class="toolbar-btn" onclick="insertMd('- ','')">列表</button>
-    </div>
-
-    <textarea class="write-body" id="articleBody" placeholder="开始写作... 支持 Markdown 格式" oninput="updateCount()"></textarea>
-    <div class="char-count" id="charCount">0 字</div>
+        <button class="toolbar-btn" onclick="insertMd('\n\n','\n```\n')">Code Block</button> <button class="toolbar-btn" onclick="insertMd('> ','')">Quote</button> <button class="toolbar-btn" onclick="insertMd('[link](',')')">Link</button> <button class="toolbar-btn" onclick="insertMd('- ','')">List</button> <button class="toolbar-btn" onclick="document.getElementById('mr-float').click()">✨ Madeline</button> </div>
+    <textarea class="write-body" id="articleBody" placeholder="Start writing... Markdown supported" oninput="updateCount()"></textarea>
+    <div class="char-count" id="charCount">0 chars</div>
 
     <div class="write-footer">
-        <button class="btn btn-outline" onclick="history.back()">取消</button>
-        <button class="btn btn-primary" onclick="publishArticle()" id="publishBtn">发布文章</button>
+        <button class="btn btn-outline" onclick="history.back()">Cancel</button>
+        <button class="btn btn-primary" onclick="publishArticle()" id="publishBtn">Publish</button>
     </div>
 </div>
-
-<footer class="footer">
-    <div class="container">© 2024 mszlu博客 · Powered by Spring Boot</div>
-</footer>
-
+<footer class="footer"> <div class="container">© 2024 Celeste Blog · Explore the stars</div> </footer>
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
+<script src="js/madeline-review.js"></script>
 <script>
-    // 未登录跳转
+    // BGM
+    const bgmPlayer = document.getElementById('bgmPlayer');
+    const savedTime = parseFloat(localStorage.getItem('bgmTime') || '0');
+    if (savedTime > 0) bgmPlayer.currentTime = savedTime;
+    bgmPlayer.volume = 0.25;
+    bgmPlayer.play().catch(() => {});
+    setInterval(() => { localStorage.setItem('bgmTime', bgmPlayer.currentTime); }, 2000);
+    function tryPlayBGM() { bgmPlayer.play().then(() => { document.removeEventListener('click', tryPlayBGM); document.removeEventListener('keydown', tryPlayBGM); }).catch(() => {}); }
+    document.addEventListener('click', tryPlayBGM);
+    document.addEventListener('keydown', tryPlayBGM);
+
     if (!localStorage.getItem('token')) {
-        showToast('请先登录', 'error');
+        showToast('Please login first', 'error');
         setTimeout(() => location.href = 'login.html', 800);
     }
-
     initHeader();
     loadCategories();
 
@@ -127,7 +155,7 @@
 
     function updateCount() {
         const len = document.getElementById('articleBody').value.length;
-        document.getElementById('charCount').textContent = `${len} 字`;
+        document.getElementById('charCount').textContent = `${len} chars`;
     }
 
     function publishArticle() {
@@ -137,32 +165,34 @@
         const summary = document.getElementById('summaryInput').value.trim();
         const tagsRaw = document.getElementById('tagsInput').value.trim();
 
-        if (!title) { showToast('请输入文章标题', 'error'); return; }
-        if (!body) { showToast('请输入文章内容', 'error'); return; }
+        if (!title) {
+            showToast('Please enter a title', 'error');
+            return;
+        }
+        if (!body) {
+            showToast('Please enter content', 'error');
+            return;
+        }
 
         const tags = tagsRaw ? tagsRaw.split(',').map(t => ({ tagName: t.trim() })).filter(t => t.tagName) : [];
-
-        const payload = {
-            title,
-            summary,
-            body: { content: body },
-            tags,
-        };
+        const payload = { title, summary, body: { content: body }, tags, };
         if (categoryId) payload.category = { id: categoryId };
 
         const btn = document.getElementById('publishBtn');
-        btn.disabled = true; btn.textContent = '发布中...';
+        btn.disabled = true;
+        btn.textContent = 'Publishing...';
 
         api('/articles/publish', 'POST', payload).then(res => {
-            btn.disabled = false; btn.textContent = '发布文章';
+            btn.disabled = false;
+            btn.textContent = 'Publish';
             if (res.success) {
-                showToast('发布成功', 'success');
+                showToast('Published!', 'success');
                 setTimeout(() => location.href = res.data?.id ? `article.html?id=${res.data.id}` : 'index.html', 1000);
             } else {
-                showToast(res.msg || '发布失败', 'error');
+                showToast(res.msg || 'Publish failed', 'error');
             }
         });
     }
+
 </script>
-</body>
-</html>
+</body> </html>

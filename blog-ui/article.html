@@ -3,10 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>文章详情 - mszlu博客</title>
+    <link rel="icon" href="icon/OIP.webp" type="image/webp">
+    <title>Article - Celeste Blog</title>
     <link rel="stylesheet" href="css/common.css">
     <style>
-        .main-layout { display: flex; gap: 24px; padding: 24px 20px; align-items: flex-start; }
+    body::after {
+        content:'';
+        position:fixed; inset:0;
+        background:url('celeste-areas/bg_calm.png') center bottom/cover no-repeat;
+        opacity:0.15;
+        pointer-events:none;
+        z-index:0;
+    }
+    .nav-diary-btn {
+        display:inline-block;
+        cursor:pointer;
+        transition:transform .2s, filter .2s;
+        vertical-align:middle;
+    }
+    .nav-diary-btn:hover {
+        transform:scale(1.15);
+    }
+    .nav-diary-btn img {
+        height:36px;
+        width:auto;
+        display:block;
+        filter:drop-shadow(0 0 10px rgba(255,235,59,0.7));
+    }
+    .main-layout { display: flex; gap: 24px; padding: 24px 20px; align-items: flex-start; }
         .content { flex: 1; min-width: 0; }
         .sidebar { width: 280px; flex-shrink: 0; display: flex; flex-direction: column; gap: 20px; }
 
@@ -59,12 +83,23 @@
     </style>
 </head>
 <body>
+    <!-- BGM 播放器 -->
+    <audio id="bgmPlayer" loop autoplay>
+        <source src="bgm/postcard.mp3" type="audio/mpeg">
+    </audio>
+
+    <!-- 雪花粒子系统 -->
+    <canvas id="snowCanvas" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;"></canvas>
+
 <header class="header">
     <div class="container header-inner">
-        <a href="index.html" class="logo">📝 mszlu博客</a>
+        <a href="index.html" class="logo"><img src="celeste-gui/logo.png" alt="Celeste"></a>
         <nav class="nav">
-            <a href="index.html" class="nav-link">首页</a>
-            <a href="archives.html" class="nav-link">归档</a>
+            <a href="index.html" class="nav-link">Home</a>
+            <a href="archives.html" class="nav-link">Archives</a>
+            <a href="diary.html" class="nav-link nav-diary-btn" title="Diary with Madeline">
+                <img src="celeste-gui/journal.png" alt="Diary">
+            </a>
         </nav>
         <div class="header-right" id="headerRight"></div>
     </div>
@@ -72,39 +107,104 @@
 
 <div class="container main-layout">
     <main class="content">
-        <div id="articleHeader"><div class="loading">加载中...</div></div>
+        <div id="articleHeader"><div class="loading">Loading...</div></div>
         <div id="articleBody"></div>
         <div class="comments-section" id="commentsSection" style="display:none">
-            <div class="comments-title">💬 评论</div>
+            <div class="comments-title">💬 Comments</div>
             <div class="comment-form" id="commentForm">
-                <textarea id="commentContent" placeholder="写下你的评论..."></textarea>
+                <textarea id="commentContent" placeholder="Write a comment..."></textarea>
                 <div class="comment-form-footer">
-                    <button class="btn btn-primary btn-sm" onclick="submitComment()">发表评论</button>
+                    <button class="btn btn-primary btn-sm" onclick="submitComment()">Post Comment</button>
                 </div>
             </div>
-            <div id="commentList"><div class="loading">加载中...</div></div>
+            <div id="commentList"><div class="loading">Loading...</div></div>
         </div>
     </main>
 
     <aside class="sidebar">
         <div class="widget" id="tocWidget" style="display:none">
-            <div class="widget-title">📋 目录</div>
+            <div class="widget-title"> Contents</div>
             <div id="tocList"></div>
         </div>
         <div class="widget">
-            <div class="widget-title">🔥 热门文章</div>
-            <div id="hotList"><div class="loading">加载中...</div></div>
+            <div class="widget-title">🔥 Popular</div>
+            <div id="hotList"><div class="loading">Loading...</div></div>
         </div>
     </aside>
 </div>
 
 <footer class="footer">
-    <div class="container">© 2024 mszlu博客 · Powered by Spring Boot</div>
+    <div class="container">© 2026 Celeste Blog · Explore the stars</div>
 </footer>
 
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
 <script>
+    // ===== 雪花粒子系统 =====
+    const snowCanvas = document.getElementById('snowCanvas');
+    const snowCtx = snowCanvas.getContext('2d');
+    let snowflakes = [];
+    let snowAnimFrame = null;
+
+    function resizeSnowCanvas() {
+        snowCanvas.width = window.innerWidth;
+        snowCanvas.height = window.innerHeight;
+    }
+
+    function createSnowflake() {
+        return {
+            x: Math.random() * snowCanvas.width,
+            y: -10,
+            r: Math.random() * 3 + 1,
+            speed: Math.random() * 1.5 + 0.5,
+            wind: Math.random() * 0.5 - 0.25,
+            opacity: Math.random() * 0.6 + 0.2,
+            swing: Math.random() * Math.PI * 2,
+            swingSpeed: Math.random() * 0.02 + 0.01
+        };
+    }
+
+    function initSnowflakes() {
+        snowflakes = [];
+        for (let i = 0; i < 80; i++) {
+            const f = createSnowflake();
+            f.y = Math.random() * snowCanvas.height;
+            snowflakes.push(f);
+        }
+    }
+
+    function drawSnowflakes() {
+        snowCtx.clearRect(0, 0, snowCanvas.width, snowCanvas.height);
+        for (const f of snowflakes) {
+            f.y += f.speed;
+            f.swing += f.swingSpeed;
+            f.x += Math.sin(f.swing) * 0.5 + f.wind;
+            if (f.y > snowCanvas.height + 10) { f.y = -10; f.x = Math.random() * snowCanvas.width; }
+            if (f.x > snowCanvas.width + 10) f.x = -10;
+            if (f.x < -10) f.x = snowCanvas.width + 10;
+            snowCtx.beginPath();
+            snowCtx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+            snowCtx.fillStyle = `rgba(255,255,255,${f.opacity})`;
+            snowCtx.fill();
+        }
+        snowAnimFrame = requestAnimationFrame(drawSnowflakes);
+    }
+
+    function startSnow() { resizeSnowCanvas(); initSnowflakes(); drawSnowflakes(); }
+    window.addEventListener('resize', resizeSnowCanvas);
+    startSnow();
+
+    // BGM
+    const bgmPlayer = document.getElementById('bgmPlayer');
+    const savedTime = parseFloat(localStorage.getItem('bgmTime') || '0');
+    if (savedTime > 0) bgmPlayer.currentTime = savedTime;
+    bgmPlayer.volume = 0.25;
+    bgmPlayer.play().catch(() => {});
+    setInterval(() => { localStorage.setItem('bgmTime', bgmPlayer.currentTime); }, 2000);
+    function tryPlayBGM() { bgmPlayer.play().then(() => { document.removeEventListener('click', tryPlayBGM); document.removeEventListener('keydown', tryPlayBGM); }).catch(() => {}); }
+    document.addEventListener('click', tryPlayBGM);
+    document.addEventListener('keydown', tryPlayBGM);
+
     const articleId = new URLSearchParams(location.search).get('id');
     if (!articleId) location.href = 'index.html';
 
@@ -115,20 +215,20 @@
     function loadArticle() {
         api(`/articles/article/view/${articleId}`, 'POST').then(res => {
             if (!res.success) {
-                document.getElementById('articleHeader').innerHTML = '<div class="empty">文章不存在</div>';
+                document.getElementById('articleHeader').innerHTML = '<div class="empty">Article not found</div>';
                 return;
             }
             const a = res.data;
-            document.title = `${a.title} - mszlu博客`;
+            document.title = `${a.title} - Celeste Blog`;
 
             // 头部
             document.getElementById('articleHeader').innerHTML = `
                 <div class="article-header">
                     <h1>${escHtml(a.title)}</h1>
                     <div class="article-meta">
-                        <span>✍️ ${escHtml(a.author?.nickname || a.author?.username || '匿名')}</span>
+                        <span>✍️ ${escHtml(a.author?.nickname || a.author?.username || 'Anonymous')}</span>
                         <span>📅 ${formatDate(a.createDate)}</span>
-                        <span>👁 ${a.viewCounts || 0} 阅读</span>
+                        <span>👁 ${a.viewCounts || 0} Reads</span>
                         ${a.category ? `<span>📁 ${escHtml(a.category.categoryName || a.category.name)}</span>` : ''}
                     </div>
                     <div class="article-tags">
@@ -146,7 +246,7 @@
             // 评论区
             document.getElementById('commentsSection').style.display = 'block';
             if (!localStorage.getItem('token')) {
-                document.getElementById('commentForm').innerHTML = '<p style="color:#aaa;font-size:14px;margin-bottom:16px"><a href="login.html" style="color:#4f46e5">登录</a> 后才能发表评论</p>';
+                document.getElementById('commentForm').innerHTML = '<p style="color:#aaa;font-size:14px;margin-bottom:16px"><a href="login.html" style="color:#4f46e5">Login</a> to comment</p>';
             }
             loadComments();
         });
@@ -171,15 +271,15 @@
 
     function loadComments() {
         api(`/comments/article/${articleId}`, 'GET').then(res => {
-            if (!res.success) { document.getElementById('commentList').innerHTML = '<div class="empty">暂无评论</div>'; return; }
+            if (!res.success) { document.getElementById('commentList').innerHTML = '<div class="empty">No comments yet</div>'; return; }
             const list = res.data || [];
-            if (list.length === 0) { document.getElementById('commentList').innerHTML = '<div class="empty">暂无评论，快来抢沙发吧</div>'; return; }
+            if (list.length === 0) { document.getElementById('commentList').innerHTML = '<div class="empty">Be the first to comment!</div>'; return; }
             document.getElementById('commentList').innerHTML = list.map(c => `
                 <div class="comment-item">
                     <div class="comment-author">
                         <div class="comment-avatar">${escHtml((c.author?.nickname || c.author?.username || '?').charAt(0).toUpperCase())}</div>
                         <div>
-                            <div class="comment-name">${escHtml(c.author?.nickname || c.author?.username || '匿名')}</div>
+                            <div class="comment-name">${escHtml(c.author?.nickname || c.author?.username || 'Anonymous')}</div>
                             <div class="comment-date">${formatDate(c.createDate)}</div>
                         </div>
                     </div>
@@ -192,14 +292,14 @@
     function submitComment() {
         if (!requireLogin()) return;
         const content = document.getElementById('commentContent').value.trim();
-        if (!content) { showToast('请输入评论内容', 'error'); return; }
+        if (!content) { showToast('Please enter a comment', 'error'); return; }
         api('/comments/create/change', 'POST', { articleId, content }).then(res => {
             if (res.success) {
                 document.getElementById('commentContent').value = '';
-                showToast('评论成功', 'success');
+                showToast('Comment posted', 'success');
                 loadComments();
             } else {
-                showToast(res.msg || '评论失败', 'error');
+                showToast(res.msg || 'Failed to post comment', 'error');
             }
         });
     }
@@ -212,7 +312,7 @@
                     <span class="hot-rank rank-${i+1}">${i+1}</span>
                     <span class="hot-title">${escHtml(a.title)}</span>
                 </div>
-            `).join('') || '<div class="empty">暂无数据</div>';
+            `).join('') || '<div class="empty">No data</div>';
         });
     }
 </script>
