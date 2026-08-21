@@ -46,6 +46,16 @@
     .hot-rank { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
     .hot-rank img { width:22px; height:22px; object-fit:contain; filter:drop-shadow(0 0 4px rgba(255,235,59,.5)); }
     .tag-link.tag-on { background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); color:#fff; box-shadow:0 0 10px rgba(138,43,226,.5); }
+    /* ===== Page Transition Overlay (for diary link) ===== */
+    #page-transition {
+        position:fixed; inset:0;
+        background:#0a0a1e;          /* 与页脚/深色背景保持一致 */
+        opacity:0;
+        pointer-events:none;
+        transition:opacity .3s ease; /* 淡入淡出时长 */
+        z-index:9999;
+    }
+    #page-transition.active { opacity:1; }
     </style>
 </head>
 <body>
@@ -53,7 +63,8 @@
     <audio id="bgmPlayer" loop autoplay>
         <source src="bgm/postcard.mp3" type="audio/mpeg">
     </audio>
-
+    <!-- 页面过渡覆盖层 (仅用于 diary 链接) -->
+    <div id="page-transition"></div>
     <!-- 雪花粒子系统 -->
     <canvas id="snowCanvas" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;"></canvas>
     <div class="snow-strip"></div>
@@ -305,6 +316,146 @@
         if (page < totalPages) html += `<button class="page-btn" onclick="loadArticles(${page+1})">下一页 ›</button>`;
         el.innerHTML = html;
     }
+
+    // ===== 页面过渡仅用于 diary 链接 =====
+    const transition = document.getElementById('page-transition');
+    if (transition) {
+        // 页面加载完毕时淡出（确保首次打开是淡出状态）
+        window.addEventListener('load', () => {
+            transition.classList.remove('active');
+        });
+        // 仅 diary link 触发过渡
+        document.addEventListener('click', e => {
+            const diaryLink = e.target.closest('a.nav-diary-btn[href="diary.html"]');
+            if (diaryLink) {
+                e.preventDefault();                // 阻止默认跳转
+                transition.classList.add('active'); // 开始淡出
+                setTimeout(() => {
+                    location.href = diaryLink.href; // 300ms 后跳转
+                }, 300);                           // 与 CSS transition 时间匹配
+            }
+        });
+    }
+
+    // ===== 雪花粒子系统增强：支持分类切换雪花图片 =====
+    let snowImage = null; // 添加到雪花系统变量中
+
+    // 保存原始函数引用（如果你原来的函数名正好是这些）
+    const _createSnowflake = typeof createSnowflake === 'function' ? createSnowflake : null;
+    const _drawSnowflakes  = typeof drawSnowflakes  === 'function' ? drawSnowflakes  : null;
+    const _initSnowflakes  = typeof initSnowflakes  === 'function' ? initSnowflakes  : null;
+    const _startSnow       = typeof startSnow       === 'function' ? startSnow       : null;
+
+    // 重新定义创建雪flake（如果原来存在则在其基础上加 img 属性）
+    createSnowflake = function() {
+        const flake = _createSnowflake ? _createSnowflake() : {
+            x: Math.random()*snowCanvas.width, y:-10,
+            r: Math.random()*3+1,
+            speed: Math.random()*1.5+0.5,
+            wind: Math.random()*0.5-0.25,
+            opacity: Math.random()*0.6+0.2,
+            swing: Math.random()*Math.PI*2,
+            swingSpeed: Math.random()*0.02+0.01
+        };
+        flake.img = snowImage;
+        return flake;
+    };
+
+    // 重新定义绘制雪flake
+    drawSnowflakes = function() {
+        snowCtx.clearRect(0,0,snowCanvas.width,snowCanvas.height);
+        for(const f of snowflakes){
+            f.y += f.speed;
+            f.swing += f.swingSpeed;
+            f.x += Math.sin(f.swing)*0.5 + f.wind;
+            if(f.y > snowCanvas.height+10){ f.y=-10; f.x=Math.random()*snowCanvas.width; }
+            if(f.x > snowCanvas.width+10) f.x=-10;
+            if(f.x < -10) f.x = snowCanvas.width+10;
+            if(f.img){
+                snowCtx.drawImage(f.img, f.x-f.r, f.y-f.r, f.r*2, f.r*2);
+            }else{
+                snowCtx.beginPath();
+                snowCtx.arc(f.x,f.y,f.r,0,Math.PI*2);
+                snowCtx.fillStyle = `rgba(255,255,255,${f.opacity})`;
+                snowCtx.fill();
+            }
+        }
+        snowAnimFrame = requestAnimationFrame(drawSnowflakes);
+    };
+
+    // 重新定义初始化（保持原来的行为）
+    initSnowflakes = function() {
+        snowflakes = [];
+        for(let i=0;i<80;i++){
+            const f = createSnowflake();
+            f.y = Math.random()*snowCanvas.height;
+            snowflakes.push(f);
+        }
+    };
+
+    // 重新定义启动函数
+    startSnow = function(){
+        resizeSnowCanvas();
+        initSnowflakes();
+        drawSnowflakes();
+    };
+    window.addEventListener('resize', resizeSnowCanvas);
+    startSnow();   // 确保页面打开时就开始
+
+    // 设置分类对应的雪flake图片
+    function setSnowImageForCategory(categoryId) {
+        // ==== 在这里填写你准备好的雪flake图片映射 ====
+        // key 为你后端返回的 category.id（或你在 filter-item[data-id] 中存的值）
+        // value 为相对路径（相对于 index.html）
+        const imageMap = {
+            // 示例（请根据你实际的图片名称修改）：
+            // "forsaken-city": "celeste-areas/ForsakenCity_snowleaf.png",
+            // "celestial-resort": "celeste-areas/CelestialResort_snowstar.png",
+            // 如果没有映射或想使用默认圆点雪flake，则返回 null
+        };
+        const imgSrc = imageMap[categoryId] || null;
+
+        if (imgSrc) {
+            const img = new Image();
+            img.src = imgSrc;
+            img.onload = () => {
+                snowImage = img;
+                // 立即更新一次雪flake显示
+                drawSnowflakes();
+            };
+            img.onerror = () => {
+                console.warn('雪flake图片加载失败:', imgSrc);
+                snowImage = null;
+            };
+        } else {
+            snowImage = null; // 恢复为默认圆点雪flake
+        }
+    };
+
+    // 在分类点击处理中添加雪flake切换（增强现有的点击事件）
+    document.querySelectorAll('.filter-item[data-id]').forEach(item => {
+        const originalOnclick = item.onclick;
+        item.onclick = function() {
+            if (typeof originalOnclick === 'function') {
+                originalOnclick.call(this);
+            }
+            setSnowImageForCategory(this.dataset.id); // 新增：切换雪flake
+        };
+    });
+
+    // 修改 filterAll 以恢复默认雪flake（点击 “All” 时）
+    const originalFilterAll = filterAll;
+    filterAll = function() {
+        if (typeof originalFilterAll === 'function') originalFilterAll();
+        setSnowImageForCategory(null);
+    };
+
+    // 修改 filterByTag 以恢复默认雪flake（切换标签时）
+    const originalFilterByTag = filterByTag;
+    filterByTag = function(tagId, el) {
+        if (typeof originalFilterByTag === 'function') originalFilterByTag(tagId, el);
+        setSnowImageForCategory(null); // 标签切换时使用默认圆点雪flake
+    };
 </script>
 </body>
 </html>
