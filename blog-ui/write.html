@@ -38,6 +38,7 @@
         transition: all 0.3s;
     }
     .toolbar-btn:hover { border-color: #a78bfa; color: #a78bfa; background: rgba(138, 43, 226, 0.2); box-shadow: 0 0 10px rgba(138, 43, 226, 0.3); }
+    .toolbar-btn img { height: 15px; width: auto; vertical-align: -2px; margin-right: 4px; image-rendering: pixelated; }
     .write-body {
         width: 100%; min-height: 420px; padding: 16px;
         border: 1px solid rgba(138, 43, 226, 0.3);
@@ -283,8 +284,8 @@
         <button class="toolbar-btn" onclick="insertMd('### ','')">H3</button>
         <button class="toolbar-btn" onclick="insertMd('`','`')">Code</button>
         <button class="toolbar-btn" onclick="insertMd('\n\n','\n```\n')">Code Block</button> <button class="toolbar-btn" onclick="insertMd('> ','')">Quote</button> <button class="toolbar-btn" onclick="insertMd('[link](',')')">Link</button> <button class="toolbar-btn" onclick="insertMd('- ','')">List</button>
-        <button class="toolbar-btn" id="openMadelineBtn">✨ Madeline</button>
-        <button class="toolbar-btn" id="toolbarPolishBtn" style="border-color:rgba(255,227,109,.5);color:#ffe36d;">🖊 润色</button>
+        <button class="toolbar-btn" id="openMadelineBtn"><img src="celeste-collectables/strawberry.png" alt="">Madeline</button>
+        <button class="toolbar-btn" id="toolbarPolishBtn" style="border-color:rgba(255,227,109,.5);color:#ffe36d;"><img src="celeste-icons/beat.png" alt="">润色</button>
     </div>
     <textarea class="write-body" id="articleBody" placeholder="Start writing... Markdown supported" oninput="updateCount()"></textarea>
     <div class="char-count" id="charCount">0 chars</div>

@@ -1166,6 +1166,7 @@
                     const saveCnt = parseInt(localStorage.getItem('diarySaveCount') || '0') + 1;
                     localStorage.setItem('diarySaveCount', String(saveCnt));
                     pmMilestone(saveCnt);
+                    playBerrySound();
                 }
                 onSaveStreak();
                 editingDiaryId = null;
@@ -1273,13 +1274,34 @@
     };
 
     function pmGroundY() { return window.innerHeight - pm.offsetHeight - 8; }
+    const PM_FRAMES = {};
+    PM_FRAMES[PM_SRC.fall] = (function () {
+        const a = [];
+        // Deleted:for (let i = 0; i < 12; i++) a.push('celeste-player/fallPose' + String(i).padStart(2, '0') + '.png');
+        for (let i = 0; i < 11; i++) a.push('celeste-player/fallPose' + String(i).padStart(2, '0') + '.png');
+        return a;
+    })();
+    let pmFrameTimer = null;
     function pmSetSrc(name) {
-        if (pm.src.indexOf(name) === -1) pm.src = name;
+        if (pmFrameTimer) { clearInterval(pmFrameTimer); pmFrameTimer = null; }
+        const frames = PM_FRAMES[name];
+        if (frames) {
+            let i = 0;
+            pm.src = frames[0];
+            pmFrameTimer = setInterval(() => {
+                i++;
+                if (i >= frames.length) { clearInterval(pmFrameTimer); pmFrameTimer = null; return; }
+                pm.src = frames[i];
+            }, 55);
+        } else if (pm.src.indexOf(name) === -1) {
+            pm.src = name;
+        }
         pmCurName = name;
         pmApplySize();
         pmCalibrate(name);
     }
 
+    let zoneScoldUntil = 0;
     function blockedAt(tx, ty) {
         const zones = [];
         if (gameDialog.classList.contains('show')) zones.push({ r: gameDialog.getBoundingClientRect(), m: 14 });
@@ -1287,8 +1309,9 @@
         if (book) zones.push({ r: book.getBoundingClientRect(), m: 14 });
         const acts = document.querySelector('.diary-actions');
         if (acts) zones.push({ r: acts.getBoundingClientRect(), m: 26 });
+        const extra = performance.now() < zoneScoldUntil ? 26 : 0;
         for (const z of zones) {
-            const r = z.r, m = z.m;
+            const r = z.r, m = z.m + extra;
             if (!r || (r.width === 0 && r.height === 0)) continue;
             if (tx < r.right + m && tx + pm.offsetWidth > r.left - m &&
                 ty < r.bottom + m && ty + pm.offsetHeight > r.top - m) return true;
@@ -1395,9 +1418,9 @@
         const nearGround = pmState.y > pmGroundY() - 60;
         const hour = new Date().getHours();
         const night = hour >= 23 || hour < 6;
-        let sitP = gloomy ? 0.34 : 0.18;
-        let funP = lively ? 0.26 : 0.12;
-        let walkP = lively ? 0.5 : 0.42;
+        let sitP = gloomy ? 0.2 : 0.08;
+        let funP = lively ? 0.18 : 0.1;
+        let walkP = lively ? 0.66 : 0.6;
         if (night) { sitP += 0.2; walkP -= 0.2; }
         const r = Math.random();
         if (r < sitP && nearGround) {
@@ -1421,7 +1444,8 @@
     }
 
     function pmThink(now) {
-        // ... existing code ...
+        const e0 = companionState.currentEmotion;
+        pmBadeline(e0 === '悲伤' || e0 === '孤独' || e0 === '不开心', now);
         if (companionState.isTyping && pmState.mode !== 'celebrate') {
             if (pmState.mode !== 'peek') {
                 pmState.mode = 'peek';
@@ -1457,7 +1481,7 @@
             if (pmState.mode === 'sit') {
                 const e = companionState.currentEmotion;
                 const hour = new Date().getHours();
-                const sleepy = (hour >= 23 || hour < 6 || e === '悲伤' || e === '孤独') ? 0.6 : 0.35;
+                const sleepy = (hour >= 23 || hour < 6 || e === '悲伤' || e === '孤独') ? 0.4 : 0.2;
                 if (Math.random() < sleepy) {
                     pmState.mode = 'sleep';
                     pmState.modeUntil = now + 20000 + Math.random() * 25000;
@@ -1492,7 +1516,7 @@
 
         if (!chatOpen) {
             pmThink(now);
-            const speed = 85;
+            const speed = 120;
             const movable = !posing && (pmState.mode === 'peek' || pmState.mode === 'walk' || pmState.mode === 'celebrate') && pmState.targetX !== null
             if (movable) {
                 const dx = pmState.targetX - pmState.x;
@@ -1514,7 +1538,7 @@
                 } else if (pmState.mode === 'walk') {
 // ... existing code ...
                     pmState.mode = 'idle';
-                    pmState.modeUntil = now + 600 + Math.random() * 1200;
+                    pmState.modeUntil = now + 300 + Math.random() * 700;
                 }else if (pmState.mode === 'celebrate') {
                     pmState.mode = 'idle';
                     pmState.modeUntil = now + 2600;
@@ -1550,6 +1574,27 @@
 
         pm.style.transform = 'translate(' + pmState.x + 'px,' + (pmState.y - hopOffset) + 'px)' + (pmState.dir < 0 ? ' scaleX(-1)' : '');
         requestAnimationFrame(pmLoop);
+    }
+    const bd = document.createElement('img');
+    bd.id = 'pixelBadeline';
+    bd.style.cssText = 'position:fixed;left:0;top:0;z-index:99;pointer-events:none;opacity:0;transition:opacity .8s;image-rendering:pixelated;filter:drop-shadow(0 0 6px rgba(140,120,255,.45));';
+    document.body.appendChild(bd);
+    const BD_IDLE = [];
+    for (let i = 0; i < 9; i++) BD_IDLE.push('celeste-player/badeline/idle' + String(i).padStart(2, '0') + '.png');
+    BD_IDLE.forEach(s => { const im = new Image(); im.src = s; });
+    let bdOn = false, bdFi = 0;
+    setInterval(() => {
+        if (!bdOn) return;
+        bd.src = BD_IDLE[bdFi % BD_IDLE.length];
+        bdFi++;
+    }, 110);
+    function pmBadeline(gloomy, now) {
+        if (gloomy && !bdOn) { bdOn = true; bd.style.opacity = '0.92'; bd.style.width = '52px'; }
+        if (!gloomy && bdOn) { bdOn = false; bd.style.opacity = '0'; }
+        if (!bdOn) return;
+        const off = Math.sin(now / 700) * 5;
+        const bx = Math.min(window.innerWidth - 60, Math.max(8, pmState.x + pmState.dir * 72));
+        bd.style.transform = 'translate(' + bx + 'px,' + (pmState.y - 14 + off) + 'px)' + (pmState.dir < 0 ? ' scaleX(-1)' : '');
     }
     requestAnimationFrame(pmLoop);
     if (blockedAt(pmState.x, pmState.y)) {
@@ -1610,6 +1655,35 @@
     });
 
     const petLines = ['嘿嘿…再摸一下也可以哦。', '唔，头发要被你摸乱啦。', '谢谢你，今天也辛苦了。', '嗯！感觉又充上电了。', '山顶的风，都没你这么温柔。'];
+    const shooLines = ['好～我去别处逛逛！', '那我走啦，想找我双击就行。', '溜了溜了～想我了就写进日记里。', '收到！换个地方待着～'];
+    function pmShoo() {
+        if (pmState.mode === 'sleep') {
+            addMadelineMessage(dreamLines[Math.floor(Math.random() * dreamLines.length)], '默认');
+            pmState.mode = 'wake';
+            pmState.modeUntil = performance.now() + 2300;
+            pmSetSrc(PM_SRC.wake);
+            return;
+        }
+        addMadelineMessage(shooLines[Math.floor(Math.random() * shooLines.length)], '可爱');
+        pmStartWalk(performance.now());
+        pmState.hopT = 0;
+    }
+    const scoldLines = ['呀！？对、对不起！我挡到你了，马上挪开！', '呜哇！抱歉抱歉，我这就走，接下来一阵子都不靠近这里！', '噫！是我不对…我绕远路走，真的！'];
+    function pmScold() {
+        addMadelineMessage(scoldLines[Math.floor(Math.random() * scoldLines.length)], '惊讶');
+        zoneScoldUntil = performance.now() + 8 * 60 * 1000;
+        pmState.poseUntil = performance.now() + 900;
+        pmState.poseReturn = PM_SRC.move;
+        pmSetSrc(PM_SRC.fun);
+        const gy = pmGroundY();
+        const maxX = window.innerWidth - pm.offsetWidth - 8;
+        const farX = pmState.x < window.innerWidth / 2 ? maxX - 8 : 8;
+        if (!blockedAt(farX, gy)) { pmState.targetX = farX; pmState.targetY = gy; }
+        else { const t = pmPickTarget(); pmState.targetX = t.x; pmState.targetY = t.y; }
+        pmState.mode = 'walk';
+        pmState.modeUntil = performance.now() + 9000;
+        pmState.hopT = 0;
+    }
     function pmPet() {
         if (pmState.mode === 'sleep') {
             addMadelineMessage(dreamLines[Math.floor(Math.random() * dreamLines.length)], '默认');
@@ -1623,11 +1697,11 @@
     let pmClickTimer = null;
     pm.addEventListener('click', () => {
         if (pmClickTimer) return;
-        pmClickTimer = setTimeout(() => { pmClickTimer = null; pmPet(); }, 260);
-    });
-    pm.addEventListener('dblclick', () => {
-        if (pmClickTimer) { clearTimeout(pmClickTimer); pmClickTimer = null; }
-        toggleChat();
+        pmClickTimer = setTimeout(() => {
+            pmClickTimer = null;
+            if (blockedAt(pmState.x, pmState.y)) pmScold();
+            else pmPet();
+        }, 260);
     });
 
 
@@ -1766,6 +1840,7 @@
 
         // BGM
         const bgmPlayer = document.getElementById('bgmPlayer');
+        applyBerryBgm();
         const savedDiaryTime = parseFloat(localStorage.getItem('bgmTimeDiary') || '0');
         if (savedDiaryTime > 0) bgmPlayer.currentTime = savedDiaryTime;
         bgmPlayer.volume = 0.3;
@@ -1852,24 +1927,40 @@
     // ================================================================
     // ===== 主线4：草莓与篝火（收集系统） =====
     // ================================================================
-    function initStrawberryBonfire() {
-        if (document.getElementById('strawberryBonfire')) return;
-        const w = document.createElement('div');
-        w.id = 'strawberryBonfire';
-        w.innerHTML =
-            '<div class="sb-straw"><img src="celeste-collectables/strawberry.png" alt="strawberry"><span id="sbCount">0</span></div>' +
-            '<div class="sb-fire" id="sbFire"><div class="sb-fire-base"></div></div>';
-        document.body.appendChild(w);
-        updateBonfire({
-            total: parseInt(localStorage.getItem('diarySaveCount') || '0'),
-            streak: parseInt(localStorage.getItem('diaryStreak') || '0')
-        });
-        w.addEventListener('click', () => {
-            const s = parseInt(localStorage.getItem('diaryStreak') || '0');
-            const t = parseInt(localStorage.getItem('diarySaveCount') || '0');
-            addMadelineMessage('你已经收集了 ' + t + ' 颗草莓，连续写了 ' + s + ' 天。继续加油！', '可爱');
-        });
-    }
+        const berrySound = new Audio('celeste-sounds/strawberry.wav');
+        berrySound.volume = 0.7;
+        function playBerrySound() {
+            if (!window.__audioGestured) return;
+            try { berrySound.currentTime = 0; berrySound.play().catch(() => {}); } catch (e) {}
+        }
+
+        function berryBalance() {
+            return parseInt(localStorage.getItem('diarySaveCount') || '0') - parseInt(localStorage.getItem('berrySpent') || '0');
+        }
+        function applyBerryBgm() {
+            const p = localStorage.getItem('berryBgm');
+            const src = document.querySelector('#bgmPlayer source');
+            if (src && p) { src.src = 'bgm/' + p + '.mp3'; }
+        }
+
+        function refreshShopUI() {
+            const c = document.getElementById('sbCount');
+            if (c) c.textContent = berryBalance();
+        }
+        function initStrawberryShop() {
+            if (document.getElementById('strawberryBonfire')) return;
+            const w = document.createElement('div');
+            w.id = 'strawberryBonfire';
+            w.innerHTML =
+                '<div class="sb-straw"><img src="celeste-collectables/strawberry.png" alt="strawberry"><span id="sbCount">0</span></div>' +
+                '<a class="sb-shop-link" id="sbShopLink" href="shop.html" title="草莓商店">商店</a>';
+            document.body.appendChild(w);
+            w.addEventListener('click', e => {
+                if (e.target.closest('#sbShopLink')) return;
+                addMadelineMessage('你现在有 ' + berryBalance() + ' 颗草莓。点「商店」去换好东西～', '可爱');
+            });
+            refreshShopUI();
+        }
     function updateBonfire(d) {
         const fire = document.getElementById('sbFire');
         const cnt = document.getElementById('sbCount');
@@ -1926,6 +2017,8 @@
         if (streak === 3) addMadelineMessage(lines3[Math.floor(Math.random() * lines3.length)], '可爱');
         if (streak === 7) addMadelineMessage(lines7[Math.floor(Math.random() * lines7.length)], '可爱');
         if (streak === 30) addMadelineMessage(lines30[Math.floor(Math.random() * lines30.length)], '可爱');
+
+        refreshShopUI();
     }
 
     // ================================================================
@@ -2079,7 +2172,7 @@
             idleCareTimer = setTimeout(idleCare, 180000);
         }, { passive: true })
     );
-    initStrawberryBonfire();
+        initStrawberryShop();
     })();
 
 })();

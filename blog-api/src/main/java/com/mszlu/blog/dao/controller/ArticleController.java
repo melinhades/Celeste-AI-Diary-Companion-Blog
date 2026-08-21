@@ -18,7 +18,7 @@ public class ArticleController {
     //加上此注解 代表要对此接口记录日志
     @LogAnnotation(module="文章",operator="获取文章列表")
     public Result listArticle(@RequestBody PageParams pageParams) {
-        return Result.success(articleService.listArticlesPage(pageParams));
+        return articleService.listArticle(pageParams);
     }
 
     @PostMapping("hot")

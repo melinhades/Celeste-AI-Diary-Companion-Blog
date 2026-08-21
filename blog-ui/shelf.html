@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>回忆书架 · Madeline</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="icon/OIP.webp" type="image/webp">
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 * { box-sizing:border-box; margin:0; padding:0; }
@@ -15,6 +16,7 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:16px; }
 .card { background:rgba(22,34,60,.88); border:2px solid rgba(255,230,109,.4); border-radius:8px; padding:14px; cursor:pointer; transition:transform .15s, border-color .15s; }
 .card:hover { transform:translateY(-4px); border-color:#ffe36d; }
+.card-cover { width:100%; height:70px; object-fit:cover; object-position:center; border-radius:5px; margin-bottom:10px; opacity:.85; border:1px solid rgba(255,230,109,.25); }
 .card .t { color:#fff; font-size:15px; margin-bottom:6px; word-break:break-all; }
 .card .d { color:rgba(255,230,109,.7); font-size:11px; margin-bottom:8px; }
 .card .s { color:rgba(255,255,255,.55); font-size:12px; line-height:1.6; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
@@ -30,11 +32,44 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 .acts button.del { border-color:#e6517c; color:#ff9ab5; }
 .toast { position:fixed; left:50%; bottom:40px; transform:translateX(-50%) translateY(20px); background:rgba(22,34,60,.95); color:#ffe36d; border:1px solid #ffe36d; padding:10px 18px; border-radius:6px; opacity:0; transition:.3s; z-index:99; font-size:13px; }
 .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+/* ===== 篝火（从 diary 迁来） ===== */
+#strawberryBonfire{position:fixed;right:26px;bottom:24px;z-index:20;display:flex;flex-direction:column;align-items:flex-end;gap:8px;user-select:none;cursor:pointer;}
+.sb-straw{display:flex;align-items:center;gap:5px;padding:4px 11px;background:rgba(22,34,60,.9);border:2px solid rgba(255,230,109,.5);border-radius:8px;box-shadow:0 0 8px rgba(255,230,109,.25);font-family:'Press Start 2P',monospace;font-size:11px;color:#ff6b8a;}
+.sb-straw img{width:20px;height:20px;image-rendering:pixelated;}
+.sb-scene{position:relative;display:flex;align-items:flex-end;gap:2px;}
+.sb-scene::before{content:'';position:absolute;left:50%;bottom:-8px;transform:translateX(-50%);width:220px;height:64px;background:radial-gradient(ellipse at center,rgba(255,150,50,.35) 0%,rgba(255,150,50,.12) 45%,transparent 70%);pointer-events:none;animation:sbGlow 1.6s ease-in-out infinite alternate;}
+@keyframes sbGlow{from{opacity:.7}to{opacity:1}}
+.sb-madeline{width:74px;height:auto;image-rendering:pixelated;filter:drop-shadow(0 3px 6px rgba(0,0,0,.5));}
+.sb-flag{width:30px;height:auto;image-rendering:pixelated;align-self:flex-end;margin:0 -2px 2px 0;filter:drop-shadow(0 0 4px rgba(125,207,255,.5));}
+.sb-flash{position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:80px;height:auto;image-rendering:pixelated;pointer-events:none;z-index:2;}
+.sb-fire{position:relative;display:flex;align-items:flex-end;justify-content:center;}
+.sb-fire img{display:block;height:auto;image-rendering:pixelated;filter:drop-shadow(0 0 14px rgba(255,150,50,.65));}
+.sb-label{font-family:'Press Start 2P',monospace;font-size:9px;color:rgba(255,230,109,.75);text-shadow:0 1px 2px rgba(0,0,0,.8);position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);white-space:nowrap;}
+/* ===== 商店收藏品展示 ===== */
+#berryTrophy{position:fixed;top:70px;right:16px;z-index:20;display:flex;gap:8px;padding:6px 10px;background:rgba(22,34,60,.85);border:1px dashed rgba(255,230,109,.4);border-radius:8px;}
+#berryTrophy img{width:26px;height:26px;image-rendering:pixelated;object-fit:contain;filter:drop-shadow(0 0 4px rgba(255,230,109,.5));}
+#berryTrophy.empty{display:none;}
 </style>
 </head>
 <body>
 <h1>MEMORY SHELF</h1>
 <div class="topbar"><a href="diary.html">← 回日记本</a></div>
+<canvas id="shelfSnow" style="position:fixed;inset:0;z-index:1;pointer-events:none;"></canvas>
+<div id="strawberryBonfire">
+    <div class="sb-straw"><img id="sbStrawImg" src="celeste-collectables/strawberry.png" alt="strawberry"><span id="sbCount">0</span></div>
+    <div class="sb-scene">
+        <img class="sb-madeline" src="celeste-gui/madeline-sitdown.gif" alt="Madeline">
+        <img id="sbFlag" class="sb-flag" alt="" style="display:none;">
+        <div class="sb-fire" id="sbFire"><img id="sbFlameImg" alt=""></div>
+    </div>
+</div>
+<div id="berryTrophy" class="empty"></div>
+
+<!-- BGM 播放器 -->
+<audio id="bgmPlayer" loop>
+    <source src="bgm/dearest-friends.mp3" type="audio/mpeg">
+</audio>
+
 <div class="wrap">
     <div id="cards" class="cards"></div>
     <div id="detail" class="detail">
@@ -45,6 +80,61 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 </div>
 <script src="js/api.js"></script>
 <script>
+    // ===== 雪花动画（mountainSnow 原版贴图） =====
+    (function () {
+        const canvas = document.getElementById('shelfSnow');
+        const ctx = canvas.getContext('2d');
+        const flakeImg = new Image();
+        flakeImg.src = 'celeste-gui/mountain-snow.png';
+        let flakes = [];
+        function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+        function mk(randomY) {
+            return {
+                x: Math.random() * canvas.width,
+                y: randomY ? Math.random() * canvas.height : -20,
+                s: Math.random() * 10 + 5,
+                speed: Math.random() * 1 + 0.4,
+                wind: Math.random() * 0.4 - 0.2,
+                opacity: Math.random() * 0.55 + 0.3,
+                rot: Math.random() * Math.PI * 2,
+                rotSpeed: (Math.random() - 0.5) * 0.02,
+                swing: Math.random() * Math.PI * 2,
+                swingSpeed: Math.random() * 0.02 + 0.008
+            };
+        }
+        function init() { flakes = []; for (let i = 0; i < 50; i++) flakes.push(mk(true)); }
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (flakeImg.complete && flakeImg.naturalWidth > 0) {
+                for (const f of flakes) {
+                    f.y += f.speed; f.swing += f.swingSpeed; f.rot += f.rotSpeed;
+                    f.x += Math.sin(f.swing) * 0.5 + f.wind;
+                    if (f.y > canvas.height + 20) Object.assign(f, mk(false));
+                    if (f.x > canvas.width + 20) f.x = -20;
+                    if (f.x < -20) f.x = canvas.width + 20;
+                    ctx.save();
+                    ctx.globalAlpha = f.opacity;
+                    ctx.translate(f.x, f.y);
+                    ctx.rotate(f.rot);
+                    ctx.drawImage(flakeImg, -f.s / 2, -f.s / 2, f.s, f.s);
+                    ctx.restore();
+                }
+            }
+            requestAnimationFrame(draw);
+        }
+        window.addEventListener('resize', resize);
+        resize(); init(); draw();
+    })();
+
+    const bgmPlayer = document.getElementById('bgmPlayer');
+    const savedTime = parseFloat(localStorage.getItem('bgmTimeShelf') || '0');
+    if (savedTime > 0) bgmPlayer.currentTime = savedTime;
+    bgmPlayer.volume = 0.3;
+    bgmPlayer.play().catch(() => {});
+    setInterval(() => { localStorage.setItem('bgmTimeShelf', bgmPlayer.currentTime); }, 2000);
+    function tryPlayBGM() { bgmPlayer.play().then(() => { document.removeEventListener('click', tryPlayBGM); document.removeEventListener('keydown', tryPlayBGM); }).catch(() => {}); }
+    document.addEventListener('click', tryPlayBGM);
+    document.addEventListener('keydown', tryPlayBGM);
 
 function renderPostcardCanvas(canvas, title, dateStr, content, summary, strawCount) {
     var ctx = canvas.getContext('2d');
@@ -158,11 +248,17 @@ function exportPostcard(data) {
         if (res.success && Array.isArray(res.data)) {
             data = res.data;
             if (!data.length) { cards.innerHTML = '<div class="empty">书架还空着。<br>写下第一篇，它就有了位置。</div>'; return; }
-            cards.innerHTML = data.map((d, i) =>
+            const CH_COVERS = [1,2,3,4,5,6,7,9];
+            const htmls = data.map((d, i) =>
                 '<div class="card" data-i="' + i + '">' +
                 '<div class="t">' + escHtml(d.title || '无题') + '</div>' +
                 '<div class="d">' + fmt(d.updateDate || d.createDate) + '</div>' +
-                '<div class="s">' + escHtml((d.content || '').slice(0, 80)) + '</div></div>').join('');
+                '<div class="s">' + escHtml((d.content || '').slice(0, 80)) + '</div></div>');
+            htmls.forEach((h, i) => {
+                const cv = '<img class="card-cover" src="celeste-gui/chapter-covers/' + CH_COVERS[i % CH_COVERS.length] + '.png" alt="">';
+                htmls[i] = h.replace('<div class="t">', cv + '<div class="t">');
+            });
+            cards.innerHTML = htmls.join('');
         } else {
             cards.innerHTML = '<div class="empty">书架暂时打不开（' + escHtml(res.msg || '未知错误') + '）</div>';
         }
@@ -190,6 +286,101 @@ function exportPostcard(data) {
     });
     await load();
 })();
+
+    // ===== 篝火渲染（原版 campfire 逐帧动画） =====
+    (function () {
+        const TROPHIES = {
+            goldberry: 'celeste-collectables/goldberry/idle00.png',
+            cassette: 'celeste-collectables/cassette/idle00.png',
+            heartgem: 'celeste-collectables/heartgem/0/00.png',
+            moonberry: 'celeste-collectables/moonberry/normal00.png'
+        };
+        let owned = [];
+        try { owned = JSON.parse(localStorage.getItem('berryOwned') || '[]'); } catch (e) {}
+        const trophy = document.getElementById('berryTrophy');
+        owned.forEach(id => {
+            if (!TROPHIES[id]) return;
+            const im = document.createElement('img');
+            im.src = TROPHIES[id]; im.title = id; im.dataset.id = id;
+            trophy.appendChild(im);
+        });
+        if (trophy.children.length) trophy.classList.remove('empty');
+        function mkTrophyFrames(prefix, n) { const a = []; for (let i = 0; i < n; i++) a.push(prefix + String(i).padStart(2, '0') + '.png'); return a; }
+        function heartTier() {
+            const c = parseInt(localStorage.getItem('diarySaveCount') || '0');
+            return c >= 100 ? 3 : c >= 60 ? 2 : c >= 30 ? 1 : 0;
+        }
+        const TROPHY_FRAMES = {
+            goldberry: mkTrophyFrames('celeste-collectables/goldberry/idle', 12),
+            moonberry: mkTrophyFrames('celeste-collectables/moonberry/normal', 52),
+            cassette: mkTrophyFrames('celeste-collectables/cassette/idle', 19)
+        };
+        const STRAW_FRAMES = mkTrophyFrames('celeste-collectables/strawberry/normal', 62);
+        STRAW_FRAMES.forEach(s => { const im = new Image(); im.src = s; });
+        let tfi = 0;
+        setInterval(() => {
+            trophy.querySelectorAll('img').forEach(im => {
+                if (im.dataset.id === 'heartgem') {
+                    im.src = 'celeste-collectables/heartgem/' + heartTier() + '/' + String(tfi % 14).padStart(2, '0') + '.png';
+                    return;
+                }
+                const f = TROPHY_FRAMES[im.dataset.id];
+                if (f) im.src = f[tfi % f.length];
+            });
+            const strawIm = document.getElementById('sbStrawImg');
+            if (strawIm) strawIm.src = STRAW_FRAMES[tfi % STRAW_FRAMES.length];
+            tfi++;
+        }, 90);
+
+        const FIRE_FRAMES = [];
+        for (let i = 0; i < 16; i++) FIRE_FRAMES.push('celeste-gui/campfire/fire' + String(i).padStart(2, '0') + '.png');
+        const SMOKE_FRAMES = [];
+        for (let i = 0; i < 8; i++) SMOKE_FRAMES.push('celeste-gui/campfire/smoking' + String(i).padStart(2, '0') + '.png');
+        FIRE_FRAMES.concat(SMOKE_FRAMES).forEach(src => { const im = new Image(); im.src = src; });
+
+        const flameImg = document.getElementById('sbFlameImg');
+        let curFrames = null, fi = 0;
+        setInterval(() => {
+            if (!curFrames || !curFrames.length) return;
+            flameImg.src = curFrames[fi % curFrames.length];
+            fi++;
+        }, 70);
+
+        function updateBonfire() {
+            const fire = document.getElementById('sbFire');
+            const cnt = document.getElementById('sbCount');
+            const total = parseInt(localStorage.getItem('diarySaveCount') || '0') - parseInt(localStorage.getItem('berrySpent') || '0');
+            const s = parseInt(localStorage.getItem('diaryStreak') || '0');
+            cnt.textContent = total;
+            fire.querySelectorAll('.sb-label').forEach(e => e.remove());
+            if (s >= 1) {
+                curFrames = FIRE_FRAMES; fi = 0;
+                flameImg.style.width = (s >= 30 ? 120 : s >= 7 ? 104 : s >= 3 ? 90 : 76) + 'px';
+            } else {
+                curFrames = SMOKE_FRAMES; fi = 0;
+                flameImg.style.width = '64px';
+            }
+            const lb = document.createElement('div');
+            lb.className = 'sb-label';
+            lb.textContent = s >= 30 ? '\u2605' + s : s + '天';
+            fire.appendChild(lb);
+            const flag = document.getElementById('sbFlag');
+            if (s >= 30) { flag.src = 'celeste-gui/checkpoint/flag30.png'; flag.title = '存档点 \u2605' + s; flag.style.display = ''; }
+            else if (s >= 7) { flag.src = 'celeste-gui/checkpoint/flag7.png'; flag.title = '存档点 ' + s + ' 天'; flag.style.display = ''; }
+            else if (s >= 3) { flag.src = 'celeste-gui/checkpoint/flag3.png'; flag.title = '存档点 ' + s + ' 天'; flag.style.display = ''; }
+            else { flag.style.display = 'none'; }
+        }
+        updateBonfire();
+        document.getElementById('strawberryBonfire').addEventListener('click', () => {
+            const s = parseInt(localStorage.getItem('diaryStreak') || '0');
+            const line = s >= 30 ? '篝火已经燃成传说了！\u2605'
+                : s >= 7 ? '火光正旺，继续攀登！'
+                : s >= 3 ? '篝火稳定燃烧着。'
+                : s >= 1 ? '小火苗也在努力发光。'
+                : '火堆冷了……写一篇日记把它点燃吧。';
+            showToast(line);
+        });
+    })();
 </script>
 </body>
 </html>

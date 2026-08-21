@@ -45,6 +45,7 @@
     .meta-author-img { width:18px; height:18px; border-radius:50%; vertical-align:-4px; margin-right:5px; border:1px solid rgba(255,235,59,.6); }
     .hot-rank { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
     .hot-rank img { width:22px; height:22px; object-fit:contain; filter:drop-shadow(0 0 4px rgba(255,235,59,.5)); }
+    .tag-link.tag-on { background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); color:#fff; box-shadow:0 0 10px rgba(138,43,226,.5); }
     </style>
 </head>
 <body>
@@ -80,7 +81,7 @@
     <main class="content">
         <!-- 分类筛选 -->
         <div class="filter-bar" id="categoryBar">
-            <span class="filter-item active" data-id="">All</span>
+            <span class="filter-item active" data-id="" onclick="filterAll()">All</span>
         </div>
 
         <div id="articleList"><div class="loading">Loading...</div></div>
@@ -178,6 +179,7 @@
     const PAGE_SIZE = 10;
     let currentPage = 1;
     let currentCategory = '';
+    let currentTag = '';
 
     // 初始化
     initHeader();
@@ -199,6 +201,8 @@
                     document.querySelectorAll('.filter-item').forEach(el => el.classList.remove('active'));
                     span.classList.add('active');
                     currentCategory = c.id;
+                    currentTag = '';
+                    document.querySelectorAll('.tag-link').forEach(t => t.classList.remove('tag-on'));
                     loadArticles(1);
                 };
                 bar.appendChild(span);
@@ -211,6 +215,7 @@
         document.getElementById('articleList').innerHTML = '<div class="loading">加载中...</div>';
         const body = { page: page, pageSize: PAGE_SIZE };
         if (currentCategory) body.categoryId = currentCategory;
+        if (currentTag) body.tagId = currentTag;
         api('/articles', 'POST', body).then(res => {
             if (!res.success) { document.getElementById('articleList').innerHTML = '<div class="empty">加载失败</div>'; return; }
             renderArticles(res.data.records || res.data);
@@ -265,17 +270,28 @@
         api('/tags/hot', 'GET').then(res => {
             if (!res.success) return;
             const html = (res.data || []).map(t =>
-                `<span class="tag tag-link" onclick="filterByTag(${t.id})">${escHtml(t.tagName || t.name)}</span>`
+                `<span class="tag tag-link" onclick="filterByTag('${t.id}', this)">${escHtml(t.tagName || t.name)}</span>`
             ).join('');
             document.getElementById('tagCloud').innerHTML = html || '<div class="empty">暂无标签</div>';
         });
     }
 
-    function filterByTag(tagId) {
-        // 按标签筛选（传给文章列表）
+    function filterByTag(tagId, el) {
+        currentTag = tagId;
         currentCategory = '';
         document.querySelectorAll('.filter-item').forEach(el => el.classList.remove('active'));
         document.querySelector('.filter-item[data-id=""]').classList.add('active');
+        document.querySelectorAll('.tag-link').forEach(t => t.classList.remove('tag-on'));
+        if (el) el.classList.add('tag-on');
+        loadArticles(1);
+    }
+
+    function filterAll() {
+        currentTag = '';
+        currentCategory = '';
+        document.querySelectorAll('.filter-item').forEach(el => el.classList.remove('active'));
+        document.querySelector('.filter-item[data-id=""]').classList.add('active');
+        document.querySelectorAll('.tag-link').forEach(t => t.classList.remove('tag-on'));
         loadArticles(1);
     }
 

@@ -126,13 +126,15 @@ public class ArticleServiceImpl implements ArticleService {
 
     }
 
+
+    @Override
     public Result listArticle(PageParams pageParams) {
-        Page<Article> page = new Page<>(pageParams.getPage(),pageParams.getPageSize());
-        IPage<Article> articleIPage = articleMapper.listArticle(page,pageParams.getCategoryId(),pageParams.getTagId(),pageParams.getYear(),pageParams.getMonth());
-        List<Article> records = articleIPage.getRecords();
-        return Result.success(copyList(records,true,true,true));
-
-
+        Page<Article> page = new Page<>(pageParams.getPage(), pageParams.getPageSize());
+        IPage<Article> articleIPage = articleMapper.listArticle(page, pageParams.getCategoryId(), pageParams.getTagId(), pageParams.getYear(), pageParams.getMonth());
+        Map<String, Object> data = new HashMap<>();
+        data.put("records", copyList(articleIPage.getRecords(), true, false, true));
+        data.put("total", articleIPage.getTotal());
+        return Result.success(data);
     }
 
 

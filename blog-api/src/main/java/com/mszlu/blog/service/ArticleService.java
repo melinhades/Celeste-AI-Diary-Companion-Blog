@@ -11,6 +11,7 @@ import java.util.List;
 public interface ArticleService {
 
     List<ArticleVo> listArticlesPage(PageParams pageParams);
+    Result listArticle(PageParams pageParams);
     Result hotArticle(int limit);
     Result newArticles(int limit);
     //文章归档

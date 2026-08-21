@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>草莓商店 · Madeline</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="icon/OIP.webp" type="image/webp">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+body { min-height:100vh; background:url('celeste-gui/shelf-bg.webp') center/cover no-repeat fixed; font-family:'Renogare','Microsoft YaHei',sans-serif; }
+.topbar { position:fixed; top:14px; left:16px; z-index:20; }
+.topbar a { display:inline-block; padding:8px 14px; background:rgba(22,34,60,.88); color:#ffe36d; border:2px solid #ffe36d; border-radius:6px; text-decoration:none; font-size:13px; box-shadow:0 0 10px rgba(255,230,109,.35); }
+h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family:'Press Start 2P',monospace; font-size:15px; color:#ffe36d; text-shadow:0 2px 0 rgba(0,0,0,.6); letter-spacing:2px; z-index:20; }
+.wrap { max-width:760px; margin:0 auto; padding:86px 20px 40px; }
+.balance { display:flex; align-items:center; gap:10px; justify-content:center; margin-bottom:26px; }
+.balance img { width:34px; height:34px; image-rendering:pixelated; filter:drop-shadow(0 0 6px rgba(255,107,138,.6)); }
+.balance .num { font-family:'Press Start 2P',monospace; font-size:20px; color:#ff6b8a; text-shadow:0 2px 0 rgba(0,0,0,.6); }
+.balance .tip { color:rgba(255,255,255,.55); font-size:12px; }
+.items { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:16px; }
+.item { background:rgba(22,34,60,.88); border:2px solid rgba(255,230,109,.4); border-radius:8px; padding:16px; display:flex; align-items:center; gap:14px; transition:transform .15s, border-color .15s; }
+.item:hover { transform:translateY(-3px); border-color:#ffe36d; }
+.item img { width:44px; height:44px; image-rendering:pixelated; object-fit:contain; flex-shrink:0; }
+.item .info { flex:1; min-width:0; }
+.item .name { color:#fff; font-size:15px; margin-bottom:4px; }
+.item .desc { color:rgba(255,255,255,.55); font-size:12px; line-height:1.6; }
+.item .buy { padding:8px 14px; border:2px solid #ffe36d; border-radius:6px; background:rgba(22,34,60,.9); color:#ffe36d; cursor:pointer; font-size:13px; white-space:nowrap; flex-shrink:0; transition:background .2s; }
+.item .buy:hover:not(:disabled) { background:rgba(255,227,109,.25); }
+.item .buy:disabled { opacity:.45; cursor:not-allowed; }
+.item.owned { border-color:rgba(255,230,109,.75); }
+.item.owned .buy { border-color:#7dcf7d; color:#a5e8a5; }
+.madeline-say { margin-top:26px; text-align:center; color:rgba(255,227,109,.85); font-size:13px; min-height:22px; }
+</style>
+</head>
+<body>
+<h1>BERRY SHOP</h1>
+<div class="topbar"><a href="diary.html">← 回日记本</a></div>
+
+<audio id="bgmPlayer" loop>
+    <source src="bgm/exhale.mp3" type="audio/mpeg">
+</audio>
+
+<div class="wrap">
+    <div class="balance">
+        <img src="celeste-collectables/strawberry.png" alt="strawberry">
+        <span class="num" id="balNum">0</span>
+        <span class="tip">每写一篇日记收一颗草莓</span>
+    </div>
+    <div class="items" id="items"></div>
+    <div class="madeline-say" id="mSay"></div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+    const bgmPlayer = document.getElementById('bgmPlayer');
+    const savedTime = parseFloat(localStorage.getItem('bgmTimeDiary') || '0');
+    if (savedTime > 0) bgmPlayer.currentTime = savedTime;
+    bgmPlayer.volume = 0.3;
+    bgmPlayer.play().catch(() => {});
+    setInterval(() => { localStorage.setItem('bgmTimeDiary', bgmPlayer.currentTime); }, 2000);
+    function tryPlayBGM() { bgmPlayer.play().then(() => { document.removeEventListener('click', tryPlayBGM); document.removeEventListener('keydown', tryPlayBGM); }).catch(() => {}); }
+    document.addEventListener('click', tryPlayBGM);
+    document.addEventListener('keydown', tryPlayBGM);
+
+    const SHOP_ITEMS = [
+        { id: 'bgm', name: '明信片 BGM', icon: 'celeste-gui/postcard.png', price: 3, desc: '日记页的 BGM 换成 postcard，山野换海风。' },
+        { id: 'goldberry', name: '金草莓荣誉', icon: 'celeste-collectables/goldberry/idle00.png', price: 5, desc: '书架右上角点亮金草莓徽章。' },
+        { id: 'cassette', name: '磁带收藏', icon: 'celeste-collectables/cassette/idle00.png', price: 8, desc: '解锁磁带收藏位，纯粹的快乐。' },
+        { id: 'heartgem', name: '心之宝石', icon: 'celeste-icons/heartgem0.png', price: 15, desc: '山顶的终极成就。写满 100 篇，它会升满四色。' },
+        { id: 'moonberry', name: '月亮莓', icon: 'celeste-collectables/moonberry/normal00.png', price: 30, desc: '山里藏得最深的传说收藏。拿到它，说明你写到了山顶。' }
+    ];
+    const SAY_BUY = ['换到啦！草莓花得值～', '嘿嘿，这个我也想要！', '成交！谢谢惠顾～'];
+    const SAY_POOR = ['草莓还不够呢，再去写几篇吧～', '差一点点啦，加油写日记！'];
+
+    function balance() {
+        return parseInt(localStorage.getItem('diarySaveCount') || '0') - parseInt(localStorage.getItem('berrySpent') || '0');
+    }
+    function owned() {
+        try { return JSON.parse(localStorage.getItem('berryOwned') || '[]'); } catch (e) { return []; }
+    }
+    function say(txt) { document.getElementById('mSay').textContent = '「' + txt + '」—— Madeline'; }
+
+    function render() {
+        const bal = balance(), own = owned();
+        document.getElementById('balNum').textContent = bal;
+        document.getElementById('items').innerHTML = SHOP_ITEMS.map(it => {
+            const has = own.indexOf(it.id) >= 0;
+            return '<div class="item' + (has ? ' owned' : '') + '">' +
+                '<img src="' + it.icon + '" alt="">' +
+                '<div class="info"><div class="name">' + it.name + '</div><div class="desc">' + it.desc + '</div></div>' +
+                '<button class="buy" data-id="' + it.id + '"' + (has ? ' disabled' : (bal < it.price ? ' disabled' : '')) + '>' +
+                (has ? '✓ 已拥有' : it.price + ' 🍓') + '</button></div>';
+        }).join('');
+        document.querySelectorAll('.buy').forEach(b => b.addEventListener('click', () => buy(b.dataset.id)));
+    }
+    function buy(id) {
+        const it = SHOP_ITEMS.find(x => x.id === id);
+        if (!it) return;
+        const own = owned();
+        if (own.indexOf(id) >= 0) return;
+        if (balance() < it.price) { say(SAY_POOR[Math.floor(Math.random() * SAY_POOR.length)]); return; }
+        own.push(id);
+        localStorage.setItem('berryOwned', JSON.stringify(own));
+        localStorage.setItem('berrySpent', String(parseInt(localStorage.getItem('berrySpent') || '0') + it.price));
+        if (id === 'bgm') localStorage.setItem('berryBgm', 'postcard');
+        say(SAY_BUY[Math.floor(Math.random() * SAY_BUY.length)]);
+        render();
+    }
+    render();
+    function mkFrames(prefix, n) { const a = []; for (let i = 0; i < n; i++) a.push(prefix + String(i).padStart(2, '0') + '.png'); return a; }
+    function heartTier() {
+        const c = parseInt(localStorage.getItem('diarySaveCount') || '0');
+        return c >= 100 ? 3 : c >= 60 ? 2 : c >= 30 ? 1 : 0;
+    }
+    const ICON_FRAMES = {
+        goldberry: mkFrames('celeste-collectables/goldberry/idle', 12),
+        moonberry: mkFrames('celeste-collectables/moonberry/normal', 52),
+        cassette: mkFrames('celeste-collectables/cassette/idle', 19),
+        strawberry: mkFrames('celeste-collectables/strawberry/normal', 62)
+    };
+    Object.keys(ICON_FRAMES).forEach(k => ICON_FRAMES[k].forEach(s => { const im = new Image(); im.src = s; }));
+    let shopFi = 0;
+    setInterval(() => {
+        document.querySelectorAll('.item').forEach((el, idx) => {
+            const it = SHOP_ITEMS[idx];
+            const f = it && ICON_FRAMES[it.id];
+            if (!f) return;
+            el.querySelector('img').src = f[shopFi % f.length];
+        });
+        const hg = SHOP_ITEMS.findIndex(x => x.id === 'heartgem');
+        if (hg >= 0) {
+            const hel = document.querySelectorAll('.item')[hg];
+            if (hel) hel.querySelector('img').src = 'celeste-collectables/heartgem/' + heartTier() + '/' + String(shopFi % 14).padStart(2, '0') + '.png';
+        }
+        const bal = document.querySelector('.balance img');
+        if (bal) bal.src = ICON_FRAMES.strawberry[shopFi % ICON_FRAMES.strawberry.length];
+        shopFi++;
+    }, 90);
+    if (!owned().length) say('欢迎来到草莓商店！写日记攒草莓，来换好东西吧～');
+</script>
+</body>
+</html>

@@ -858,6 +858,8 @@ body::before {
 /* ===== 主线4：草莓与篝火 ===== */
 #strawberryBonfire{position:fixed;top:16px;right:140px;z-index:955;display:flex;align-items:flex-end;gap:8px;padding:8px 14px;background:rgba(22,34,60,.9);border:2px solid rgba(255,230,109,.5);border-radius:8px;cursor:pointer;box-shadow:0 0 8px rgba(255,230,109,.25);transition:transform .15s,border-color .15s;user-select:none;}
 #strawberryBonfire:hover{transform:translateY(-2px);border-color:#ffe36d;}
+#strawberryBonfire .sb-shop-link{padding:3px 8px;background:rgba(255,227,109,.15);color:#ffe36d;border:1px solid rgba(255,230,109,.5);border-radius:4px;text-decoration:none;font-size:11px;font-family:var(--chat-font);}
+#strawberryBonfire .sb-shop-link:hover{background:rgba(255,227,109,.3);}
 .sb-straw{display:flex;align-items:center;gap:4px;font-family:var(--pixel-font);font-size:11px;color:#ff6b8a;}
 .sb-straw img{width:20px;height:20px;image-rendering:pixelated;}
 .sb-fire{position:relative;width:24px;height:32px;display:flex;align-items:flex-end;justify-content:center;}
