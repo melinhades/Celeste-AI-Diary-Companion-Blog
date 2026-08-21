@@ -28,4 +28,7 @@ public interface DiaryService {
 
     /** Madeline 主动冒泡 */
     Result bubble();
+
+    /** 保存成功：Madeline 对这篇日记做一句总结 */
+    Result summary(DiaryParam param);
 }

@@ -55,6 +55,12 @@ public class DiaryController {
         return diaryService.bubble();
     }
 
+    /** 保存成功后的日记总结 */
+    @PostMapping("summary")
+    public Result summary(@RequestBody DiaryParam param) {
+        return diaryService.summary(param);
+    }
+
     /** 请求体类：用于 companion 接口 */
     static class CompanionParam {
         private String draft;

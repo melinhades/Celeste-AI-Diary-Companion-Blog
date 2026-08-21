@@ -1136,6 +1136,7 @@
                 }
 
                 showToast('保存成功！', 'success');
+                pmCelebrate();
                 titleInput.value = '';
                 contentInput.value = '';
                 emotionBar.classList.remove('show');

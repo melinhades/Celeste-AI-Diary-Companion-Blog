@@ -48,7 +48,9 @@ public class DiaryServiceImpl implements DiaryService {
         Date now = new Date();
         Diary diary = new Diary();
         diary.setUserId(userId);
-        diary.setTitle(param.getTitle());
+        String title = param.getTitle();
+        if (title != null && title.length() > 255) title = title.substring(0, 255);
+        diary.setTitle(title);
         diary.setContent(param.getContent());
         diary.setCreateDate(now);
         diary.setUpdateDate(now);
@@ -263,5 +265,28 @@ public class DiaryServiceImpl implements DiaryService {
             }
         }
         return "默认";
+    }
+
+    @Override
+    public Result summary(DiaryParam param) {
+        SysUser user = UserThreadLocal.get();
+        if (user == null) return Result.fail(403, "未登录");
+        String content = param.getContent() == null ? "" : param.getContent();
+        if (content.isEmpty()) return Result.fail(400, "内容为空");
+        String snippet = content.substring(0, Math.min(600, content.length()));
+        String prompt = "你是Madeline，Celeste的爬山女孩。你温暖、真诚、细腻。\n"
+                + "用户刚写完一篇日记并保存了：\n———\n" + snippet + "\n———\n\n"
+                + "请以Madeline的身份，用1-2句话为这篇日记做一个温柔的总结：先轻轻点出日记里最打动你的一件事，再给一句暖心的收尾。\n"
+                + "不要说教，不要罗列，像朋友合上日记本后随口说的那句话。\n"
+                + "直接输出文字，不要JSON，不要引号。";
+        String reply = aiClient.chat(new java.util.ArrayList<>(java.util.Arrays.asList(
+                new AiMessage("user", prompt))));
+        if (reply == null || reply.isEmpty()) {
+            reply = "写完啦。今天这一页，我会替你记着的。";
+        }
+        java.util.Map<String, Object> data = new java.util.HashMap<>();
+        data.put("message", reply.trim());
+        data.put("emotion", scanEmotion(snippet));
+        return Result.success(data);
     }
 }
