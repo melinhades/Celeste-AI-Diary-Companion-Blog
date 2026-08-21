@@ -80,6 +80,45 @@
         .hot-rank.rank-2 { background: #e67e22; }
         .hot-rank.rank-3 { background: #f1c40f; color: #333; }
         .hot-title { font-size: 13px; color: #555; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+    #articleLoadingOverlay {
+        position: fixed; inset: 0; z-index: 9999;
+        background: rgba(10, 10, 30, 0.92);
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        transition: opacity 0.6s ease;
+    }
+    #articleLoadingOverlay.fade-out { opacity: 0; pointer-events: none; }
+    #articleLoadingOverlay .loading-madeline {
+        width: 120px; height: 120px;
+        background-size: contain; background-repeat: no-repeat; background-position: center;
+        animation: loadingRun 0.72s steps(9) infinite;
+    }
+    @keyframes loadingRun {
+        0%   { background-image: url('celeste-gui/loading/loading-0.png'); }
+        11%  { background-image: url('celeste-gui/loading/loading-1.png'); }
+        22%  { background-image: url('celeste-gui/loading/loading-2.png'); }
+        33%  { background-image: url('celeste-gui/loading/loading-3.png'); }
+        44%  { background-image: url('celeste-gui/loading/loading-4.png'); }
+        55%  { background-image: url('celeste-gui/loading/loading-5.png'); }
+        66%  { background-image: url('celeste-gui/loading/loading-6.png'); }
+        77%  { background-image: url('celeste-gui/loading/loading-7.png'); }
+        88%  { background-image: url('celeste-gui/loading/loading-8.png'); }
+    }
+    #articleLoadingOverlay .loading-text {
+        margin-top: 20px; color: #ffe36d;
+        font-family: 'Press Start 2P', monospace; font-size: 13px;
+        letter-spacing: 2px;
+    }
+    #articleLoadingOverlay .loading-dots::after {
+        content: ''; animation: dots 1.5s steps(4, end) infinite;
+    }
+    @keyframes dots {
+        0%   { content: ''; }
+        25%  { content: '.'; }
+        50%  { content: '..'; }
+        75%  { content: '...'; }
+    }
     </style>
 </head>
 <body>
@@ -87,6 +126,12 @@
     <audio id="bgmPlayer" loop autoplay>
         <source src="bgm/postcard.mp3" type="audio/mpeg">
     </audio>
+
+    <!-- 加载动画 -->
+    <div id="articleLoadingOverlay">
+        <div class="loading-madeline"></div>
+        <div class="loading-text">Climbing<span class="loading-dots"></span></div>
+    </div>
 
     <!-- 雪花粒子系统 -->
     <canvas id="snowCanvas" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;"></canvas>
@@ -214,6 +259,8 @@
 
     function loadArticle() {
         api(`/articles/article/view/${articleId}`, 'POST').then(res => {
+            const overlay = document.getElementById('articleLoadingOverlay');
+            if (overlay) { overlay.classList.add('fade-out'); setTimeout(() => overlay.remove(), 700); }
             if (!res.success) {
                 document.getElementById('articleHeader').innerHTML = '<div class="empty">Article not found</div>';
                 return;

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>回忆书架 · Madeline</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+body { min-height:100vh; background:url('celeste-gui/shelf-bg.webp') center/cover no-repeat fixed; font-family:'Renogare','Microsoft YaHei',sans-serif; }
+.topbar { position:fixed; top:14px; left:16px; z-index:20; }
+.topbar a { display:inline-block; padding:8px 14px; background:rgba(22,34,60,.88); color:#ffe36d; border:2px solid #ffe36d; border-radius:6px; text-decoration:none; font-size:13px; box-shadow:0 0 10px rgba(255,230,109,.35); }
+h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family:'Press Start 2P',monospace; font-size:15px; color:#ffe36d; text-shadow:0 2px 0 rgba(0,0,0,.6); letter-spacing:2px; z-index:20; }
+.wrap { max-width:1000px; margin:0 auto; padding:76px 20px 40px; }
+.cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:16px; }
+.card { background:rgba(22,34,60,.88); border:2px solid rgba(255,230,109,.4); border-radius:8px; padding:14px; cursor:pointer; transition:transform .15s, border-color .15s; }
+.card:hover { transform:translateY(-4px); border-color:#ffe36d; }
+.card .t { color:#fff; font-size:15px; margin-bottom:6px; word-break:break-all; }
+.card .d { color:rgba(255,230,109,.7); font-size:11px; margin-bottom:8px; }
+.card .s { color:rgba(255,255,255,.55); font-size:12px; line-height:1.6; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.empty { text-align:center; color:rgba(255,255,255,.75); background:rgba(22,34,60,.7); border-radius:8px; padding:60px 20px; font-size:14px; line-height:2.2; }
+.detail { display:none; background:rgba(22,34,60,.9); border:2px solid rgba(255,230,109,.4); border-radius:8px; padding:22px; }
+.detail.show { display:block; }
+.detail .back { background:none; border:none; color:#ffe36d; cursor:pointer; font-size:13px; margin-bottom:14px; }
+.detail .t { color:#ffe36d; font-size:20px; margin-bottom:6px; word-break:break-all; }
+.detail .d { color:rgba(255,230,109,.6); font-size:12px; margin-bottom:16px; }
+.detail .c { color:rgba(255,255,255,.9); font-size:14px; line-height:2; white-space:pre-wrap; word-break:break-all; }
+.acts { display:flex; gap:10px; margin-top:22px; }
+.acts button { flex:1; padding:10px 0; border-radius:6px; cursor:pointer; font-size:14px; border:2px solid #ffe36d; background:rgba(22,34,60,.9); color:#ffe36d; }
+.acts button.del { border-color:#e6517c; color:#ff9ab5; }
+.toast { position:fixed; left:50%; bottom:40px; transform:translateX(-50%) translateY(20px); background:rgba(22,34,60,.95); color:#ffe36d; border:1px solid #ffe36d; padding:10px 18px; border-radius:6px; opacity:0; transition:.3s; z-index:99; font-size:13px; }
+.toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<h1>MEMORY SHELF</h1>
+<div class="topbar"><a href="diary.html">← 回日记本</a></div>
+<div class="wrap">
+    <div id="cards" class="cards"></div>
+    <div id="detail" class="detail">
+        <button class="back">← 返回列表</button>
+        <div class="t"></div><div class="d"></div><div class="c"></div>
+        <div class="acts"><button class="edit">回去编辑这篇</button><button class="export-postcard">🖼 导出明信片</button><button class="del">删掉它</button></div>
+    </div>
+</div>
+<script src="js/api.js"></script>
+<script>
+
+function renderPostcardCanvas(canvas, title, dateStr, content, summary, strawCount) {
+    var ctx = canvas.getContext('2d');
+    var W = 1200, H = 800;
+    canvas.width = W; canvas.height = H;
+    ctx.fillStyle = '#0f1729'; ctx.fillRect(0, 0, W, H);
+    var grad = ctx.createLinearGradient(0, 0, 0, 320);
+    grad.addColorStop(0, '#1a2744'); grad.addColorStop(1, '#0f1729');
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, W, 320);
+    for (var i = 0; i < 50; i++) {
+        ctx.fillStyle = 'rgba(255,255,255,' + (Math.random() * 0.4 + 0.1) + ')';
+        var sx = Math.random() * W, sy = Math.random() * 260, ss = Math.random() * 2 + 0.5;
+        ctx.fillRect(Math.floor(sx), Math.floor(sy), ss, ss);
+    }
+    ctx.fillStyle = '#1e2d4a';
+    ctx.beginPath(); ctx.moveTo(0, 300);
+    ctx.lineTo(120, 170); ctx.lineTo(280, 230); ctx.lineTo(480, 110);
+    ctx.lineTo(680, 190); ctx.lineTo(880, 130); ctx.lineTo(1060, 200);
+    ctx.lineTo(W, 260); ctx.lineTo(W, 320); ctx.lineTo(0, 320);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#253552';
+    ctx.beginPath(); ctx.moveTo(0, 310);
+    ctx.lineTo(200, 250); ctx.lineTo(400, 280); ctx.lineTo(600, 220);
+    ctx.lineTo(800, 265); ctx.lineTo(1000, 235); ctx.lineTo(W, 285);
+    ctx.lineTo(W, 320); ctx.lineTo(0, 320);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#ffe36d';
+    ctx.font = '22px "Press Start 2P",monospace';
+    ctx.fillText('MOUNTAIN DIARY', 60, 380);
+    ctx.fillStyle = 'rgba(255,227,109,.45)';
+    ctx.font = '13px "Press Start 2P",monospace';
+    ctx.fillText(dateStr || '', 60, 410);
+    ctx.fillStyle = '#ffe36d';
+    ctx.fillRect(60, 425, W - 120, 2);
+    ctx.fillStyle = '#fff';
+    ctx.font = '24px "Renogare","Microsoft YaHei",sans-serif';
+    var dt = (title || '无题').substring(0, 36);
+    ctx.fillText(dt, 60, 470);
+    ctx.fillStyle = 'rgba(255,255,255,.82)';
+    ctx.font = '15px "Renogare","CelesteZH","Microsoft YaHei",sans-serif';
+    var snip = (content || '').substring(0, 280);
+    var words = snip.split('');
+    var line = '', ly = 510, mh = 630, ml = Math.floor((W - 120) / 15);
+    for (var ci = 0; ci < words.length; ci++) {
+        if (words[ci] === '\n') { ctx.fillText(line, 60, ly); line = ''; ly += 28; if (ly > mh) break; continue; }
+        if ((line + words[ci]).length > ml) { ctx.fillText(line, 60, ly); line = words[ci]; ly += 28; if (ly > mh) break; }
+        else line += words[ci];
+    }
+    if (line && ly <= mh) ctx.fillText(line, 60, ly);
+    if (summary) {
+        var sy2 = Math.min(ly + 45, 660);
+        ctx.fillStyle = 'rgba(255,227,109,.5)';
+        ctx.fillRect(60, sy2 - 12, W - 120, 1);
+        ctx.fillStyle = 'rgba(255,227,109,.75)';
+        ctx.font = '14px "Renogare","CelesteZH","Microsoft YaHei",sans-serif';
+        var st = summary.substring(0, 80);
+        ctx.fillText('\u201c' + st + '\u201d', 80, sy2 + 14);
+    }
+    ctx.fillStyle = 'rgba(255,255,255,.35)';
+    ctx.font = '11px "Press Start 2P",monospace';
+    ctx.fillText('\u00d7' + (strawCount || 0) + '  \u2014 Madeline', 60, H - 36);
+    ctx.fillStyle = 'rgba(255,230,109,.25)';
+    for (var bx = 0; bx < W; bx += 8) { ctx.fillRect(bx, 0, 4, 4); ctx.fillRect(bx, H - 4, 4, 4); }
+    for (var by = 0; by < H; by += 8) { ctx.fillRect(0, by, 4, 4); ctx.fillRect(W - 4, by, 4, 4); }
+}
+function exportPostcard(data) {
+    var modal = document.getElementById('postcardExportModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'postcardExportModal';
+        modal.innerHTML = '<canvas id="postcardCanvas"></canvas><div class="pe-actions"><button id="peDownload">\u2b07 下载明信片</button><button class="pe-close" id="peClose">\u2715 关闭</button></div>';
+        document.body.appendChild(modal);
+        document.getElementById('peClose').addEventListener('click', function() { modal.classList.remove('show'); });
+        modal.addEventListener('click', function(e) { if (e.target === modal) modal.classList.remove('show'); });
+    }
+    var canvas = document.getElementById('postcardCanvas');
+    renderPostcardCanvas(canvas, data.title, data.date, data.content, data.summary, parseInt(localStorage.getItem('diarySaveCount') || '0'));
+    document.getElementById('peDownload').onclick = function() {
+        var url = canvas.toDataURL('image/png');
+        var a = document.createElement('a');
+        a.download = 'mountain-diary-' + (data.date || '').replace(/\D/g, '').slice(0, 8) + '.png';
+        a.href = url;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    };
+    modal.classList.add('show');
+}
+
+(async function () {
+    if (!localStorage.getItem('token')) { alert('请先登录'); location.href = 'login.html'; return; }
+    const cards = document.getElementById('cards');
+    const detail = document.getElementById('detail');
+    let data = [], cur = null;
+    function fmt(v) {
+        if (!v) return '';
+        const d = new Date(typeof v === 'number' || /^\d+$/.test(String(v)) ? Number(v) : v);
+        if (isNaN(d.getTime())) return String(v);
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+    function showList() { detail.classList.remove('show'); cards.style.display = ''; }
+    function showDetail(i) {
+        cur = data[i]; if (!cur) return;
+        cards.style.display = 'none';
+        detail.querySelector('.t').textContent = cur.title || '无题';
+        detail.querySelector('.d').textContent = fmt(cur.updateDate || cur.createDate);
+        detail.querySelector('.c').textContent = cur.content || '';
+        detail.classList.add('show');
+    }
+    async function load() {
+        cards.innerHTML = '<div class="empty">正在搬书……</div>';
+        const res = await api('/diary/list', 'GET');
+        if (res.success && Array.isArray(res.data)) {
+            data = res.data;
+            if (!data.length) { cards.innerHTML = '<div class="empty">书架还空着。<br>写下第一篇，它就有了位置。</div>'; return; }
+            cards.innerHTML = data.map((d, i) =>
+                '<div class="card" data-i="' + i + '">' +
+                '<div class="t">' + escHtml(d.title || '无题') + '</div>' +
+                '<div class="d">' + fmt(d.updateDate || d.createDate) + '</div>' +
+                '<div class="s">' + escHtml((d.content || '').slice(0, 80)) + '</div></div>').join('');
+        } else {
+            cards.innerHTML = '<div class="empty">书架暂时打不开（' + escHtml(res.msg || '未知错误') + '）</div>';
+        }
+    }
+    cards.addEventListener('click', ev => {
+        const c = ev.target.closest('.card');
+        if (c) showDetail(+c.dataset.i);
+    });
+    detail.querySelector('.back').addEventListener('click', showList);
+
+    detail.querySelector('.export-postcard').addEventListener('click', () => {
+        if (!cur) return;
+        exportPostcard({ title: cur.title, date: fmt(cur.updateDate || cur.createDate), content: cur.content, summary: '' });
+    });
+
+    detail.querySelector('.edit').addEventListener('click', () => {
+        if (cur) location.href = 'diary.html?edit=' + encodeURIComponent(cur.id);
+    });
+    detail.querySelector('.del').addEventListener('click', async () => {
+        if (!cur) return;
+        if (!confirm('确定要删掉这篇日记吗？删了就找不回来了。')) return;
+        const res = await api('/diary?diaryId=' + encodeURIComponent(cur.id), 'DELETE');
+        if (res.success) { showToast('这一页合上了'); showList(); load(); }
+        else showToast(res.msg || '删除失败');
+    });
+    await load();
+})();
+</script>
+</body>
+</html>

@@ -1,6 +1,15 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
+@font-face {
+    font-family: 'Renogare';
+    src: url('../celeste-font-en/Renogare-Regular.otf') format('opentype');
+}
+@font-face {
+    font-family: 'CelesteZH';
+    src: url('../fonts/NotoSansCJKsc-Medium.otf') format('opentype');
+    font-display: swap;
+}
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+    font-family: 'Renogare', 'CelesteZH', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
     background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
     background-attachment: fixed;
     color: #e8e8f0;
@@ -105,7 +114,9 @@ a { text-decoration: none; color: inherit; }
     font-size: 13px;
     font-weight: 600;
     box-shadow: 0 0 15px rgba(138, 43, 226, 0.5);
+    overflow: hidden;
 }
+.user-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 /* 按钮 */
 .btn {

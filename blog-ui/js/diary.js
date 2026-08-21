@@ -2,21 +2,21 @@
     // ===== Celeste 日记本 =====
     const BOOK_PAGES = [
         { src: 'celeste-journal/spread1.jpg', fields: [
-                { kind: 'line', id: 'titleInput', x: .104, y: .518, w: .364, h: .144 },
-                { kind: 'area', id: 'contentInput', x: .104, y: .244, w: .364, h: .230 },
-                { kind: 'area', x: .527, y: .230, w: .182, h: .396 },
+                { kind: 'line', id: 'titleInput', x: .104, y: .518, w: .364, h: .144, ph: '想去爬的那座山…' },
+                { kind: 'area', id: 'contentInput', x: .104, y: .244, w: .364, h: .230, ph: '从小步开始。今天发生了什么…' },
+                { kind: 'area', x: .527, y: .230, w: .182, h: .396, ph: '愿望清单：第一件…' },
                 { kind: 'area', x: .737, y: .230, w: .173, h: .396 } ] },
         { src: 'celeste-journal/spread2.jpg', fields: [
-                { kind: 'area', x: .104, y: .244, w: .364, h: .230 },
-                { kind: 'area', x: .104, y: .518, w: .364, h: .144 },
-                { kind: 'line', x: .536, y: .197, w: .364, h: .036 },
-                { kind: 'line', x: .536, y: .255, w: .364, h: .036 },
+                { kind: 'area', x: .104, y: .244, w: .364, h: .230, ph: '把大目标拆成能做到的小步…' },
+                { kind: 'area', x: .104, y: .518, w: .364, h: .144, ph: '想疯狂尝试一次的体验…' },
+                { kind: 'line', x: .536, y: .197, w: .364, h: .036, ph: '我想去——' },
+                { kind: 'line', x: .536, y: .255, w: .364, h: .036, ph: '因为——' },
                 { kind: 'grid', x: .536, y: .309, w: .378, h: .396, cols: 12, rows: 10 } ] },
         { src: 'celeste-journal/spread3.jpg', fields: [
-                { kind: 'area', x: .104, y: .230, w: .364, h: .216 },
-                { kind: 'area', x: .104, y: .482, w: .364, h: .122 },
-                { kind: 'area', x: .536, y: .215, w: .373, h: .216 },
-                { kind: 'cols', x: .536, y: .532, w: .373, h: .094, n: 3 } ] }
+                { kind: 'area', x: .104, y: .230, w: .364, h: .216, ph: '想对自己慢慢说的话…' },
+                { kind: 'area', x: .104, y: .482, w: .364, h: .122, ph: '弄丢了，但没忘记…' },
+                { kind: 'area', x: .536, y: .215, w: .373, h: .216, ph: '想起来会笑的回忆…' },
+                { kind: 'cols', x: .536, y: .532, w: .373, h: .094, n: 3, phs: ['想谢的人…', '想谢的小事…', '想谢的自己…'] } ] }
     ];
     const bookEl = document.getElementById('journalBook');
     const dotsBox = document.getElementById('bookDots');
@@ -42,9 +42,8 @@
             if (f.kind === 'area' || f.kind === 'line') {
                 node = document.createElement(f.kind === 'area' ? 'textarea' : 'input');
                 pos(node);
-                if (f.id === 'titleInput') node.placeholder = '今天的标题...';
-                else if (f.id === 'contentInput') node.placeholder = '今天发生了什么...';
-                else {
+                if (f.ph) node.placeholder = f.ph;
+                if (!f.id) {
                     node.value = localStorage.getItem(key) || '';
                     node.addEventListener('input', () => localStorage.setItem(key, node.value));
                 }
@@ -72,6 +71,7 @@
                 for (let i = 0; i < f.n; i++) {
                     const inp = document.createElement('input');
                     inp.style.cssText = 'flex:1; position:static; width:auto; height:100%; border:none; outline:none; background:transparent; font:inherit; color:rgba(64,58,66,.92); caret-color:#e6517c;';
+                    if (f.phs && f.phs[i]) inp.placeholder = f.phs[i];
                     inp.value = localStorage.getItem(key + '-' + i) || '';
                     inp.addEventListener('input', () => localStorage.setItem(key + '-' + i, inp.value));
                     node.appendChild(inp);
@@ -447,12 +447,19 @@
         }
     }
 
+    let nightCareSaid = false;
+
     // ===== 聊天发送 =====
     async function sendChatMessage() {
         const text = chatInput.value.trim();
         if (!text || isTyping) return;
         chatInput.value = '';
         addUserMessage(text);
+        if (nightCareSaid && /再写|再待|一会|再陪我|不困|不想睡|睡不着|还早/.test(text)) {
+            nightCareSaid = false;
+            addMadelineMessage('嗯，那我陪着你。不过写完这一段，真的要睡哦。', '可爱');
+            return;
+        }
         isTyping = true;
         chatSendBtn.disabled = true;
 
@@ -800,15 +807,21 @@
         try {
             const res = await api('/diary/bubble', 'GET');
             if (res.success && res.data && res.data.message) {
-                await addMadelineMessage(res.data.message, res.data.emotion || '默认');
+                const msg = res.data.message.trim();
+                if (bubbleSaid.indexOf(msg) === -1) {
+                    bubbleSaid.push(msg);
+                    if (bubbleSaid.length > 8) bubbleSaid.shift();
+                    await addMadelineMessage(msg, res.data.emotion || '默认');
+                }
             }
         } catch (e) {
             console.warn('主动对话失败:', e);
         }
         scheduleNextBubble();
     }
+    const bubbleSaid = [];
     function scheduleNextBubble() {
-        const delay = (40 + Math.random() * 50) * 1000;
+        const delay = (150 + Math.random() * 120) * 1000;
         bubbleTimer = setTimeout(proactiveBubble, delay);
     }
 
@@ -1040,6 +1053,7 @@
                 updateThemeByEmotion(userEmotion);
                 companionState.currentEmotion = userEmotion;
                 companionState.previousEmotion = userEmotion;
+                if (userEmotion === '不开心') pmComfort();
                 companionState.localReactionCount = 0;
                 companionState.lastAiTime = Date.now();
 
@@ -1116,9 +1130,19 @@
         const content = contentInput.value.trim();
         if (!content) { showToast('写点什么再保存吧~', 'error'); return; }
         saveBtn.disabled = true;
-        saveBtn.textContent = '保存中...';
+        saveBtn.textContent = 'Saving...';
         try {
-            const res = await api('/diary', 'POST', { title: title || '无题', content });
+            const extras = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k && k.indexOf('jbook-') === 0) {
+                    const v = (localStorage.getItem(k) || '').trim();
+                    if (v && v.indexOf('[') !== 0) extras.push(v);
+                }
+            }
+            const payload = { title: title || '无题', content: extras.length ? content + '\n\n' + extras.join('\n') : content };
+            if (editingDiaryId) payload.id = editingDiaryId;
+            const res = await api('/diary', 'POST', payload);
             if (res.success) {
                 companionState.lastAnalyzedText = '';
                 companionState.lastAnalyzedLen = 0;
@@ -1135,12 +1159,25 @@
                     updateThemeByEmotion(emotion);
                 }
 
-                showToast('保存成功！', 'success');
+                showToast(editingDiaryId ? '更新成功！' : '保存成功！', 'success');
                 pmCelebrate();
+                pmSummarize();
+                if (!editingDiaryId) {
+                    const saveCnt = parseInt(localStorage.getItem('diarySaveCount') || '0') + 1;
+                    localStorage.setItem('diarySaveCount', String(saveCnt));
+                    pmMilestone(saveCnt);
+                }
+                onSaveStreak();
+                editingDiaryId = null;
                 titleInput.value = '';
                 contentInput.value = '';
                 emotionBar.classList.remove('show');
                 emotionWaveEl.classList.remove('show');
+                for (let i = localStorage.length - 1; i >= 0; i--) {
+                    const k = localStorage.key(i);
+                    if (k && k.indexOf('jbook-') === 0) localStorage.removeItem(k);
+                }
+                document.querySelectorAll('#journalBook input:not(#titleInput), #journalBook textarea:not(#contentInput)').forEach(n => n.value = '');
             } else {
                 showToast(res.msg || '保存失败', 'error');
             }
@@ -1148,7 +1185,7 @@
             showToast('网络错误', 'error');
         }
         saveBtn.disabled = false;
-        saveBtn.textContent = '保存日记';
+        saveBtn.textContent = 'SAVE';
     }
     saveBtn.addEventListener('click', saveDiary);
 
@@ -1166,6 +1203,7 @@
             '<strong>Top 情绪:</strong> ' + analysis.topEmotions.join(', ') + '<br>' +
             '<strong>详细得分:</strong> ' + (Object.entries(analysis.scores).filter(function(p){ return p[1] > 0; }).map(function(p){ return p[0] + ':' + p[1]; }).join(', ') || '无');
     });
+
 
     // ================================================================
     // ===== 初始化 =====
@@ -1243,14 +1281,14 @@
     }
 
     function blockedAt(tx, ty) {
-        const m = 14;
         const zones = [];
-        if (gameDialog.classList.contains('show')) zones.push(gameDialog.getBoundingClientRect());
+        if (gameDialog.classList.contains('show')) zones.push({ r: gameDialog.getBoundingClientRect(), m: 14 });
         const book = document.getElementById('journalBook');
-        if (book) zones.push(book.getBoundingClientRect());
+        if (book) zones.push({ r: book.getBoundingClientRect(), m: 14 });
         const acts = document.querySelector('.diary-actions');
-        if (acts) zones.push(acts.getBoundingClientRect());
-        for (const r of zones) {
+        if (acts) zones.push({ r: acts.getBoundingClientRect(), m: 26 });
+        for (const z of zones) {
+            const r = z.r, m = z.m;
             if (!r || (r.width === 0 && r.height === 0)) continue;
             if (tx < r.right + m && tx + pm.offsetWidth > r.left - m &&
                 ty < r.bottom + m && ty + pm.offsetHeight > r.top - m) return true;
@@ -1316,21 +1354,39 @@
         const gy = pmGroundY();
         const acts = document.querySelector('.diary-actions');
         const rect = acts ? acts.getBoundingClientRect() : null;
-        if (!rect) return;
         const maxX = window.innerWidth - pm.offsetWidth - 8;
-        const cands = [
-            rect.left - pm.offsetWidth - 18,
-            rect.right + 18,
-            rect.left + rect.width / 2 - pm.offsetWidth / 2
-        ];
-        const tx = cands.find(v => v >= 4 && v <= maxX && !blockedAt(v, gy));
+        let tx;
+        if (rect) {
+            const cands = [
+                rect.left - pm.offsetWidth - 18,
+                rect.right + 18,
+                rect.left + rect.width / 2 - pm.offsetWidth / 2
+            ];
+            tx = cands.find(v => v >= 4 && v <= maxX && !blockedAt(v, gy));
+        }
+        if (tx === undefined) {
+            for (let v = 4; v <= maxX; v += 24) {
+                if (!blockedAt(v, gy)) { tx = v; break; }
+            }
+        }
         if (tx === undefined) return;
+        pmState.hopT = 0;
         pmState.mode = 'celebrate';
         pmState.targetX = tx;
         pmState.targetY = gy;
         pmState.modeUntil = performance.now() + 12000;
         pmSetSrc(PM_SRC.move);
     }
+
+    async function pmSummarize() {
+        const content = contentInput.value.trim();
+        if (!content) return;
+        try {
+            const res = await api('/diary/summary', 'POST', { title: titleInput.value.trim(), content: content });
+            if (res.success && res.data && res.data.message) addMadelineMessage(res.data.message, res.data.emotion || '默认');
+        } catch (e) { }
+    }
+
 
     function pmNextMode(now) {
         const e = companionState.currentEmotion;
@@ -1388,6 +1444,14 @@
         }
 // ... existing code ...
         if (pmState.mode === 'peek') { pmState.mode = 'idle'; pmState.modeUntil = 0; }
+
+        if (pmState.mode === 'sleep') {
+            if (!pmState.nextMurmur) pmState.nextMurmur = now + 12000 + Math.random() * 15000;
+            if (now >= pmState.nextMurmur) {
+                pmState.nextMurmur = now + 18000 + Math.random() * 22000;
+                addMadelineMessage(dreamLines[Math.floor(Math.random() * dreamLines.length)], '默认');
+            }
+        }
 
         if (now >= pmState.modeUntil) {
             if (pmState.mode === 'sit') {
@@ -1467,7 +1531,7 @@
         }
 
         let hopOffset = 0;
-        const hopping = pmState.hopT >= 0 && pmState.mode === 'walk' && !posing;
+        const hopping = pmState.hopT >= 0 && (pmState.mode === 'walk' || pmState.mode === 'celebrate') && !posing;
         if (pmState.hopT >= 0) {
             pmState.hopT += dt;
             if (pmState.hopT >= 0.5) {
@@ -1488,13 +1552,210 @@
         requestAnimationFrame(pmLoop);
     }
     requestAnimationFrame(pmLoop);
-    if (blockedAt(pmState.x, pmState.y)) { pmState.x = 8; pmState.y = pmGroundY(); }
+    if (blockedAt(pmState.x, pmState.y)) {
+        let found = false;
+        for (let v = 8; v <= window.innerWidth - 72; v += 24) {
+            if (!blockedAt(v, pmGroundY())) { pmState.x = v; pmState.y = pmGroundY(); found = true; break; }
+        }
+        if (!found) { pmState.x = 8; pmState.y = 60; }
+    }
     window.addEventListener('resize', () => { pmState.y = Math.min(pmState.y, pmGroundY()); });
     window.addEventListener('feather-finished', () => {
         addMadelineMessage('回来啦。刚才跟着羽毛的那一会儿，心里是不是安静了一点？', '可爱');
     });
-    pm.addEventListener('click', () => toggleChat());
+    let lastComfortAt = 0;
+    function pmComfort() {
+        if (performance.now() - lastComfortAt < 10 * 60 * 1000) return;
+        lastComfortAt = performance.now();
+        const bk = document.getElementById('journalBook');
+        const rect = bk ? bk.getBoundingClientRect() : null;
+        const gy = pmGroundY();
+        const maxX = window.innerWidth - pm.offsetWidth - 8;
+        let px = Math.max(8, window.innerWidth * 0.12);
+        if (rect) {
+            const rightX = rect.right + 18;
+            const leftX = rect.left - pm.offsetWidth - 18;
+            if (rightX + pm.offsetWidth <= maxX && !blockedAt(rightX, gy)) px = rightX;
+            else if (leftX >= 4 && !blockedAt(leftX, gy)) px = leftX;
+        }
+        pmState.mode = 'peek';
+        pmState.targetX = px;
+        pmState.targetY = gy;
+        pmSetSrc(PM_SRC.move);
+    }
 
+    const dreamLines = ['唔……再睡五分钟……', '（梦话）雪……别停……', '嗯……山顶……快到了……', '（翻身）……草莓……', '……别关灯……'];
+    function pmMilestone(cnt) {
+        const lines = {
+            5: '第五篇啦！这本日记越来越像你了。',
+            10: '第十篇！看，坚持一件事也没那么难，对吧？',
+            20: '二十篇了……回头看看第一篇，你会吓一跳的。',
+            30: '三十篇……这本子快装不下你的故事了，我好喜欢。',
+            50: '五十篇！要不要给自己鼓个掌？',
+            100: '第一百篇。这座山，你一步一步走上来了。'
+        };
+        if (lines[cnt]) addMadelineMessage(lines[cnt], '可爱');
+    }
+    let pauseTimer = null;
+    let lastPauseCare = 0;
+    const pauseLines = ['写到一半停下来也没关系，我等你。', '慢慢想，字会自己来的。', '深呼吸一下……我在旁边呢。'];
+    contentInput.addEventListener('input', () => {
+        clearTimeout(pauseTimer);
+        pauseTimer = setTimeout(() => {
+            if (chatOpen || !contentInput.value.trim()) return;
+            if (performance.now() - lastPauseCare < 5 * 60 * 1000) return;
+            lastPauseCare = performance.now();
+            addMadelineMessage(pauseLines[Math.floor(Math.random() * pauseLines.length)], '可爱');
+        }, 25000);
+    });
+
+    const petLines = ['嘿嘿…再摸一下也可以哦。', '唔，头发要被你摸乱啦。', '谢谢你，今天也辛苦了。', '嗯！感觉又充上电了。', '山顶的风，都没你这么温柔。'];
+    function pmPet() {
+        if (pmState.mode === 'sleep') {
+            addMadelineMessage(dreamLines[Math.floor(Math.random() * dreamLines.length)], '默认');
+            return;
+        }
+        addMadelineMessage(petLines[Math.floor(Math.random() * petLines.length)], '可爱');
+        pmState.poseUntil = performance.now() + 1300;
+        pmState.poseReturn = PM_SRC.move;
+        pmSetSrc(PM_SRC.fun);
+    }
+    let pmClickTimer = null;
+    pm.addEventListener('click', () => {
+        if (pmClickTimer) return;
+        pmClickTimer = setTimeout(() => { pmClickTimer = null; pmPet(); }, 260);
+    });
+    pm.addEventListener('dblclick', () => {
+        if (pmClickTimer) { clearTimeout(pmClickTimer); pmClickTimer = null; }
+        toggleChat();
+    });
+
+
+    // ===== 主线2：回忆书架 =====
+    let editingDiaryId = null;
+    const shelfBtn = document.createElement('button');
+    shelfBtn.id = 'shelfBtn';
+    shelfBtn.textContent = '📚 回忆书架';
+    document.body.appendChild(shelfBtn);
+
+    const shelfPanel = document.createElement('div');
+    shelfPanel.id = 'shelfPanel';
+    shelfPanel.innerHTML =
+        '<div class="shelf-head"><h3>回忆书架</h3><button class="shelf-close">✕</button></div>' +
+        '<div id="shelfList"></div>' +
+        '<div id="shelfDetail">' +
+        '<button class="sd-back">← 返回列表</button>' +
+        '<div class="sd-title"></div><div class="sd-date"></div><div class="sd-content"></div>' +
+        '<div class="sd-actions"><button class="sd-edit">回去编辑这篇</button><button class="sd-del danger">删掉它</button></div>' +
+        '</div>';
+    document.body.appendChild(shelfPanel);
+
+    const shelfList = shelfPanel.querySelector('#shelfList');
+    const shelfDetail = shelfPanel.querySelector('#shelfDetail');
+    let shelfData = [];
+    let shelfCur = null;
+
+    function shelfFmtDate(v) {
+        if (!v) return '';
+        const d = new Date(typeof v === 'number' || /^\d+$/.test(String(v)) ? Number(v) : v);
+        if (isNaN(d.getTime())) return String(v);
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+    async function shelfLoad() {
+        shelfList.innerHTML = '<div class="shelf-empty">正在搬书……</div>';
+        const res = await api('/diary/list', 'GET');
+        if (res.success && Array.isArray(res.data)) {
+            shelfData = res.data;
+            if (!shelfData.length) { shelfList.innerHTML = '<div class="shelf-empty">书架还空着。<br>写下第一篇，它就有了位置。</div>'; return; }
+            shelfList.innerHTML = shelfData.map((d, i) =>
+                '<div class="shelf-card" data-i="' + i + '">' +
+                '<div class="sc-title">' + escHtml(d.title || '无题') + '</div>' +
+                '<div class="sc-date">' + shelfFmtDate(d.updateDate || d.createDate) + '</div>' +
+                '<div class="sc-snippet">' + escHtml((d.content || '').slice(0, 60)) + '</div>' +
+                '</div>').join('');
+        } else {
+            shelfList.innerHTML = '<div class="shelf-empty">书架暂时打不开（' + escHtml(res.msg || '未知错误') + '）</div>';
+        }
+    }
+    function shelfShowList() { shelfDetail.classList.remove('show'); shelfList.style.display = ''; }
+    // ===== 主线2.5：记忆联动 =====
+    let memCache = null;
+    const memMentioned = new Set();
+    async function shelfLoadMemories() {
+        try {
+            const res = await api('/memory/list', 'GET');
+            memCache = (res.success && Array.isArray(res.data)) ? res.data : [];
+        } catch (e) { memCache = []; }
+    }
+    function shelfMemoryRecall(text, days) {
+        if (!text || days <= 0) return;
+        if (!memCache) { shelfLoadMemories().then(() => shelfMemoryRecall(text, days)); return; }
+        const clean = t => String(t).replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, '');
+        const grams = t => { const g = []; const c = clean(t); for (let i = 0; i < c.length - 1; i++) g.push(c.slice(i, i + 2)); return g; };
+        let best = null, bestScore = 0;
+        for (const m of memCache) {
+            if (!m.content || memMentioned.has(m.id)) continue;
+            let score = 0;
+            for (const g of grams(m.content)) if (clean(text).indexOf(g) !== -1) score++;
+            if (score > bestScore) { bestScore = score; best = m; }
+        }
+        if (!best || bestScore < 2) {
+            const cand = memCache.filter(m => m.content && !memMentioned.has(m.id))
+                .sort((a, b) => (b.importance || 0) - (a.importance || 0))[0];
+            if (cand && memMentioned.size === 0) { best = cand; bestScore = 1; }
+        }
+        if (best) {
+            memMentioned.add(best.id);
+            const lines = bestScore >= 2
+                ? ['说起来，你之前提到过——' + best.content + '……现在怎么样了？',
+                   '我记得你说过，' + best.content + '。后来有好一点吗？',
+                   '这一页让我想起你提过的那件事：' + best.content + '。我一直记着哦。']
+                : ['翻到这一页，忽然想起你之前说过——' + best.content + '。'];
+            setTimeout(() => addMadelineMessage(lines[Math.floor(Math.random() * lines.length)], '可爱'), 3400);
+        }
+    }
+    function shelfShowDetail(i) {
+        const d = shelfData[i];
+        if (!d) return;
+        shelfCur = d;
+        shelfList.style.display = 'none';
+        shelfDetail.querySelector('.sd-title').textContent = d.title || '无题';
+        shelfDetail.querySelector('.sd-date').textContent = shelfFmtDate(d.updateDate || d.createDate);
+        shelfDetail.querySelector('.sd-content').textContent = d.content || '';
+        shelfDetail.classList.add('show');
+        const created = new Date(typeof d.createDate === 'number' || /^\d+$/.test(String(d.createDate)) ? Number(d.createDate) : d.createDate);
+        const days = Math.max(0, Math.floor((Date.now() - created.getTime()) / 86400000));
+        if (days > 0) addMadelineMessage('这是 ' + days + ' 天前写下的……那时候的你，还好吗？', '可爱');
+        shelfMemoryRecall(d.content || '', days);
+    }
+    shelfBtn.addEventListener('click', () => { location.href = 'shelf.html'; });
+    shelfPanel.querySelector('.shelf-close').addEventListener('click', () => shelfPanel.classList.remove('open'));
+    shelfPanel.querySelector('.sd-back').addEventListener('click', shelfShowList);
+    shelfList.addEventListener('click', ev => {
+        const card = ev.target.closest('.shelf-card');
+        if (card) shelfShowDetail(+card.dataset.i);
+    });
+    shelfDetail.querySelector('.sd-edit').addEventListener('click', () => {
+        if (!shelfCur) return;
+        editingDiaryId = shelfCur.id;
+        titleInput.value = shelfCur.title || '';
+        contentInput.value = shelfCur.content || '';
+        shelfPanel.classList.remove('open');
+        addMadelineMessage('我把那一页翻开放好了，改完记得保存哦。', '可爱');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    shelfDetail.querySelector('.sd-del').addEventListener('click', async () => {
+        if (!shelfCur) return;
+        if (!confirm('确定要删掉这篇日记吗？删了就找不回来了。')) return;
+        const res = await api('/diary?diaryId=' + encodeURIComponent(shelfCur.id), 'DELETE');
+        if (res.success) {
+            addMadelineMessage('好，我替你合上这一页了。', '默认');
+            shelfShowList();
+            shelfLoad();
+        } else {
+            showToast(res.msg || '删除失败', 'error');
+        }
+    });
 
     (async function init() {
         if (!localStorage.getItem('token')) {
@@ -1516,10 +1777,70 @@
 
         const savedEmotion = localStorage.getItem('lastEmotion') || '默认';
         updateThemeByEmotion(savedEmotion);
-        addMadelineMessage('Hey! I\'m Madeline. Let\'s record life together.', '默认');
+        // ===== 主线5：时段人格 =====
+        const _nowH = new Date().getHours();
+        const morningLines = ['早安……我刚醒。今天也一起写点什么吧。', '早上好呀！清晨的山上空气最新鲜了。', '早~ 我刚睡醒，你来得正好。'];
+        const dayLines = ['Hey! I\'m Madeline. Let\'s record life together.', '你来啦。我一直在这儿等你呢。', '今天想记点什么？一件小事也可以哦。'];
+        const eveningLines = ['回来啦。这一天，过得还好吗？', '晚上好~ 坐下来慢慢说。', '天快黑了，正是写几笔的好时候。'];
+        const deepNightLines = ['这么晚还没睡呀……那我陪你，但别太晚哦。', '夜里山上很安静。写一点，我们就去睡好不好？', '唔……好晚了。我在呢，陪着你。'];
+        let _greet;
+        if (_nowH >= 5 && _nowH < 9) {
+            _greet = morningLines[Math.floor(Math.random() * morningLines.length)];
+            pmState.poseUntil = performance.now() + 2000;
+            pmState.poseReturn = PM_SRC.move;
+            pmSetSrc(PM_SRC.wake);
+        } else if (_nowH >= 9 && _nowH < 18) {
+            _greet = dayLines[Math.floor(Math.random() * dayLines.length)];
+        } else if (_nowH >= 18 && _nowH < 23) {
+            _greet = eveningLines[Math.floor(Math.random() * eveningLines.length)];
+        } else {
+            _greet = deepNightLines[Math.floor(Math.random() * deepNightLines.length)];
+        }
+        addMadelineMessage(_greet, '可爱');
+
+        // 久别重逢（超过 7 天没来）
+        const _lastVisit = parseInt(localStorage.getItem('pmLastVisit') || '0');
+        const _gapDays = _lastVisit ? Math.floor((Date.now() - _lastVisit) / 86400000) : 0;
+        localStorage.setItem('pmLastVisit', String(Date.now()));
+        if (_gapDays >= 7) {
+            const reunionLines = [
+                '你回来了……已经过了 ' + _gapDays + ' 天了呢，还好吗？',
+                '又见到你了。这段时间发生的事，想说给我听吗？',
+                '我把本子都擦干净了，就在等你回来呀。'
+            ];
+            setTimeout(() => addMadelineMessage(reunionLines[Math.floor(Math.random() * reunionLines.length)], '可爱'), 2600);
+        }
+
+        // 深夜催睡（23 点后，停留满 8 分钟，只催一次）
+        if (_nowH >= 23 || _nowH < 5) {
+            setTimeout(() => {
+                const h2 = new Date().getHours();
+                if ((h2 >= 23 || h2 < 5) && !nightCareSaid) {
+                    nightCareSaid = true;
+                    const careLines = ['已经好晚了……写完这一段，我们就去睡好不好？', '我都有点困了。你早点写完，早点休息哦。', '别熬太久嘛，明天我还会在这里的。'];
+                    addMadelineMessage(careLines[Math.floor(Math.random() * careLines.length)], '可爱');
+                }
+            }, 8 * 60 * 1000);
+        }
 
         showQuickInput(true);
         scheduleNextBubble();
+
+        const editId = new URLSearchParams(location.search).get('edit');
+        if (editId) {
+            history.replaceState(null, '', 'diary.html');
+            api('/diary/list', 'GET').then(r => {
+                if (r.success && Array.isArray(r.data)) {
+                    const d = r.data.find(x => String(x.id) === String(editId));
+                    if (d) {
+                        editingDiaryId = d.id;
+                        titleInput.value = d.title || '';
+                        contentInput.value = d.content || '';
+                        addMadelineMessage('从书架翻出来啦，改完记得 SAVE 哦。', '可爱');
+                    }
+                }
+            });
+        }
 
         // 每日明信片（每天只弹一次）
         const today = new Date().toDateString();
@@ -1527,5 +1848,238 @@
         if (lastShown !== today) {
             await showDailyPostcard();
         }
+
+    // ================================================================
+    // ===== 主线4：草莓与篝火（收集系统） =====
+    // ================================================================
+    function initStrawberryBonfire() {
+        if (document.getElementById('strawberryBonfire')) return;
+        const w = document.createElement('div');
+        w.id = 'strawberryBonfire';
+        w.innerHTML =
+            '<div class="sb-straw"><img src="celeste-collectables/strawberry.png" alt="strawberry"><span id="sbCount">0</span></div>' +
+            '<div class="sb-fire" id="sbFire"><div class="sb-fire-base"></div></div>';
+        document.body.appendChild(w);
+        updateBonfire({
+            total: parseInt(localStorage.getItem('diarySaveCount') || '0'),
+            streak: parseInt(localStorage.getItem('diaryStreak') || '0')
+        });
+        w.addEventListener('click', () => {
+            const s = parseInt(localStorage.getItem('diaryStreak') || '0');
+            const t = parseInt(localStorage.getItem('diarySaveCount') || '0');
+            addMadelineMessage('你已经收集了 ' + t + ' 颗草莓，连续写了 ' + s + ' 天。继续加油！', '可爱');
+        });
+    }
+    function updateBonfire(d) {
+        const fire = document.getElementById('sbFire');
+        const cnt = document.getElementById('sbCount');
+        if (!fire || !cnt) return;
+        cnt.textContent = d.total;
+        const s = d.streak;
+        let sz, clr, clr2, show = false;
+        if (s >= 30)      { sz = 26; clr = '#ff4444'; clr2 = '#ffe36d'; show = true; }
+        else if (s >= 7)  { sz = 20; clr = '#ff6600'; clr2 = '#ffcc00'; show = true; }
+        else if (s >= 3)  { sz = 15; clr = '#ff8800'; clr2 = '#ffaa33'; show = true; }
+        else if (s >= 1)  { sz = 9;  clr = '#ffaa44'; clr2 = '#ffcc66'; show = true; }
+        else              { sz = 0; clr = '#888'; clr2 = '#aaa'; }
+        fire.querySelectorAll('.sb-flame,.sb-spark,.sb-smoke,.sb-label').forEach(e => e.remove());
+        if (show) {
+            const fl = document.createElement('div');
+            fl.className = 'sb-flame';
+            fl.style.cssText = 'width:' + sz + 'px;height:' + (sz * 1.4) + 'px;background:radial-gradient(ellipse at bottom,' + clr2 + ',' + clr + ' 70%,transparent);box-shadow:0 0 ' + (sz / 2) + 'px ' + clr + ';';
+            fire.insertBefore(fl, fire.firstChild);
+            if (s >= 3) for (let i = 0; i < 2; i++) {
+                const sp = document.createElement('div');
+                sp.className = 'sb-spark';
+                sp.style.cssText = 'left:' + (30 + Math.random() * 40) + '%;bottom:' + (4 + sz * 0.6) + 'px;animation-delay:' + (Math.random() * 1.2) + 's;';
+                fire.appendChild(sp);
+            }
+            const lb = document.createElement('div');
+            lb.className = 'sb-label';
+            lb.textContent = s >= 30 ? '\u2605' + s : s + '天';
+            fire.appendChild(lb);
+        } else {
+            const sm = document.createElement('div');
+            sm.className = 'sb-smoke';
+            sm.style.cssText = 'left:50%;bottom:6px;transform:translateX(-50%);';
+            fire.insertBefore(sm, fire.firstChild);
+        }
+    }
+    function onSaveStreak() {
+        const today = new Date().toDateString();
+        const last = localStorage.getItem('diaryLastSaveDate') || '';
+        const prev = parseInt(localStorage.getItem('diaryStreak') || '0');
+        let streak;
+        if (!last) streak = 1;
+        else if (last === today) streak = prev;
+        else {
+            const y = new Date(); y.setDate(y.getDate() - 1);
+            streak = (last === y.toDateString()) ? prev + 1 : 1;
+        }
+        localStorage.setItem('diaryStreak', String(streak));
+        localStorage.setItem('diaryLastSaveDate', today);
+        const total = parseInt(localStorage.getItem('diarySaveCount') || '0');
+        updateBonfire({ total: total, streak: streak });
+        const lines3 = ['三天了！篝火生起来了……我们在这里扎营了。', '连续三天！山上的篝火最温暖。'];
+        const lines7 = ['一周了！你真的坚持下来了……我很感动。', '七天连续，这篝火够照亮整个山脊了。'];
+        const lines30 = ['三十天……你已经是山上的老朋友了。', '传说连续写三十天日记的人，能看见山顶的星星。'];
+        if (streak === 3) addMadelineMessage(lines3[Math.floor(Math.random() * lines3.length)], '可爱');
+        if (streak === 7) addMadelineMessage(lines7[Math.floor(Math.random() * lines7.length)], '可爱');
+        if (streak === 30) addMadelineMessage(lines30[Math.floor(Math.random() * lines30.length)], '可爱');
+    }
+
+    // ================================================================
+    // ===== 主线7：明信片导出 =====
+    // ================================================================
+    function renderPostcardCanvas(canvas, title, dateStr, content, summary, strawCount) {
+        var ctx = canvas.getContext('2d');
+        var W = 1200, H = 800;
+        canvas.width = W; canvas.height = H;
+        ctx.fillStyle = '#0f1729'; ctx.fillRect(0, 0, W, H);
+        var grad = ctx.createLinearGradient(0, 0, 0, 320);
+        grad.addColorStop(0, '#1a2744'); grad.addColorStop(1, '#0f1729');
+        ctx.fillStyle = grad; ctx.fillRect(0, 0, W, 320);
+        for (var i = 0; i < 50; i++) {
+            ctx.fillStyle = 'rgba(255,255,255,' + (Math.random() * 0.4 + 0.1) + ')';
+            var sx = Math.random() * W, sy = Math.random() * 260, ss = Math.random() * 2 + 0.5;
+            ctx.fillRect(Math.floor(sx), Math.floor(sy), ss, ss);
+        }
+        ctx.fillStyle = '#1e2d4a';
+        ctx.beginPath(); ctx.moveTo(0, 300);
+        ctx.lineTo(120, 170); ctx.lineTo(280, 230); ctx.lineTo(480, 110);
+        ctx.lineTo(680, 190); ctx.lineTo(880, 130); ctx.lineTo(1060, 200);
+        ctx.lineTo(W, 260); ctx.lineTo(W, 320); ctx.lineTo(0, 320);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#253552';
+        ctx.beginPath(); ctx.moveTo(0, 310);
+        ctx.lineTo(200, 250); ctx.lineTo(400, 280); ctx.lineTo(600, 220);
+        ctx.lineTo(800, 265); ctx.lineTo(1000, 235); ctx.lineTo(W, 285);
+        ctx.lineTo(W, 320); ctx.lineTo(0, 320);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#ffe36d';
+        ctx.font = '22px "Press Start 2P",monospace';
+        ctx.fillText('MOUNTAIN DIARY', 60, 380);
+        ctx.fillStyle = 'rgba(255,227,109,.45)';
+        ctx.font = '13px "Press Start 2P",monospace';
+        ctx.fillText(dateStr || '', 60, 410);
+        ctx.fillStyle = '#ffe36d';
+        ctx.fillRect(60, 425, W - 120, 2);
+        ctx.fillStyle = '#fff';
+        ctx.font = '24px "Renogare","Microsoft YaHei",sans-serif';
+        var dt = (title || '无题').substring(0, 36);
+        ctx.fillText(dt, 60, 470);
+        ctx.fillStyle = 'rgba(255,255,255,.82)';
+        ctx.font = '15px "Renogare","CelesteZH","Microsoft YaHei",sans-serif';
+        var snip = (content || '').substring(0, 280);
+        var words = snip.split('');
+        var line = '', ly = 510, mh = 630, ml = Math.floor((W - 120) / 15);
+        for (var ci = 0; ci < words.length; ci++) {
+            if (words[ci] === '\n') { ctx.fillText(line, 60, ly); line = ''; ly += 28; if (ly > mh) break; continue; }
+            if ((line + words[ci]).length > ml) { ctx.fillText(line, 60, ly); line = words[ci]; ly += 28; if (ly > mh) break; }
+            else line += words[ci];
+        }
+        if (line && ly <= mh) ctx.fillText(line, 60, ly);
+        if (summary) {
+            var sy2 = Math.min(ly + 45, 660);
+            ctx.fillStyle = 'rgba(255,227,109,.5)';
+            ctx.fillRect(60, sy2 - 12, W - 120, 1);
+            ctx.fillStyle = 'rgba(255,227,109,.75)';
+            ctx.font = '14px "Renogare","CelesteZH","Microsoft YaHei",sans-serif';
+            var st = summary.substring(0, 80);
+            ctx.fillText('\u201c' + st + '\u201d', 80, sy2 + 14);
+        }
+        ctx.fillStyle = 'rgba(255,255,255,.35)';
+        ctx.font = '11px "Press Start 2P",monospace';
+        ctx.fillText('\u00d7' + (strawCount || 0) + '  \u2014 Madeline', 60, H - 36);
+        ctx.fillStyle = 'rgba(255,230,109,.25)';
+        for (var bx = 0; bx < W; bx += 8) { ctx.fillRect(bx, 0, 4, 4); ctx.fillRect(bx, H - 4, 4, 4); }
+        for (var by = 0; by < H; by += 8) { ctx.fillRect(0, by, 4, 4); ctx.fillRect(W - 4, by, 4, 4); }
+    }
+    function exportPostcard(data) {
+        var modal = document.getElementById('postcardExportModal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'postcardExportModal';
+            modal.innerHTML = '<canvas id="postcardCanvas"></canvas><div class="pe-actions"><button id="peDownload">\u2b07 下载明信片</button><button class="pe-close" id="peClose">\u2715 关闭</button></div>';
+            document.body.appendChild(modal);
+            document.getElementById('peClose').addEventListener('click', function() { modal.classList.remove('show'); });
+            modal.addEventListener('click', function(e) { if (e.target === modal) modal.classList.remove('show'); });
+        }
+        var canvas = document.getElementById('postcardCanvas');
+        renderPostcardCanvas(canvas, data.title, data.date, data.content, data.summary, parseInt(localStorage.getItem('diarySaveCount') || '0'));
+        document.getElementById('peDownload').onclick = function() {
+            var url = canvas.toDataURL('image/png');
+            var a = document.createElement('a');
+            a.download = 'mountain-diary-' + (data.date || '').replace(/\D/g, '').slice(0, 8) + '.png';
+            a.href = url;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        };
+        modal.classList.add('show');
+    }
+
+    // ===== 书架面板集成导出按钮 =====
+    (function shelfPostcardHook() {
+        var tryHook = setInterval(function() {
+            var editBtn = document.querySelector('#shelfDetail .sd-edit');
+            if (!editBtn || editBtn.dataset.hooked) return;
+            editBtn.dataset.hooked = '1';
+            var exp = document.createElement('button');
+            exp.textContent = '🖼 导出明信片';
+            exp.addEventListener('click', function() {
+                if (!shelfCur) return;
+                var dd = shelfFmtDate(shelfCur.updateDate || shelfCur.createDate);
+                exportPostcard({ title: shelfCur.title, date: dd, content: shelfCur.content, summary: '' });
+            });
+            editBtn.parentNode.insertBefore(exp, editBtn.nextSibling);
+        }, 500);
+        setTimeout(function() { clearInterval(tryHook); }, 30000);
     })();
+
+
+    // ===== 迭代7：道别 =====
+    const farewellLines = ['下次见啦，我把你没写完的部分收好了。', '别担心，这一页我替你记着呢。', '去忙吧，山在这里，我也在这里。'];
+    window.addEventListener('beforeunload', () => {
+        const t = titleInput.value.trim();
+        const c = contentInput.value.trim();
+        if (c) {
+            localStorage.setItem('diaryUnsaved', JSON.stringify({ t: t, c: c }));
+            localStorage.setItem('diaryFarewell', farewellLines[Math.floor(Math.random() * farewellLines.length)]);
+        }
+    });
+    const _fw = localStorage.getItem('diaryFarewell');
+    const _unsaved = localStorage.getItem('diaryUnsaved');
+    if (_fw) {
+        localStorage.removeItem('diaryFarewell');
+        addMadelineMessage(_fw, '可爱');
+    }
+    if (_unsaved) {
+        localStorage.removeItem('diaryUnsaved');
+        try {
+            const u = JSON.parse(_unsaved);
+            if (!contentInput.value.trim() && u.c) {
+                titleInput.value = u.t || '';
+                contentInput.value = u.c;
+            }
+        } catch (e) { }
+    }
+
+    const idleCareLines = ['还在吗？…我先坐着等你。', '慢慢来，我不催你。', '要是累了，就歇一会儿再写。'];
+    let lastIdleCare = 0;
+    let idleCareTimer = setTimeout(idleCare, 180000);
+    function idleCare() {
+        if (!chatOpen && contentInput.value.trim() && performance.now() - lastIdleCare > 5 * 60 * 1000) {
+            lastIdleCare = performance.now();
+            addMadelineMessage(idleCareLines[Math.floor(Math.random() * idleCareLines.length)], '可爱');
+        }
+        idleCareTimer = setTimeout(idleCare, 180000);
+    }
+    ['mousedown', 'keydown', 'touchstart'].forEach(evt =>
+        document.addEventListener(evt, () => {
+            clearTimeout(idleCareTimer);
+            idleCareTimer = setTimeout(idleCare, 180000);
+        }, { passive: true })
+    );
+    initStrawberryBonfire();
+    })();
+
 })();

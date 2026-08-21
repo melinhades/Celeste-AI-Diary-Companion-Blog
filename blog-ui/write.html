@@ -6,6 +6,7 @@
     <link rel="icon" href="icon/OIP.webp" type="image/webp">
     <title>Write - Celeste Blog</title>
     <link rel="stylesheet" href="css/common.css">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
     .nav-diary-btn {
         display:inline-block;
@@ -41,7 +42,7 @@
         width: 100%; min-height: 420px; padding: 16px;
         border: 1px solid rgba(138, 43, 226, 0.3);
         border-radius: 10px; font-size: 15px; outline: none; resize: vertical;
-        font-family: 'Courier New', monospace; line-height: 1.8; color: #e8e8f0;
+        font-family: 'Renogare', 'CelesteZH', 'Microsoft YaHei', sans-serif; line-height: 1.8; color: #e8e8f0;
         background: rgba(30, 27, 75, 0.4); transition: all 0.3s;
     }
     .write-body:focus { border-color: #a78bfa; background: rgba(30, 27, 75, 0.6); box-shadow: 0 0 15px rgba(138, 43, 226, 0.3); }
@@ -57,6 +58,153 @@
     .write-meta input { flex: 1; min-width: 200px; }
     .write-footer { display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(138, 43, 226, 0.2); }
     .char-count { font-size: 12px; color: #8b8ba0; text-align: right; margin-top: 6px; }
+    body { background: url('celeste-areas/Summit-ch7-complete.png') center center / cover no-repeat fixed; }
+
+    /* ===== 历史记录框（与 diary 页完全一致，card.png 素材） ===== */
+    #madeline-chat-dialog {
+        position: fixed; bottom: 12px; right: 12px;
+        width: 420px;
+        height: 500px;
+        background: url('celeste-gui/card.png') top / 100% 123% no-repeat;
+        border: none;
+        border-radius: 0;
+        display: flex; flex-direction: column;
+        opacity: 0; pointer-events: none;
+        transform: perspective(1200px) rotateY(32deg) rotateX(8deg) scale(0.85);
+        transform-origin: 100% 100%;
+        transition: opacity .3s ease, transform .45s cubic-bezier(0.34,1.3,0.64,1);
+        z-index: 1000;
+        box-shadow: 0 10px 30px rgba(0,0,0,.35);
+        overflow: hidden;
+    }
+    #madeline-chat-dialog.show {
+        opacity: 1; pointer-events: all;
+        transform: perspective(1200px) rotateY(0) rotateX(0) scale(1);
+    }
+    .chat-header {
+        padding: 14px 16px 8px 42px;
+        display: flex; align-items: center; gap: 10px;
+        border-bottom: none;
+        background: url('celeste-gui/card-top.png') center / 100% 100% no-repeat;
+        flex-shrink: 0;
+    }
+    #chat-madeline-avatar-wrap {
+        width: 32px; height: 32px; border-radius: 50%; overflow: hidden;
+        border: 2px solid #2b2018; flex-shrink: 0; display: block;
+    }
+    #chat-madeline-avatar-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .chat-header .chat-title {
+        font-family: 'Press Start 2P', monospace;
+        font-size: 12px;
+        color: #2b2018;
+        flex: 1;
+    }
+    .chat-header .close-btn {
+        width: 24px; height: 24px;
+        border: none; border-radius: 50%;
+        background: transparent;
+        color: rgba(43,32,24,.55);
+        font-size: 16px;
+        cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+        transition: color .2s;
+    }
+    .chat-header .close-btn:hover { color: #2b2018; }
+    .chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 14px 16px 10px 42px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-height: 0;
+    }
+    .chat-messages::-webkit-scrollbar { width: 4px; }
+    .chat-messages::-webkit-scrollbar-thumb { background: rgba(58,46,42,.4); border-radius: 2px; }
+    .msg-row {
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+        max-width: 90%;
+        transform-origin: top center;
+        animation: wpPageIn .4s ease-out;
+    }
+    @keyframes wpPageIn {
+        from { transform: perspective(800px) rotateX(-38deg) translateY(-8px); opacity: 0; }
+        to { transform: none; opacity: 1; }
+    }
+    .msg-row.madeline-row { align-self: flex-start; }
+    .msg-row.user-row { align-self: flex-end; }
+    .msg-avatar-wrap {
+        width: 28px; height: 28px; border-radius: 50%; overflow: hidden;
+        border: 1px solid #FFEB3B; flex-shrink: 0; display: block;
+    }
+    .msg-avatar-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .msg-bubble {
+        padding: 8px 12px;
+        border-radius: 12px;
+        font-family: 'Renogare', 'CelesteZH', 'Microsoft YaHei', sans-serif;
+        font-size: 13px;
+        line-height: 1.6;
+        word-break: break-word;
+        max-width: 260px;
+    }
+    .msg-row.madeline-row .msg-bubble {
+        background: transparent;
+        border: none;
+        padding: 4px 6px;
+        color: #3a2e2a;
+        box-shadow: none;
+        max-width: 300px;
+    }
+    .msg-row.user-row .msg-bubble {
+        background: rgba(74,144,226,.14);
+        color: #2b3a52;
+        border: 1px solid rgba(74,144,226,.4);
+    }
+
+    /* ===== 游戏对话框（与 diary 完全一致，madeline.png textbox 素材） ===== */
+    #wpGameDialog {
+        position: fixed;
+        left: 50%;
+        bottom: 26px;
+        transform: translateX(-50%) translateY(24px);
+        width: min(94vw, 900px);
+        min-height: 128px;
+        z-index: 950;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 20px 30px;
+        background: url('celeste-portraits/textbox/madeline.png') center / 100% 100% no-repeat;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .25s ease, transform .25s ease;
+    }
+    #wpGameDialog.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+    #wpGameDialog.portrait-right { flex-direction: row-reverse; }
+    #wpGameDialogPortrait {
+        width: 84px; height: 84px;
+        flex-shrink: 0;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    #wpGameDialogPortrait img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    #wpGameDialogBody { flex: 1; min-width: 0; }
+    #wpGameDialogName {
+        font-family: 'Press Start 2P', monospace;
+        color: #FFEB3B;
+        font-size: 13px;
+        margin-bottom: 5px;
+    }
+    #wpGameDialogText {
+        font-family: 'Renogare', 'CelesteZH', 'Microsoft YaHei', sans-serif;
+        color: #fff;
+        font-size: 14px;
+        line-height: 1.7;
+        word-break: break-word;
+    }
     </style>
 </head>
 <body>
@@ -96,7 +244,10 @@
         <button class="toolbar-btn" onclick="insertMd('## ','')">H2</button>
         <button class="toolbar-btn" onclick="insertMd('### ','')">H3</button>
         <button class="toolbar-btn" onclick="insertMd('`','`')">Code</button>
-        <button class="toolbar-btn" onclick="insertMd('\n\n','\n```\n')">Code Block</button> <button class="toolbar-btn" onclick="insertMd('> ','')">Quote</button> <button class="toolbar-btn" onclick="insertMd('[link](',')')">Link</button> <button class="toolbar-btn" onclick="insertMd('- ','')">List</button> <button class="toolbar-btn" onclick="document.getElementById('mr-float').click()">✨ Madeline</button> </div>
+        <button class="toolbar-btn" onclick="insertMd('\n\n','\n```\n')">Code Block</button> <button class="toolbar-btn" onclick="insertMd('> ','')">Quote</button> <button class="toolbar-btn" onclick="insertMd('[link](',')')">Link</button> <button class="toolbar-btn" onclick="insertMd('- ','')">List</button>
+        <button class="toolbar-btn" id="openMadelineBtn">✨ Madeline</button>
+        <button class="toolbar-btn" id="toolbarPolishBtn" style="border-color:rgba(255,227,109,.5);color:#ffe36d;">🖊 润色</button>
+    </div>
     <textarea class="write-body" id="articleBody" placeholder="Start writing... Markdown supported" oninput="updateCount()"></textarea>
     <div class="char-count" id="charCount">0 chars</div>
 
@@ -105,10 +256,36 @@
         <button class="btn btn-primary" onclick="publishArticle()" id="publishBtn">Publish</button>
     </div>
 </div>
+
+<img id="wpPixelMadeline" src="celeste-gui/bounceline.gif" alt="Madeline" title="单击摸摸她 · 双击打开聊天记录">
+<canvas id="snowCanvas" style="position:fixed;inset:0;z-index:0;pointer-events:none;"></canvas>
+<div id="wpGameDialog">
+    <div id="wpGameDialogPortrait"><img id="wpGameDialogPortraitImg" src="celeste-portraits/madeline/normal00.png" alt="Madeline"></div>
+    <div id="wpGameDialogBody">
+        <div id="wpGameDialogName">Madeline</div>
+        <div id="wpGameDialogText"></div>
+    </div>
+</div>
+
+<div id="madeline-chat-dialog">
+    <div class="chat-header">
+        <div id="chat-madeline-avatar-wrap">
+            <img id="chatAvatar" src="celeste-portraits/madeline/normal00.png" alt="Madeline">
+        </div>
+        <span class="chat-title">Madeline</span>
+        <button class="close-btn" id="closeChatBtn">✕</button>
+    </div>
+    <div class="chat-messages" id="chatMessages"></div>
+    <div class="chat-input">
+        <input type="text" id="chatInput" placeholder="跟 Madeline 说点什么...">
+        <button id="chatSendBtn">Send</button>
+    </div>
+</div>
+
 <footer class="footer"> <div class="container">© 2024 Celeste Blog · Explore the stars</div> </footer>
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
-<script src="js/madeline-review.js"></script>
+<script src="js/write-madeline.js"></script>
 <script>
     // BGM
     const bgmPlayer = document.getElementById('bgmPlayer');
@@ -120,6 +297,13 @@
     function tryPlayBGM() { bgmPlayer.play().then(() => { document.removeEventListener('click', tryPlayBGM); document.removeEventListener('keydown', tryPlayBGM); }).catch(() => {}); }
     document.addEventListener('click', tryPlayBGM);
     document.addEventListener('keydown', tryPlayBGM);
+
+    document.getElementById('openMadelineBtn').addEventListener('click', function() {
+        if (typeof togglePanel === 'function') togglePanel();
+    });
+    document.getElementById('toolbarPolishBtn').addEventListener('click', function() {
+        if (typeof doPolish === 'function') doPolish();
+    });
 
     if (!localStorage.getItem('token')) {
         showToast('Please login first', 'error');

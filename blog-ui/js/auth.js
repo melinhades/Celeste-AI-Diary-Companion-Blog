@@ -7,7 +7,7 @@ function initHeader() {
     if (token && nickname) {
         el.innerHTML = `
             <div class="user-info">
-                <div class="user-avatar">${escHtml(nickname.charAt(0).toUpperCase())}</div>
+                <div class="user-avatar"><img src="celeste-gui/user-avatar.png" alt=""></div>
                 <span>${escHtml(nickname)}</span>
                 <a href="write.html" class="btn btn-primary btn-sm">写文章</a>
                 <button class="btn btn-outline btn-sm" onclick="doLogout()">退出</button>

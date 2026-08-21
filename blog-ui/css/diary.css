@@ -491,6 +491,11 @@ body::before {
     src: url('../fonts/NotoSansCJKsc-Medium.otf') format('opentype');
     font-display: swap;
 }
+@font-face {
+    font-family: 'Press Start 2P';
+    src: url('../celeste-font-en/PressStart2P-Regular.ttf') format('truetype');
+    font-display: swap;
+}
 
 .madeline-row .msg-bubble,
 .user-row .msg-bubble {
@@ -676,7 +681,6 @@ body::before {
 @keyframes snowDriftSlow { from{background-position:0 0} to{background-position:-600px 40px} }
 @keyframes snowDriftFast { from{background-position-x:0} to{background-position-x:-480px} }
 #madeline-float-button, #madeline-wrapper .quick-input-container { display: none !important; }
-/* ... existing code ... */
 #pixelMadeline {
     position: fixed;
     left: 0; top: 0;
@@ -791,7 +795,7 @@ body::before {
 .book-page textarea, .book-page input {
     position:absolute; border:none; outline:none; background:transparent; overflow:hidden;
     font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif;
-    font-size:clamp(11px, 1.2vw, 15px); line-height:1.9;
+    font-size:clamp(11px, 1.2vw, 15px); line-height:1.5;
     color:rgba(64,58,66,.92); caret-color:#e6517c;
 }
 .book-page textarea { resize:none; }
@@ -826,3 +830,51 @@ body::before {
 #tunePanel button { flex:1; padding:7px 0; background:rgba(22,34,60,.9); color:#fff; border:1px solid var(--c-yellow); border-radius:4px; cursor:pointer; font-size:12px; }
 #tunePanel button:hover { background:rgba(255,227,109,.25); }
 #tunePanel .tp-tip { color:rgba(255,255,255,.5); font-size:11px; text-align:center; }
+
+/* ===== 回忆书架 ===== */
+#shelfBtn { position:fixed; top:16px; right:16px; z-index:900; padding:8px 14px; background:rgba(22,34,60,.9); color:var(--c-yellow); border:2px solid var(--c-yellow); border-radius:6px; cursor:pointer; font-size:13px; box-shadow:0 0 8px rgba(255,230,109,.35); }
+#shelfPanel { position:fixed; top:0; right:-360px; width:340px; max-width:92vw; height:100vh; z-index:970; background:rgba(15,23,42,.97); border-left:2px solid var(--c-yellow); transition:right .35s cubic-bezier(.3,.7,.25,1); display:flex; flex-direction:column; }
+#shelfPanel.open { right:0; }
+#shelfPanel .shelf-head { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px dashed rgba(255,230,109,.3); flex-shrink:0; }
+#shelfPanel .shelf-head h3 { margin:0; color:#ffe36d; font-family:var(--pixel-font); font-size:13px; }
+#shelfPanel .shelf-close { background:none; border:none; color:#ffe36d; font-size:18px; cursor:pointer; }
+#shelfList { flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:10px; }
+.shelf-card { background:rgba(22,34,60,.85); border:1px solid rgba(255,230,109,.35); border-radius:6px; padding:10px 12px; cursor:pointer; transition:transform .15s, border-color .15s; flex-shrink:0; }
+.shelf-card:hover { transform:translateX(-3px); border-color:var(--c-yellow); }
+.shelf-card .sc-title { color:#fff; font-size:14px; margin-bottom:4px; word-break:break-all; }
+.shelf-card .sc-date { color:rgba(255,230,109,.7); font-size:11px; }
+.shelf-card .sc-snippet { color:rgba(255,255,255,.55); font-size:12px; margin-top:4px; line-height:1.5; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.shelf-empty { color:rgba(255,255,255,.4); text-align:center; margin-top:40px; font-size:13px; line-height:2; }
+#shelfDetail { display:none; flex-direction:column; flex:1; overflow-y:auto; padding:14px 16px; }
+#shelfDetail.show { display:flex; }
+#shelfDetail .sd-back { background:none; border:none; color:#ffe36d; cursor:pointer; font-size:12px; margin-bottom:10px; align-self:flex-start; padding:0; }
+#shelfDetail .sd-title { color:#ffe36d; font-size:16px; margin-bottom:6px; word-break:break-all; }
+#shelfDetail .sd-date { color:rgba(255,230,109,.6); font-size:11px; margin-bottom:12px; }
+#shelfDetail .sd-content { color:rgba(255,255,255,.85); font-size:13px; line-height:1.9; white-space:pre-wrap; word-break:break-all; }
+#shelfDetail .sd-actions { display:flex; gap:8px; margin-top:16px; }
+#shelfDetail .sd-actions button { flex:1; padding:8px 0; border-radius:4px; cursor:pointer; font-size:13px; border:1px solid var(--c-yellow); background:rgba(22,34,60,.9); color:#ffe36d; }
+#shelfDetail .sd-actions button.danger { border-color:#e6517c; color:#ff9ab5; }
+
+/* ===== 主线4：草莓与篝火 ===== */
+#strawberryBonfire{position:fixed;top:16px;right:140px;z-index:955;display:flex;align-items:flex-end;gap:8px;padding:8px 14px;background:rgba(22,34,60,.9);border:2px solid rgba(255,230,109,.5);border-radius:8px;cursor:pointer;box-shadow:0 0 8px rgba(255,230,109,.25);transition:transform .15s,border-color .15s;user-select:none;}
+#strawberryBonfire:hover{transform:translateY(-2px);border-color:#ffe36d;}
+.sb-straw{display:flex;align-items:center;gap:4px;font-family:var(--pixel-font);font-size:11px;color:#ff6b8a;}
+.sb-straw img{width:20px;height:20px;image-rendering:pixelated;}
+.sb-fire{position:relative;width:24px;height:32px;display:flex;align-items:flex-end;justify-content:center;}
+.sb-fire-base{width:16px;height:5px;background:#5a3e36;border-radius:2px;position:absolute;bottom:0;}
+.sb-flame{position:absolute;bottom:4px;left:50%;transform:translateX(-50%);border-radius:50% 50% 50% 50%/60% 60% 40% 40%;animation:sbFlicker .5s ease-in-out infinite alternate;}
+.sb-spark{position:absolute;width:3px;height:3px;border-radius:50%;background:#ffe36d;animation:sbSpark 1.2s ease-out infinite;}
+@keyframes sbFlicker{0%{transform:translateX(-50%) scaleY(1) scaleX(1);opacity:.9}50%{transform:translateX(-45%) scaleY(1.12) scaleX(.92);opacity:1}100%{transform:translateX(-55%) scaleY(.92) scaleX(1.06);opacity:.85}}
+@keyframes sbSpark{0%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(-18px) scale(.3)}}
+.sb-smoke{position:absolute;width:6px;height:6px;border-radius:50%;background:rgba(180,180,200,.3);animation:sbSmoke 2s ease-out infinite;}
+@keyframes sbSmoke{0%{opacity:.4;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(-28px) scale(2.2)}}
+.sb-label{font-family:var(--pixel-font);font-size:8px;color:rgba(255,230,109,.6);position:absolute;bottom:-14px;left:50%;transform:translateX(-50%);white-space:nowrap;}
+/* ===== 主线7：明信片导出 ===== */
+#postcardExportModal{position:fixed;inset:0;background:rgba(5,5,20,.96);z-index:10001;display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px;}
+#postcardExportModal.show{display:flex;}
+#postcardExportModal canvas{max-width:90vw;max-height:75vh;border:2px solid rgba(255,230,109,.4);border-radius:4px;box-shadow:0 8px 40px rgba(0,0,0,.6);}
+.pe-actions{display:flex;gap:12px;}
+.pe-actions button{padding:10px 24px;border:2px solid #ffe36d;border-radius:6px;background:rgba(22,34,60,.9);color:#ffe36d;font-family:var(--pixel-font);font-size:12px;cursor:pointer;transition:background .2s;}
+.pe-actions button:hover{background:rgba(255,227,109,.2);}
+.pe-actions button.pe-close{border-color:#888;color:#aaa;}
+
