@@ -164,6 +164,44 @@
         border: 1px solid rgba(74,144,226,.4);
     }
 
+    /* ===== 输入区 ===== */
+    .chat-input {
+        margin-top: auto;
+        display: flex; gap: 8px;
+        padding: 8px 10px 5px 10px;
+        border-bottom: 1px dashed rgba(58,46,42,.35);
+        background: transparent;
+        flex-shrink: 0;
+    }
+    .chat-input input {
+        flex: 1;
+        padding: 8px 10px;
+        border-radius: 6px;
+        background: rgba(125,207,255,.18);
+        color: #2b3a52;
+        border: 1px solid rgba(125,207,255,.5);
+        font-family: 'Renogare', 'CelesteZH', 'Microsoft YaHei', sans-serif;
+        font-size: 13px;
+        outline: none;
+        transition: all .2s;
+    }
+    .chat-input input:focus { border-color: #7DCFFF; background: rgba(125,207,255,.3); box-shadow: 0 0 8px rgba(125,207,255,.35); }
+    .chat-input input::placeholder { color: rgba(43,58,82,.45); }
+    .chat-input button {
+        padding: 8px 14px;
+        border: none; border-radius: 6px;
+        background: #FFEB3B; color: #111;
+        font-family: 'Renogare', sans-serif;
+        font-size: 14px;
+        letter-spacing: 1px;
+        cursor: pointer;
+        box-shadow: inset 0 -2px #111111;
+        transition: background .2s;
+        flex-shrink: 0;
+    }
+    .chat-input button:hover:not(:disabled) { background: #ffeb85; }
+    .chat-input button:disabled { background: #555; color: #999; cursor: not-allowed; }
+
     /* ===== 游戏对话框（与 diary 完全一致，madeline.png textbox 素材） ===== */
     #wpGameDialog {
         position: fixed;
