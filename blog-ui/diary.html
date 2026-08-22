@@ -1,4 +1,4 @@
-﻿﻿<!DOCTYPE html>
+﻿﻿﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -7,18 +7,14 @@
     <title>Madeline - 写日记</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Patrick+Hand&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/diary.css">
-    <style>
-    #page-transition{position:fixed;inset:0;z-index:10000;background:#050514;opacity:0;pointer-events:none;transition:opacity .3s ease;}
-    #page-transition.active{opacity:1;pointer-events:auto;}
-    </style>
+
 </head>
 <body>
-    <div id="page-transition" class="active"></div>
     <!-- 情绪场景背景 -->
     <div id="emotion-bg"></div>
     <div id="bg-snow-back"></div>
     <div id="bg-snow-front"></div>
-    <button id="homePosterBtn" title="回到主页 · Discover Celeste Mountain" onclick="pageFadeGo('index.html')">
+    <button id="homePosterBtn" title="回到主页 · Discover Celeste Mountain" onclick="location.href='index.html'">
         <img src="celeste-gui/mountain-poster.png" alt="Celeste Mountain">
     </button>
     <!-- 金羽毛游戏入口（右上角） -->
@@ -103,17 +99,6 @@
         <div class="peeking-dots"><span></span><span></span><span></span></div>
     </div>
 
-    <script>
-    // ===== 页面过渡：进场从黑淡入 / 离场先淡黑再跳 =====
-    window.pageFadeGo = function(url) {
-        const t = document.getElementById('page-transition');
-        t.classList.add('active');
-        setTimeout(function() { location.href = url; }, 300);
-    };
-    window.addEventListener('load', function() {
-        setTimeout(function() { document.getElementById('page-transition').classList.remove('active'); }, 150);
-    });
-    </script>
     <script src="js/api.js"></script>
     <script src="js/feather-game.js"></script>
     <script src="js/diary.js"></script>

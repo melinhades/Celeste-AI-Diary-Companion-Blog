@@ -286,17 +286,7 @@ function exportPostcard(data) {
     });
 
     detail.querySelector('.edit').addEventListener('click', () => {
-        if (cur) {
-            let t = document.getElementById('page-transition');
-            if (!t) {
-                t = document.createElement('div');
-                t.id = 'page-transition';
-                t.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#050514;opacity:0;transition:opacity .3s ease;pointer-events:none;';
-                document.body.appendChild(t);
-            }
-            t.style.opacity = '1';
-            setTimeout(function() { location.href = 'diary.html?edit=' + encodeURIComponent(cur.id); }, 300);
-        }
+        if (cur) location.href = 'diary.html?edit=' + encodeURIComponent(cur.id);
     });
     detail.querySelector('.del').addEventListener('click', async () => {
         if (!cur) return;

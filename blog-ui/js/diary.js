@@ -1817,7 +1817,7 @@
         // ... existing code ...
         shelfMemoryRecall(d.content || '', days);
     }
-    shelfBtn.addEventListener('click', () => { pageFadeGo('shelf.html'); });
+    shelfBtn.addEventListener('click', () => { location.href = 'shelf.html'; });
     shelfPanel.querySelector('.shelf-close').addEventListener('click', () => shelfPanel.classList.remove('open'));
 // ... existing code ...
     shelfPanel.querySelector('.sd-back').addEventListener('click', shelfShowList);
@@ -1850,7 +1850,7 @@
     (async function init() {
         if (!localStorage.getItem('token')) {
             alert('请先登录');
-            pageFadeGo('login.html');
+            location.href = 'login.html';
             return;
         }
 

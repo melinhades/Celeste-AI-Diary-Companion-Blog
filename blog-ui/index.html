@@ -50,8 +50,6 @@
     @keyframes cardIn { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:none; } }
     .search-bar { display:flex; gap:10px; margin-bottom:16px; position:relative; z-index:1; }
     .search-bar .form-control { flex:1; }
-    #page-transition{position:fixed;inset:0;z-index:9999;background:#050514;opacity:0;pointer-events:none;transition:opacity .3s ease;}
-    #page-transition.active{opacity:1;pointer-events:auto;}
     </style>
 </head>
 <body>
@@ -59,8 +57,6 @@
     <audio id="bgmPlayer" loop autoplay>
         <source src="bgm/postcard.mp3" type="audio/mpeg">
     </audio>
-    <!-- 页面过渡覆盖层 (仅用于 diary 链接) -->
-    <div id="page-transition" class="active"></div>
     <!-- 雪花粒子系统 -->
     <canvas id="snowCanvas" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;"></canvas>
     <div class="snow-strip"></div>
@@ -335,26 +331,6 @@
         html += `<span class="page-info">第 ${page} / ${totalPages} 页</span>`;
         if (page < totalPages) html += `<button class="page-btn" onclick="loadArticles(${page+1})">下一页 ›</button>`;
         el.innerHTML = html;
-    }
-
-    // ===== 页面过渡仅用于 diary 链接 =====
-    const transition = document.getElementById('page-transition');
-    if (transition) {
-        // 页面加载完毕时淡出（确保首次打开是淡出状态）
-        window.addEventListener('load', () => {
-            transition.classList.remove('active');
-        });
-        // 仅 diary link 触发过渡
-        document.addEventListener('click', e => {
-            const diaryLink = e.target.closest('a.nav-diary-btn[href="diary.html"]');
-            if (diaryLink) {
-                e.preventDefault();                // 阻止默认跳转
-                transition.classList.add('active'); // 开始淡出
-                setTimeout(() => {
-                    location.href = diaryLink.href; // 300ms 后跳转
-                }, 300);                           // 与 CSS transition 时间匹配
-            }
-        });
     }
 
     // ===== 雪花粒子系统增强：支持分类切换雪花图片 =====
