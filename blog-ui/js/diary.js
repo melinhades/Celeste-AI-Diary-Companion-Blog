@@ -629,6 +629,18 @@
         el.textContent = '';
         for (const ch of text) { el.textContent += ch; await sleep(60); }
     }
+    // ===== 明信片音效：csides 对 = 发出（每日明信片） / variants 对 = keep（导出明信片） =====
+    const PC_SOUNDS = {};
+    function pcPlay(name) {
+        try {
+            if (!PC_SOUNDS[name]) PC_SOUNDS[name] = new Audio('celeste-sounds/' + name);
+            const a = PC_SOUNDS[name];
+            a.currentTime = 0;
+            a.volume = 0.9;
+            a.play().catch(() => {});
+        } catch (e) { /* 无声降级 */ }
+    }
+
 
     // ===== 每日明信片主流程 =====
     async function showDailyPostcard() {
@@ -639,6 +651,7 @@
         const closeBtn = document.getElementById('postcard-close');
 
         overlay.classList.add('show');
+        pcPlay('ui_main_postcard_csides_in.wav');
         startSnow();
 
         try {
@@ -667,6 +680,7 @@
         }
 
         closeBtn.onclick = () => {
+            pcPlay('ui_main_postcard_csides_out.wav');
             document.getElementById('bgmPlayer').play().catch(() => {});
             overlay.style.opacity = '0';
             overlay.style.transition = 'opacity 0.6s ease';
@@ -1800,10 +1814,12 @@
         const created = new Date(typeof d.createDate === 'number' || /^\d+$/.test(String(d.createDate)) ? Number(d.createDate) : d.createDate);
         const days = Math.max(0, Math.floor((Date.now() - created.getTime()) / 86400000));
         if (days > 0) addMadelineMessage('这是 ' + days + ' 天前写下的……那时候的你，还好吗？', '可爱');
+        // ... existing code ...
         shelfMemoryRecall(d.content || '', days);
     }
-    shelfBtn.addEventListener('click', () => { location.href = 'shelf.html'; });
+    shelfBtn.addEventListener('click', () => { pageFadeGo('shelf.html'); });
     shelfPanel.querySelector('.shelf-close').addEventListener('click', () => shelfPanel.classList.remove('open'));
+// ... existing code ...
     shelfPanel.querySelector('.sd-back').addEventListener('click', shelfShowList);
     shelfList.addEventListener('click', ev => {
         const card = ev.target.closest('.shelf-card');
@@ -1834,7 +1850,7 @@
     (async function init() {
         if (!localStorage.getItem('token')) {
             alert('请先登录');
-            location.href = 'login.html';
+            pageFadeGo('login.html');
             return;
         }
 
@@ -2088,27 +2104,28 @@
         for (var bx = 0; bx < W; bx += 8) { ctx.fillRect(bx, 0, 4, 4); ctx.fillRect(bx, H - 4, 4, 4); }
         for (var by = 0; by < H; by += 8) { ctx.fillRect(0, by, 4, 4); ctx.fillRect(W - 4, by, 4, 4); }
     }
-    function exportPostcard(data) {
-        var modal = document.getElementById('postcardExportModal');
-        if (!modal) {
-            modal = document.createElement('div');
-            modal.id = 'postcardExportModal';
-            modal.innerHTML = '<canvas id="postcardCanvas"></canvas><div class="pe-actions"><button id="peDownload">\u2b07 下载明信片</button><button class="pe-close" id="peClose">\u2715 关闭</button></div>';
-            document.body.appendChild(modal);
-            document.getElementById('peClose').addEventListener('click', function() { modal.classList.remove('show'); });
-            modal.addEventListener('click', function(e) { if (e.target === modal) modal.classList.remove('show'); });
+        function exportPostcard(data) {
+            var modal = document.getElementById('postcardExportModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'postcardExportModal';
+                modal.innerHTML = '<canvas id="postcardCanvas"></canvas><div class="pe-actions"><button id="peDownload">\u2b07 下载明信片</button><button class="pe-close" id="peClose">\u2715 关闭</button></div>';
+                document.body.appendChild(modal);
+                document.getElementById('peClose').addEventListener('click', function() { modal.classList.remove('show'); pcPlay('ui_main_postcard_variants_out.wav'); });
+                modal.addEventListener('click', function(e) { if (e.target === modal) { modal.classList.remove('show'); pcPlay('ui_main_postcard_variants_out.wav'); } });
+            }
+            var canvas = document.getElementById('postcardCanvas');
+            renderPostcardCanvas(canvas, data.title, data.date, data.content, data.summary, parseInt(localStorage.getItem('diarySaveCount') || '0'));
+            document.getElementById('peDownload').onclick = function() {
+                var url = canvas.toDataURL('image/png');
+                var a = document.createElement('a');
+                a.download = 'mountain-diary-' + (data.date || '').replace(/\D/g, '').slice(0, 8) + '.png';
+                a.href = url;
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            };
+            modal.classList.add('show');
+            pcPlay('ui_main_postcard_variants_in.wav');
         }
-        var canvas = document.getElementById('postcardCanvas');
-        renderPostcardCanvas(canvas, data.title, data.date, data.content, data.summary, parseInt(localStorage.getItem('diarySaveCount') || '0'));
-        document.getElementById('peDownload').onclick = function() {
-            var url = canvas.toDataURL('image/png');
-            var a = document.createElement('a');
-            a.download = 'mountain-diary-' + (data.date || '').replace(/\D/g, '').slice(0, 8) + '.png';
-            a.href = url;
-            document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        };
-        modal.classList.add('show');
-    }
 
     // ===== 书架面板集成导出按钮 =====
     (function shelfPostcardHook() {
@@ -2127,6 +2144,40 @@
         }, 500);
         setTimeout(function() { clearInterval(tryHook); }, 30000);
     })();
+        // ===== 节日彩蛋（公历自动判定 + 农历硬编码表） =====
+        const HOLIDAY_EGGS = {
+            '1-1':   { e: '可爱', l: ['新年快乐！今年的山刚开门，我们一起慢慢爬。', '新的一年，新的路线。我还是走在你前面等你。'] },
+            '2-14':  { e: '可爱', l: ['情人节快乐～今天我就是你的 Valentine！', '山顶那颗心是最好的礼物，我们去把它取下来吧。'] },
+            '4-1':   { e: '惊讶', l: ['嘿嘿，我把你的草莓藏起来了～……开玩笑的，在页面里呢。', '愚人节快乐！今天的雪是柠檬味的，别尝。'] },
+            '5-1':   { e: '可爱', l: ['劳动节快乐！今天不写日记也算正经休息。', '登山的人也要有休息日，今天推荐躺平。'] },
+            '6-1':   { e: '可爱', l: ['儿童节快乐！今天谁都可以当小孩。', '今日任务：尽情玩。日记嘛，可写可不写。'] },
+            '10-1':  { e: '可爱', l: ['国庆快乐！长假正好用来慢慢爬山。', '假期模式开启～写一篇，还是出去走走？'] },
+            '10-24': { e: '惊讶', l: ['1024！程序员节快乐，愿你的代码一次跑通、日记永不丢失～', '今天的 bug 都被我吓跑啦，放心写。'] },
+            '10-31': { e: '不安', l: ['万圣夜……镜子里那位 Badeline 今天化了妆。', '不给草莓就捣蛋！……好吧，给你唱首歌也行。'] },
+            '11-11': { e: '无语', l: ['双十一……购物车是空的，背包里全是故事。', '别冲动消费，我念一段日记给你冷静一下？'] },
+            '12-25': { e: '可爱', l: ['圣诞快乐～雪山就是全世界最大的圣诞树！', '叮叮当～你的草莓今天挂上去当装饰了。'] },
+            '1-25':  { e: '惊讶', l: ['今天是 Celeste 的生日！谢谢你陪我爬这座山。', '1 月 25，登山纪念日。还记得第一次冲刺吗？'] },
+            // 农历固定表（2026-2027），到期可续加
+            '2026-2-16':  { e: '可爱', l: ['除夕夜！山下的灯都亮了，吃完饺子再写也不迟。'] },
+            '2026-2-17':  { e: '可爱', l: ['春节快乐！新年第一页日记，留给最想说的话。', '过年好～红包拿来……啊不，草莓拿来！'] },
+            '2026-6-19':  { e: '可爱', l: ['端午安康！粽子要趁热吃，日记要趁想写。'] },
+            '2026-9-25':  { e: '可爱', l: ['中秋快乐～山顶的月亮，比哪里的都圆。'] },
+            '2027-2-5':   { e: '可爱', l: ['除夕夜！这一年辛苦啦，山上见。'] },
+            '2027-2-6':   { e: '可爱', l: ['春节快乐！新的一年，继续一步一步来。'] },
+            '2027-6-9':   { e: '可爱', l: ['端午安康！今天的风里有粽叶香。'] },
+            '2027-9-15':  { e: '可爱', l: ['中秋快乐～把月亮写进今天的日记里吧。'] }
+        };
+        (function holidayGreet() {
+            const d = new Date();
+            const fullKey = d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+            const mdKey = (d.getMonth() + 1) + '-' + d.getDate();
+            const egg = HOLIDAY_EGGS[fullKey] || HOLIDAY_EGGS[mdKey];
+            if (!egg) return;
+            const stamp = 'diaryHoliday_' + mdKey + '_' + d.getFullYear();
+            if (localStorage.getItem(stamp) === d.toDateString()) return;
+            localStorage.setItem(stamp, d.toDateString());
+            setTimeout(() => addMadelineMessage(egg.l[Math.floor(Math.random() * egg.l.length)], egg.e), 2500);
+        })();
 
 
     // ===== 迭代7：道别 =====

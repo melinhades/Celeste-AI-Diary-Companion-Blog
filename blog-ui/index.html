@@ -48,6 +48,10 @@
     .tag-link.tag-on { background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); color:#fff; box-shadow:0 0 10px rgba(138,43,226,.5); }
     .article-card { animation: cardIn .5s ease both; }
     @keyframes cardIn { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:none; } }
+    .search-bar { display:flex; gap:10px; margin-bottom:16px; position:relative; z-index:1; }
+    .search-bar .form-control { flex:1; }
+    #page-transition{position:fixed;inset:0;z-index:9999;background:#050514;opacity:0;pointer-events:none;transition:opacity .3s ease;}
+    #page-transition.active{opacity:1;pointer-events:auto;}
     </style>
 </head>
 <body>
@@ -56,7 +60,7 @@
         <source src="bgm/postcard.mp3" type="audio/mpeg">
     </audio>
     <!-- 页面过渡覆盖层 (仅用于 diary 链接) -->
-    <div id="page-transition"></div>
+    <div id="page-transition" class="active"></div>
     <!-- 雪花粒子系统 -->
     <canvas id="snowCanvas" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;"></canvas>
     <div class="snow-strip"></div>
@@ -85,6 +89,12 @@
         <!-- 分类筛选 -->
         <div class="filter-bar" id="categoryBar">
             <span class="filter-item active" data-id="" onclick="filterAll()">All</span>
+        </div>
+
+        <!-- 关键词搜索 -->
+        <div class="search-bar">
+            <input class="form-control" type="text" id="searchInput" placeholder="搜索文章标题，回车搜索..." onkeyup="if(event.key==='Enter')doSearch()">
+            <button class="btn btn-outline btn-sm" onclick="doSearch()">🔍 搜索</button>
         </div>
 
         <div id="articleList"><div class="loading">Loading...</div></div>
@@ -183,6 +193,7 @@
     let currentPage = 1;
     let currentCategory = '';
     let currentTag = '';
+    let currentKeyword = '';
 
     // 初始化
     initHeader();
@@ -205,6 +216,8 @@
                     span.classList.add('active');
                     currentCategory = c.id;
                     currentTag = '';
+                    currentKeyword = '';
+                    document.getElementById('searchInput').value = '';
                     document.querySelectorAll('.tag-link').forEach(t => t.classList.remove('tag-on'));
                     loadArticles(1);
                 };
@@ -219,6 +232,7 @@
         const body = { page: page, pageSize: PAGE_SIZE };
         if (currentCategory) body.categoryId = currentCategory;
         if (currentTag) body.tagId = currentTag;
+        if (currentKeyword) body.keyword = currentKeyword;
         api('/articles', 'POST', body).then(res => {
             if (!res.success) { document.getElementById('articleList').innerHTML = '<div class="empty">加载失败</div>'; return; }
             renderArticles(res.data.records || res.data);
@@ -282,6 +296,8 @@
     function filterByTag(tagId, el) {
         currentTag = tagId;
         currentCategory = '';
+        currentKeyword = '';
+        document.getElementById('searchInput').value = '';
         document.querySelectorAll('.filter-item').forEach(el => el.classList.remove('active'));
         document.querySelector('.filter-item[data-id=""]').classList.add('active');
         document.querySelectorAll('.tag-link').forEach(t => t.classList.remove('tag-on'));
@@ -290,6 +306,18 @@
     }
 
     function filterAll() {
+        currentTag = '';
+        currentCategory = '';
+        currentKeyword = '';
+        document.getElementById('searchInput').value = '';
+        document.querySelectorAll('.filter-item').forEach(el => el.classList.remove('active'));
+        document.querySelector('.filter-item[data-id=""]').classList.add('active');
+        document.querySelectorAll('.tag-link').forEach(t => t.classList.remove('tag-on'));
+        loadArticles(1);
+    }
+
+    function doSearch() {
+        currentKeyword = document.getElementById('searchInput').value.trim();
         currentTag = '';
         currentCategory = '';
         document.querySelectorAll('.filter-item').forEach(el => el.classList.remove('active'));

@@ -200,6 +200,16 @@ function renderPostcardCanvas(canvas, title, dateStr, content, summary, strawCou
     for (var bx = 0; bx < W; bx += 8) { ctx.fillRect(bx, 0, 4, 4); ctx.fillRect(bx, H - 4, 4, 4); }
     for (var by = 0; by < H; by += 8) { ctx.fillRect(0, by, 4, 4); ctx.fillRect(W - 4, by, 4, 4); }
 }
+var PC_SOUNDS = {};
+function pcPlay(name) {
+    try {
+        if (!PC_SOUNDS[name]) PC_SOUNDS[name] = new Audio('celeste-sounds/' + name);
+        var a = PC_SOUNDS[name];
+        a.currentTime = 0;
+        a.volume = 0.9;
+        a.play().catch(function(){});
+    } catch (e) { }
+}
 function exportPostcard(data) {
     var modal = document.getElementById('postcardExportModal');
     if (!modal) {
@@ -207,8 +217,8 @@ function exportPostcard(data) {
         modal.id = 'postcardExportModal';
         modal.innerHTML = '<canvas id="postcardCanvas"></canvas><div class="pe-actions"><button id="peDownload">\u2b07 下载明信片</button><button class="pe-close" id="peClose">\u2715 关闭</button></div>';
         document.body.appendChild(modal);
-        document.getElementById('peClose').addEventListener('click', function() { modal.classList.remove('show'); });
-        modal.addEventListener('click', function(e) { if (e.target === modal) modal.classList.remove('show'); });
+        document.getElementById('peClose').addEventListener('click', function() { modal.classList.remove('show'); pcPlay('ui_main_postcard_variants_out.wav'); });
+        modal.addEventListener('click', function(e) { if (e.target === modal) { modal.classList.remove('show'); pcPlay('ui_main_postcard_variants_out.wav'); } });
     }
     var canvas = document.getElementById('postcardCanvas');
     renderPostcardCanvas(canvas, data.title, data.date, data.content, data.summary, parseInt(localStorage.getItem('diarySaveCount') || '0'));
@@ -220,6 +230,7 @@ function exportPostcard(data) {
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
     };
     modal.classList.add('show');
+    pcPlay('ui_main_postcard_variants_in.wav');
 }
 
 (async function () {
@@ -275,7 +286,17 @@ function exportPostcard(data) {
     });
 
     detail.querySelector('.edit').addEventListener('click', () => {
-        if (cur) location.href = 'diary.html?edit=' + encodeURIComponent(cur.id);
+        if (cur) {
+            let t = document.getElementById('page-transition');
+            if (!t) {
+                t = document.createElement('div');
+                t.id = 'page-transition';
+                t.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#050514;opacity:0;transition:opacity .3s ease;pointer-events:none;';
+                document.body.appendChild(t);
+            }
+            t.style.opacity = '1';
+            setTimeout(function() { location.href = 'diary.html?edit=' + encodeURIComponent(cur.id); }, 300);
+        }
     });
     detail.querySelector('.del').addEventListener('click', async () => {
         if (!cur) return;

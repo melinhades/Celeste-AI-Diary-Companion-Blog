@@ -332,6 +332,9 @@
     const style = document.createElement('style');
     style.textContent =
         '#genRunner{position:fixed;z-index:2100;width:52px;height:52px;image-rendering:pixelated;pointer-events:none;display:none;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5));transform:translate(-50%,-96%);}' +
+        '#genWaitOverlay{position:fixed;right:28px;bottom:28px;z-index:2099;display:none;flex-direction:column;align-items:center;gap:6px;pointer-events:none;}' +
+        '.gen-wait-anim{width:84px;height:84px;background-size:contain;background-repeat:no-repeat;background-position:center;filter:drop-shadow(0 2px 8px rgba(0,0,0,.5));}' +
+        '.gen-wait-text{color:#ffe36d;font-size:14px;text-align:center;text-shadow:0 1px 4px rgba(0,0,0,.8);}' +
         '#genFallLayer{position:fixed;inset:0;z-index:2050;display:none;pointer-events:none;}' +
         '#genFallLayer.show{display:block;}' +
         '#genFallSprite{position:absolute;width:64px;height:64px;image-rendering:pixelated;animation:genFallMove 1.6s ease-in forwards;}' +
@@ -368,10 +371,32 @@
         '</div></div>';
     document.body.appendChild(decision);
 
+    const waitOverlay = document.createElement('div');
+    waitOverlay.id = 'genWaitOverlay';
+    waitOverlay.innerHTML = '<div class="gen-wait-anim"></div><div class="gen-wait-text">Thinking<span class="loading-dots"></span></div>';
+    document.body.appendChild(waitOverlay);
+
     const RUN_FRAMES = [];
     for (let i = 0; i < 9; i++) RUN_FRAMES.push('celeste-player/marker/runBackpack' + String(i).padStart(5, '0') + '.png');
     const FALL_FRAMES = ['celeste-player/marker/Fall0000.png', 'celeste-player/marker/Fall0001.png'];
     RUN_FRAMES.concat(FALL_FRAMES).forEach(s => { const im = new Image(); im.src = s; });
+
+    const WAIT_FRAMES = [];
+    for (let i = 0; i < 10; i++) WAIT_FRAMES.push('celeste-gui/loading/' + String(i).padStart(2, '0') + '.png');
+    WAIT_FRAMES.forEach(s => { const im = new Image(); im.src = s; });
+    let waitTimer = null;
+    function waitShow() {
+        waitOverlay.classList.add('show');
+        const el = waitOverlay.querySelector('.gen-wait-anim');
+        let i = 0;
+        el.style.backgroundImage = 'url("' + WAIT_FRAMES[0] + '")';
+        if (waitTimer) clearInterval(waitTimer);
+        waitTimer = setInterval(() => { i = (i + 1) % WAIT_FRAMES.length; el.style.backgroundImage = 'url("' + WAIT_FRAMES[i] + '")'; }, 90);
+    }
+    function waitHide() {
+        if (waitTimer) { clearInterval(waitTimer); waitTimer = null; }
+        waitOverlay.classList.remove('show');
+    }
 
     // mirror 镜像法：算 textarea 光标处的像素坐标
     const mirror = document.createElement('div');
@@ -444,11 +469,13 @@
         const prompt = '请以博客作者的身份写一篇 Markdown 文章。主题：' + topic + extra + '。要求：直接输出完整 Markdown 正文，第一行用 # 给出文章标题，不要任何解释、前缀或后缀，400-800字。';
 
         let ok = false, text = '';
+        waitShow();
         try {
             const res = await api('/chat', 'POST', { content: prompt });
             if (res.success && res.data && res.data.content) { ok = true; text = res.data.content; }
         } catch (e) { }
         if (btn) btn.disabled = false;
+        waitHide();
 
         const refused = ok && /抱歉|无法|我不能|对不起|sorry|cannot|can't/i.test(text.slice(0, 60));
         if (!ok || refused) {
