@@ -194,6 +194,25 @@
     // 初始化
     initHeader();
     loadCategories();
+
+    // ===== URL 参数直达筛选（文章页标签跳转 ?tag= / 搜索直达 ?kw=） =====
+    const _urlParams = new URLSearchParams(location.search);
+    if (_urlParams.get('tag')) currentTag = _urlParams.get('tag');
+    if (_urlParams.get('kw')) {
+        currentKeyword = _urlParams.get('kw');
+        document.getElementById('searchInput').value = currentKeyword;
+    }
+    if (currentTag || currentKeyword) {
+        setTimeout(() => {
+            document.querySelectorAll('.tag-link').forEach(t => {
+                if (t.textContent.trim() && currentTag && t.getAttribute('onclick')?.includes(`'${currentTag}'`)) t.classList.add('tag-on');
+            });
+            document.querySelectorAll('.filter-item').forEach(el => el.classList.remove('active'));
+            const allBtn = document.querySelector('.filter-item[data-id=""]');
+            if (allBtn) allBtn.classList.add('active');
+        }, 1500);
+    }
+
     loadArticles(1);
     loadHotArticles();
     loadHotTags();

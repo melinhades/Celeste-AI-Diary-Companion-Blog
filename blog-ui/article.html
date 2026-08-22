@@ -173,6 +173,10 @@
             <div class="widget-title"> Contents</div>
             <div id="tocList"></div>
         </div>
+        <div class="widget" id="relatedWidget" style="display:none">
+            <div class="widget-title">🧗 Related Routes</div>
+            <div id="relatedList"></div>
+        </div>
         <div class="widget">
             <div class="widget-title">🔥 Popular</div>
             <div id="hotList"><div class="loading">Loading...</div></div>
@@ -296,7 +300,7 @@
                         ${a.category ? `<span>📁 ${escHtml(a.category.categoryName || a.category.name)}</span>` : ''}
                     </div>
                     <div class="article-tags">
-                        ${(a.tags || []).map(t => `<span class="tag">${escHtml(t.tagName || t.name)}</span>`).join('')}
+                        ${(a.tags || []).map(t => `<span class="tag" style="cursor:pointer" onclick="location.href='index.html?tag=${t.id}'" title="查看该标签下的文章">${escHtml(t.tagName || t.name)}</span>`).join('')}
                     </div>
                 </div>`;
 
@@ -313,6 +317,9 @@
                 document.getElementById('commentForm').innerHTML = '<p style="color:#aaa;font-size:14px;margin-bottom:16px"><a href="login.html" style="color:#a78bfa">Login</a> to comment</p>';
             }
             loadComments();
+
+            // 相关路线（同分类推荐）
+            if (a.category && a.category.id) loadRelated(a.category.id);
         });
     }
 
@@ -368,6 +375,19 @@
                 showToast(res.msg || 'Failed to post comment', 'error');
             }
         });
+    }
+
+    function loadRelated(categoryId) {
+        api('/articles', 'POST', { page: 1, pageSize: 8, categoryId: String(categoryId) }).then(res => {
+            const records = (res && res.success && res.data && (res.data.records || res.data)) || [];
+            const rel = records.filter(x => String(x.id) !== String(articleId)).slice(0, 4);
+            if (!rel.length) return;
+            document.getElementById('relatedList').innerHTML = rel.map(x => `
+                <div class="hot-item" onclick="location.href='article.html?id=${x.id}'">
+                    <span class="hot-title">${escHtml(x.title)}</span>
+                </div>`).join('');
+            document.getElementById('relatedWidget').style.display = 'block';
+        }).catch(() => {});
     }
 
     function loadHotArticles() {
