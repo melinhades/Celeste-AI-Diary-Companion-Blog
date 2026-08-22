@@ -12,4 +12,6 @@ public interface LikeService {
     Result info(String articleId, SysUser user);
 
     Result batchCounts(List<String> articleIds);
+
+    Result likers(String articleId);
 }

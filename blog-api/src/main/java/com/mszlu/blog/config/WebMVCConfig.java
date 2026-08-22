@@ -37,6 +37,7 @@ public class WebMVCConfig implements WebMvcConfigurer {
                 .addPathPatterns("/articles/publish")
                 .addPathPatterns("/articles/update")
                 .addPathPatterns("/likes/toggle")
+                .addPathPatterns("/notifications/**")
                 .addPathPatterns("/chat/**")
                 .addPathPatterns("/persona/**")
                 .addPathPatterns("/memory/**")

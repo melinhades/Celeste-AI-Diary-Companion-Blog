@@ -210,6 +210,24 @@
         '可爱': 'celeste-portraits/madeline/peaceful00.png',
         '无语': 'celeste-portraits/madeline/deadpan00.png'
     };
+    // ... existing code ...
+    const PORTRAIT_FRAMES = { normal: 7, panic: 5, surprised: 7, angry: 7, sad: 7, peaceful: 4, deadpan: 9 };
+    let portraitAnimTimer = null;
+    function startPortraitAnim(emotion) {
+        clearInterval(portraitAnimTimer);
+        const src = avatarMap[emotion] || avatarMap['默认'];
+        const stem = src.split('/').pop().replace(/00\.png$/, '');
+        const n = PORTRAIT_FRAMES[stem] || 1;
+        if (n <= 1) { gameDialogPortraitImg.src = src; return; }
+        let fi = 0;
+        gameDialogPortraitImg.src = 'Atlases/Portraits/madeline/' + stem + '00.png';
+        portraitAnimTimer = setInterval(() => {
+            fi = (fi + 1) % n;
+            gameDialogPortraitImg.src = 'Atlases/Portraits/madeline/' + stem + String(fi).padStart(2, '0') + '.png';
+        }, 120);
+    }
+    function stopPortraitAnim() { clearInterval(portraitAnimTimer); portraitAnimTimer = null; }
+// ... existing code ...
     const emotionBgMap = {
         '默认': 'celeste-areas/bg_default.png',
         '平静': 'celeste-areas/bg_calm.png',
@@ -344,26 +362,28 @@
     let gameDialogHideTimer = null;
 
     // ... existing code ...
-    // ... existing code ...
     function openGameDialog(emotion) {
-        gameDialogPortraitImg.src = avatarMap[emotion] || avatarMap['默认'];
+        startPortraitAnim(emotion);
         const pmCenter = pmState.x + pm.offsetWidth / 2;
         const onRight = pmCenter > window.innerWidth / 2;
-        gameDialog.classList.toggle('portrait-right', onRight);
-        gameDialogPortraitImg.style.transform = onRight ? 'scaleX(-1)' : '';
+
+        gameDialogPortraitImg.parentElement.style.transform = onRight ? 'scaleX(-1)' : '';
         gameDialog.classList.add('show');
     }
 // ... existing code ...
+        function scheduleGameDialogHide() {
+            clearTimeout(gameDialogHideTimer);
+            gameDialogHideTimer = setTimeout(() => {
+                stopPortraitAnim();
+                gameDialog.classList.remove('show');
+            }, 6000);
+        }
+        gameDialog.addEventListener('click', () => {
+            clearTimeout(gameDialogHideTimer);
+            stopPortraitAnim();
+            gameDialog.classList.remove('show');
+        });
 // ... existing code ...
-
-    function scheduleGameDialogHide() {
-        clearTimeout(gameDialogHideTimer);
-        gameDialogHideTimer = setTimeout(() => gameDialog.classList.remove('show'), 6000);
-    }
-    gameDialog.addEventListener('click', () => {
-        clearTimeout(gameDialogHideTimer);
-        gameDialog.classList.remove('show');
-    });
     let msgQueue = Promise.resolve();
     function addMadelineMessage(text, emotion) {
         msgQueue = msgQueue.then(() => doAddMadelineMessage(text, emotion)).catch(e => console.warn('说话失败:', e));
@@ -389,6 +409,7 @@
                     gameDialogText.textContent += ch;
                     if (!/[\s。！？!?…，,、；;：:（）()*]/.test(ch)) {
                         speakCount++;
+                        // Deleted:if (speakCount % 3 === 1) { playSpeakSound(emotion); stepPortraitAnim(); }
                         if (speakCount % 3 === 1) playSpeakSound(emotion);
                     }
                     await sleep(45 + Math.random() * 20);
@@ -409,6 +430,7 @@
                 if (messages.length > 1) await sleep(240 + Math.random() * 200);
             }
         }
+        if (useGameDialog) stopPortraitAnim();
         if (useGameDialog) scheduleGameDialogHide();
     }
     function addUserMessage(text) {

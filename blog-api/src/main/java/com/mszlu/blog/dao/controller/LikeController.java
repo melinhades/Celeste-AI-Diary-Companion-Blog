@@ -53,4 +53,10 @@ public class LikeController {
                 .collect(Collectors.toList());
         return likeService.batchCounts(idList);
     }
+
+    // 点赞人名单（最多 10 个，游客可访问）
+    @GetMapping("users/{articleId}")
+    public Result likers(@PathVariable("articleId") String articleId) {
+        return likeService.likers(articleId);
+    }
 }

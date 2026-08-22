@@ -243,17 +243,44 @@
     }
 
     // ===================== 游戏对话框 =====================
+    const avatarMap = {
+        '默认': 'celeste-portraits/madeline/normal00.png',
+        '不安': 'celeste-portraits/madeline/panic00.png',
+        '惊讶': 'celeste-portraits/madeline/surprised00.png',
+        '性恨': 'celeste-portraits/madeline/angry00.png',
+        '不开心': 'celeste-portraits/madeline/sad00.png',
+        '可爱': 'celeste-portraits/madeline/peaceful00.png',
+        '无语': 'celeste-portraits/madeline/deadpan00.png',
+        '冒泡': 'celeste-portraits/madeline/distracted00.png'
+    };
+    const PORTRAIT_FRAMES = { normal: 7, panic: 5, surprised: 7, angry: 7, sad: 7, peaceful: 4, deadpan: 9 };
+    let portraitAnimTimer = null;
+    function startPortraitAnim(emotion) {
+        clearInterval(portraitAnimTimer);
+        const src = avatarMap[emotion] || avatarMap['默认'];
+        const stem = src.split('/').pop().replace(/00\.png$/, '');
+        const n = PORTRAIT_FRAMES[stem] || 1;
+        if (n <= 1) { dialogPortrait.src = src; return; }
+        let fi = 0;
+        dialogPortrait.src = 'Atlases/Portraits/madeline/' + stem + '00.png';
+        portraitAnimTimer = setInterval(() => {
+            fi = (fi + 1) % n;
+            dialogPortrait.src = 'Atlases/Portraits/madeline/' + stem + String(fi).padStart(2, '0') + '.png';
+        }, 120);
+    }
+    function stopPortraitAnim() { clearInterval(portraitAnimTimer); portraitAnimTimer = null; }
     function openDialog(emotion) {
-        dialogPortrait.src = AVATAR;
-        dialog.classList.toggle('portrait-right', (st.x + pm.offsetWidth / 2) > window.innerWidth / 2);
+        startPortraitAnim(emotion);
+        const onRight = (st.x + pm.offsetWidth / 2) > window.innerWidth / 2;
+        dialogPortrait.parentElement.style.transform = onRight ? 'scaleX(-1)' : '';
         dialog.classList.add('show');
     }
     let dialogHideTimer = null;
     function scheduleDialogHide() {
         clearTimeout(dialogHideTimer);
-        dialogHideTimer = setTimeout(() => dialog.classList.remove('show'), 6000);
+        dialogHideTimer = setTimeout(() => { stopPortraitAnim(); dialog.classList.remove('show'); }, 6000);
     }
-    dialog.addEventListener('click', () => { clearTimeout(dialogHideTimer); dialog.classList.remove('show'); });
+    dialog.addEventListener('click', () => { clearTimeout(dialogHideTimer); stopPortraitAnim(); dialog.classList.remove('show'); });
 
     // ===================== 音效 =====================
     const VOICE_DIRS = {
@@ -286,7 +313,7 @@
         const avWrap = document.createElement('div');
         avWrap.className = 'msg-avatar-wrap';
         const avImg = document.createElement('img');
-        avImg.src = AVATAR;
+        avImg.src = avatarMap[emotion] || avatarMap['默认'];
         avWrap.appendChild(avImg);
         const bubble = document.createElement('div');
         bubble.className = 'msg-bubble';

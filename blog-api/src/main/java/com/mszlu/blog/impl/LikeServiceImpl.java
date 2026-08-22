@@ -2,13 +2,19 @@ package com.mszlu.blog.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.mszlu.blog.dao.mapper.ArticleLikeMapper;
+import com.mszlu.blog.dao.mapper.ArticleMapper;
+import com.mszlu.blog.dao.mapper.NotificationMapper;
+import com.mszlu.blog.dao.pojo.Article;
 import com.mszlu.blog.dao.pojo.ArticleLike;
+import com.mszlu.blog.dao.pojo.Notification;
 import com.mszlu.blog.dao.pojo.SysUser;
 import com.mszlu.blog.service.LikeService;
+import com.mszlu.blog.service.SysUserService;
 import com.mszlu.blog.vo.Result;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +24,15 @@ public class LikeServiceImpl implements LikeService {
 
     @Autowired
     private ArticleLikeMapper articleLikeMapper;
+
+    @Autowired
+    private ArticleMapper articleMapper;
+
+    @Autowired
+    private NotificationMapper notificationMapper;
+
+    @Autowired
+    private SysUserService sysUserService;
 
     @Override
     public Result toggle(String articleId, SysUser user) {
@@ -32,6 +47,17 @@ public class LikeServiceImpl implements LikeService {
             like.setUserId(user.getId());
             like.setCreateDate(System.currentTimeMillis());
             articleLikeMapper.insert(like);
+            Article article = articleMapper.selectById(articleId);
+            if (article != null && !user.getId().equals(article.getAuthorId())) {
+                Notification n = new Notification();
+                n.setUserId(article.getAuthorId());
+                n.setFromUserId(user.getId());
+                n.setArticleId(articleId);
+                n.setType("like");
+                n.setIsRead(0);
+                n.setCreateDate(System.currentTimeMillis());
+                notificationMapper.insert(n);
+            }
         }
         return info(articleId, user);
     }
@@ -65,5 +91,20 @@ public class LikeServiceImpl implements LikeService {
             }
         }
         return Result.success(map);
+    }
+
+    @Override
+    public Result likers(String articleId) {
+        LambdaQueryWrapper<ArticleLike> qw = new LambdaQueryWrapper<>();
+        qw.eq(ArticleLike::getArticleId, articleId)
+                .orderByDesc(ArticleLike::getCreateDate)
+                .last("limit 10");
+        List<ArticleLike> likes = articleLikeMapper.selectList(qw);
+        List<String> names = new ArrayList<>();
+        for (ArticleLike l : likes) {
+            SysUser u = sysUserService.findUserById(l.getUserId());
+            if (u != null) names.add(u.getNickname());
+        }
+        return Result.success(names);
     }
 }

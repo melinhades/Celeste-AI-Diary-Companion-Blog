@@ -1,8 +1,12 @@
 package com.mszlu.blog.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.mszlu.blog.dao.mapper.ArticleMapper;
 import com.mszlu.blog.dao.mapper.CommentsMapper;
+import com.mszlu.blog.dao.mapper.NotificationMapper;
+import com.mszlu.blog.dao.pojo.Article;
 import com.mszlu.blog.dao.pojo.Comment;
+import com.mszlu.blog.dao.pojo.Notification;
 import com.mszlu.blog.dao.pojo.SysUser;
 import com.mszlu.blog.service.CommentsService;
 import com.mszlu.blog.service.SysUserService;
@@ -24,6 +28,10 @@ public class CommentsServiceImpl implements CommentsService {
     private CommentsMapper commentsMapper;
     @Autowired
     private SysUserService sysUserService;
+    @Autowired
+    private ArticleMapper articleMapper;
+    @Autowired
+    private NotificationMapper notificationMapper;
 
     @Override
     public Result commentsByArticleId(String id) {
@@ -59,6 +67,24 @@ public class CommentsServiceImpl implements CommentsService {
         String toUserId = commentParam.getToUserId();
         comment.setToUid(toUserId == null ? "0" : toUserId);
         this.commentsMapper.insert(comment);
+
+        String receiverId;
+        if (comment.getLevel() == 2 && toUserId != null && !"0".equals(toUserId)) {
+            receiverId = toUserId;
+        } else {
+            Article article = articleMapper.selectById(commentParam.getArticleId());
+            receiverId = article != null ? article.getAuthorId() : null;
+        }
+        if (receiverId != null && !receiverId.equals(sysUser.getId())) {
+            Notification n = new Notification();
+            n.setUserId(receiverId);
+            n.setFromUserId(sysUser.getId());
+            n.setArticleId(commentParam.getArticleId());
+            n.setType("comment");
+            n.setIsRead(0);
+            n.setCreateDate(System.currentTimeMillis());
+            notificationMapper.insert(n);
+        }
         return Result.success(null);
     }
 

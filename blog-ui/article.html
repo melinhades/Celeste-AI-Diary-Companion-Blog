@@ -182,6 +182,7 @@
                 <span id="likeCount">0</span>
             </button>
         </div>
+        <div id="likersLine" style="text-align:center;font-size:12px;color:rgba(255,255,255,.55);margin:-6px 0 14px;"></div>
         <div style="text-align:center;margin-bottom:14px"><button id="editArticleBtn" onclick="location.href='write.html?edit=' + articleId">✏ Edit This Article</button></div>
         <div class="comments-section" id="commentsSection" style="display:none">
             <div class="comments-title">💬 Comments</div>
@@ -456,6 +457,16 @@
             applyLikeUI(res.data.likeCount || 0, !!res.data.liked);
             document.getElementById('likeBar').style.display = 'flex';
         }).catch(() => {});
+        loadLikers();
+    }
+
+    function loadLikers() {
+        api(`/likes/users/${articleId}`, 'GET').then(res => {
+            const names = res.success ? (res.data || []) : [];
+            document.getElementById('likersLine').textContent = names.length
+                ? '✨ ' + names.map(escHtml).join('、') + ' 点亮了这篇文章'
+                : '';
+        }).catch(() => {});
     }
 
     function applyLikeUI(count, liked) {
@@ -469,6 +480,7 @@
         api('/likes/toggle', 'POST', { articleId }).then(res => {
             if (!res.success) { showToast(res.msg || '操作失败', 'error'); return; }
             applyLikeUI(res.data.likeCount || 0, !!res.data.liked);
+            loadLikers();
             const btn = document.getElementById('likeBtn');
             btn.classList.remove('pop'); void btn.offsetWidth; btn.classList.add('pop');
             showToast(res.data.liked ? '心之宝石点亮了这篇文章 ✨' : '已取消点亮', 'success');

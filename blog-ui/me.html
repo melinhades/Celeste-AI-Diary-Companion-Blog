@@ -31,6 +31,8 @@ h2 { font-family:'Press Start 2P',monospace; font-size:12px; color:#ffe36d; marg
 .links a { padding:8px 14px; background:rgba(22,34,60,.88); color:#ffe36d; border:2px solid rgba(255,230,109,.4); border-radius:6px; text-decoration:none; font-size:13px; }
 .links a:hover { border-color:#ffe36d; background:rgba(255,227,109,.15); }
 .empty { color:rgba(255,255,255,.45); text-align:center; padding:20px; }
+.art.unread { border-color:#ffe36d; box-shadow:0 0 8px rgba(255,227,109,.35); }
+.art.unread .t::before { content:'● '; color:#ff6b8a; }
 </style>
 </head>
 <body>
@@ -55,6 +57,9 @@ h2 { font-family:'Press Start 2P',monospace; font-size:12px; color:#ffe36d; marg
         <div class="stat"><div class="num" id="stBerries">0</div><div class="lbl">草莓</div></div>
         <div class="stat"><img class="heart" id="stHeart" src="celeste-icons/heartgem0.png" alt=""><div class="lbl" id="stHeartLbl">心之宝石</div></div>
     </div>
+
+    <h2 id="messagesAnchor">MESSAGES</h2>
+    <div id="msgList"><div class="empty">加载中...</div></div>
 
     <h2>MY ARTICLES</h2>
     <div id="artList"><div class="empty">加载中...</div></div>
@@ -110,6 +115,22 @@ h2 { font-family:'Press Start 2P',monospace; font-size:12px; color:#ffe36d; marg
             '<span class="d">' + formatDate(a.createDate) + '</span></div>'
         ).join('');
     });
+
+    function loadMessages() {
+        api('/notifications/list', 'GET').then(res => {
+            const list = res.success ? (res.data || []) : [];
+            const box = document.getElementById('msgList');
+            if (!list.length) { box.innerHTML = '<div class="empty">还没有消息，去写篇文章吧～</div>'; return; }
+            box.innerHTML = list.map(m =>
+                '<div class="art' + (m.isRead ? '' : ' unread') + '" onclick="location.href=\'article.html?id=' + m.articleId + '\'">' +
+                '<span class="t">' + (m.type === 'comment' ? '💬 ' : '❤️ ') + escHtml(m.fromName) + (m.type === 'comment' ? ' 评论了你的《' : ' 赞了你的《') + escHtml(m.articleTitle) + '》</span>' +
+                '<span class="d">' + new Date(m.createDate).toLocaleString() + '</span></div>'
+            ).join('');
+            if (list.some(m => !m.isRead)) api('/notifications/readAll', 'POST');
+        });
+    }
+    loadMessages();
+    if (location.hash === '#messages') document.getElementById('messagesAnchor').scrollIntoView();
 </script>
 </body>
 </html>

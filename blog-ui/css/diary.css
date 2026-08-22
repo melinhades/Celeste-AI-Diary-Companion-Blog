@@ -727,15 +727,12 @@ body::before {
     transition: opacity .25s ease, transform .25s ease;
 }
 #gameDialog.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
-
-#gameDialogPortrait {
-    width: 84px; height: 84px;
-    flex-shrink: 0;
-    border-radius: 8px;
-    overflow: hidden;
-}
+/* ... existing code ... */
+#gameDialog.portrait-right { flex-direction: row-reverse; }
+#gameDialogPortrait { width: 92px; height: 92px; flex-shrink: 0; border-radius: 6px; overflow: hidden; }
+/* ... existing code ... */
+#gameDialogPortrait { width: 92px; height: 92px; flex-shrink: 0; border-radius: 6px; overflow: hidden; }
 #gameDialogPortrait img { width: 100%; height: 100%; object-fit: cover; display: block; }
-#gameDialogBody { flex: 1; min-width: 0; }
 #gameDialogName {
     font-family: var(--pixel-font);
     color: var(--c-yellow);
