@@ -327,53 +327,107 @@
 <script src="js/auth.js"></script>
 <script src="js/write-madeline.js"></script>
 <script>
-// ================= AI 生成文章（runBackpack 跑步 / Fall 坠落） =================
+// ================= AI 生成文章：跑步指针 + 采纳/拒绝 + Fall 回退 =================
 (function () {
     const style = document.createElement('style');
     style.textContent =
-        '#genLoadingOverlay{position:fixed;right:28px;bottom:28px;z-index:2001;display:none;flex-direction:column;align-items:center;gap:6px;pointer-events:none;}' +
-        '#genLoadingOverlay.show{display:flex;}' +
-        '.gen-run-anim{width:84px;height:84px;background-size:contain;background-repeat:no-repeat;background-position:center;filter:drop-shadow(0 2px 8px rgba(0,0,0,.5));}' +
-        '.gen-run-anim.falling{animation:genFallMove 1.5s ease-in forwards;}' +
-        '@keyframes genFallMove{0%{transform:translateY(0) rotate(0deg);opacity:1;}100%{transform:translateY(46vh) rotate(-70deg);opacity:.15;}}' +
-        '.gen-loading-text{color:#ffe36d;font-size:14px;text-align:center;text-shadow:0 1px 4px rgba(0,0,0,.8);font-family:"Renogare","CelesteZH",sans-serif;}';
+        '#genRunner{position:fixed;z-index:2100;width:52px;height:52px;image-rendering:pixelated;pointer-events:none;display:none;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5));transform:translate(-50%,-96%);}' +
+        '#genFallLayer{position:fixed;inset:0;z-index:2050;display:none;pointer-events:none;}' +
+        '#genFallLayer.show{display:block;}' +
+        '#genFallSprite{position:absolute;width:64px;height:64px;image-rendering:pixelated;animation:genFallMove 1.6s ease-in forwards;}' +
+        '@keyframes genFallMove{0%{transform:translateY(0) rotate(0deg);opacity:1;}100%{transform:translateY(68vh) rotate(-60deg);opacity:.15;}}' +
+        '#genDecision{position:fixed;inset:0;background:rgba(5,5,20,.9);z-index:2100;display:none;align-items:center;justify-content:center;}' +
+        '#genDecision.show{display:flex;}' +
+        '.gd-box{background:rgba(22,34,60,.96);border:2px solid #ffe36d;border-radius:10px;padding:28px 36px;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.6);}' +
+        '.gd-box h3{color:#ffe36d;font-size:16px;margin-bottom:8px;}' +
+        '.gd-box p{color:#aab8d0;font-size:13px;margin-bottom:20px;}' +
+        '.gd-actions{display:flex;gap:14px;justify-content:center;}' +
+        '.gd-actions button{padding:10px 26px;border-radius:6px;cursor:pointer;font-size:13px;border:2px solid #ffe36d;background:rgba(22,34,60,.9);color:#ffe36d;transition:background .2s;}' +
+        '.gd-actions button:hover{background:rgba(255,227,109,.2);}' +
+        '.gd-actions .gd-reject{border-color:#888;color:#aaa;}';
     document.head.appendChild(style);
 
-    const overlay = document.createElement('div');
-    overlay.id = 'genLoadingOverlay';
-    overlay.innerHTML = '<div class="gen-run-anim"></div><div class="gen-loading-text">Generating...</div>';
-    document.body.appendChild(overlay);
-    const animEl = overlay.querySelector('.gen-run-anim');
-    const textEl = overlay.querySelector('.gen-loading-text');
+    const runner = new Image();
+    runner.id = 'genRunner';
+    document.body.appendChild(runner);
 
-    const GEN_RUN_FRAMES = [];
-    for (let i = 0; i < 9; i++) GEN_RUN_FRAMES.push('celeste-player/marker/runBackpack' + String(i).padStart(5, '0') + '.png');
-    const GEN_FALL_FRAMES = ['celeste-player/marker/Fall0000.png', 'celeste-player/marker/Fall0001.png'];
-    GEN_RUN_FRAMES.concat(GEN_FALL_FRAMES).forEach(s => { const im = new Image(); im.src = s; });
+    const fallLayer = document.createElement('div');
+    fallLayer.id = 'genFallLayer';
+    fallLayer.innerHTML = '<img id="genFallSprite" alt="">';
+    document.body.appendChild(fallLayer);
 
-    let genTimer = null;
-    function genPlayFrames(frames, interval) {
-        if (genTimer) clearInterval(genTimer);
+    const decision = document.createElement('div');
+    decision.id = 'genDecision';
+    decision.innerHTML =
+        '<div class="gd-box">' +
+        '<h3>Madeline 跑完了！</h3>' +
+        '<p>草稿已写进正文，看一眼再决定～</p>' +
+        '<div class="gd-actions">' +
+        '<button id="gdAccept">✅ 采纳草稿</button>' +
+        '<button id="gdReject" class="gd-reject">❌ 拒绝并回退</button>' +
+        '</div></div>';
+    document.body.appendChild(decision);
+
+    const RUN_FRAMES = [];
+    for (let i = 0; i < 9; i++) RUN_FRAMES.push('celeste-player/marker/runBackpack' + String(i).padStart(5, '0') + '.png');
+    const FALL_FRAMES = ['celeste-player/marker/Fall0000.png', 'celeste-player/marker/Fall0001.png'];
+    RUN_FRAMES.concat(FALL_FRAMES).forEach(s => { const im = new Image(); im.src = s; });
+
+    // mirror 镜像法：算 textarea 光标处的像素坐标
+    const mirror = document.createElement('div');
+    mirror.style.cssText = 'position:absolute;visibility:hidden;left:-9999px;top:0;white-space:pre-wrap;word-wrap:break-word;';
+    document.body.appendChild(mirror);
+    function caretXY(el) {
+        const cs = window.getComputedStyle(el);
+        ['fontFamily', 'fontSize', 'lineHeight', 'letterSpacing', 'padding', 'border', 'boxSizing'].forEach(p => { mirror.style[p] = cs[p]; });
+        mirror.style.width = el.clientWidth + 'px';
+        mirror.textContent = el.value;
+        const marker = document.createElement('span');
+        marker.textContent = '\u200b';
+        mirror.appendChild(marker);
+        const r = el.getBoundingClientRect();
+        return {
+            x: r.left + marker.offsetLeft - el.scrollLeft,
+            y: r.top + marker.offsetTop - el.scrollTop
+        };
+    }
+
+    let runTimer = null, fallTimer = null;
+    function startRun() {
+        runner.style.display = 'block';
         let i = 0;
-        animEl.style.backgroundImage = 'url("' + frames[0] + '")';
-        genTimer = setInterval(() => {
-            i = (i + 1) % frames.length;
-            animEl.style.backgroundImage = 'url("' + frames[i] + '")';
-        }, interval);
+        runner.src = RUN_FRAMES[0];
+        if (runTimer) clearInterval(runTimer);
+        runTimer = setInterval(() => { i = (i + 1) % RUN_FRAMES.length; runner.src = RUN_FRAMES[i]; }, 90);
     }
-    function genStop() {
-        if (genTimer) { clearInterval(genTimer); genTimer = null; }
-        overlay.classList.remove('show');
-        animEl.classList.remove('falling');
-        textEl.textContent = 'Generating...';
+    function stopRun() {
+        if (runTimer) { clearInterval(runTimer); runTimer = null; }
+        runner.style.display = 'none';
     }
-    function genFallThenClose(msg) {
-        textEl.textContent = msg;
-        genPlayFrames(GEN_FALL_FRAMES, 220);
-        animEl.classList.add('falling');
-        setTimeout(() => { genStop(); if (typeof showToast === 'function') showToast(msg, 'error'); }, 1600);
+    function moveRunner(el) {
+        const p = caretXY(el);
+        runner.style.left = p.x + 'px';
+        runner.style.top = (p.y + 4) + 'px';
+    }
+    function playFall(x, y) {
+        const sprite = document.getElementById('genFallSprite');
+        sprite.style.left = Math.max(10, Math.min(window.innerWidth - 80, x - 32)) + 'px';
+        sprite.style.top = Math.max(10, y - 32) + 'px';
+        sprite.style.animation = 'none';
+        void sprite.offsetWidth;
+        sprite.style.animation = '';
+        fallLayer.classList.add('show');
+        let i = 0;
+        sprite.src = FALL_FRAMES[0];
+        if (fallTimer) clearInterval(fallTimer);
+        fallTimer = setInterval(() => { i = (i + 1) % FALL_FRAMES.length; sprite.src = FALL_FRAMES[i]; }, 200);
+        setTimeout(() => {
+            fallLayer.classList.remove('show');
+            if (fallTimer) { clearInterval(fallTimer); fallTimer = null; }
+        }, 1700);
     }
 
+    let genBefore = '';
     async function doGenerate() {
         const titleEl = document.getElementById('articleTitle');
         const title = titleEl.value.trim();
@@ -382,10 +436,8 @@
 
         const btn = document.getElementById('toolbarGenBtn');
         if (btn) btn.disabled = true;
-        overlay.classList.add('show');
-        animEl.classList.remove('falling');
-        textEl.textContent = 'Generating...';
-        genPlayFrames(GEN_RUN_FRAMES, 90);
+        const bodyEl = document.getElementById('articleBody');
+        genBefore = bodyEl.value;
 
         const topic = title || summary;
         const extra = (title && summary) ? '。要点：' + summary : '';
@@ -396,12 +448,12 @@
             const res = await api('/chat', 'POST', { content: prompt });
             if (res.success && res.data && res.data.content) { ok = true; text = res.data.content; }
         } catch (e) { }
-
         if (btn) btn.disabled = false;
 
-        const refused = /抱歉|无法|我不能|对不起|sorry|cannot|can't/i.test(text.slice(0, 60));
+        const refused = ok && /抱歉|无法|我不能|对不起|sorry|cannot|can't/i.test(text.slice(0, 60));
         if (!ok || refused) {
-            genFallThenClose(refused ? 'Madeline 拒绝了这次生成…' : '生成被拒绝，等下再试试');
+            playFall(window.innerWidth / 2, window.innerHeight * 0.25);
+            if (typeof showToast === 'function') showToast(refused ? 'Madeline 拒绝了这次生成…' : '生成被拒绝，等下再试试', 'error');
             return;
         }
 
@@ -411,17 +463,37 @@
             text = lines.slice(1).join('\n').replace(/^\s*\n/, '');
         }
 
-        textEl.textContent = 'Writing...';
-        const bodyEl = document.getElementById('articleBody');
+        if (bodyEl.value && !bodyEl.value.endsWith('\n')) bodyEl.value += '\n\n';
+        startRun();
+        moveRunner(bodyEl);
+        let n = 0;
         for (const ch of text) {
             bodyEl.value += ch;
-            bodyEl.scrollTop = bodyEl.scrollHeight;
-            if (typeof updateCount === 'function') updateCount();
+            n++;
+            if (n % 2 === 0) {
+                bodyEl.scrollTop = bodyEl.scrollHeight;
+                moveRunner(bodyEl);
+                if (typeof updateCount === 'function') updateCount();
+            }
             await new Promise(r => setTimeout(r, 14));
         }
-        genStop();
-        if (typeof showToast === 'function') showToast('文章生成完成！', 'success');
+        stopRun();
+        decision.classList.add('show');
     }
+
+    document.getElementById('gdAccept').addEventListener('click', () => {
+        decision.classList.remove('show');
+        if (typeof showToast === 'function') showToast('草稿已采纳！', 'success');
+    });
+    document.getElementById('gdReject').addEventListener('click', () => {
+        decision.classList.remove('show');
+        const bodyEl = document.getElementById('articleBody');
+        const p = caretXY(bodyEl);
+        bodyEl.value = genBefore;
+        if (typeof updateCount === 'function') updateCount();
+        playFall(p.x, p.y);
+        if (typeof showToast === 'function') showToast('已回退，Madeline 摔了一跤…', 'info');
+    });
 
     const genBtn = document.getElementById('toolbarGenBtn');
     if (genBtn) genBtn.addEventListener('click', doGenerate);
