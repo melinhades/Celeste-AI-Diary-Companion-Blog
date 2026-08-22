@@ -37,3 +37,14 @@ function showToast(msg, type) {
     clearTimeout(el._timer);
     el._timer = setTimeout(() => el.classList.remove('show'), 2500);
 }
+
+// ===== berry wallet: single source of truth for strawberry count =====
+function berryBalance() {
+    if (localStorage.getItem('berryBalance') === null) {
+        const init = Math.max(parseInt(localStorage.getItem('diarySaveCount') || '0') - parseInt(localStorage.getItem('berrySpent') || '0'), 0);
+        localStorage.setItem('berryBalance', String(init));
+    }
+    return parseInt(localStorage.getItem('berryBalance') || '0');
+}
+function addBerries(n) { localStorage.setItem('berryBalance', String(berryBalance() + n)); }
+function spendBerries(n) { localStorage.setItem('berryBalance', String(Math.max(berryBalance() - n, 0))); }

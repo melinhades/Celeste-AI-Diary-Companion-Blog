@@ -19,7 +19,7 @@ public interface ArticleService {
     //查询文章详请
     Result findArticlesById(String articleId);
     Result publish(ArticleParam articleParam);
-
+    Result update(ArticleParam articleParam);
 
 }
 

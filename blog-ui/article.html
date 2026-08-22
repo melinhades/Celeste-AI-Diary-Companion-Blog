@@ -6,6 +6,7 @@
     <link rel="icon" href="icon/OIP.webp" type="image/webp">
     <title>Article - Celeste Blog</title>
     <link rel="stylesheet" href="css/common.css">
+    <link rel="stylesheet" href="css/theme.css">
     <style>
     body::after {
         content:'';
@@ -67,6 +68,16 @@
         .comment-name { font-size: 14px; font-weight: 500; color: #e8e8f0; }
         .comment-date { font-size: 12px; color: #8b8ba0; }
         .comment-content { font-size: 14px; color: #c9c9dd; line-height: 1.7; padding-left: 44px; }
+        .comment-reply-btn { margin: 6px 0 0 44px; padding: 2px 12px; border: 1px solid rgba(138,43,226,0.3); border-radius: 12px; background: transparent; color: #8b8ba0; font-size: 12px; cursor: pointer; transition: all 0.2s; }
+        .comment-reply-btn:hover { color: #a78bfa; border-color: #a78bfa; background: rgba(138,43,226,0.1); }
+        .comment-children { margin: 12px 0 4px 44px; padding: 4px 0 4px 14px; border-left: 2px solid rgba(138,43,226,0.2); }
+        .comment-children .comment-item { padding: 10px 0; border-bottom: 1px dashed rgba(138,43,226,0.1); }
+        .comment-children .comment-item:last-child { border-bottom: none; }
+        .comment-to { color: #a78bfa; font-size: 13px; margin-right: 4px; }
+        #replyBanner { display: none; align-items: center; gap: 10px; margin-bottom: 10px; padding: 6px 12px; background: rgba(138,43,226,0.12); border: 1px solid rgba(138,43,226,0.3); border-radius: 6px; color: #c9c9dd; font-size: 13px; }
+        #replyBanner b { color: #a78bfa; }
+        #replyBanner button { margin-left: auto; border: none; background: transparent; color: #8b8ba0; font-size: 14px; cursor: pointer; }
+        #replyBanner button:hover { color: #fff; }
         .hot-title { font-size: 13px; color: #c9c9dd; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
         .comment-avatar img { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; border-radius: 50%; }
 
@@ -80,12 +91,10 @@
 
     #articleLoadingOverlay {
         position: fixed; inset: 0; z-index: 9999;
-        background: rgba(10, 10, 30, 0.92);
+        background: var(--article-loading-color);
         display: flex; flex-direction: column;
         align-items: center; justify-content: center;
-        transition: opacity 0.6s ease;
     }
-    #articleLoadingOverlay.fade-out { opacity: 0; pointer-events: none; }
     #articleLoadingOverlay .loading-madeline {
         width: 120px; height: 120px;
         background-size: contain; background-repeat: no-repeat; background-position: center;
@@ -117,6 +126,17 @@
         50%  { content: '..'; }
         75%  { content: '...'; }
     }
+
+    /* 心之宝石点赞 */
+    #likeBar { display: none; justify-content: center; margin: 0 0 20px; }
+    #editArticleBtn { display: none; padding: 8px 22px; background: rgba(30,27,75,.6); border: 1px solid rgba(138,43,226,.3); border-radius: 20px; color: #c9c9dd; font-size: 13px; cursor: pointer; transition: all .25s; backdrop-filter: blur(8px); }
+    #editArticleBtn:hover { color: #a78bfa; border-color: #a78bfa; }
+    .like-btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 24px; background: rgba(30,27,75,.6); border: 1px solid rgba(138,43,226,.3); border-radius: 24px; color: #c9c9dd; font-size: 14px; cursor: pointer; transition: all .25s; backdrop-filter: blur(8px); }
+    .like-btn:hover { transform: translateY(-2px); border-color: #a78bfa; box-shadow: 0 0 14px rgba(167,139,250,.35); }
+    .like-btn img { width: 26px; height: 26px; image-rendering: pixelated; }
+    .like-btn.liked { color: #ffe36d; border-color: rgba(255,227,109,.6); box-shadow: 0 0 18px rgba(255,227,109,.3); }
+    .like-btn.pop img { animation: gemPop .5s ease; }
+    @keyframes gemPop { 0% { transform: scale(1); } 40% { transform: scale(1.7) rotate(-10deg); } 100% { transform: scale(1); } }
     </style>
 </head>
 <body>
@@ -136,16 +156,16 @@
 
     <!-- 阅读进度条 + 回顶羽毛 -->
     <div id="readProgress"></div>
-    <div id="backToTop" title="Back to top"><img src="celeste-feather/feather0.png" alt=""></div>
+    <div id="backToTop" title="Back to top"><img loading="lazy" src="celeste-feather/feather0.png" alt=""></div>
 
 <header class="header">
     <div class="container header-inner">
-        <a href="index.html" class="logo"><img src="celeste-gui/logo.png" alt="Celeste"></a>
+        <a href="index.html" class="logo"><img loading="lazy" src="celeste-gui/logo.png" alt="Celeste"></a>
         <nav class="nav">
             <a href="index.html" class="nav-link">Home</a>
             <a href="archives.html" class="nav-link">Archives</a>
             <a href="diary.html" class="nav-link nav-diary-btn" title="Diary with Madeline">
-                <img src="celeste-gui/journal.png" alt="Diary">
+                <img loading="lazy" src="celeste-gui/journal.png" alt="Diary">
             </a>
         </nav>
         <div class="header-right" id="headerRight"></div>
@@ -156,9 +176,17 @@
     <main class="content">
         <div id="articleHeader"><div class="loading">Loading...</div></div>
         <div id="articleBody"></div>
+        <div id="likeBar">
+            <button id="likeBtn" class="like-btn" title="为这篇文章点亮心之宝石">
+                <img id="likeGem" src="celeste-icons/heartgem0.png" alt="">
+                <span id="likeCount">0</span>
+            </button>
+        </div>
+        <div style="text-align:center;margin-bottom:14px"><button id="editArticleBtn" onclick="location.href='write.html?edit=' + articleId">✏ Edit This Article</button></div>
         <div class="comments-section" id="commentsSection" style="display:none">
             <div class="comments-title">💬 Comments</div>
             <div class="comment-form" id="commentForm">
+                <div id="replyBanner">回复 <b id="replyToName"></b><button onclick="clearReply()" title="取消回复">✕ 取消回复</button></div>
                 <textarea id="commentContent" placeholder="Write a comment..."></textarea>
                 <div class="comment-form-footer">
                     <button class="btn btn-primary btn-sm" onclick="submitComment()">Post Comment</button>
@@ -243,7 +271,9 @@
 
     function startSnow() { resizeSnowCanvas(); initSnowflakes(); drawSnowflakes(); }
     window.addEventListener('resize', resizeSnowCanvas);
-    startSnow();
+    if (window.location.pathname.endsWith('/index.html') || window.location.pathname === '/' || window.location.pathname === '') {
+        startSnow();
+    }
 
     // BGM
     const bgmPlayer = document.getElementById('bgmPlayer');
@@ -277,7 +307,7 @@
     function loadArticle() {
         api(`/articles/article/view/${articleId}`, 'POST').then(res => {
             const overlay = document.getElementById('articleLoadingOverlay');
-            if (overlay) { overlay.classList.add('fade-out'); setTimeout(() => overlay.remove(), 700); }
+            if (overlay) { overlay.remove(); }
             if (!res.success) {
                 document.getElementById('articleHeader').innerHTML = '<div class="empty">Article not found</div>';
                 return;
@@ -318,8 +348,14 @@
             }
             loadComments();
 
-            // 相关路线（同分类推荐）
-            if (a.category && a.category.id) loadRelated(a.category.id);
+            // 编辑入口：仅作者本人可见
+            const myNick = localStorage.getItem('nickname');
+            const authorName = a.author?.nickname || a.author?.username;
+            if (myNick && authorName && myNick === authorName) {
+                document.getElementById('editArticleBtn').style.display = 'inline-block';
+            }
+
+            loadLikeState();
         });
     }
 
@@ -341,24 +377,57 @@
     }
 
     const MAD_PORTRAITS = ['normal00.png', 'peaceful00.png', 'determined00.png', 'distracted00.png'];
+    let avIdx = 0;
+
+    // ===== 二级评论回复 =====
+    let replyTarget = null;
+    function setReply(parentId, toUserId, name) {
+        if (!requireLogin()) return;
+        replyTarget = { parent: parentId, toUserId: toUserId };
+        document.getElementById('replyToName').textContent = '@' + name;
+        document.getElementById('replyBanner').style.display = 'flex';
+        document.getElementById('commentForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        document.getElementById('commentContent').focus();
+    }
+    function clearReply() {
+        replyTarget = null;
+        document.getElementById('replyBanner').style.display = 'none';
+    }
+    document.getElementById('commentList').addEventListener('click', e => {
+        const btn = e.target.closest('.comment-reply-btn');
+        if (!btn) return;
+        setReply(btn.dataset.parent, btn.dataset.uid, btn.dataset.name);
+    });
+
+    function commentHtml(c, topId, isChild) {
+        const name = c.author?.nickname || c.author?.username || 'Anonymous';
+        const authorId = c.author?.id || '';
+        const replyParent = isChild ? topId : c.id;
+        const to = (!isChild || !c.toUser) ? '' : `<span class="comment-to">回复 @${escHtml(c.toUser.nickname || c.toUser.username || '')}：</span>`;
+        const children = (c.childrens && c.childrens.length)
+            ? `<div class="comment-children">${c.childrens.map(ch => commentHtml(ch, c.id, true)).join('')}</div>` : '';
+        return `
+            <div class="comment-item">
+                <div class="comment-author">
+                    <div class="comment-avatar"><img loading="lazy" src="celeste-portraits/madeline/${MAD_PORTRAITS[(avIdx++) % MAD_PORTRAITS.length]}" alt=""></div>
+                    <div>
+                        <div class="comment-name">${escHtml(name)}</div>
+                        <div class="comment-date">${formatDate(c.createDate)}</div>
+                    </div>
+                </div>
+                <div class="comment-content">${to}${escHtml(c.content)}</div>
+                <button class="comment-reply-btn" data-parent="${replyParent}" data-uid="${authorId}" data-name="${escHtml(name)}">Reply</button>
+                ${children}
+            </div>`;
+    }
 
     function loadComments() {
         api(`/comments/article/${articleId}`, 'GET').then(res => {
             if (!res.success) { document.getElementById('commentList').innerHTML = '<div class="empty">No comments yet</div>'; return; }
             const list = res.data || [];
             if (list.length === 0) { document.getElementById('commentList').innerHTML = '<div class="empty">Be the first to comment!</div>'; return; }
-            document.getElementById('commentList').innerHTML = list.map((c, i) => `
-                <div class="comment-item">
-                    <div class="comment-author">
-                        <div class="comment-avatar"><img src="celeste-portraits/madeline/${MAD_PORTRAITS[i % MAD_PORTRAITS.length]}" alt=""></div>
-                        <div>
-                            <div class="comment-name">${escHtml(c.author?.nickname || c.author?.username || 'Anonymous')}</div>
-                            <div class="comment-date">${formatDate(c.createDate)}</div>
-                        </div>
-                    </div>
-                    <div class="comment-content">${escHtml(c.content)}</div>
-                </div>
-            `).join('');
+            avIdx = 0;
+            document.getElementById('commentList').innerHTML = list.map(c => commentHtml(c, c.id, false)).join('');
         });
     }
 
@@ -366,9 +435,12 @@
         if (!requireLogin()) return;
         const content = document.getElementById('commentContent').value.trim();
         if (!content) { showToast('Please enter a comment', 'error'); return; }
-        api('/comments/create/change', 'POST', { articleId, content }).then(res => {
+        const payload = { articleId, content };
+        if (replyTarget) { payload.parent = replyTarget.parent; payload.toUserId = replyTarget.toUserId; }
+        api('/comments/create/change', 'POST', payload).then(res => {
             if (res.success) {
                 document.getElementById('commentContent').value = '';
+                clearReply();
                 showToast('Comment posted', 'success');
                 loadComments();
             } else {
@@ -376,6 +448,32 @@
             }
         });
     }
+
+    // ===== 心之宝石点赞 =====
+    function loadLikeState() {
+        api(`/likes/info/${articleId}`, 'GET').then(res => {
+            if (!res.success) return;
+            applyLikeUI(res.data.likeCount || 0, !!res.data.liked);
+            document.getElementById('likeBar').style.display = 'flex';
+        }).catch(() => {});
+    }
+
+    function applyLikeUI(count, liked) {
+        document.getElementById('likeCount').textContent = count;
+        document.getElementById('likeGem').src = liked ? 'celeste-icons/heartgem1.png' : 'celeste-icons/heartgem0.png';
+        document.getElementById('likeBtn').classList.toggle('liked', liked);
+    }
+
+    document.getElementById('likeBtn').onclick = () => {
+        if (!requireLogin()) return;
+        api('/likes/toggle', 'POST', { articleId }).then(res => {
+            if (!res.success) { showToast(res.msg || '操作失败', 'error'); return; }
+            applyLikeUI(res.data.likeCount || 0, !!res.data.liked);
+            const btn = document.getElementById('likeBtn');
+            btn.classList.remove('pop'); void btn.offsetWidth; btn.classList.add('pop');
+            showToast(res.data.liked ? '心之宝石点亮了这篇文章 ✨' : '已取消点亮', 'success');
+        });
+    };
 
     function loadRelated(categoryId) {
         api('/articles', 'POST', { page: 1, pageSize: 8, categoryId: String(categoryId) }).then(res => {
@@ -402,7 +500,7 @@
             ];
             document.getElementById('hotList').innerHTML = (res.data || []).map((a, i) => `
                 <div class="hot-item" onclick="location.href='article.html?id=${a.id}'">
-                    <span class="hot-rank rank-${i+1}">${RANK_ICONS[i] ? `<img src="${RANK_ICONS[i]}" alt="${i+1}">` : (i+1)}</span>
+                    <span class="hot-rank rank-${i+1}">${RANK_ICONS[i] ? `<img loading="lazy" src="${RANK_ICONS[i]}" alt="${i+1}">` : (i+1)}</span>
                     <span class="hot-title">${escHtml(a.title)}</span>
                 </div>
             `).join('') || '<div class="empty">No data</div>';

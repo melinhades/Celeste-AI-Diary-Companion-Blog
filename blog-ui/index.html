@@ -7,6 +7,7 @@
     <title>Celeste Blog</title>
     <link rel="stylesheet" href="css/common.css">
     <link rel="stylesheet" href="css/index.css">
+    <link rel="stylesheet" href="css/theme.css">
     <style>
     body::after {
         content:'';
@@ -50,6 +51,8 @@
     @keyframes cardIn { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:none; } }
     .search-bar { display:flex; gap:10px; margin-bottom:16px; position:relative; z-index:1; }
     .search-bar .form-control { flex:1; }
+    .card-thumbs { display:flex; gap:10px; margin:12px 0 6px; flex-wrap:wrap; }
+    .card-thumbs img { max-width:200px; max-height:140px; height:auto; border-radius:8px; border:1px solid rgba(255,235,59,.35); }
     </style>
 </head>
 <body>
@@ -64,12 +67,12 @@
 <!-- 顶部导航 -->
 <header class="header">
     <div class="container header-inner">
-        <a href="index.html" class="logo"><img src="celeste-gui/logo.png" alt="Celeste"></a>
+        <a href="index.html" class="logo"><img loading="lazy" src="celeste-gui/logo.png" alt="Celeste" loading="lazy"></a>
         <nav class="nav">
             <a href="index.html" class="nav-link active">Home</a>
             <a href="archives.html" class="nav-link">Archives</a>
             <a href="diary.html" class="nav-link nav-diary-btn" title="Diary with Madeline">
-                <img src="celeste-gui/journal.png" alt="Diary">
+                <img loading="lazy" src="celeste-gui/journal.png" alt="Diary">
             </a>
         </nav>
         <div class="header-right" id="headerRight">
@@ -251,6 +254,7 @@
         api('/articles', 'POST', body).then(res => {
             if (!res.success) { document.getElementById('articleList').innerHTML = '<div class="empty">加载失败</div>'; return; }
             renderArticles(res.data.records || res.data);
+            loadLikeCounts(res.data.records || res.data);
             renderPagination(res.data.total || 0, page);
         });
     }
@@ -263,12 +267,14 @@
         const html = list.map((a, i) => `
             <article class="article-card" style="animation-delay:${i * 0.06}s" onclick="location.href='article.html?id=${a.id}'">
                 <div class="article-meta">
-                    <span class="meta-author"><img class="meta-author-img" src="${(a.author?.nickname || a.author?.username) ? 'celeste-portraits/madeline/normal00.png' : 'celeste-icons/beat.png'}" alt="">${escHtml(a.author?.nickname || a.author?.username || '匿名')}</span>
-                    <span class="meta-date"><img class="meta-icon" src="celeste-icons/cs_variantmode.png" alt="">${formatDate(a.createDate)}</span>
-                    <span class="meta-views"><img class="meta-icon" src="celeste-icons/time.png" alt="">${a.viewCounts || 0}</span>
+                    <span class="meta-author"><img loading="lazy" class="meta-author-img" src="${(a.author?.nickname || a.author?.username) ? 'celeste-portraits/madeline/normal00.png' : 'celeste-icons/beat.png'}" alt="">${escHtml(a.author?.nickname || a.author?.username || '匿名')}</span>
+                    <span class="meta-date"><img loading="lazy" class="meta-icon" src="celeste-icons/cs_variantmode.png" alt="">${formatDate(a.createDate)}</span>
+                    <span class="meta-views"><img loading="lazy" class="meta-icon" src="celeste-icons/time.png" alt="">${a.viewCounts || 0}</span>
+                    <span class="meta-views"><img class="meta-icon" src="celeste-icons/heartgem1.png" alt=""><span class="like-num" data-id="${a.id}">0</span></span>
                     ${a.category ? `<span class="meta-category">${escHtml(a.category.categoryName || a.category.name)}</span>` : ''}
                 </div>
                 <h2 class="article-title">${escHtml(a.title)}</h2>
+                ${(a.images || []).length ? `<div class="card-thumbs">${a.images.slice(0, 3).map(u => `<img loading="lazy" src="${escHtml(u)}" alt="">`).join('')}</div>` : ''}
                 <p class="article-summary">${escHtml(a.summary || '')}</p>
                 <div class="article-tags">
                     ${(a.tags || []).map(t => `<span class="tag">${escHtml(t.tagName || t.name)}</span>`).join('')}
@@ -276,6 +282,17 @@
             </article>
         `).join('');
         document.getElementById('articleList').innerHTML = html;
+    }
+
+    function loadLikeCounts(list) {
+        const ids = (list || []).map(a => a.id).filter(Boolean).join(',');
+        if (!ids) return;
+        api('/likes/counts?ids=' + encodeURIComponent(ids), 'GET').then(res => {
+            if (!res.success || !res.data) return;
+            Object.keys(res.data).forEach(id => {
+                document.querySelectorAll(`.like-num[data-id="${id}"]`).forEach(el => el.textContent = res.data[id]);
+            });
+        }).catch(() => {});
     }
 
     function loadHotArticles() {
@@ -290,7 +307,7 @@
             ];
             const html = (res.data || []).map((a, i) => `
                 <div class="hot-item" onclick="location.href='article.html?id=${a.id}'">
-                    <span class="hot-rank rank-${i+1}">${RANK_ICONS[i] ? `<img src="${RANK_ICONS[i]}" alt="${i+1}">` : (i+1)}</span>
+                    <span class="hot-rank rank-${i+1}">${RANK_ICONS[i] ? `<img loading="lazy" src="${RANK_ICONS[i]}" alt="${i+1}">` : (i+1)}</span>
                     <span class="hot-title">${escHtml(a.title)}</span>
                 </div>
             `).join('');
@@ -415,7 +432,9 @@
         drawSnowflakes();
     };
     window.addEventListener('resize', resizeSnowCanvas);
-    startSnow();   // 确保页面打开时就开始
+    if (window.location.pathname.endsWith('/index.html') || window.location.pathname === '/' || window.location.pathname === '') {
+        startSnow();   // 确保页面打开时就开始
+    }
 
     // 设置分类对应的雪flake图片
     function setSnowImageForCategory(categoryId) {

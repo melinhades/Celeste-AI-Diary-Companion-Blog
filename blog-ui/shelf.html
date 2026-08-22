@@ -13,16 +13,27 @@ body { min-height:100vh; background:url('celeste-gui/shelf-bg.webp') center/cove
 .topbar a { display:inline-block; padding:8px 14px; background:rgba(22,34,60,.88); color:#ffe36d; border:2px solid #ffe36d; border-radius:6px; text-decoration:none; font-size:13px; box-shadow:0 0 10px rgba(255,230,109,.35); }
 h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family:'Press Start 2P',monospace; font-size:15px; color:#ffe36d; text-shadow:0 2px 0 rgba(0,0,0,.6); letter-spacing:2px; z-index:20; }
 .wrap { max-width:1000px; margin:0 auto; padding:76px 20px 40px; }
-.cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:16px; }
-.card { background:rgba(22,34,60,.88); border:2px solid rgba(255,230,109,.4); border-radius:8px; padding:14px; cursor:pointer; transition:transform .15s, border-color .15s; }
-.card:hover { transform:translateY(-4px); border-color:#ffe36d; }
-.card-cover { width:100%; height:70px; object-fit:cover; object-position:center; border-radius:5px; margin-bottom:10px; opacity:.85; border:1px solid rgba(255,230,109,.25); }
-.card .t { color:#fff; font-size:15px; margin-bottom:6px; word-break:break-all; }
-.card .d { color:rgba(255,230,109,.7); font-size:11px; margin-bottom:8px; }
-.card .s { color:rgba(255,255,255,.55); font-size:12px; line-height:1.6; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:26px 20px; }
+/* ===== 日记纸页（page.png 叠放 + 抽出） ===== */
+.page { position:relative; aspect-ratio:3/4; padding:20px 20px 16px; cursor:pointer; background:url('celeste-journal/page.png') center/100% 100% no-repeat; filter:drop-shadow(0 6px 10px rgba(0,0,0,.4)); transition:transform .28s ease, filter .28s ease; }
+.page::before, .page::after { content:''; position:absolute; inset:0; background:url('celeste-journal/page.png') center/100% 100% no-repeat; z-index:-1; }
+.page::before { transform:rotate(2.4deg) translate(5px,3px); filter:brightness(.92); }
+.page::after  { transform:rotate(-1.8deg) translate(-4px,5px); filter:brightness(.85); }
+.page:nth-child(odd)  { transform:rotate(-1.3deg); }
+.page:nth-child(even) { transform:rotate(1.1deg); }
+.page:hover { transform:translateY(-14px) rotate(-2.5deg) scale(1.04); filter:drop-shadow(0 16px 22px rgba(0,0,0,.55)); z-index:3; }
+.page-date { font-family:'Renogare','Microsoft YaHei',sans-serif; font-size:13px; letter-spacing:2px; color:#5d4a33; text-align:center; text-transform:uppercase; border-bottom:1px solid rgba(93,74,51,.3); padding-bottom:8px; margin-bottom:10px; }
+.page-t { font-family:'Renogare','Microsoft YaHei',sans-serif; font-size:15px; color:#3a2e22; font-weight:600; margin-bottom:8px; word-break:break-all; line-height:1.4; }
+.page-s { font-size:12px; color:rgba(58,46,34,.6); line-height:1.9; display:-webkit-box; -webkit-line-clamp:6; -webkit-box-orient:vertical; overflow:hidden; }
+.page-count { position:absolute; top:10px; right:12px; padding:1px 9px; background:rgba(138,109,74,.16); border:1px solid rgba(138,109,74,.35); border-radius:9px; font-family:'Renogare','Microsoft YaHei',sans-serif; font-size:11px; color:#7a5f3f; }
 .empty { text-align:center; color:rgba(255,255,255,.75); background:rgba(22,34,60,.7); border-radius:8px; padding:60px 20px; font-size:14px; line-height:2.2; }
 .detail { display:none; background:rgba(22,34,60,.9); border:2px solid rgba(255,230,109,.4); border-radius:8px; padding:22px; }
 .detail.show { display:block; }
+.detail-nav { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; }
+.detail-nav button { padding:6px 18px; border:2px solid #ffe36d; border-radius:6px; background:rgba(22,34,60,.9); color:#ffe36d; font-size:14px; cursor:pointer; transition:background .15s; }
+.detail-nav button:hover:not(:disabled) { background:rgba(255,230,109,.15); }
+.detail-nav button:disabled { opacity:.3; cursor:not-allowed; }
+.detail-nav .pos { color:rgba(255,230,109,.7); font-size:12px; font-family:'Renogare',sans-serif; letter-spacing:1px; }
 .detail .back { background:none; border:none; color:#ffe36d; cursor:pointer; font-size:13px; margin-bottom:14px; }
 .detail .t { color:#ffe36d; font-size:20px; margin-bottom:6px; word-break:break-all; }
 .detail .d { color:rgba(255,230,109,.6); font-size:12px; margin-bottom:16px; }
@@ -74,6 +85,7 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     <div id="cards" class="cards"></div>
     <div id="detail" class="detail">
         <button class="back">← 返回列表</button>
+        <div class="detail-nav"><button class="prev-e" title="同日上一篇">←</button><span class="pos"></span><button class="next-e" title="同日下一篇">→</button></div>
         <div class="t"></div><div class="d"></div><div class="c"></div>
         <div class="acts"><button class="edit">回去编辑这篇</button><button class="export-postcard">🖼 导出明信片</button><button class="del">删掉它</button></div>
     </div>
@@ -244,39 +256,85 @@ function exportPostcard(data) {
         if (isNaN(d.getTime())) return String(v);
         return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     }
+    const MONTHS_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    function fmtEn(v) {
+        if (!v) return '';
+        const d = new Date(typeof v === 'number' || /^\d+$/.test(String(v)) ? Number(v) : v);
+        if (isNaN(d.getTime())) return String(v);
+        return MONTHS_EN[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+    }
+    // ===== 日记翻页音效：forward = 抽出/向右，back = 向左（官方素材，变体随机） =====
+    const PAGE_SFX = {
+        forward: ['ui_world_journal_page_cover_forward_01.wav', 'ui_world_journal_page_cover_forward_02.wav', 'ui_world_journal_page_cover_forward_03.wav'],
+        back: ['ui_world_journal_page_main_back_01.wav', 'ui_world_journal_page_main_back_02.wav', 'ui_world_journal_page_main_back_03.wav']
+    };
+    const PAGE_AUDIO = {};
+    function playPageSfx(dir) {
+        try {
+            const list = PAGE_SFX[dir];
+            const name = list[Math.floor(Math.random() * list.length)];
+            if (!PAGE_AUDIO[name]) PAGE_AUDIO[name] = new Audio('celeste-sounds/' + name);
+            const a = PAGE_AUDIO[name];
+            a.currentTime = 0;
+            a.volume = 0.20;
+            a.play().catch(() => {});
+        } catch (e) { /* 无声降级 */ }
+    }
+    let groups = [], curGroup = null, curIdx = 0;
+    function buildGroups() {
+        const map = new Map();
+        for (const d of data) {
+            const key = fmt(d.updateDate || d.createDate);
+            if (!map.has(key)) map.set(key, []);
+            map.get(key).push(d);
+        }
+        groups = [...map.values()].map(es => ({ date: es[0].updateDate || es[0].createDate, entries: es }));
+    }
     function showList() { detail.classList.remove('show'); cards.style.display = ''; }
-    function showDetail(i) {
-        cur = data[i]; if (!cur) return;
-        cards.style.display = 'none';
+    function renderEntry() {
+        cur = curGroup.entries[curIdx];
         detail.querySelector('.t').textContent = cur.title || '无题';
-        detail.querySelector('.d').textContent = fmt(cur.updateDate || cur.createDate);
+        detail.querySelector('.d').textContent = fmtEn(cur.updateDate || cur.createDate);
         detail.querySelector('.c').textContent = cur.content || '';
+        detail.querySelector('.pos').textContent = (curIdx + 1) + ' / ' + curGroup.entries.length;
+        detail.querySelector('.prev-e').disabled = curIdx === 0;
+        detail.querySelector('.next-e').disabled = curIdx === curGroup.entries.length - 1;
+    }
+    function showDetail(i) {
+        curGroup = groups[i]; if (!curGroup) return;
+        curIdx = 0;
+        cards.style.display = 'none';
+        renderEntry();
         detail.classList.add('show');
     }
+    detail.querySelector('.prev-e').addEventListener('click', () => { if (curIdx > 0) { playPageSfx('back'); curIdx--; renderEntry(); } });
+    detail.querySelector('.next-e').addEventListener('click', () => { if (curGroup && curIdx < curGroup.entries.length - 1) { playPageSfx('forward'); curIdx++; renderEntry(); } });
+    document.addEventListener('keydown', e => {
+        if (!detail.classList.contains('show')) return;
+        if (e.key === 'ArrowLeft') detail.querySelector('.prev-e').click();
+        if (e.key === 'ArrowRight') detail.querySelector('.next-e').click();
+    });
     async function load() {
         cards.innerHTML = '<div class="empty">正在搬书……</div>';
         const res = await api('/diary/list', 'GET');
         if (res.success && Array.isArray(res.data)) {
             data = res.data;
             if (!data.length) { cards.innerHTML = '<div class="empty">书架还空着。<br>写下第一篇，它就有了位置。</div>'; return; }
-            const CH_COVERS = [1,2,3,4,5,6,7,9];
-            const htmls = data.map((d, i) =>
-                '<div class="card" data-i="' + i + '">' +
-                '<div class="t">' + escHtml(d.title || '无题') + '</div>' +
-                '<div class="d">' + fmt(d.updateDate || d.createDate) + '</div>' +
-                '<div class="s">' + escHtml((d.content || '').slice(0, 80)) + '</div></div>');
-            htmls.forEach((h, i) => {
-                const cv = '<img class="card-cover" src="celeste-gui/chapter-covers/' + CH_COVERS[i % CH_COVERS.length] + '.png" alt="">';
-                htmls[i] = h.replace('<div class="t">', cv + '<div class="t">');
-            });
-            cards.innerHTML = htmls.join('');
+            buildGroups();
+            cards.innerHTML = groups.map((g, i) =>
+                '<div class="page" data-i="' + i + '">' +
+                (g.entries.length > 1 ? '<div class="page-count">×' + g.entries.length + '</div>' : '') +
+                '<div class="page-date">' + fmtEn(g.date) + '</div>' +
+                '<div class="page-t">' + escHtml(g.entries[0].title || '无题') + '</div>' +
+                '<div class="page-s">' + escHtml((g.entries[0].content || '').slice(0, 130)) + '</div>' +
+                '</div>').join('');
         } else {
             cards.innerHTML = '<div class="empty">书架暂时打不开（' + escHtml(res.msg || '未知错误') + '）</div>';
         }
     }
     cards.addEventListener('click', ev => {
-        const c = ev.target.closest('.card');
-        if (c) showDetail(+c.dataset.i);
+        const c = ev.target.closest('.page');
+        if (c) { playPageSfx('forward'); showDetail(+c.dataset.i); }
     });
     detail.querySelector('.back').addEventListener('click', showList);
 

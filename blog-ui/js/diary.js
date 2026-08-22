@@ -199,8 +199,8 @@
         }, 580);
     }
 
-    document.getElementById('bookPrev').addEventListener('click', () => bookGoto((bookCur - 1 + pageEls.length) % pageEls.length));
-    document.getElementById('bookNext').addEventListener('click', () => bookGoto((bookCur + 1) % pageEls.length));
+    document.getElementById('bookPrev').addEventListener('click', () => { jpPlay('back'); bookGoto((bookCur - 1 + pageEls.length) % pageEls.length); });
+    document.getElementById('bookNext').addEventListener('click', () => { jpPlay('forward'); bookGoto((bookCur + 1) % pageEls.length); });
     const avatarMap = {
         '默认': 'celeste-portraits/madeline/normal00.png',
         '不安': 'celeste-portraits/madeline/panic00.png',
@@ -231,6 +231,8 @@
         '可爱': '开心',
         '无语': '平静'
     };
+    // 暖色场景：原图已经够暖，不叠场景图
+    const warmScenes = ['默认', '开心', '满足', '希望'];
     const sceneClassMap = {
         '默认': 'default',
         '平静': 'calm',
@@ -247,11 +249,14 @@
         const scene = emotionSceneMap[emotion] || emotion || '默认';
         document.body.className = 'emotion-' + (sceneClassMap[scene] || 'default');
         setAvatar(emotion);
+        if (warmScenes.includes(scene)) {
+            emotionBg.classList.remove('show');
+            return;
+        }
         const bgSrc = emotionBgMap[scene] || emotionBgMap['默认'];
         emotionBg.style.backgroundImage = `url('${bgSrc}')`;
         emotionBg.classList.add('show');
     }
-
     // ===== DOM 引用 =====
     const wrapper = document.getElementById('madeline-wrapper');
     const floatButton = document.getElementById('madeline-float-button');
@@ -338,12 +343,18 @@
     const gameDialogText = document.getElementById('gameDialogText');
     let gameDialogHideTimer = null;
 
+    // ... existing code ...
+    // ... existing code ...
     function openGameDialog(emotion) {
         gameDialogPortraitImg.src = avatarMap[emotion] || avatarMap['默认'];
         const pmCenter = pmState.x + pm.offsetWidth / 2;
-        gameDialog.classList.toggle('portrait-right', pmCenter > window.innerWidth / 2);
+        const onRight = pmCenter > window.innerWidth / 2;
+        gameDialog.classList.toggle('portrait-right', onRight);
+        gameDialogPortraitImg.style.transform = onRight ? 'scaleX(-1)' : '';
         gameDialog.classList.add('show');
     }
+// ... existing code ...
+// ... existing code ...
 
     function scheduleGameDialogHide() {
         clearTimeout(gameDialogHideTimer);
@@ -637,6 +648,24 @@
             const a = PC_SOUNDS[name];
             a.currentTime = 0;
             a.volume = 0.9;
+            a.play().catch(() => {});
+        } catch (e) { /* 无声降级 */ }
+    }
+
+    // ===== 日记本翻页音效：forward = 向右 / back = 向左（官方素材，变体随机） =====
+    const JP_SFX = {
+        forward: ['ui_world_journal_page_cover_forward_01.wav', 'ui_world_journal_page_cover_forward_02.wav', 'ui_world_journal_page_cover_forward_03.wav'],
+        back: ['ui_world_journal_page_main_back_01.wav', 'ui_world_journal_page_main_back_02.wav', 'ui_world_journal_page_main_back_03.wav']
+    };
+    const JP_AUDIO = {};
+    function jpPlay(dir) {
+        try {
+            const list = JP_SFX[dir];
+            const name = list[Math.floor(Math.random() * list.length)];
+            if (!JP_AUDIO[name]) JP_AUDIO[name] = new Audio('celeste-sounds/' + name);
+            const a = JP_AUDIO[name];
+            a.currentTime = 0;
+            a.volume = 0.20;
             a.play().catch(() => {});
         } catch (e) { /* 无声降级 */ }
     }
@@ -1179,6 +1208,7 @@
                 if (!editingDiaryId) {
                     const saveCnt = parseInt(localStorage.getItem('diarySaveCount') || '0') + 1;
                     localStorage.setItem('diarySaveCount', String(saveCnt));
+                    addBerries(1);
                     pmMilestone(saveCnt);
                     playBerrySound();
                 }
@@ -1316,6 +1346,7 @@
     }
 
     let zoneScoldUntil = 0;
+    let pmCaution = false;
     function blockedAt(tx, ty) {
         const zones = [];
         if (gameDialog.classList.contains('show')) zones.push({ r: gameDialog.getBoundingClientRect(), m: 14 });
@@ -1356,13 +1387,13 @@
                         for (let i = 0; i < 5; i++) cands.push({ x: 8 + Math.random() * (maxX - 16), y: 60 + Math.random() * (topH - 60) });
                     }
                 }
-                for (const c of cands) {
-                    if (!blockedAt(c.x, c.y)) return { x: c.x, y: c.y };
-                }
+            for (const c of cands) {
+                if (!pmCaution || !blockedAt(c.x, c.y)) return { x: c.x, y: c.y };
+            }
                 for (const fx of [0.04, 0.96, 0.15, 0.85]) {
-                    const tx = Math.min(maxX, window.innerWidth * fx);
-                    if (!blockedAt(tx, gy)) return { x: tx, y: gy };
-                }
+                const tx = Math.min(maxX, window.innerWidth * fx);
+                    if (!pmCaution || !blockedAt(tx, gy)) return { x: tx, y: gy };
+            }
                 return { x: 8, y: gy };
             }
 // ... existing code ...
@@ -1542,7 +1573,8 @@
                     else if (dx < -0.5) pmState.dir = -1;
                     let nx = pmState.x + (dx / dist) * speed * dt;
                     let ny = pmState.y + (dy / dist) * speed * dt;
-                    if (blockedAt(nx, ny)) {
+                    // 自己还站在禁区里时先放行（正在逃离），出去了才恢复绕行
+                    if (pmCaution && !blockedAt(pmState.x, pmState.y) && blockedAt(nx, ny)) {
                         if (!blockedAt(nx, pmState.y)) ny = pmState.y;
                         else if (!blockedAt(pmState.x, ny)) nx = pmState.x;
                         else { pmDetour(now); nx = pmState.x; ny = pmState.y; }
@@ -1562,9 +1594,13 @@
                 }
             }
             // ... existing code ...
+
             pmState.x = Math.max(4, Math.min(pmState.x, window.innerWidth - pm.offsetWidth - 4));
             pmState.y = Math.max(60, Math.min(pmState.y, pmGroundY()));
-            if (pmState.mode !== 'peek' && blockedAt(pmState.x, pmState.y)) pmStartWalk(now);
+            // Deleted:if (pmCaution && pmState.mode !== 'peek' && blockedAt(pmState.x, pmState.y)) pmStartWalk(now);
+            // 已经在走/逃跑途中不再重选目标，避免每帧换方向瞎动
+            if (pmCaution && pmState.mode !== 'peek' && pmState.mode !== 'walk' && pmState.mode !== 'celebrate' && blockedAt(pmState.x, pmState.y)) pmStartWalk(now);
+
 // ... existing code ...
         }
 
@@ -1611,7 +1647,7 @@
         bd.style.transform = 'translate(' + bx + 'px,' + (pmState.y - 14 + off) + 'px)' + (pmState.dir < 0 ? ' scaleX(-1)' : '');
     }
     requestAnimationFrame(pmLoop);
-    if (blockedAt(pmState.x, pmState.y)) {
+    if (pmCaution && blockedAt(pmState.x, pmState.y)) {
         let found = false;
         for (let v = 8; v <= window.innerWidth - 72; v += 24) {
             if (!blockedAt(v, pmGroundY())) { pmState.x = v; pmState.y = pmGroundY(); found = true; break; }
@@ -1685,6 +1721,7 @@
     const scoldLines = ['呀！？对、对不起！我挡到你了，马上挪开！', '呜哇！抱歉抱歉，我这就走，接下来一阵子都不靠近这里！', '噫！是我不对…我绕远路走，真的！'];
     function pmScold() {
         addMadelineMessage(scoldLines[Math.floor(Math.random() * scoldLines.length)], '惊讶');
+        pmCaution = true;
         zoneScoldUntil = performance.now() + 8 * 60 * 1000;
         pmState.poseUntil = performance.now() + 900;
         pmState.poseReturn = PM_SRC.move;
@@ -1717,6 +1754,12 @@
             else pmPet();
         }, 260);
     });
+    // 双击像素 Madeline → 开关聊天历史记录框
+    pm.addEventListener('dblclick', () => {
+        if (pmClickTimer) { clearTimeout(pmClickTimer); pmClickTimer = null; }
+        toggleChat();
+    });
+
 
 
     // ===== 主线2：回忆书架 =====
@@ -1951,7 +1994,7 @@
         }
 
         function berryBalance() {
-            return parseInt(localStorage.getItem('diarySaveCount') || '0') - parseInt(localStorage.getItem('berrySpent') || '0');
+            return window.berryBalance();
         }
         function applyBerryBgm() {
             const p = localStorage.getItem('berryBgm');

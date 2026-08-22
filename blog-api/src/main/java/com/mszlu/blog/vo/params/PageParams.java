@@ -13,6 +13,8 @@ public class PageParams {
 
     private String tagId;
 
+    private String keyword;
+
     private String year;
 
     private String month;

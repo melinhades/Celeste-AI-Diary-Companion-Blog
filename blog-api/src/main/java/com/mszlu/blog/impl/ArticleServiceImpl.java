@@ -32,6 +32,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 public class ArticleServiceImpl implements ArticleService {
@@ -130,13 +132,30 @@ public class ArticleServiceImpl implements ArticleService {
     @Override
     public Result listArticle(PageParams pageParams) {
         Page<Article> page = new Page<>(pageParams.getPage(), pageParams.getPageSize());
-        IPage<Article> articleIPage = articleMapper.listArticle(page, pageParams.getCategoryId(), pageParams.getTagId(), pageParams.getYear(), pageParams.getMonth());
+        IPage<Article> articleIPage = articleMapper.listArticle(page, pageParams.getCategoryId(), pageParams.getTagId(), pageParams.getYear(), pageParams.getMonth(), pageParams.getKeyword());
+        List<Article> records = articleIPage.getRecords();
+        List<ArticleVo> voList = copyList(records, true, false, true);
+        for (int i = 0; i < voList.size(); i++) {
+            ArticleBody body = articleBodyMapper.selectById(records.get(i).getBodyId());
+            voList.get(i).setImages(extractImages(body == null ? null : body.getContent()));
+        }
         Map<String, Object> data = new HashMap<>();
-        data.put("records", copyList(articleIPage.getRecords(), true, false, true));
+        data.put("records", voList);
         data.put("total", articleIPage.getTotal());
         return Result.success(data);
     }
 
+    private List<String> extractImages(String content) {
+        List<String> imgs = new ArrayList<>();
+        if (content == null || content.isEmpty()) return imgs;
+        Matcher m = Pattern.compile("<img[^>]+src\\s*=\\s*[\"']([^\"']+)[\"']").matcher(content);
+        while (m.find() && imgs.size() < 3) imgs.add(m.group(1));
+        if (imgs.isEmpty()) {
+            Matcher m2 = Pattern.compile("!\\[[^\\]]*\\]\\(([^)]+)\\)").matcher(content);
+            while (m2.find() && imgs.size() < 3) imgs.add(m2.group(1));
+        }
+        return imgs;
+    }
 
     @Override
     public Result findArticlesById(String articleId) {
@@ -224,6 +243,65 @@ public class ArticleServiceImpl implements ArticleService {
         Map<String ,String> map=new HashMap<>();
         map.put("id",article.getId());
         return Result.success(map);
+    }
+
+    @Override
+    public Result update(ArticleParam articleParam) {
+        SysUser sysUser = UserThreadLocal.get();
+        Article article = articleMapper.selectById(articleParam.getId());
+        if (article == null) {
+            return Result.fail(404, "文章不存在");
+        }
+        if (!article.getAuthorId().equals(sysUser.getId())) {
+            return Result.fail(403, "只能编辑自己的文章");
+        }
+        article.setTitle(articleParam.getTitle());
+        article.setSummary(articleParam.getSummary());
+        if (articleParam.getCategory() != null && articleParam.getCategory().getId() != null) {
+            article.setCategoryId(articleParam.getCategory().getId());
+        } else {
+            article.setCategoryId(null);
+        }
+        articleMapper.updateById(article);
+
+        articleTagMapper.delete(new LambdaQueryWrapper<ArticleTag>().eq(ArticleTag::getArticleId, article.getId()));
+        List<TagVo> tags = articleParam.getTags();
+        if (tags != null) {
+            for (TagVo tag : tags) {
+                String tagId = tag.getId();
+                if (tagId == null && tag.getTagName() != null) {
+                    Tag newTag = new Tag();
+                    newTag.setTagName(tag.getTagName());
+                    newTag.setAvatar("/static/img/logo.b3a48c0.png");
+                    tagMapper.insert(newTag);
+                    tagId = newTag.getId();
+                }
+                if (tagId != null) {
+                    ArticleTag articleTag = new ArticleTag();
+                    articleTag.setTagId(tagId);
+                    articleTag.setArticleId(article.getId());
+                    articleTagMapper.insert(articleTag);
+                }
+            }
+        }
+
+        ArticleBody articleBody = article.getBodyId() != null ? articleBodyMapper.selectById(article.getBodyId()) : null;
+        if (articleBody == null) {
+            articleBody = new ArticleBody();
+            articleBody.setArticleId(article.getId());
+            articleBody.setContent(articleParam.getBody().getContent());
+            articleBody.setContentHtml(articleParam.getBody().getContentHtml());
+            articleBodyMapper.insert(articleBody);
+            article.setBodyId(articleBody.getId());
+            articleMapper.updateById(article);
+        } else {
+            articleBody.setContent(articleParam.getBody().getContent());
+            articleBody.setContentHtml(articleParam.getBody().getContentHtml());
+            articleBodyMapper.updateById(articleBody);
+        }
+        Map<String, String> result = new HashMap<>();
+        result.put("id", article.getId());
+        return Result.success(result);
     }
 
     @Override

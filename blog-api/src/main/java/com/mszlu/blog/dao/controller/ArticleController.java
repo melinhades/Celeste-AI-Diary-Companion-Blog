@@ -44,4 +44,9 @@ public class ArticleController {
     public Result publish(@RequestBody ArticleParam articleParam){
         return articleService.publish(articleParam);
     }
+
+    @PostMapping("update")
+    public Result update(@RequestBody ArticleParam articleParam){
+        return articleService.update(articleParam);
+    }
 }

@@ -56,20 +56,16 @@ body.emotion-hopeful   .content-editor { border-color: #3498DB; }
   opacity:0.35;
 }
 
-/* ===== 情绪场景背景色 ===== */
-body.emotion-default   {
-    background:
-            linear-gradient(rgba(15,23,42,.35), rgba(15,23,42,.55)),
-            url('../celeste-gui/diary-bg.jpg') center / cover no-repeat fixed;
-}
-body.emotion-calm      { background: linear-gradient(135deg, #0F3460, #1E3A8A); }
-body.emotion-happy     { background: linear-gradient(135deg, #2E3A17, #166534); }
-body.emotion-sad       { background: linear-gradient(135deg, #2C1A47, #4C1D95); }
-body.emotion-angry     { background: linear-gradient(135deg, #4A1A1A, #991B1B); }
-body.emotion-surprised { background: linear-gradient(135deg, #1A374D, #0E7490); }
-body.emotion-lonely    { background: linear-gradient(135deg, #3A2A4A, #581C87); }
-body.emotion-content   { background: linear-gradient(135deg, #1A3A2E, #0F766E); }
-body.emotion-hopeful   { background: linear-gradient(135deg, #1A2E3A, #0369A1); }
+/* ===== 情绪场景背景色（半透明蒙色，叠在 diary-bg.jpg 上渐入渐出） ===== */
+body.emotion-default   { background-color: transparent; }
+body.emotion-calm      { background-color: rgba(30,58,138,.72); }
+body.emotion-happy     { background-color: rgba(22,101,52,.65); }
+body.emotion-sad       { background-color: rgba(76,29,149,.72); }
+body.emotion-angry     { background-color: rgba(153,27,27,.72); }
+body.emotion-surprised { background-color: rgba(14,116,144,.65); }
+body.emotion-lonely    { background-color: rgba(88,28,135,.72); }
+body.emotion-content   { background-color: rgba(15,118,110,.65); }
+body.emotion-hopeful   { background-color: rgba(3,105,161,.68); }
 
 body.emotion-default   { --c-sky: #A8E6CF; --c-teal: #7DCFFF; --c-yellow: #FFEB3B; --c-pink: #FF6B6B; }
 body.emotion-calm      { --c-sky: #87CEEB; --c-teal: #4A90E2; --c-yellow: #F0E68C; --c-pink: #FFB6C1; }
@@ -94,6 +90,12 @@ body {
     display:flex;
     flex-direction:column;
     padding:10px 16px 8px;
+    position:relative;
+    z-index:0;
+    background:
+            linear-gradient(rgba(15,23,42,.35), rgba(15,23,42,.55)),
+            url('../celeste-gui/diary-bg.jpg') center / cover no-repeat fixed;
+    transition: background-color 1.2s ease;
 }
 body::-webkit-scrollbar { display:none; }
 
@@ -694,7 +696,6 @@ body::before {
     user-select: none;
     -webkit-user-drag: none;
 }
-/* ... existing code ... */
 .madeline-row .msg-bubble {
     border-radius: 0;
     background: rgba(24, 12, 38, 0.92);
@@ -726,7 +727,7 @@ body::before {
     transition: opacity .25s ease, transform .25s ease;
 }
 #gameDialog.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
-#gameDialog.portrait-right { flex-direction: row-reverse; }
+
 #gameDialogPortrait {
     width: 84px; height: 84px;
     flex-shrink: 0;
@@ -816,8 +817,6 @@ body::before {
 .book-dots { display:flex; justify-content:center; gap:7px; margin-top:8px; }
 .book-dots span { width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,.25); transition:all .3s; cursor:pointer; }
 .book-dots span.on { background:var(--c-yellow); box-shadow:0 0 8px rgba(255,227,109,.7); transform:scale(1.25); }
-/* ... existing code ... */
-
 /* ===== 调框模式 ===== */
 .tune-mode .book-page [data-tk] { outline: 1px dashed rgba(230,81,124,.7); background: rgba(230,81,124,.06); }
 .tune-mode .book-page .tune-sel { outline: 2px solid #e6517c; background: rgba(230,81,124,.14); }

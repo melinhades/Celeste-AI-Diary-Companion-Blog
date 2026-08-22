@@ -9,6 +9,7 @@ function initHeader() {
             <div class="user-info">
                 <div class="user-avatar"><img src="celeste-gui/user-avatar.png" alt=""></div>
                 <span>${escHtml(nickname)}</span>
+                <a href="me.html" class="btn btn-outline btn-sm">我的空间</a>
                 <a href="write.html" class="btn btn-primary btn-sm">写文章</a>
                 <button class="btn btn-outline btn-sm" onclick="doLogout()">退出</button>
             </div>`;

@@ -10,6 +10,8 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+import java.io.File;
+
 @Configuration
 public class WebMVCConfig implements WebMvcConfigurer {
     private LoginIntercepter loginIntercepter;
@@ -33,12 +35,22 @@ public class WebMVCConfig implements WebMvcConfigurer {
                 .addPathPatterns("/test")
                 .addPathPatterns("/comments/create/change")
                 .addPathPatterns("/articles/publish")
+                .addPathPatterns("/articles/update")
+                .addPathPatterns("/likes/toggle")
                 .addPathPatterns("/chat/**")
                 .addPathPatterns("/persona/**")
                 .addPathPatterns("/memory/**")
                 .addPathPatterns("/proactive/**")
                 .addPathPatterns("/diary/**")
+                .addPathPatterns("/upload")
                 .excludePathPatterns("/chat/test-ai");
+    }
+
+    @Override
+    public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        File dir = new File(System.getProperty("user.dir"), "uploads");
+        if (!dir.exists()) dir.mkdirs();
+        registry.addResourceHandler("/uploads/**").addResourceLocations(dir.toURI().toString());
     }
 
     @Bean

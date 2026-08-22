@@ -37,7 +37,7 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 <div class="topbar"><a href="diary.html">← 回日记本</a></div>
 
 <audio id="bgmPlayer" loop>
-    <source src="bgm/exhale.mp3" type="audio/mpeg">
+    <source src="bgm/farewell.mp3" type="audio/mpeg">
 </audio>
 
 <div class="wrap">
@@ -62,8 +62,20 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     document.addEventListener('click', tryPlayBGM);
     document.addEventListener('keydown', tryPlayBGM);
 
+    // one-time wallet fix: restore to confirmed balance, run once
+    if (localStorage.getItem('berryFix20260822') !== '1') {
+        localStorage.setItem('berryFix20260822', '1');
+        localStorage.setItem('berryBalance', '3');
+        try {
+            const keep = JSON.parse(localStorage.getItem('berryOwned') || '[]').filter(function (id) {
+                return ['goldberry', 'cassette', 'heartgem', 'moonberry'].indexOf(id) >= 0;
+            });
+            localStorage.setItem('berryOwned', JSON.stringify(keep));
+        } catch (e) {}
+        localStorage.removeItem('berryBgm');
+    }
+
     const SHOP_ITEMS = [
-        { id: 'bgm', name: '明信片 BGM', icon: 'celeste-gui/postcard.png', price: 3, desc: '日记页的 BGM 换成 postcard，山野换海风。' },
         { id: 'goldberry', name: '金草莓荣誉', icon: 'celeste-collectables/goldberry/idle00.png', price: 5, desc: '书架右上角点亮金草莓徽章。' },
         { id: 'cassette', name: '磁带收藏', icon: 'celeste-collectables/cassette/idle00.png', price: 8, desc: '解锁磁带收藏位，纯粹的快乐。' },
         { id: 'heartgem', name: '心之宝石', icon: 'celeste-icons/heartgem0.png', price: 15, desc: '山顶的终极成就。写满 100 篇，它会升满四色。' },
@@ -73,7 +85,7 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     const SAY_POOR = ['草莓还不够呢，再去写几篇吧～', '差一点点啦，加油写日记！'];
 
     function balance() {
-        return parseInt(localStorage.getItem('diarySaveCount') || '0') - parseInt(localStorage.getItem('berrySpent') || '0');
+        return berryBalance();
     }
     function owned() {
         try { return JSON.parse(localStorage.getItem('berryOwned') || '[]'); } catch (e) { return []; }
@@ -101,8 +113,7 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
         if (balance() < it.price) { say(SAY_POOR[Math.floor(Math.random() * SAY_POOR.length)]); return; }
         own.push(id);
         localStorage.setItem('berryOwned', JSON.stringify(own));
-        localStorage.setItem('berrySpent', String(parseInt(localStorage.getItem('berrySpent') || '0') + it.price));
-        if (id === 'bgm') localStorage.setItem('berryBgm', 'postcard');
+        spendBerries(it.price);
         say(SAY_BUY[Math.floor(Math.random() * SAY_BUY.length)]);
         render();
     }
@@ -130,7 +141,10 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
         const hg = SHOP_ITEMS.findIndex(x => x.id === 'heartgem');
         if (hg >= 0) {
             const hel = document.querySelectorAll('.item')[hg];
-            if (hel) hel.querySelector('img').src = 'celeste-collectables/heartgem/' + heartTier() + '/' + String(shopFi % 14).padStart(2, '0') + '.png';
+            const tier = heartTier();
+            if (hel) hel.querySelector('img').src = tier >= 3
+                ? 'celeste-collectables/heartgem/3/FakeHeart' + String(shopFi % 33).padStart(4, '0') + '.png'
+                : 'celeste-collectables/heartgem/' + tier + '/spin' + String(shopFi % 11).padStart(2, '0') + '.png';
         }
         const bal = document.querySelector('.balance img');
         if (bal) bal.src = ICON_FRAMES.strawberry[shopFi % ICON_FRAMES.strawberry.length];

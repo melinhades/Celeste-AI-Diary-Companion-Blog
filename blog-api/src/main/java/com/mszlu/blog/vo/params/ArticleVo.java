@@ -32,4 +32,6 @@ public class ArticleVo {
 
     private CategoryVo category;
 
+    private List<String> images;
+
 }
