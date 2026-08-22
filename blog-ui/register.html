@@ -89,6 +89,7 @@
 
         const btn = document.getElementById('regBtn');
         btn.disabled = true; btn.textContent = '注册中...';
+        document.querySelector('.register-madeline').src = 'celeste-portraits/madeline/determined00.png';
 
         api('/register', 'POST', { account, password, nickname }).then(res => {
             btn.disabled = false; btn.textContent = '注 册';
@@ -104,6 +105,7 @@
     function showErr(msg) {
         const el = document.getElementById('errMsg');
         el.textContent = msg; el.style.display = 'block';
+        document.querySelector('.register-madeline').src = 'celeste-portraits/madeline/sad00.png';
     }
 </script>
 </body>

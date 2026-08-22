@@ -46,16 +46,8 @@
     .hot-rank { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
     .hot-rank img { width:22px; height:22px; object-fit:contain; filter:drop-shadow(0 0 4px rgba(255,235,59,.5)); }
     .tag-link.tag-on { background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); color:#fff; box-shadow:0 0 10px rgba(138,43,226,.5); }
-    /* ===== Page Transition Overlay (for diary link) ===== */
-    #page-transition {
-        position:fixed; inset:0;
-        background:#0a0a1e;          /* 与页脚/深色背景保持一致 */
-        opacity:0;
-        pointer-events:none;
-        transition:opacity .3s ease; /* 淡入淡出时长 */
-        z-index:9999;
-    }
-    #page-transition.active { opacity:1; }
+    .article-card { animation: cardIn .5s ease both; }
+    @keyframes cardIn { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:none; } }
     </style>
 </head>
 <body>
@@ -116,7 +108,7 @@
 </div>
 
 <footer class="footer">
-    <div class="container">© 2024 Celeste Blog · Explore the stars</div>
+    <div class="container">© 2026 Celeste Blog · Explore the stars</div>
 </footer>
 
 <script src="js/api.js"></script>
@@ -239,8 +231,8 @@
             document.getElementById('articleList').innerHTML = '<div class="empty">暂无文章</div>';
             return;
         }
-        const html = list.map(a => `
-            <article class="article-card" onclick="location.href='article.html?id=${a.id}'">
+        const html = list.map((a, i) => `
+            <article class="article-card" style="animation-delay:${i * 0.06}s" onclick="location.href='article.html?id=${a.id}'">
                 <div class="article-meta">
                     <span class="meta-author"><img class="meta-author-img" src="${(a.author?.nickname || a.author?.username) ? 'celeste-portraits/madeline/normal00.png' : 'celeste-icons/beat.png'}" alt="">${escHtml(a.author?.nickname || a.author?.username || '匿名')}</span>
                     <span class="meta-date"><img class="meta-icon" src="celeste-icons/cs_variantmode.png" alt="">${formatDate(a.createDate)}</span>

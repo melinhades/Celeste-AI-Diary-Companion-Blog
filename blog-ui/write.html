@@ -286,6 +286,7 @@
         <button class="toolbar-btn" onclick="insertMd('\n\n','\n```\n')">Code Block</button> <button class="toolbar-btn" onclick="insertMd('> ','')">Quote</button> <button class="toolbar-btn" onclick="insertMd('[link](',')')">Link</button> <button class="toolbar-btn" onclick="insertMd('- ','')">List</button>
         <button class="toolbar-btn" id="openMadelineBtn"><img src="celeste-collectables/strawberry.png" alt="">Madeline</button>
         <button class="toolbar-btn" id="toolbarPolishBtn" style="border-color:rgba(255,227,109,.5);color:#ffe36d;"><img src="celeste-icons/beat.png" alt="">润色</button>
+        <button class="toolbar-btn" id="toolbarGenBtn" style="border-color:rgba(120,220,255,.5);color:#78dcff;"><img src="celeste-collectables/cassette.png" alt="">生成文章</button>
     </div>
     <textarea class="write-body" id="articleBody" placeholder="Start writing... Markdown supported" oninput="updateCount()"></textarea>
     <div class="char-count" id="charCount">0 chars</div>
@@ -325,6 +326,107 @@
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/write-madeline.js"></script>
+<script>
+// ================= AI 生成文章（runBackpack 跑步 / Fall 坠落） =================
+(function () {
+    const style = document.createElement('style');
+    style.textContent =
+        '#genLoadingOverlay{position:fixed;right:28px;bottom:28px;z-index:2001;display:none;flex-direction:column;align-items:center;gap:6px;pointer-events:none;}' +
+        '#genLoadingOverlay.show{display:flex;}' +
+        '.gen-run-anim{width:84px;height:84px;background-size:contain;background-repeat:no-repeat;background-position:center;filter:drop-shadow(0 2px 8px rgba(0,0,0,.5));}' +
+        '.gen-run-anim.falling{animation:genFallMove 1.5s ease-in forwards;}' +
+        '@keyframes genFallMove{0%{transform:translateY(0) rotate(0deg);opacity:1;}100%{transform:translateY(46vh) rotate(-70deg);opacity:.15;}}' +
+        '.gen-loading-text{color:#ffe36d;font-size:14px;text-align:center;text-shadow:0 1px 4px rgba(0,0,0,.8);font-family:"Renogare","CelesteZH",sans-serif;}';
+    document.head.appendChild(style);
+
+    const overlay = document.createElement('div');
+    overlay.id = 'genLoadingOverlay';
+    overlay.innerHTML = '<div class="gen-run-anim"></div><div class="gen-loading-text">Generating...</div>';
+    document.body.appendChild(overlay);
+    const animEl = overlay.querySelector('.gen-run-anim');
+    const textEl = overlay.querySelector('.gen-loading-text');
+
+    const GEN_RUN_FRAMES = [];
+    for (let i = 0; i < 9; i++) GEN_RUN_FRAMES.push('celeste-player/marker/runBackpack' + String(i).padStart(5, '0') + '.png');
+    const GEN_FALL_FRAMES = ['celeste-player/marker/Fall0000.png', 'celeste-player/marker/Fall0001.png'];
+    GEN_RUN_FRAMES.concat(GEN_FALL_FRAMES).forEach(s => { const im = new Image(); im.src = s; });
+
+    let genTimer = null;
+    function genPlayFrames(frames, interval) {
+        if (genTimer) clearInterval(genTimer);
+        let i = 0;
+        animEl.style.backgroundImage = 'url("' + frames[0] + '")';
+        genTimer = setInterval(() => {
+            i = (i + 1) % frames.length;
+            animEl.style.backgroundImage = 'url("' + frames[i] + '")';
+        }, interval);
+    }
+    function genStop() {
+        if (genTimer) { clearInterval(genTimer); genTimer = null; }
+        overlay.classList.remove('show');
+        animEl.classList.remove('falling');
+        textEl.textContent = 'Generating...';
+    }
+    function genFallThenClose(msg) {
+        textEl.textContent = msg;
+        genPlayFrames(GEN_FALL_FRAMES, 220);
+        animEl.classList.add('falling');
+        setTimeout(() => { genStop(); if (typeof showToast === 'function') showToast(msg, 'error'); }, 1600);
+    }
+
+    async function doGenerate() {
+        const titleEl = document.getElementById('articleTitle');
+        const title = titleEl.value.trim();
+        const summary = (document.getElementById('summaryInput').value || '').trim();
+        if (!title && !summary) { if (typeof showToast === 'function') showToast('先写个标题或摘要，告诉我你想写什么', 'error'); return; }
+
+        const btn = document.getElementById('toolbarGenBtn');
+        if (btn) btn.disabled = true;
+        overlay.classList.add('show');
+        animEl.classList.remove('falling');
+        textEl.textContent = 'Generating...';
+        genPlayFrames(GEN_RUN_FRAMES, 90);
+
+        const topic = title || summary;
+        const extra = (title && summary) ? '。要点：' + summary : '';
+        const prompt = '请以博客作者的身份写一篇 Markdown 文章。主题：' + topic + extra + '。要求：直接输出完整 Markdown 正文，第一行用 # 给出文章标题，不要任何解释、前缀或后缀，400-800字。';
+
+        let ok = false, text = '';
+        try {
+            const res = await api('/chat', 'POST', { content: prompt });
+            if (res.success && res.data && res.data.content) { ok = true; text = res.data.content; }
+        } catch (e) { }
+
+        if (btn) btn.disabled = false;
+
+        const refused = /抱歉|无法|我不能|对不起|sorry|cannot|can't/i.test(text.slice(0, 60));
+        if (!ok || refused) {
+            genFallThenClose(refused ? 'Madeline 拒绝了这次生成…' : '生成被拒绝，等下再试试');
+            return;
+        }
+
+        const lines = text.split('\n');
+        if (!title && lines[0] && lines[0].startsWith('#')) {
+            titleEl.value = lines[0].replace(/^#+\s*/, '');
+            text = lines.slice(1).join('\n').replace(/^\s*\n/, '');
+        }
+
+        textEl.textContent = 'Writing...';
+        const bodyEl = document.getElementById('articleBody');
+        for (const ch of text) {
+            bodyEl.value += ch;
+            bodyEl.scrollTop = bodyEl.scrollHeight;
+            if (typeof updateCount === 'function') updateCount();
+            await new Promise(r => setTimeout(r, 14));
+        }
+        genStop();
+        if (typeof showToast === 'function') showToast('文章生成完成！', 'success');
+    }
+
+    const genBtn = document.getElementById('toolbarGenBtn');
+    if (genBtn) genBtn.addEventListener('click', doGenerate);
+})();
+</script>
 <script>
     // BGM
     const bgmPlayer = document.getElementById('bgmPlayer');

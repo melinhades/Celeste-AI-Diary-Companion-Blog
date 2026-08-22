@@ -71,7 +71,7 @@
 </div>
 
 <footer class="footer">
-    <div class="container">© 2024 Celeste Blog System · Explore the Knowledge Ocean</div>
+    <div class="container">© 2026 Celeste Blog System · Explore the Knowledge Ocean</div>
 </footer>
 
 <script src="js/api.js"></script>
@@ -105,6 +105,8 @@
         });
 
         const years = Object.keys(groups).sort((a, b) => b - a);
+        const totalPosts = res.data.reduce((s, it) => s + (parseInt(it.count) || 0), 0);
+        document.querySelector('.archives-title').innerHTML = ' Archives <span class="archive-count">' + totalPosts + ' posts total</span>';
         const CH_COVERS = [1,2,3,4,5,6,7,9];
         let html = '';
         years.forEach((year, yi) => {

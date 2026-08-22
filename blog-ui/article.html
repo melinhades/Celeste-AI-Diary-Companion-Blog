@@ -280,6 +280,9 @@
             const a = res.data;
             document.title = `${a.title} - Celeste Blog`;
 
+            const plain = (a.body?.contentHtml || a.body?.content || '').replace(/<[^>]+>/g, '');
+            const readMin = Math.max(1, Math.ceil(plain.length / 400));
+
             // 头部
             document.getElementById('articleHeader').innerHTML = `
                 <div class="article-header">
@@ -288,6 +291,7 @@
                         <span>✍️ ${escHtml(a.author?.nickname || a.author?.username || 'Anonymous')}</span>
                         <span>📅 ${formatDate(a.createDate)}</span>
                         <span>👁 ${a.viewCounts || 0} Reads</span>
+                        <span>⏳ ~${readMin} min read</span>
                         ${a.category ? `<span>📁 ${escHtml(a.category.categoryName || a.category.name)}</span>` : ''}
                     </div>
                     <div class="article-tags">
