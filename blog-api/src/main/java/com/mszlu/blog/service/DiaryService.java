@@ -31,4 +31,7 @@ public interface DiaryService {
 
     /** 保存成功：Madeline 对这篇日记做一句总结 */
     Result summary(DiaryParam param);
+
+    /** Oshiro 旅馆聊天 */
+    Result oshiroChat(String message, String historyJson);
 }

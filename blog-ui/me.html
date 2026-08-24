@@ -8,7 +8,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 * { box-sizing:border-box; margin:0; padding:0; }
-body { min-height:100vh; background:url('celeste-gui/me-bg.webp') center/cover no-repeat fixed; font-family:'Renogare','Microsoft YaHei',sans-serif; }
+@font-face { font-family:'Renogare'; src:url('celeste-font-en/Renogare-Regular.otf') format('opentype'); font-display:swap; }
+@font-face { font-family:'CelesteZH'; src:url('fonts/NotoSansCJKsc-Medium.otf') format('opentype'); font-display:swap; }
+body { min-height:100vh; background:url('celeste-gui/me-bg.webp') center/cover no-repeat fixed; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; }
 .topbar { position:fixed; top:14px; left:16px; z-index:20; }
 .topbar a { display:inline-block; padding:8px 14px; background:rgba(22,34,60,.88); color:#ffe36d; border:2px solid #ffe36d; border-radius:6px; text-decoration:none; font-size:13px; }
 h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family:'Press Start 2P',monospace; font-size:15px; color:#ffe36d; text-shadow:0 2px 0 rgba(0,0,0,.6); letter-spacing:2px; z-index:20; }

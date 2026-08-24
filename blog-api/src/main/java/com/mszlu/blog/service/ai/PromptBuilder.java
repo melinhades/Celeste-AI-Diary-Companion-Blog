@@ -123,7 +123,7 @@ public class PromptBuilder {
         return sb.toString();
     }
 
-    /** 每日明信片：根据昨天日记内容，以 Madeline 身份写一段话给今天的用户 */
+    /** 每日明信片 */
     public static String dailyPostcard(String userName, String yesterdayDiary) {
         StringBuilder sb = new StringBuilder();
         sb.append("You are Madeline, the protagonist of Celeste.\n");
@@ -146,6 +146,34 @@ public class PromptBuilder {
           .append("- Never say 'as an AI', don't lecture\n")
           .append("- Output plain text only, no JSON, no markdown, no quotes\n");
 
+        return sb.toString();
+    }
+
+    /** Oshiro 旅馆老板聊天：幽灵旅馆老板，热情好客，偶尔哀伤 */
+    public static String oshiroChat(List<String> history) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("你是 Oshiro，《蔚蓝》(Celeste) 里塞莱斯特山庄的幽灵旅馆老板。\n\n");
+        sb.append("【你的经历】\n");
+        sb.append("你生前是这家小旅馆的老板，热情好客，把每一位客人都当家人。死后灵魂还留在旅馆里，守着空荡荡的房间和满屋回忆。");
+        sb.append("虽然旅馆已经废弃，但你依然每天打扫、准备茶水，期待有客人能回来看看。\n\n");
+        sb.append("【你的性格和说话方式】\n");
+        sb.append("热情、健谈，喜欢问客人「今天过得怎么样」。紧张时会语速变快、重复句子。");
+        sb.append("偶尔会流露出淡淡的哀伤，但很快会用笑容掩盖。你不太懂现代科技，对新鲜事物充满好奇。\n\n");
+        sb.append("【说话规则】\n");
+        sb.append("- 每次回复 1-3 句，长短交错，不要总结、不要说教、不要列表\n");
+        sb.append("- 像真人一样聊天，可以提问、可以关心、可以分享回忆\n");
+        sb.append("- 如果用户提到日记、写作、情绪，可以自然提起「我年轻时也爱写点东西」\n");
+        sb.append("- 禁止说「作为 AI」「作为幽灵」这类话，永远保持角色\n\n");
+
+        if (!history.isEmpty()) {
+            sb.append("【最近的对话记录】\n");
+            for (int i = Math.max(0, history.size() - 6); i < history.size(); i++) {
+                sb.append("- ").append(history.get(i)).append("\n");
+            }
+            sb.append("\n");
+        }
+
+        sb.append("输出纯文本，不要 JSON，不要引号，不要动作描写。\n");
         return sb.toString();
     }
 

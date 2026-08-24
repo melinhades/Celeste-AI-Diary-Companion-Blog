@@ -780,6 +780,7 @@
 
 
 
+    // ... existing code ...
     const VOICE_DIRS = {
         '默认': 'determined',
         '不安': 'upset',
@@ -792,23 +793,48 @@
     };
     const VOICE_VARIANTS = ['mid_A', 'mid_B', 'mid_C', 'per'];
 
+    const VOICE_RATE = {
+        '默认': [0.92, 1.06],
+        '不安': [0.88, 1.0],
+        '惊讶': [1.0, 1.18],
+        '怨恨': [0.95, 1.12],
+        '不开心': [0.82, 0.94],
+        '可爱': [0.96, 1.1],
+        '无语': [0.85, 0.95],
+        '冒泡': [0.9, 1.05]
+    };
+    const VOICE_VOL = {
+        '默认': 0.75, '不安': 0.65, '惊讶': 0.85,
+        '怨恨': 0.85, '不开心': 0.55, '可爱': 0.8,
+        '无语': 0.6, '冒泡': 0.7
+    };
+
+    let speakSeq = 0;
     const blipAudio = new Audio();
     function playSpeakSound(emotion) {
         if (!window.__audioGestured) return;
         let voice = VOICE_DIRS[emotion] || VOICE_DIRS['冒泡'];
         if (emotion === '不开心') voice = Math.random() < 0.5 ? 'sad' : 'sadder';
-        const variant = VOICE_VARIANTS[Math.floor(Math.random() * VOICE_VARIANTS.length)];
+        speakSeq++;
+        let variant;
+        if (speakSeq % 7 === 0) {
+            variant = 'per';
+        } else {
+            variant = VOICE_VARIANTS[speakSeq % 3];
+        }
         const num = String(Math.floor(Math.random() * 10) + 1).padStart(2, '0');
-        const src = 'celeste-sounds/' + voice + '/' + variant + '/' + voice + '_' + variant + '_' + num + '.wav';
+        const src = 'celeste-sounds/madeline/' + voice + '/' + variant + '/' + voice + '_' + variant + '_' + num + '.wav';
         try {
             const a = blipAudio;
             a.src = src;
-            a.volume = 0.8;
-            a.playbackRate = 0.94 + Math.random() * 0.12;
+            const rateRange = VOICE_RATE[emotion] || VOICE_RATE['默认'];
+            a.playbackRate = rateRange[0] + Math.random() * (rateRange[1] - rateRange[0]);
+            a.volume = (VOICE_VOL[emotion] || 0.75) + (Math.random() - 0.5) * 0.1;
             a.currentTime = 0;
             a.play().catch(() => {});
         } catch (e) { /* 无声降级 */ }
     }
+// ... existing code ...
 
     function createBubbleElement() {
         if (bubbleEl) bubbleEl.remove();
@@ -1786,9 +1812,26 @@
 
     // ===== 主线2：回忆书架 =====
     let editingDiaryId = null;
+    // ... existing code ...
     const shelfBtn = document.createElement('button');
     shelfBtn.id = 'shelfBtn';
-    shelfBtn.textContent = '📚 回忆书架';
+    // Deleted:shelfBtn.textContent = '📚 回忆书架';
+    // ... existing code ...
+    shelfBtn.title = '回忆书架';
+    // Deleted:shelfBtn.innerHTML = '<img src="Atlases/Gui/collectables/cassette.png" alt="回忆书架">';
+    shelfBtn.innerHTML = '<img src="celeste-collectables/cassette/idle00.png" alt="回忆书架">';
+    const shelfBtnImg = shelfBtn.querySelector('img');
+    const SHELF_CASSETTE_FRAMES = [];
+    for (let i = 0; i < 19; i++) SHELF_CASSETTE_FRAMES.push('celeste-collectables/cassette/idle' + String(i).padStart(2, '0') + '.png');
+    let shelfBtnTimer = null, shelfBtnFi = 0;
+    shelfBtn.addEventListener('mouseenter', () => {
+        if (shelfBtnTimer) return;
+        shelfBtnTimer = setInterval(() => { shelfBtnFi = (shelfBtnFi + 1) % 19; shelfBtnImg.src = SHELF_CASSETTE_FRAMES[shelfBtnFi]; }, 90);
+    });
+    shelfBtn.addEventListener('mouseleave', () => {
+        if (shelfBtnTimer) { clearInterval(shelfBtnTimer); shelfBtnTimer = null; }
+        shelfBtnFi = 0; shelfBtnImg.src = SHELF_CASSETTE_FRAMES[0];
+    });
     document.body.appendChild(shelfBtn);
 
     const shelfPanel = document.createElement('div');
@@ -1802,6 +1845,8 @@
         '<div class="sd-actions"><button class="sd-edit">回去编辑这篇</button><button class="sd-del danger">删掉它</button></div>' +
         '</div>';
     document.body.appendChild(shelfPanel);
+
+// ... existing code ...
 
     const shelfList = shelfPanel.querySelector('#shelfList');
     const shelfDetail = shelfPanel.querySelector('#shelfDetail');

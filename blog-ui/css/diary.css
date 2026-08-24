@@ -727,10 +727,7 @@ body::before {
     transition: opacity .25s ease, transform .25s ease;
 }
 #gameDialog.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
-/* ... existing code ... */
 #gameDialog.portrait-right { flex-direction: row-reverse; }
-#gameDialogPortrait { width: 92px; height: 92px; flex-shrink: 0; border-radius: 6px; overflow: hidden; }
-/* ... existing code ... */
 #gameDialogPortrait { width: 92px; height: 92px; flex-shrink: 0; border-radius: 6px; overflow: hidden; }
 #gameDialogPortrait img { width: 100%; height: 100%; object-fit: cover; display: block; }
 #gameDialogName {
@@ -759,26 +756,27 @@ body::before {
     top: 16px;
     left: 16px;
     z-index: 900;
-    width: 104px;
-    height: 140px;
+    width: 96px;
+    height: 96px;
     padding: 0;
-    border: 2px solid var(--c-yellow);
-    border-radius: 6px;
-    overflow: hidden;
+    border: none;
+    border-radius: 0;
+    overflow: visible;
     cursor: pointer;
     background: transparent;
-    box-shadow: 0 0 8px rgba(255,230,109,.45);
-    transition: transform .2s, box-shadow .2s;
+    box-shadow: none;
+    filter: drop-shadow(0 0 6px rgba(170,220,255,.8)) drop-shadow(0 0 16px rgba(120,190,255,.45));
+    transition: transform .2s, filter .2s;
 }
 #homePosterBtn img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
     display: block;
 }
 #homePosterBtn:hover {
     transform: translateY(-2px) scale(1.05);
-    box-shadow: 0 0 16px rgba(255,230,109,.7);
+    filter: drop-shadow(0 0 10px rgba(200,235,255,1)) drop-shadow(0 0 24px rgba(120,190,255,.8));
 }
 /* ===== Celeste 日记本 ===== */
 #journalStage { width:min(100%, 1080px, calc((100vh - 300px) * 2)); margin:0 auto; position:relative; }
@@ -803,14 +801,14 @@ body::before {
 .book-page .gridzone i.on { background:rgba(255,214,90,.7); box-shadow:0 0 6px rgba(255,227,109,.8); }
 .book-arrow {
     position:absolute; top:50%; transform:translateY(-50%); z-index:10;
-    border:2px solid var(--c-yellow); background:rgba(22,34,60,.85); color:var(--c-yellow);
-    width:40px; height:40px; border-radius:50%; cursor:pointer;
-    box-shadow:0 0 8px rgba(255,230,109,.35); transition:transform .2s, filter .2s;
-    font-size:14px; line-height:1;
+    border:none; background:transparent; padding:0;
+    width:48px; height:48px; cursor:pointer;
+    filter:drop-shadow(0 0 6px rgba(255,230,109,.5)); transition:transform .2s, filter .2s;
 }
+.book-arrow img { width:100%; height:100%; object-fit:contain; display:block; }
 #bookPrev { left:-20px; }
 #bookNext { right:-20px; }
-.book-arrow:hover { transform:translateY(-50%) scale(1.12); filter:brightness(1.2); }
+.book-arrow:hover { transform:translateY(-50%) scale(1.12); filter:drop-shadow(0 0 10px rgba(255,230,109,.85)); }
 .book-dots { display:flex; justify-content:center; gap:7px; margin-top:8px; }
 .book-dots span { width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,.25); transition:all .3s; cursor:pointer; }
 .book-dots span.on { background:var(--c-yellow); box-shadow:0 0 8px rgba(255,227,109,.7); transform:scale(1.25); }
@@ -828,7 +826,10 @@ body::before {
 #tunePanel .tp-tip { color:rgba(255,255,255,.5); font-size:11px; text-align:center; }
 
 /* ===== 回忆书架 ===== */
-#shelfBtn { position:fixed; top:16px; right:16px; z-index:900; padding:8px 14px; background:rgba(22,34,60,.9); color:var(--c-yellow); border:2px solid var(--c-yellow); border-radius:6px; cursor:pointer; font-size:13px; box-shadow:0 0 8px rgba(255,230,109,.35); }
+#shelfBtn { position:fixed; bottom:12px; right:16px; z-index:900; width:100px; height:100px; padding:12px; background:transparent; border:none; cursor:pointer; filter:drop-shadow(0 0 6px rgba(140,220,255,.55)) drop-shadow(0 0 14px rgba(140,220,255,.25)); transition:transform .2s; }
+#shelfBtn:hover { transform:scale(1.06); }
+#shelfBtn img { width:100%; height:100%; object-fit:contain; display:block; }
+
 #shelfPanel { position:fixed; top:0; right:-360px; width:340px; max-width:92vw; height:100vh; z-index:970; background:rgba(15,23,42,.97); border-left:2px solid var(--c-yellow); transition:right .35s cubic-bezier(.3,.7,.25,1); display:flex; flex-direction:column; }
 #shelfPanel.open { right:0; }
 #shelfPanel .shelf-head { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px dashed rgba(255,230,109,.3); flex-shrink:0; }

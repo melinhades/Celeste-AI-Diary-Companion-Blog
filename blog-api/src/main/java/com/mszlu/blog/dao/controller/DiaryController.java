@@ -73,4 +73,15 @@ public class DiaryController {
             this.draft = draft;
         }
     }
+
+    /** Oshiro 聊天请求体 */
+    static class OshiroChatParam {
+        private String message;
+        private String history; // JSON 数组字符串
+
+        public String getMessage() { return message; }
+        public void setMessage(String message) { this.message = message; }
+        public String getHistory() { return history; }
+        public void setHistory(String history) { this.history = history; }
+    }
 }

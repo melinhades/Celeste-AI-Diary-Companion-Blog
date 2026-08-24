@@ -274,11 +274,11 @@ public class DiaryServiceImpl implements DiaryService {
         String content = param.getContent() == null ? "" : param.getContent();
         if (content.isEmpty()) return Result.fail(400, "内容为空");
         String snippet = content.substring(0, Math.min(600, content.length()));
-        String prompt = "你是Madeline，Celeste的爬山女孩。你温暖、真诚、细腻。\n"
+        String prompt = "你是 Madeline，Celeste 的爬山女孩。你温暖、真诚、细腻。\n"
                 + "用户刚写完一篇日记并保存了：\n———\n" + snippet + "\n———\n\n"
-                + "请以Madeline的身份，用1-2句话为这篇日记做一个温柔的总结：先轻轻点出日记里最打动你的一件事，再给一句暖心的收尾。\n"
+                + "请以 Madeline 的身份，用 1-2 句话为这篇日记做一个温柔的总结：先轻轻点出日记里最打动你的一件事，再给一句暖心的收尾。\n"
                 + "不要说教，不要罗列，像朋友合上日记本后随口说的那句话。\n"
-                + "直接输出文字，不要JSON，不要引号。";
+                + "直接输出文字，不要 JSON，不要引号。";
         String reply = aiClient.chat(new java.util.ArrayList<>(java.util.Arrays.asList(
                 new AiMessage("user", prompt))));
         if (reply == null || reply.isEmpty()) {
@@ -289,4 +289,51 @@ public class DiaryServiceImpl implements DiaryService {
         data.put("emotion", scanEmotion(snippet));
         return Result.success(data);
     }
+
+    @Override
+    public Result oshiroChat(String message, String historyJson) {
+        SysUser user = UserThreadLocal.get();
+        if (user == null) {
+            return Result.fail(403, "未登录，请先登录");
+        }
+
+        var messages = new ArrayList<AiMessage>();
+        messages.add(new AiMessage("system", PromptBuilder.oshiroChat(new java.util.ArrayList<>())));
+        messages.add(new AiMessage("user", message));
+
+        String reply = aiClient.chat(messages);
+        if (reply == null) {
+            return Result.fail(500, "Oshiro 这会儿有点恍惚（AI 调用失败），稍后再试");
+        }
+
+        String emotion = scanOshiroEmotion(reply.trim());
+        var result = new java.util.HashMap<String, Object>();
+        result.put("message", reply.trim());
+        result.put("emotion", emotion);
+        return Result.success(result);
+    }
+
+    private String scanOshiroEmotion(String reply) {
+        // 快乐→sidehappy，紧张→nervous，担心→worried，戏剧化→drama，失控→lostcontrol，严肃→serious
+        if (reply.contains("哈哈") || reply.contains("嘿嘿") || reply.contains("太好") || reply.contains("开心")) {
+            return "sidehappy";
+        }
+        if (reply.contains("诶？") || reply.contains("真的吗") || reply.contains("哇")) {
+            return "sidesuspicious";
+        }
+        if (reply.contains("担心") || reply.contains("小心") || reply.contains("别")) {
+            return "sideworried";
+        }
+        if (reply.contains("可恶") || reply.contains("气")) {
+            return "drama";
+        }
+        if (reply.contains("唉") || reply.contains("老了") || reply.contains("以前")) {
+            return "lostcontrol";
+        }
+        if (reply.contains("哼") || reply.contains("才不是")) {
+            return "serious";
+        }
+        return "normal";
+    }
+
 }
