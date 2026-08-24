@@ -10,7 +10,7 @@
 * { box-sizing:border-box; margin:0; padding:0; }
 @font-face { font-family:'Renogare'; src:url('celeste-font-en/Renogare-Regular.otf') format('opentype'); font-display:swap; }
 @font-face { font-family:'CelesteZH'; src:url('fonts/NotoSansCJKsc-Medium.otf') format('opentype'); font-display:swap; }
-body { min-height:100vh; background:url('celeste-areas/resort.png') center/cover no-repeat fixed; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; overflow-x:hidden; }
+body { min-height:100vh; background:url('celeste-gui/shop-screen.png') center/cover no-repeat fixed; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; overflow-x:hidden; }
 .topbar { position:fixed; top:14px; left:16px; z-index:20; }
 .topbar a { display:inline-block; padding:8px 14px; background:rgba(22,34,60,.88); color:#ffe36d; border:2px solid #ffe36d; border-radius:6px; text-decoration:none; font-size:13px; box-shadow:0 0 10px rgba(255,230,109,.35); }
 h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family:'Press Start 2P',monospace; font-size:14px; color:#ffe36d; text-shadow:0 2px 0 rgba(0,0,0,.6); letter-spacing:2px; z-index:20; }
@@ -263,11 +263,14 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     }
     startPortraitAnim('normal');
 
-    // ===== Oshiro 音效 =====
+    // ===== Oshiro 音效（情绪化语速/音量） =====
     var OS_VARIANTS = ['mid_a', 'mid_b', 'mid_c', 'end'];
     var OS_FILE_MAP = { 'mid_a': 'mid_A', 'mid_b': 'mid_B', 'mid_c': 'mid_C', 'end': 'end' };
     var OS_MAX_NUM = { 'mid_a': 10, 'mid_b': 10, 'mid_c': 8, 'end': 10 };
+    var OS_RATE = { '不安':[0.82,0.95], '不开心':[0.8,0.92], '惊讶':[1.02,1.2], '怨恨':[0.95,1.15], '可爱':[0.95,1.12], '无语':[0.85,0.96], '默认':[0.9,1.08] };
+    var OS_VOL = { '不安':0.62, '不开心':0.55, '惊讶':0.9, '怨恨':0.85, '可爱':0.85, '无语':0.6, '默认':0.78 };
     var osSpeakSeq = 0;
+    var osDialogEmotion = '默认';
     var oshiroBlipAudio = new Audio();
     function playOshiroSound() {
         if (!window.__audioGestured) return;
@@ -282,9 +285,10 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
         var num = String(Math.floor(Math.random() * maxNum) + 1).padStart(2, '0');
         var src = 'celeste-sounds/oshiro/worried/' + dirVariant + '/worried_' + fileVariant + '_' + num + '.wav';
         try {
+            var rr = OS_RATE[osDialogEmotion] || OS_RATE['默认'];
             oshiroBlipAudio.src = src;
-            oshiroBlipAudio.volume = 0.8;
-            oshiroBlipAudio.playbackRate = 0.92 + Math.random() * 0.16;
+            oshiroBlipAudio.volume = (OS_VOL[osDialogEmotion] || 0.78) + (Math.random() - 0.5) * 0.08;
+            oshiroBlipAudio.playbackRate = rr[0] + Math.random() * (rr[1] - rr[0]);
             oshiroBlipAudio.currentTime = 0;
             oshiroBlipAudio.play().catch(function(){});
         } catch (e) {}
@@ -298,6 +302,7 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 
     function showOshiroDialog(text, emotion) {
         var emo = OSHIRO_EMOTION[emotion] || emotion || 'normal';
+        osDialogEmotion = emotion || '默认';
         if (OSHIRO_FRAMES[emo]) startPortraitAnim(emo);
         dialogText.textContent = '';
         gameDialog.classList.add('show');
@@ -352,7 +357,7 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     }
 
     function osWander() {
-        if (osMode === 'sit' || osMode === 'greet') {
+        if (osMode === 'sit' || osMode === 'greet' || osMode === 'trip') {
             osWanderTimer = setTimeout(osWander, 3000);
             return;
         }
@@ -370,10 +375,13 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 
         osWanderTimer = setTimeout(function() {
             pixelOshiro.style.transform = '';
+            if (osMode === 'sit') return;
             var roll = Math.random();
-            if (roll < 0.22) {
+            if (roll < 0.06) {
+                osTrip();
+            } else if (roll < 0.28) {
                 osSweep();
-            } else if (roll < 0.3) {
+            } else if (roll < 0.36) {
                 osRest();
             } else {
                 osWander();
@@ -404,6 +412,28 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
                 setTimeout(osWander, 1500);
             }
         }, 9000);
+    }
+
+    // ===== 绊倒：fall.gif 上岗（走路途中小概率触发） =====
+    function osTrip() {
+        osMode = 'trip';
+        osSetSrc(OS_SRC.fall);
+        setTimeout(function() {
+            osSetSrc(OS_SRC.idle_ground);
+            var lines = ['呀…！失礼了失礼了……', '地、地板怎么突然……', '唔……被您看到丢脸的一面了。'];
+            showOshiroDialog(lines[Math.floor(Math.random() * lines.length)], '惊讶');
+            setTimeout(function() {
+                osSetSrc(OS_SRC.recover);
+                setTimeout(function() { osMode = ''; osWander(); }, 1600);
+            }, 4200);
+        }, 1300);
+    }
+
+    // ===== 成交庆祝：侧身得意姿态 =====
+    function osCelebrate() {
+        osMode = 'greet';
+        osSetSrc(OS_SRC.side);
+        setTimeout(function() { if (osMode === 'greet') osMode = ''; }, 3000);
     }
 
     // 进场：appear → 开始游逛
@@ -494,11 +524,19 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
         if (!it) return;
         var own = owned();
         if (own.indexOf(id) >= 0) return;
-        if (balance() < it.price) { say(SAY_POOR[Math.floor(Math.random() * SAY_POOR.length)]); return; }
+        if (balance() < it.price) {
+            var poor = SAY_POOR[Math.floor(Math.random() * SAY_POOR.length)];
+            say(poor);
+            showOshiroDialog(poor, '不开心');
+            return;
+        }
         own.push(id);
         localStorage.setItem('berryOwned', JSON.stringify(own));
         spendBerries(it.price);
-        say(SAY_BUY[Math.floor(Math.random() * SAY_BUY.length)]);
+        var line = SAY_BUY[Math.floor(Math.random() * SAY_BUY.length)];
+        say(line);
+        osCelebrate();
+        showOshiroDialog(line, '可爱');
         render();
     }
     render();

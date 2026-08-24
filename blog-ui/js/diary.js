@@ -389,6 +389,7 @@
         msgQueue = msgQueue.then(() => doAddMadelineMessage(text, emotion)).catch(e => console.warn('说话失败:', e));
     }
 
+// ... existing code ...
     async function doAddMadelineMessage(text, emotion) {
         text = String(text || '').replace(/[（(][^（）()]*[）)]/g, '').trim();
         if (!text) return;
@@ -399,18 +400,25 @@
             clearTimeout(gameDialogHideTimer);
             openGameDialog(emotion);
         }
+        let lastMsgEmotion = emotion || '默认';
         for (const msg of messages) {
             const histBubble = newMadelineRow(emotion);
             histBubble.textContent = msg;
+            let sentenceBuf = '';
+            let voiceEmotion = (emotion && emotion !== '默认') ? emotion : inferReplyEmotion(msg);
             if (useGameDialog) {
                 gameDialogText.textContent = '';
                 let speakCount = 0;
                 for (const ch of msg) {
                     gameDialogText.textContent += ch;
-                    if (!/[\s。！？!?…，,、；;：:（）()*]/.test(ch)) {
+                    if (/[。！？!?]/.test(ch)) {
+                        const inferred = inferSentenceEmotion(sentenceBuf);
+                        voiceEmotion = (inferred !== '默认') ? inferred : nextDefaultVoice();
+                        sentenceBuf = '';
+                    } else if (!/[\s…，,、；;：:（）()*]/.test(ch)) {
+                        sentenceBuf += ch;
                         speakCount++;
-                        // Deleted:if (speakCount % 3 === 1) { playSpeakSound(emotion); stepPortraitAnim(); }
-                        if (speakCount % 3 === 1) playSpeakSound(emotion);
+                        if (speakCount % 3 === 1) playSpeakSound(voiceEmotion);
                     }
                     await sleep(45 + Math.random() * 20);
                 }
@@ -421,18 +429,26 @@
                 for (const ch of msg) {
                     histBubble.textContent += ch;
                     chatMessages.scrollTop = chatMessages.scrollHeight;
-                    if (!/[\s。！？!?…，,、；;：:（）()*]/.test(ch)) {
+                    if (/[。！？!?]/.test(ch)) {
+                        const inferred = inferSentenceEmotion(sentenceBuf);
+                        voiceEmotion = (inferred !== '默认') ? inferred : nextDefaultVoice();
+                        sentenceBuf = '';
+                    } else if (!/[\s…，,、；;：:（）()*]/.test(ch)) {
+                        sentenceBuf += ch;
                         speakCount++;
-                        if (speakCount % 3 === 1) playSpeakSound(emotion);
+                        if (speakCount % 3 === 1) playSpeakSound(voiceEmotion);
                     }
                     await sleep(45 + Math.random() * 20);
                 }
                 if (messages.length > 1) await sleep(240 + Math.random() * 200);
             }
+            lastMsgEmotion = voiceEmotion;
         }
+        pmReactToEmotion(lastMsgEmotion);
         if (useGameDialog) stopPortraitAnim();
         if (useGameDialog) scheduleGameDialogHide();
     }
+// ... existing code ...
     function addUserMessage(text) {
         const row = document.createElement('div');
         row.className = 'msg-row user-row';
@@ -457,10 +473,11 @@
         quickInputBox.style.display = 'none';
         chatInput.focus();
 
+        // ... existing code ...
         try {
             const res = await api('/chat', 'POST', { content: text });
             if (res.success && res.data) {
-                addMadelineMessage(res.data.content || '...', '默认');
+                addMadelineMessage(res.data.content || '...', inferReplyEmotion(res.data.content || ''));
             } else {
                 addMadelineMessage('Hmm... I didn\'t catch that. Say it again?', '默认');
             }
@@ -500,7 +517,7 @@
             const res = await api('/chat', 'POST', { content: text });
             if (res.success && res.data) {
                 const reply = res.data.content || '...';
-                addMadelineMessage(reply, '默认');
+                addMadelineMessage(reply, inferReplyEmotion(reply));
             } else {
                 addMadelineMessage('Hmm... I didn\'t catch that. Say it again?', '默认');
             }
@@ -834,8 +851,37 @@
             a.play().catch(() => {});
         } catch (e) { /* 无声降级 */ }
     }
-// ... existing code ...
-
+// ===== 回复语气推理：从她说的话推断语气，逐句切换音色 =====
+const REPLY_JOY = ['哈哈','嘿嘿','哇','太棒','真好','开心','耶','嗯嗯','加油','你可以','我相信','没问题','好呀','一起'];
+const REPLY_SURPRISE = ['诶','哎','居然','竟然','没想到','真的吗','天哪','真的假的','原来'];
+const REPLY_SOOTHE = ['别怕','没事','深呼吸','慢慢来','我在','陪着你','别担心','放轻松','不着急'];
+const REPLY_SAD = ['抱抱','哭','难过','辛苦','不容易','委屈'];
+const REPLY_SPEECHLESS = ['唉','算了','服了','离谱','无言'];
+function inferSentenceEmotion(sentence) {
+    let best = '默认', bestScore = 0;
+    const check = (words, emo) => {
+        let s = 0;
+        for (const w of words) if (sentence.indexOf(w) !== -1) s++;
+        if (s > bestScore) { bestScore = s; best = emo; }
+    };
+    check(REPLY_JOY, '可爱');
+    check(REPLY_SURPRISE, '惊讶');
+    check(REPLY_SOOTHE, '不安');
+    check(REPLY_SAD, '不开心');
+    check(REPLY_SPEECHLESS, '无语');
+    if (bestScore > 0) return best;
+    if (/[!！]/.test(sentence)) return '惊讶';
+    return '默认';
+}
+// "默认"不再只用 determined，随机轮换让语气有呼吸感
+const VOICE_POOL_DEFAULT = ['默认', '默认', '可爱', '冒泡', '惊讶'];
+function nextDefaultVoice() { return VOICE_POOL_DEFAULT[Math.floor(Math.random() * VOICE_POOL_DEFAULT.length)]; }
+function inferReplyEmotion(text) {
+    const t = String(text || '');
+    const a = analyzeLocalEmotion(t);
+    if (a.emotion !== '默认') return a.emotion;
+    return inferSentenceEmotion(t);
+}
     function createBubbleElement() {
         if (bubbleEl) bubbleEl.remove();
         bubbleEl = document.createElement('div');
@@ -1119,7 +1165,7 @@
             };
             const pool = reactions[newEmotion] || ['…'];
             const reaction = pool[Math.floor(Math.random() * pool.length)];
-            addMadelineMessage(reaction, '默认');
+            addMadelineMessage(reaction, newEmotion);
         }
 
         companionState.peakIntensity = Math.max(companionState.peakIntensity, analysis.intensity);
@@ -1304,44 +1350,7 @@
     // ===== 像素 Madeline 行为树 v3（贴地行走 + 坐/睡/醒/摔） =====
     const pm = document.getElementById('pixelMadeline');
 
-    const PM_BASE_SIZE = 56;
-    const PM_FRAC = {};
     let pmCurName = '';
-    function pmCalibrate(src) {
-        if (PM_FRAC[src] !== undefined) return;
-        const im = new Image();
-        im.onload = () => {
-            const c = document.createElement('canvas');
-            c.width = im.naturalWidth; c.height = im.naturalHeight;
-            const ctx = c.getContext('2d');
-            ctx.drawImage(im, 0, 0);
-            let data;
-            try { data = ctx.getImageData(0, 0, c.width, c.height).data; } catch (err) { return; }
-            let minX = c.width, minY = c.height, maxX = -1, maxY = -1;
-            for (let y = 0; y < c.height; y++) {
-                for (let x = 0; x < c.width; x++) {
-                    if (data[(y * c.width + x) * 4 + 3] > 20) {
-                        if (x < minX) minX = x;
-                        if (x > maxX) maxX = x;
-                        if (y < minY) minY = y;
-                        if (y > maxY) maxY = y;
-                    }
-                }
-            }
-            if (maxX < 0) return;
-            PM_FRAC[src] = Math.max((maxX - minX + 1) / c.width, (maxY - minY + 1) / c.height);
-            pmApplySize();
-        };
-        im.src = src;
-    }
-    function pmApplySize() {
-        const base = PM_FRAC[PM_SRC.move];
-        const cur = PM_FRAC[pmCurName];
-        let s = 1;
-        if (base && cur) s = Math.min(2.5, base / cur);
-        pm.style.width = Math.round(PM_BASE_SIZE * s) + 'px';
-        pm.style.height = Math.round(PM_BASE_SIZE * s) + 'px';
-    }
 
     const PM_SRC = {
         move: 'celeste-gui/madeline-move.gif',
@@ -1389,8 +1398,6 @@
             pm.src = name;
         }
         pmCurName = name;
-        pmApplySize();
-        pmCalibrate(name);
     }
 
     let zoneScoldUntil = 0;
@@ -1504,6 +1511,7 @@
     }
 
 
+    // ... existing code ...
     function pmNextMode(now) {
         const e = companionState.currentEmotion;
         const gloomy = (e === '悲伤' || e === '孤独' || e === '不开心');
@@ -1511,9 +1519,9 @@
         const nearGround = pmState.y > pmGroundY() - 60;
         const hour = new Date().getHours();
         const night = hour >= 23 || hour < 6;
-        let sitP = gloomy ? 0.2 : 0.08;
-        let funP = lively ? 0.18 : 0.1;
-        let walkP = lively ? 0.66 : 0.6;
+        let sitP = gloomy ? 0.24 : 0.08;
+        let funP = lively ? 0.25 : 0.12;
+        let walkP = lively ? 0.62 : 0.6;
         if (night) { sitP += 0.2; walkP -= 0.2; }
         const r = Math.random();
         if (r < sitP && nearGround) {
@@ -1536,6 +1544,27 @@
         }
     }
 
+    // ===== 情绪→身体：说完一句话后，用动作回应当前语气 =====
+    function pmReactToEmotion(em) {
+        if (chatOpen || pmState.mode === 'sleep' || pmState.mode === 'celebrate') return;
+        const now = performance.now();
+        if (em === '可爱' || em === '惊讶') {
+            if (Math.random() < 0.6) {
+                pmState.mode = 'idle';
+                pmState.modeUntil = now + 1900;
+                pmState.poseUntil = now + 1800;
+                pmState.poseReturn = PM_SRC.move;
+                pmSetSrc(PM_SRC.fun);
+            } else {
+                pmState.hopT = 0;
+            }
+        } else if ((em === '不开心' || em === '不安') && Math.random() < 0.6) {
+            pmState.mode = 'sit';
+            pmState.modeUntil = now + 8000 + Math.random() * 4000;
+            pmSetSrc(PM_SRC.sit);
+        }
+    }
+// ... existing code ...
     function pmThink(now) {
         const e0 = companionState.currentEmotion;
         pmBadeline(e0 === '悲伤' || e0 === '孤独' || e0 === '不开心', now);
