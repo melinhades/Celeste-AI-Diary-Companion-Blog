@@ -1,22 +1,18 @@
 ﻿(function() {
-    // ===== Celeste 日记本 =====
+    // ===== Celeste 日记本（红书封面 + 单页内页） =====
     const BOOK_PAGES = [
-        { src: 'celeste-journal/spread1.jpg', fields: [
-                { kind: 'line', id: 'titleInput', x: .104, y: .518, w: .364, h: .144, ph: '想去爬的那座山…' },
-                { kind: 'area', id: 'contentInput', x: .104, y: .244, w: .364, h: .230, ph: '从小步开始。今天发生了什么…' },
-                { kind: 'area', x: .527, y: .230, w: .182, h: .396, ph: '愿望清单：第一件…' },
-                { kind: 'area', x: .737, y: .230, w: .173, h: .396 } ] },
-        { src: 'celeste-journal/spread2.jpg', fields: [
-                { kind: 'area', x: .104, y: .244, w: .364, h: .230, ph: '把大目标拆成能做到的小步…' },
-                { kind: 'area', x: .104, y: .518, w: .364, h: .144, ph: '想疯狂尝试一次的体验…' },
-                { kind: 'line', x: .536, y: .197, w: .364, h: .036, ph: '我想去——' },
-                { kind: 'line', x: .536, y: .255, w: .364, h: .036, ph: '因为——' },
-                { kind: 'grid', x: .536, y: .309, w: .378, h: .396, cols: 12, rows: 10 } ] },
-        { src: 'celeste-journal/spread3.jpg', fields: [
-                { kind: 'area', x: .104, y: .230, w: .364, h: .216, ph: '想对自己慢慢说的话…' },
-                { kind: 'area', x: .104, y: .482, w: .364, h: .122, ph: '弄丢了，但没忘记…' },
-                { kind: 'area', x: .536, y: .215, w: .373, h: .216, ph: '想起来会笑的回忆…' },
-                { kind: 'cols', x: .536, y: .532, w: .373, h: .094, n: 3, phs: ['想谢的人…', '想谢的小事…', '想谢的自己…'] } ] }
+        { src: 'Atlases/Journal/cover.png', cover: true, fields: [] },
+        { src: 'Atlases/Journal/page.png', fields: [
+                { kind: 'line', id: 'titleInput', x: .12, y: .13, w: .76, h: .058, ph: '想去爬的那座山…' },
+                { kind: 'area', id: 'contentInput', x: .12, y: .225, w: .76, h: .56, ph: '从小步开始。今天发生了什么…' } ] },
+        { src: 'Atlases/Journal/page.png', fields: [
+                { kind: 'area', x: .12, y: .13, w: .76, h: .26, ph: '把大目标拆成能做到的小步…' },
+                { kind: 'area', x: .12, y: .44, w: .76, h: .18, ph: '想起来会笑的回忆…' },
+                { kind: 'grid', x: .12, y: .67, w: .76, h: .2, cols: 14, rows: 4 } ] },
+        { src: 'Atlases/Journal/page.png', fields: [
+                { kind: 'area', x: .12, y: .13, w: .76, h: .26, ph: '想对自己慢慢说的话…' },
+                { kind: 'area', x: .12, y: .44, w: .76, h: .18, ph: '想谢的人、想谢的小事、想谢的自己…' },
+                { kind: 'area', x: .12, y: .67, w: .76, h: .18, ph: '弄丢了，但没忘记…' } ] }
     ];
     const bookEl = document.getElementById('journalBook');
     const dotsBox = document.getElementById('bookDots');
@@ -26,6 +22,7 @@
     BOOK_PAGES.forEach((p, pi) => {
         const el = document.createElement('div');
         el.className = 'book-page';
+        if (p.cover) { el.id = 'bookCover'; el.classList.add('book-cover'); }
         const img = document.createElement('img');
         img.src = p.src;
         img.alt = '日记本第 ' + (pi + 1) + ' 页';
@@ -89,88 +86,89 @@
         dotsBox.appendChild(d);
     });
     dotsBox.children[0].classList.add('on');
+    // ===== 日记图案：每写一篇日记多一个，8 个 Celeste 图标按固定顺序 =====
+    const JOURNAL_STAMPS = ['farewell', 'flag', 'goldberry', 'goldheart', 'heart', 'cassettes', 'cheatmode', 'assist'];
+    let renderCoverStamps = function () {};
+    const coverEl = document.getElementById('bookCover');
+    if (coverEl) {
+        // 日期写在 cover 上（Renogare，每天刷新）
+        const dateEl = document.createElement('div');
+        dateEl.className = 'cover-date';
+        const d = new Date();
+        const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        dateEl.textContent = MONTHS[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+        coverEl.appendChild(dateEl);
 
-    // ===== 调框模式（可视化面板：左下角按钮开关） =====
-    const tuneStore = JSON.parse(localStorage.getItem('jbookTune') || '{}');
-    document.querySelectorAll('#journalBook [data-tk]').forEach(n => {
-        const t = tuneStore[n.dataset.tk];
-        if (!t) return;
-        if (t.l !== undefined) n.style.left = t.l + '%';
-        if (t.t !== undefined) n.style.top = t.t + '%';
-        if (t.w !== undefined) n.style.width = t.w + '%';
-        if (t.h !== undefined) n.style.height = t.h + '%';
-    });
-    let tuneSel = null;
+        // 贴一张当天明信片：用户名位置照搬每日明信片（#postcard-to）
+        const pcEl = document.createElement('div');
+        pcEl.className = 'cover-postcard';
+        const pcImg = document.createElement('img');
+        pcImg.src = 'celeste-gui/postcard.png';
+        pcImg.alt = 'postcard';
+        pcEl.appendChild(pcImg);
 
-    const tuneBtn = document.createElement('button');
-    tuneBtn.id = 'tuneToggle';
-    tuneBtn.textContent = '🔧 调框';
-    document.body.appendChild(tuneBtn);
+        const pcTo = document.createElement('div');
+        pcTo.className = 'cover-pc-to';
+        const pcName = document.createElement('span');
+        pcName.className = 'name';
+        pcName.textContent = localStorage.getItem('nickname') || 'Traveler';
+        pcTo.appendChild(pcName);
+        pcEl.appendChild(pcTo);
 
-    const tunePanel = document.createElement('div');
-    tunePanel.id = 'tunePanel';
-    tunePanel.innerHTML =
-        '<div class="tp-title">点选一个文本框，再用下面按钮微调</div>' +
-        '<div class="tp-row"><button data-act="left">◀ 左</button><button data-act="up">▲ 上</button><button data-act="down">▼ 下</button><button data-act="right">▶ 右</button></div>' +
-        '<div class="tp-row"><button data-act="wMinus">宽 −</button><button data-act="wPlus">宽 ＋</button><button data-act="hMinus">高 −</button><button data-act="hPlus">高 ＋</button></div>' +
-        '<div class="tp-row"><button data-act="resetOne">重置此框</button><button data-act="resetAll">全部重置</button><button data-act="done">完成</button></div>' +
-        '<div class="tp-tip">按住按钮可连续移动 · 自动保存</div>';
-    document.body.appendChild(tunePanel);
+        const pcMsg = document.createElement('div');
+        pcMsg.className = 'cover-pc-msg';
+        pcMsg.textContent = '…';
+        pcEl.appendChild(pcMsg);
+        coverEl.appendChild(pcEl);
 
-    function tuneSave(n) {
-        tuneStore[n.dataset.tk] = {
-            l: +parseFloat(n.style.left).toFixed(2),
-            t: +parseFloat(n.style.top).toFixed(2),
-            w: +parseFloat(n.style.width).toFixed(2),
-            h: +parseFloat(n.style.height).toFixed(2)
-        };
-        localStorage.setItem('jbookTune', JSON.stringify(tuneStore));
-    }
-    function tuneApply(act) {
-        if (!tuneSel) return;
-        const step = 0.3, s = tuneSel.style;
-        if (act === 'left') s.left = (parseFloat(s.left) - step) + '%';
-        else if (act === 'right') s.left = (parseFloat(s.left) + step) + '%';
-        else if (act === 'up') s.top = (parseFloat(s.top) - step) + '%';
-        else if (act === 'down') s.top = (parseFloat(s.top) + step) + '%';
-        else if (act === 'wMinus') s.width = (parseFloat(s.width) - step) + '%';
-        else if (act === 'wPlus') s.width = (parseFloat(s.width) + step) + '%';
-        else if (act === 'hMinus') s.height = (parseFloat(s.height) - step) + '%';
-        else if (act === 'hPlus') s.height = (parseFloat(s.height) + step) + '%';
-        else if (act === 'resetOne') { delete tuneStore[tuneSel.dataset.tk]; localStorage.setItem('jbookTune', JSON.stringify(tuneStore)); location.reload(); return; }
-        else if (act === 'resetAll') { localStorage.removeItem('jbookTune'); location.reload(); return; }
-        else if (act === 'done') { tuneBtn.click(); return; }
-        else return;
-        tuneSave(tuneSel);
-    }
-    tuneBtn.addEventListener('click', () => {
-        document.body.classList.toggle('tune-mode');
-        const on = document.body.classList.contains('tune-mode');
-        tunePanel.style.display = on ? 'block' : 'none';
-        tuneBtn.textContent = on ? '❌ 退出调框' : '🔧 调框';
-        if (!on && tuneSel) { tuneSel.classList.remove('tune-sel'); tuneSel = null; }
-    });
-    tunePanel.querySelectorAll('button').forEach(b => {
-        let timer = null;
-        b.addEventListener('mousedown', ev => {
-            ev.preventDefault();
-            tuneApply(b.dataset.act);
-            timer = setInterval(() => tuneApply(b.dataset.act), 60);
+        getDailyPostcard().then(pc => {
+            pcName.textContent = pc.userName;
+            pcMsg.textContent = pc.message;
         });
-        b.addEventListener('mouseup', () => clearInterval(timer));
-        b.addEventListener('mouseleave', () => clearInterval(timer));
-    });
-    bookEl.addEventListener('mousedown', ev => {
-        if (!document.body.classList.contains('tune-mode')) return;
-        const n = ev.target.closest('[data-tk]');
-        if (!n) return;
-        ev.preventDefault(); ev.stopPropagation();
-        if (tuneSel) tuneSel.classList.remove('tune-sel');
-        tuneSel = n;
-        n.classList.add('tune-sel');
-        if (n.blur) n.blur();
-    }, true);
-
+        // 图案：已得数量 = diarySaveCount（最多 8 个），横排贴在封面下方
+        const stampsBox = document.createElement('div');
+        stampsBox.className = 'cover-stamps';
+        coverEl.appendChild(stampsBox);
+        renderCoverStamps = function () {
+            const n = Math.min(parseInt(localStorage.getItem('diarySaveCount') || '0'), JOURNAL_STAMPS.length);
+            stampsBox.innerHTML = '';
+            for (let i = 0; i < n; i++) {
+                const im = document.createElement('img');
+                im.src = 'celeste-journal/' + JOURNAL_STAMPS[i] + '.png';
+                im.alt = JOURNAL_STAMPS[i];
+                im.style.transform = 'rotate(' + (i % 2 ? 3 : -3) + 'deg)';
+                stampsBox.appendChild(im);
+            }
+        };
+        renderCoverStamps();
+        coverEl.addEventListener('click', () => {
+            if (bookCur === 0) { jpPlay('forward'); bookGoto(1); }
+        });
+    }
+    // 底部圆点旁的白色"下一页"箭头（游戏同款）
+    const dotNext = document.createElement('button');
+    dotNext.className = 'dot-next';
+    dotNext.title = '下一页';
+    const dotNextImg = document.createElement('img');
+    dotNextImg.src = 'Atlases/Journal/poemArrow.png';
+    dotNextImg.alt = '下一页';
+    dotNext.appendChild(dotNextImg);
+    dotNext.addEventListener('click', () => { jpPlay('forward'); bookGoto((bookCur + 1) % pageEls.length); });
+    dotsBox.appendChild(dotNext);
+    // ===== 书本尺寸：高度占满屏幕大半，紧挨左侧 =====
+    const fitImg = pageEls[0] && pageEls[0].querySelector('img');
+    function fitBook() {
+        if (!fitImg || !fitImg.naturalWidth) return;
+        const h = (window.innerHeight - 60) * 0.88;
+        const w = Math.min(window.innerWidth * 0.86, h * fitImg.naturalWidth / fitImg.naturalHeight);
+        bookEl.style.width = w + 'px';
+    }
+    if (fitImg) {
+        if (fitImg.complete) fitBook();
+        else fitImg.addEventListener('load', fitBook);
+        window.addEventListener('resize', fitBook);
+    }
+    // ===== 日记本翻页（Renogare，支持动画） =====
     function bookGoto(idx) {
         if (bookBusy || idx === bookCur || idx < 0 || idx >= pageEls.length) return;
         const dir = idx > bookCur ? 1 : -1;
@@ -178,6 +176,7 @@
         const oldEl = pageEls[bookCur], newEl = pageEls[idx];
         bookCur = idx;
         [...dotsBox.children].forEach((d, i) => d.classList.toggle('on', i === idx));
+
         newEl.style.display = '';
         newEl.style.position = 'absolute';
         newEl.style.top = '0'; newEl.style.left = '0'; newEl.style.width = '100%';
@@ -199,8 +198,11 @@
         }, 580);
     }
 
-    document.getElementById('bookPrev').addEventListener('click', () => { jpPlay('back'); bookGoto((bookCur - 1 + pageEls.length) % pageEls.length); });
-    document.getElementById('bookNext').addEventListener('click', () => { jpPlay('forward'); bookGoto((bookCur + 1) % pageEls.length); });
+    // 侧面箭头已移除，翻页只靠底部圆点 + 底部白箭头
+    const bookPrevBtn = document.getElementById('bookPrev');
+    const bookNextBtn = document.getElementById('bookNext');
+    if (bookPrevBtn) bookPrevBtn.addEventListener('click', () => { jpPlay('back'); bookGoto((bookCur - 1 + pageEls.length) % pageEls.length); });
+    if (bookNextBtn) bookNextBtn.addEventListener('click', () => { jpPlay('forward'); bookGoto((bookCur + 1) % pageEls.length); });
     const avatarMap = {
         '默认': 'celeste-portraits/madeline/normal00.png',
         '不安': 'celeste-portraits/madeline/panic00.png',
@@ -388,12 +390,17 @@
     function addMadelineMessage(text, emotion) {
         msgQueue = msgQueue.then(() => doAddMadelineMessage(text, emotion)).catch(e => console.warn('说话失败:', e));
     }
-
-// ... existing code ...
+    let lastUserInputTime = 0;
+    async function waitUserPause(maxWait) {
+        const start = Date.now();
+        while (lastUserInputTime && Date.now() - lastUserInputTime < 700 && Date.now() - start < (maxWait || 6000)) {
+            await sleep(200);
+        }
+    }
     async function doAddMadelineMessage(text, emotion) {
         text = String(text || '').replace(/[（(][^（）()]*[）)]/g, '').trim();
         if (!text) return;
-        if (emotion) setAvatar(emotion);
+        await waitUserPause(6000);
         const messages = splitIntoMessages(text);
         const useGameDialog = !chatOpen;
         if (useGameDialog) {
@@ -709,7 +716,27 @@
         } catch (e) { /* 无声降级 */ }
     }
 
-
+// ===== 每日明信片：当天缓存，一天只有一张 =====
+    async function getDailyPostcard() {
+        const today = new Date().toDateString();
+        try {
+            const cached = JSON.parse(localStorage.getItem('dailyPostcardCache') || 'null');
+            if (cached && cached.date === today && cached.message) return cached;
+        } catch (e) {}
+        try {
+            const res = await api('/diary/daily-postcard', 'GET');
+            if (res && res.success && res.data && res.data.message) {
+                const out = {
+                    date: today,
+                    userName: res.data.userName || localStorage.getItem('nickname') || 'Traveler',
+                    message: res.data.message
+                };
+                localStorage.setItem('dailyPostcardCache', JSON.stringify(out));
+                return out;
+            }
+        } catch (e) {}
+        return { date: today, userName: localStorage.getItem('nickname') || 'Traveler', message: 'A brand new day. Be gentle with yourself.' };
+    }
     // ===== 每日明信片主流程 =====
     async function showDailyPostcard() {
         const overlay = document.getElementById('postcard-overlay');
@@ -722,30 +749,14 @@
         pcPlay('ui_main_postcard_csides_in.wav');
         startSnow();
 
-        try {
-            const res = await api('/diary/daily-postcard', 'GET');
-            if (res.success && res.data) {
-                nameEl.textContent = res.data.userName || 'Traveler';
-                await sleep(800);
-                container.classList.add('slide-in');
-                await sleep(1200);
-                await typewritePostcard(msgEl, res.data.message || 'A new day begins. Take it slow.');
-                await sleep(500);
-                closeBtn.classList.add('show');
-            } else {
-                nameEl.textContent = 'Traveler';
-                container.classList.add('slide-in');
-                await sleep(1000);
-                await typewritePostcard(msgEl, 'A brand new day. Be gentle with yourself.');
-                closeBtn.classList.add('show');
-            }
-        } catch (e) {
-            nameEl.textContent = 'Traveler';
-            container.classList.add('slide-in');
-            await sleep(1000);
-            await typewritePostcard(msgEl, 'Keep going, one step at a time. — Madeline');
-            closeBtn.classList.add('show');
-        }
+        const pc = await getDailyPostcard();
+        nameEl.textContent = pc.userName;
+        await sleep(800);
+        container.classList.add('slide-in');
+        await sleep(1200);
+        await typewritePostcard(msgEl, pc.message);
+        await sleep(500);
+        closeBtn.classList.add('show');
 
         closeBtn.onclick = () => {
             pcPlay('ui_main_postcard_csides_out.wav');
@@ -763,7 +774,6 @@
             localStorage.setItem('postcardDate', new Date().toDateString());
         };
     }
-
     // ================================================================
     // ===== Madeline 主动冒泡系统 =====
     // ================================================================
@@ -967,10 +977,11 @@ function inferReplyEmotion(text) {
     // ================================================================
 
     // ===== 配置常量 =====
+    // ... existing code ...
     const REALTIME_CONFIG = {
         MIN_CHARS_FOR_AI: 8,
-        MIN_NEW_CHARS_FOR_AI: 12,
-        MIN_NEW_CHARS_FOR_QUICK: 6,
+        MIN_NEW_CHARS_FOR_AI: 30,
+        MIN_NEW_CHARS_FOR_QUICK: 18,
         SENTENCE_ENDERS: ['。', '！', '？', '…', '...', '!', '?', '\n'],
         EMOTION_WORDS: {
             '不安': ['担心','焦虑','害怕','紧张','不安','忐忑','恐慌','患得患失','迷茫','彷徨','不知所措','心慌'],
@@ -985,11 +996,12 @@ function inferReplyEmotion(text) {
             '怨恨': '#FF4444', '不开心': '#9B59B6', '可爱': '#FF69B4', '无语': '#B0B0B0'
         },
         EMOTION_WEIGHTS: { '不安':1.2, '惊讶':1.0, '怨恨':1.3, '不开心':1.2, '可爱':1.0, '无语':0.8 },
-        COOLDOWN_AFTER_AI: 2000,
-        MAX_LOCAL_REACTIONS: 3
+        COOLDOWN_AFTER_AI: 12000,
+        MAX_LOCAL_REACTIONS: 2,
+        LOCAL_REACT_COOLDOWN: 20000
     };
+// ... existing code ...
 
-    // ===== 状态管理 =====
     const companionState = {
         lastAnalyzedText: '',
         lastAnalyzedLen: 0,
@@ -1002,9 +1014,10 @@ function inferReplyEmotion(text) {
         isTyping: false,
         typeTimer: null,
         peakEmotion: null,
-        peakIntensity: 0
+        peakIntensity: 0,
+        lastLocalReactTime: 0,
+        lastReactionLine: ''
     };
-
     // ===== DOM 引用 =====
     const peekingEl = document.getElementById('madeline-peeking');
     const emotionBar = document.getElementById('emotion-analysis-bar');
@@ -1147,14 +1160,11 @@ function inferReplyEmotion(text) {
     // ===== 本地快速反应（不等 AI，即时反馈） =====
     function localReact(analysis, newText) {
         if (companionState.localReactionCount >= REALTIME_CONFIG.MAX_LOCAL_REACTIONS) return;
+        if (Date.now() - companionState.lastLocalReactTime < REALTIME_CONFIG.LOCAL_REACT_COOLDOWN) return;
         const prevEmotion = companionState.currentEmotion;
         const newEmotion = analysis.emotion;
 
         if (newEmotion !== prevEmotion && newEmotion !== '默认') {
-            companionState.localReactionCount++;
-            companionState.currentEmotion = newEmotion;
-            updateThemeByEmotion(newEmotion);
-
             const reactions = {
                 '不安': ['…怎么了？', '感觉到你有点不安…', '慢慢写，我在。'],
                 '惊讶': ['哦？发生了什么！', '然后呢？！', '哇…'],
@@ -1163,14 +1173,37 @@ function inferReplyEmotion(text) {
                 '可爱': ['♥', '嗯嗯！', '看到你开心我也开心。'],
                 '无语': ['…嗯。', '有时候就是会这样。', '无语也没关系。']
             };
-            const pool = reactions[newEmotion] || ['…'];
+            const all = reactions[newEmotion] || ['…'];
+            const pool = all.filter(l => l !== companionState.lastReactionLine);
             const reaction = pool[Math.floor(Math.random() * pool.length)];
+            companionState.localReactionCount++;
+            companionState.currentEmotion = newEmotion;
+            companionState.lastReactionLine = reaction;
+            companionState.lastLocalReactTime = Date.now();
+            updateThemeByEmotion(newEmotion);
             addMadelineMessage(reaction, newEmotion);
         }
 
         companionState.peakIntensity = Math.max(companionState.peakIntensity, analysis.intensity);
     }
-
+// ===== 说话去重：同样的话、开头雷同的话不再重复 =====
+    const spokenLines = [];
+    function isRepeatedSpeech(line) {
+        const t = String(line || '').trim();
+        if (!t) return true;
+        if (spokenLines.indexOf(t) !== -1) return true;
+        if (t.length >= 12) {
+            const head = t.slice(0, 12);
+            for (const prev of spokenLines) {
+                if (prev.length >= 12 && (prev.indexOf(head) !== -1 || t.indexOf(prev.slice(0, 12)) !== -1)) return true;
+            }
+        }
+        return false;
+    }
+    function rememberSpeech(line) {
+        spokenLines.push(String(line).trim());
+        if (spokenLines.length > 8) spokenLines.shift();
+    }
     // ===== 触发 AI 分析 =====
     async function triggerAiAnalysis(text, triggerType) {
         if (companionState.isAiPending) return;
@@ -1186,7 +1219,8 @@ function inferReplyEmotion(text) {
                 const emotion = res.data.emotion || '默认';
                 const userEmotion = res.data.userEmotion || emotion;
                 showPeeking(false);
-                if (feedback) addMadelineMessage(feedback, emotion);
+                // Deleted:if (feedback) addMadelineMessage(feedback, emotion);
+                if (feedback && !isRepeatedSpeech(feedback)) { rememberSpeech(feedback); addMadelineMessage(feedback, emotion); }
                 updateThemeByEmotion(userEmotion);
                 companionState.currentEmotion = userEmotion;
                 companionState.previousEmotion = userEmotion;
@@ -1216,6 +1250,7 @@ function inferReplyEmotion(text) {
 
     // ===== 核心：输入事件处理 =====
     contentInput.addEventListener('input', () => {
+        lastUserInputTime = Date.now();
         const text = contentInput.value.trim();
 
         companionState.isTyping = true;
@@ -1236,20 +1271,23 @@ function inferReplyEmotion(text) {
         const newSentences = getNewSentences(companionState.lastAnalyzedText, text);
         const newChars = text.length - companionState.lastAnalyzedLen;
         const hasSentenceEnd = newSentences.length > 0;
-        const enoughNewChars = newChars >= REALTIME_CONFIG.MIN_NEW_CHARS_FOR_AI;
-        const quickTrigger = newChars >= REALTIME_CONFIG.MIN_NEW_CHARS_FOR_QUICK && hasSentenceEnd;
+        const quickTrigger = hasSentenceEnd && newChars >= REALTIME_CONFIG.MIN_NEW_CHARS_FOR_QUICK;
+        const longStretch = newChars >= 80;
         const timeSinceLastAi = Date.now() - companionState.lastAiTime;
         const pastCooldown = timeSinceLastAi > REALTIME_CONFIG.COOLDOWN_AFTER_AI;
 
+
         localReact(analysis, text);
 
+
         if (!companionState.isAiPending && pastCooldown) {
-            if (quickTrigger || enoughNewChars) {
+            if (quickTrigger || longStretch) {
+
                 triggerAiAnalysis(text, hasSentenceEnd ? 'sentence' : 'threshold');
             }
         }
     });
-
+// ... existing code ...
     // ===== 标题也监听（轻量） =====
     titleInput.addEventListener('input', () => {
         const title = titleInput.value.trim();
@@ -1266,8 +1304,7 @@ function inferReplyEmotion(text) {
         const title = titleInput.value.trim();
         const content = contentInput.value.trim();
         if (!content) { showToast('写点什么再保存吧~', 'error'); return; }
-        saveBtn.disabled = true;
-        saveBtn.textContent = 'Saving...';
+        if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
         try {
             const extras = [];
             for (let i = 0; i < localStorage.length; i++) {
@@ -1292,7 +1329,7 @@ function inferReplyEmotion(text) {
                 if (companionRes.success && companionRes.data) {
                     const feedback = companionRes.data.feedback || '';
                     const emotion = companionRes.data.emotion || '默认';
-                    addMadelineMessage(feedback, emotion);
+                    if (feedback && !isRepeatedSpeech(feedback)) { rememberSpeech(feedback); addMadelineMessage(feedback, emotion); }
                     updateThemeByEmotion(emotion);
                 }
 
@@ -1305,6 +1342,7 @@ function inferReplyEmotion(text) {
                     addBerries(1);
                     pmMilestone(saveCnt);
                     playBerrySound();
+                    renderCoverStamps();
                 }
                 onSaveStreak();
                 editingDiaryId = null;
@@ -1323,25 +1361,32 @@ function inferReplyEmotion(text) {
         } catch (e) {
             showToast('网络错误', 'error');
         }
-        saveBtn.disabled = false;
-        saveBtn.textContent = 'SAVE';
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'SAVE'; }
     }
-    saveBtn.addEventListener('click', saveDiary);
+    if (saveBtn) saveBtn.addEventListener('click', saveDiary);
+    // 按钮已移除，Ctrl+S 保存
+    window.addEventListener('keydown', e => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveDiary(); }
+    });
 
     // ===== 测试情绪检测按钮 =====
+    // ===== 测试情绪检测按钮（按钮已移除，逻辑保留防 null） =====
+    // ===== 测试情绪检测按钮（按钮已移除，逻辑保留防 null） =====
     const testBtn = document.getElementById('testEmotionBtn');
     const emotionResult = document.getElementById('emotionResult');
-    testBtn.addEventListener('click', () => {
-        const text = contentInput.value.trim();
-        if (!text) { emotionResult.style.display = 'none'; return; }
-        const analysis = analyzeLocalEmotion(text);
-        emotionResult.style.display = 'block';
-        emotionResult.innerHTML =
-            '<strong>情绪:</strong> ' + analysis.emotion + '<br>' +
-            '<strong>强度:</strong> ' + analysis.intensity + '/10<br>' +
-            '<strong>Top 情绪:</strong> ' + analysis.topEmotions.join(', ') + '<br>' +
-            '<strong>详细得分:</strong> ' + (Object.entries(analysis.scores).filter(function(p){ return p[1] > 0; }).map(function(p){ return p[0] + ':' + p[1]; }).join(', ') || '无');
-    });
+    if (testBtn && emotionResult) {
+        testBtn.addEventListener('click', () => {
+            const text = contentInput.value.trim();
+            if (!text) { emotionResult.style.display = 'none'; return; }
+            const analysis = analyzeLocalEmotion(text);
+            emotionResult.style.display = 'block';
+            emotionResult.innerHTML =
+                '<strong>情绪:</strong> ' + analysis.emotion + '<br>' +
+                '<strong>强度:</strong> ' + analysis.intensity + '/10<br>' +
+                '<strong>Top 情绪:</strong> ' + analysis.topEmotions.join(', ') + '<br>' +
+                '<strong>详细得分:</strong> ' + (Object.entries(analysis.scores).filter(function(p){ return p[1] > 0; }).map(function(p){ return p[0] + ':' + p[1]; }).join(', ') || '无');
+        });
+    }
 
 
     // ================================================================
@@ -2106,13 +2151,12 @@ function inferReplyEmotion(text) {
             if (document.getElementById('strawberryBonfire')) return;
             const w = document.createElement('div');
             w.id = 'strawberryBonfire';
+            w.title = '我的草莓';
             w.innerHTML =
-                '<div class="sb-straw"><img src="celeste-collectables/strawberry.png" alt="strawberry"><span id="sbCount">0</span></div>' +
-                '<a class="sb-shop-link" id="sbShopLink" href="shop.html" title="草莓商店">商店</a>';
+                '<div class="sb-straw"><img src="celeste-collectables/strawberry.png" alt="strawberry"><span id="sbCount">0</span></div>';
             document.body.appendChild(w);
-            w.addEventListener('click', e => {
-                if (e.target.closest('#sbShopLink')) return;
-                addMadelineMessage('你现在有 ' + berryBalance() + ' 颗草莓。点「商店」去换好东西～', '可爱');
+            w.addEventListener('click', () => {
+                addMadelineMessage('你现在有 ' + berryBalance() + ' 颗草莓，慢慢攒，山顶有好东西等着你～', '可爱');
             });
             refreshShopUI();
         }

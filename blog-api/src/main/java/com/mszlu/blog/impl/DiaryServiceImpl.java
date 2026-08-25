@@ -297,8 +297,25 @@ public class DiaryServiceImpl implements DiaryService {
             return Result.fail(403, "未登录，请先登录");
         }
 
+        List<String> history = new java.util.ArrayList<>();
+        if (historyJson != null && !historyJson.isEmpty()) {
+            try {
+                com.alibaba.fastjson.JSONArray arr = com.alibaba.fastjson.JSON.parseArray(historyJson);
+                for (int i = 0; i < arr.size(); i++) {
+                    com.alibaba.fastjson.JSONObject obj = arr.getJSONObject(i);
+                    String role = obj.getString("role");
+                    String content = obj.getString("content");
+                    if ("user".equals(role)) {
+                        history.add("客人说：" + content);
+                    } else {
+                        history.add("Oshiro说：" + content);
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+
         var messages = new ArrayList<AiMessage>();
-        messages.add(new AiMessage("system", PromptBuilder.oshiroChat(new java.util.ArrayList<>())));
+        messages.add(new AiMessage("system", PromptBuilder.oshiroChat(history)));
         messages.add(new AiMessage("user", message));
 
         String reply = aiClient.chat(messages);

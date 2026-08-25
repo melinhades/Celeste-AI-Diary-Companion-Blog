@@ -8,13 +8,17 @@
   --c-text:        #E0E0E0;
   --c-text-dim:    #B0B0B0;
   --c-border:      #111111;
-  --chat-font: 'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+  --chat-font: 'Renogare', 'CelesteZH', 'Microsoft YaHei', sans-serif;
   --pixel-font: 'Press Start 2P', monospace;
 }
 
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(30px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeInOnly {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 @keyframes fadeInRight {
   from { opacity: 0; transform: translateX(-30px); }
@@ -80,7 +84,7 @@ body.emotion-hopeful   { --c-sky: #87CEEB; --c-teal: #3498DB; --c-yellow: #ADD8E
 * { margin:0; padding:0; box-sizing:border-box; }
 html,body {
   height:100%;
-  font-family: var(--pixel-font);
+  font-family: var(--chat-font);
   background:var(--c-bg-night);
   color:var(--c-text);
   overflow-x:hidden;
@@ -114,10 +118,11 @@ body::before {
     display:flex;
     flex-direction:column;
     gap:8px;
-    max-width:1120px;
-    margin:0 auto 8px auto;
+    max-width:none;
+    margin:0 0 8px 0;
     width:100%;
-    animation:fadeInUp 0.6s ease-out forwards;
+    align-items:flex-start;
+    animation:fadeInOnly 0.6s ease-out forwards;
     opacity:0;
     position:relative;
     z-index:4;
@@ -157,30 +162,35 @@ body::before {
 .save-btn {
   width:100%; padding:10px; border:none; border-radius:4px;
   background:var(--c-teal); color:#fff;
-  font-family: var(--pixel-font); font-size:14px;
+  font-family: var(--chat-font); font-size:14px;
   cursor:pointer;
   box-shadow:inset 0 -2px var(--c-border);
   transition:background .2s;
 }
 .diary-actions {
-    display:flex;
-    gap:16px;
-    margin-top:12px;
+    position:fixed;
+    right:22px;
+    top:50%;
+    transform:translateY(-50%);
+    flex-direction:column;
+    gap:12px;
+    margin-top:0;
+    z-index:600;
 }
 .diary-actions .save-btn {
-    flex:3;
+    width:150px;
     padding:15px;
     border-radius:8px;
     font-size:17px;
 }
 #testEmotionBtn {
-    flex:2;
+    width:150px;
     padding:15px;
     border:none;
     border-radius:8px;
     background:#ff9800;
     color:#fff;
-    font-family:var(--pixel-font);
+    font-family:var(--chat-font);
     font-size:16px;
     cursor:pointer;
     box-shadow:inset 0 -2px rgba(0,0,0,.25);
@@ -266,8 +276,9 @@ body::before {
   width:100%; height:100%; object-fit:cover; display:block;
 }
 .chat-header .chat-title {
-  font-family: var(--pixel-font);
-  font-size:12px;
+  font-family: var(--chat-font);
+  font-size:18px;
+  letter-spacing:1px;
     color: #2b2018;
   flex:1;
 }
@@ -384,13 +395,13 @@ body::before {
   flex:0 0 auto; width:100%; font-size:10px;
   padding:4px; border:1px solid var(--c-yellow);
   border-radius:4px; background:var(--c-bg-panel);
-  color:var(--c-text); font-family: var(--pixel-font);
+  color:var(--c-text); font-family: var(--chat-font);
 }
 #quickSendBtn {
   width:100%; height:24px; font-size:10px;
   border-radius:4px; background:var(--c-yellow);
   color:#111; cursor:pointer; border:none;
-  font-family: var(--pixel-font);
+  font-family: var(--chat-font);
 }
 
 /* ===== 每日明信片开场动画 ===== */
@@ -435,7 +446,7 @@ body::before {
 #postcard-to {
   position:absolute;
   top:12%; left:12%;
-  font-family:'Patrick Hand', cursive;
+  font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif;
   font-size:clamp(16px, 3vw, 28px);
   color:#5a3e36;
   letter-spacing:1px;
@@ -450,11 +461,10 @@ body::before {
 #postcard-message {
   position:absolute;
   top:28%; left:10%; right:10%; bottom:15%;
-  font-family:'Patrick Hand', cursive;
-  font-size:clamp(14px, 2.5vw, 24px);
-  color:#4a3530;
-  line-height:2;
   overflow:hidden;
+    font-family:'Renogare','Segoe UI','CelesteZH','Microsoft YaHei',sans-serif;
+    letter-spacing:1px;
+    font-size:clamp(16px, 3vw, 28px); line-height:2; color:#4a3530;
 }
 
 #postcard-close {
@@ -485,7 +495,7 @@ body::before {
 #postcard-to,
 #postcard-message,
 #postcard-close {
-    font-family: 'Renogare', 'Segoe UI', sans-serif;
+    font-family: 'Renogare', 'CelesteZH', 'Microsoft YaHei', sans-serif;
     letter-spacing: 1px;
 }
 @font-face {
@@ -779,8 +789,8 @@ body::before {
     filter: drop-shadow(0 0 10px rgba(200,235,255,1)) drop-shadow(0 0 24px rgba(120,190,255,.8));
 }
 /* ===== Celeste 日记本 ===== */
-#journalStage { width:min(100%, 1080px, calc((100vh - 300px) * 2)); margin:0 auto; position:relative; }
-#journalBook { position:relative; width:100%; perspective:1800px; }
+#journalStage { position:fixed; left:0; right:0; bottom:0; width:100%; margin:0; z-index:5; display:flex; justify-content:center; pointer-events:none; }
+#journalBook { position:relative; perspective:1800px; pointer-events:auto; margin-left:80px; }
 .book-page {
     position:relative; width:100%;
     transition:transform .55s cubic-bezier(.3,.7,.25,1), opacity .5s ease;
@@ -799,32 +809,82 @@ body::before {
 .book-page .gridzone { position:absolute; display:grid; }
 .book-page .gridzone i { cursor:pointer; border-radius:2px; transition:background .25s, box-shadow .25s; }
 .book-page .gridzone i.on { background:rgba(255,214,90,.7); box-shadow:0 0 6px rgba(255,227,109,.8); }
-.book-arrow {
-    position:absolute; top:50%; transform:translateY(-50%); z-index:10;
-    border:none; background:transparent; padding:0;
-    width:48px; height:48px; cursor:pointer;
-    filter:drop-shadow(0 0 6px rgba(255,230,109,.5)); transition:transform .2s, filter .2s;
+.book-dots { position:absolute; left:50%; bottom:12px; transform:translateX(-50%); margin:0; z-index:6; pointer-events:auto; }
+/* ===== 封面日期（Renogare，每天刷新） ===== */
+.book-cover { cursor:pointer; }
+.cover-postcard {
+    position:absolute; left:46%; top:50%; width:52%;
+    transform:translate(-50%,-50%) rotate(-4deg);
+    filter:drop-shadow(0 4px 10px rgba(90,20,10,.35));
+    pointer-events:none; user-select:none;
 }
-.book-arrow img { width:100%; height:100%; object-fit:contain; display:block; }
-#bookPrev { left:-20px; }
-#bookNext { right:-20px; }
-.book-arrow:hover { transform:translateY(-50%) scale(1.12); filter:drop-shadow(0 0 10px rgba(255,230,109,.85)); }
-.book-dots { display:flex; justify-content:center; gap:7px; margin-top:8px; }
-.book-dots span { width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,.25); transition:all .3s; cursor:pointer; }
-.book-dots span.on { background:var(--c-yellow); box-shadow:0 0 8px rgba(255,227,109,.7); transform:scale(1.25); }
-/* ===== 调框模式 ===== */
-.tune-mode .book-page [data-tk] { outline: 1px dashed rgba(230,81,124,.7); background: rgba(230,81,124,.06); }
-.tune-mode .book-page .tune-sel { outline: 2px solid #e6517c; background: rgba(230,81,124,.14); }
-
-/* ===== 调框面板 ===== */
-#tuneToggle { position:fixed; left:16px; bottom:16px; z-index:960; padding:8px 14px; background:rgba(22,34,60,.9); color:var(--c-yellow); border:2px solid var(--c-yellow); border-radius:6px; cursor:pointer; font-size:13px; box-shadow:0 0 8px rgba(255,230,109,.35); }
-#tunePanel { display:none; position:fixed; left:16px; bottom:66px; z-index:960; width:250px; background:rgba(15,23,42,.95); border:2px solid var(--c-yellow); border-radius:8px; padding:10px; }
-#tunePanel .tp-title { color:#ffe36d; font-size:12px; margin-bottom:8px; line-height:1.5; }
-#tunePanel .tp-row { display:flex; gap:6px; margin-bottom:6px; }
-#tunePanel button { flex:1; padding:7px 0; background:rgba(22,34,60,.9); color:#fff; border:1px solid var(--c-yellow); border-radius:4px; cursor:pointer; font-size:12px; }
-#tunePanel button:hover { background:rgba(255,227,109,.25); }
-#tunePanel .tp-tip { color:rgba(255,255,255,.5); font-size:11px; text-align:center; }
-
+.cover-postcard img { width:100%; display:block; }
+.cover-pc-to {
+    position:absolute;
+    top:12%; left:12%;
+    font-family:'Renogare','Segoe UI','CelesteZH','Microsoft YaHei',sans-serif;
+    letter-spacing:1px;
+    font-size:clamp(14px, 2.5vw, 24px);
+    color:#5a3e36;
+}
+.cover-pc-to .name {
+    font-weight:bold;
+    color:#3a2018;
+    border-bottom:2px solid #c4a882;
+    padding:0 8px;
+}
+.cover-pc-msg {
+    position:absolute; left:10%; right:10%; top:28%; bottom:15%;
+    overflow:hidden;
+    font-family:'Renogare','Segoe UI','CelesteZH','Microsoft YaHei',sans-serif;
+    letter-spacing:1px;
+    font-size:clamp(14px, 2.5vw, 24px); line-height:2; color:#4a3530;
+}
+.cover-date {
+    position:absolute; left:45%; top:6%; transform:translateX(-50%);
+    font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif;
+    font-size:clamp(15px, 2.4vw, 22px); letter-spacing:3px; color:#fff;
+    text-shadow:0 2px 6px rgba(60,10,5,.55), 0 0 14px rgba(255,235,210,.35);
+    pointer-events:none; user-select:none;
+    white-space:nowrap;
+}
+.cover-stamps {
+    position:absolute; left:50%; bottom:8%; transform:translateX(-50%);
+    display:flex; gap:6px; align-items:center;
+    pointer-events:none; user-select:none; z-index:3;
+}
+.cover-stamps img {
+    width:clamp(18px, 4vw, 44px); height:auto; display:block;
+    filter:drop-shadow(0 2px 3px rgba(60,15,5,.45));
+}
+/* 游戏同款圆点：白色实心+深描边为当前页，粉色为未读 */
+.book-dots { display:flex; justify-content:center; align-items:center; gap:7px; margin-top:8px; }
+.book-dots span { width:10px; height:10px; border-radius:50%; background:#e79f8b; box-shadow:none; transform:none; }
+.book-dots span.on { background:#fff; border:2px solid #2b2018; box-shadow:none; transform:none; }
+.dot-next {
+    width:auto; height:auto; margin-left:8px; padding:0;
+    border:none; border-radius:0; background:transparent;
+    box-shadow:none;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    transition:transform .15s;
+}
+.dot-next:hover { transform:translateX(3px); }
+.dot-next img { width:30px; height:30px; display:block; filter:drop-shadow(0 1px 2px rgba(0,0,0,.5)); }
+/* 右下角"返回 ✕"（回主页） */
+#journalBackBtn {
+    position:fixed; right:16px; bottom:86px; z-index:890;
+    display:flex; align-items:center; gap:7px;
+    padding:8px 16px 8px 10px;
+    background:rgba(20,24,40,.85); color:#fff; border:none; border-radius:20px;
+    cursor:pointer; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; font-size:13px;
+    box-shadow:0 2px 10px rgba(0,0,0,.35);
+    transition:background .2s;
+}
+#journalBackBtn:hover { background:rgba(20,24,40,.98); }
+#journalBackBtn .x {
+    width:18px; height:18px; border-radius:50%; background:#fff; color:#333;
+    display:flex; align-items:center; justify-content:center; font-size:11px; flex-shrink:0;
+}
 /* ===== 回忆书架 ===== */
 #shelfBtn { position:fixed; bottom:12px; right:16px; z-index:900; width:100px; height:100px; padding:12px; background:transparent; border:none; cursor:pointer; filter:drop-shadow(0 0 6px rgba(140,220,255,.55)) drop-shadow(0 0 14px rgba(140,220,255,.25)); transition:transform .2s; }
 #shelfBtn:hover { transform:scale(1.06); }
@@ -833,7 +893,7 @@ body::before {
 #shelfPanel { position:fixed; top:0; right:-360px; width:340px; max-width:92vw; height:100vh; z-index:970; background:rgba(15,23,42,.97); border-left:2px solid var(--c-yellow); transition:right .35s cubic-bezier(.3,.7,.25,1); display:flex; flex-direction:column; }
 #shelfPanel.open { right:0; }
 #shelfPanel .shelf-head { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px dashed rgba(255,230,109,.3); flex-shrink:0; }
-#shelfPanel .shelf-head h3 { margin:0; color:#ffe36d; font-family:var(--pixel-font); font-size:13px; }
+#shelfPanel .shelf-head h3 { margin:0; color:#ffe36d; font-family:var(--chat-font); font-size:13px; }
 #shelfPanel .shelf-close { background:none; border:none; color:#ffe36d; font-size:18px; cursor:pointer; }
 #shelfList { flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:10px; }
 .shelf-card { background:rgba(22,34,60,.85); border:1px solid rgba(255,230,109,.35); border-radius:6px; padding:10px 12px; cursor:pointer; transition:transform .15s, border-color .15s; flex-shrink:0; }
@@ -853,11 +913,9 @@ body::before {
 #shelfDetail .sd-actions button.danger { border-color:#e6517c; color:#ff9ab5; }
 
 /* ===== 主线4：草莓与篝火 ===== */
-#strawberryBonfire{position:fixed;top:16px;right:140px;z-index:955;display:flex;align-items:flex-end;gap:8px;padding:8px 14px;background:rgba(22,34,60,.9);border:2px solid rgba(255,230,109,.5);border-radius:8px;cursor:pointer;box-shadow:0 0 8px rgba(255,230,109,.25);transition:transform .15s,border-color .15s;user-select:none;}
-#strawberryBonfire:hover{transform:translateY(-2px);border-color:#ffe36d;}
-#strawberryBonfire .sb-shop-link{padding:3px 8px;background:rgba(255,227,109,.15);color:#ffe36d;border:1px solid rgba(255,230,109,.5);border-radius:4px;text-decoration:none;font-size:11px;font-family:var(--chat-font);}
-#strawberryBonfire .sb-shop-link:hover{background:rgba(255,227,109,.3);}
-.sb-straw{display:flex;align-items:center;gap:4px;font-family:var(--pixel-font);font-size:11px;color:#ff6b8a;}
+#strawberryBonfire{position:fixed;top:28px;right:96px;z-index:955;display:flex;align-items:center;gap:6px;padding:7px 16px;background:rgba(20,24,40,.78);border:1px solid rgba(255,107,138,.5);border-radius:20px;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.3),0 0 10px rgba(255,107,138,.15);transition:transform .15s,border-color .15s,box-shadow .15s;user-select:none;}
+#strawberryBonfire:hover{transform:translateY(-2px);border-color:#ff6b8a;box-shadow:0 2px 12px rgba(0,0,0,.35),0 0 18px rgba(255,107,138,.4);}
+.sb-straw{display:flex;align-items:center;gap:4px;font-family:var(--chat-font);font-size:11px;color:#ff6b8a;}
 .sb-straw img{width:20px;height:20px;image-rendering:pixelated;}
 .sb-fire{position:relative;width:24px;height:32px;display:flex;align-items:flex-end;justify-content:center;}
 .sb-fire-base{width:16px;height:5px;background:#5a3e36;border-radius:2px;position:absolute;bottom:0;}
@@ -873,7 +931,7 @@ body::before {
 #postcardExportModal.show{display:flex;}
 #postcardExportModal canvas{max-width:90vw;max-height:75vh;border:2px solid rgba(255,230,109,.4);border-radius:4px;box-shadow:0 8px 40px rgba(0,0,0,.6);}
 .pe-actions{display:flex;gap:12px;}
-.pe-actions button{padding:10px 24px;border:2px solid #ffe36d;border-radius:6px;background:rgba(22,34,60,.9);color:#ffe36d;font-family:var(--pixel-font);font-size:12px;cursor:pointer;transition:background .2s;}
+.pe-actions button{padding:10px 24px;border:2px solid #ffe36d;border-radius:6px;background:rgba(22,34,60,.9);color:#ffe36d;font-family:var(--chat-font);font-size:12px;cursor:pointer;transition:background .2s;}
 .pe-actions button:hover{background:rgba(255,227,109,.2);}
 .pe-actions button.pe-close{border-color:#888;color:#aaa;}
 

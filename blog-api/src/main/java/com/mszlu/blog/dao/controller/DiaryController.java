@@ -61,7 +61,13 @@ public class DiaryController {
         return diaryService.summary(param);
     }
 
-    /** 请求体类：用于 companion 接口 */
+    /** Oshiro 旅馆聊天 */
+    @PostMapping("oshiro-chat")
+    public Result oshiroChat(@RequestBody OshiroChatParam param) {
+        return diaryService.oshiroChat(param.getMessage(), param.getHistory());
+    }
+
+    /** 请求体体：用于 companion 接口 */
     static class CompanionParam {
         private String draft;
 

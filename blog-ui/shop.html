@@ -69,7 +69,7 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 /* ===== 像素 Oshiro ===== */
 #pixelOshiro {
     position: fixed;
-    bottom: 8px;
+    top: 60px;
     left: 40px;
     width: 320px;
     height: 320px;
@@ -87,49 +87,42 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 #oshiroChatDialog {
     position: fixed;
     right: 12px;
-    bottom: 66px;
-    width: 340px;
+    bottom: 12px;
+    width: 380px;
     max-width: 92vw;
-    height: 440px;
+    height: 480px;
     z-index: 955;
-    background: rgba(15,23,42,.97);
-    border: 2px solid rgba(255,230,109,.5);
-    border-radius: 10px;
+    background: url('celeste-gui/card_golden.png') top / 100% 123% no-repeat;
+    border: none;
+    border-radius: 0;
     display: none;
     flex-direction: column;
-    box-shadow: 0 8px 32px rgba(0,0,0,.5);
+    box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    overflow: hidden;
 }
 #oshiroChatDialog.show { display: flex; }
-#oshiroChatDialog .chat-header { display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid rgba(255,230,109,.3); flex-shrink:0; }
-#oshiroChatDialog .chat-header img { width:36px; height:36px; object-fit:cover; border-radius:6px; }
-#oshiroChatDialog .chat-title { flex:1; color:#ffe36d; font-family:'Press Start 2P',monospace; font-size:12px; }
-#oshiroChatDialog .close-btn { background:none; border:none; color:#ffe36d; font-size:16px; cursor:pointer; }
-#oshiroChatMessages { flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:8px; }
-.och-msg { max-width:85%; padding:8px 12px; border-radius:8px; font-size:13px; line-height:1.6; word-break:break-word; }
-.och-msg.user { align-self:flex-end; background:rgba(255,227,109,.18); color:#ffe9a8; border:1px solid rgba(255,230,109,.4); }
-.och-msg.assistant { align-self:flex-start; background:rgba(40,55,90,.9); color:#fff; border:1px solid rgba(140,160,220,.35); }
-#oshiroChatDialog .chat-input { display:flex; gap:6px; padding:10px; border-top:1px solid rgba(255,230,109,.3); flex-shrink:0; }
-#oshiroChatDialog .chat-input input { flex:1; padding:8px 10px; border:1px solid rgba(255,230,109,.4); border-radius:6px; background:rgba(22,34,60,.9); color:#fff; font-size:13px; outline:none; }
-#oshiroChatDialog .chat-input button { padding:8px 14px; border:1px solid #ffe36d; border-radius:6px; background:rgba(22,34,60,.9); color:#ffe36d; cursor:pointer; font-size:13px; }
-
-/* ===== 底部聊天输入栏 ===== */
-#chatBar {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 940;
-    display: flex;
-    gap: 8px;
-    padding: 12px 20px;
-    background: rgba(10,14,28,.92);
-    border-top: 2px solid rgba(255,230,109,.3);
+#oshiroChatDialog .chat-header {
+    display:flex; align-items:center; gap:10px;
+    padding:14px 16px 8px 42px;
+    border-bottom:none;
+    background:url('celeste-gui/cardtop_golden.png') center / 100% 100% no-repeat;
+    flex-shrink:0;
 }
-#chatBar input { flex:1; padding:10px 14px; border:2px solid rgba(255,230,109,.4); border-radius:6px; background:rgba(22,34,60,.9); color:#fff; font-size:13px; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; outline:none; }
-#chatBar input:focus { border-color:#ffe36d; }
-#chatBar button { padding:10px 20px; border:2px solid #ffe36d; border-radius:6px; background:rgba(22,34,60,.9); color:#ffe36d; cursor:pointer; font-size:13px; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; }
-#chatBar button:hover:not(:disabled) { background:rgba(255,227,109,.25); }
-#chatBar button:disabled { opacity:.45; cursor:not-allowed; }
+#oshiroChatDialog .chat-header img { width:36px; height:36px; object-fit:cover; border-radius:6px; }
+#oshiroChatDialog .chat-title { flex:1; color:#2b2018; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; font-size:18px; letter-spacing:1px; }
+#oshiroChatDialog .close-btn { background:none; border:none; color:rgba(43,32,24,.55); font-size:16px; cursor:pointer; }
+#oshiroChatDialog .close-btn:hover { color:#2b2018; }
+#oshiroChatMessages { flex:1; overflow-y:auto; padding:14px 16px 10px 42px; display:flex; flex-direction:column; gap:10px; min-height:0; }
+.och-msg { max-width:85%; padding:8px 12px; border-radius:10px; font-size:13px; line-height:1.6; word-break:break-word; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; }
+.och-msg.user { align-self:flex-end; background:rgba(74,144,226,.14); color:#2b3a52; border:1px solid rgba(74,144,226,.4); }
+.och-msg.assistant { align-self:flex-start; background:transparent; border:none; padding:4px 6px; color:#3a2e2a; }
+#oshiroChatDialog .chat-input { display:flex; gap:8px; padding:8px 12px 6px 12px; border-top:1px dashed rgba(58,46,42,.35); flex-shrink:0; }
+#oshiroChatDialog .chat-input input { flex:1; padding:8px 10px; border:1px solid rgba(125,207,255,.5); border-radius:6px; background:rgba(125,207,255,.18); color:#2b3a52; font-size:13px; outline:none; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; }
+#oshiroChatDialog .chat-input input:focus { border-color:#7DCFFF; background:rgba(125,207,255,.3); }
+#oshiroChatDialog .chat-input input::placeholder { color:rgba(43,58,82,.45); }
+#oshiroChatDialog .chat-input button { padding:8px 14px; border:none; border-radius:6px; background:#FFEB3B; color:#111; cursor:pointer; font-size:14px; letter-spacing:1px; font-family:'Renogare','CelesteZH',sans-serif; box-shadow:inset 0 -2px #111111; }
+#oshiroChatDialog .chat-input button:hover { background:#ffeb85; }
+
 </style>
 </head>
 <body>
@@ -176,11 +169,6 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     </div>
     <div class="items" id="items"></div>
     <div class="oshiro-say" id="mSay"></div>
-</div>
-
-<div id="chatBar">
-    <input type="text" id="chatInput" placeholder="和 Oshiro 说点什么..." onkeypress="if(event.key==='Enter')sendChat()">
-    <button id="chatBtn" onclick="sendChat()">发送</button>
 </div>
 
 <script src="js/api.js"></script>
@@ -331,7 +319,12 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
             osSitScared();
         }
     }
-
+    // 点击对话框立即关闭（与 Madeline 的对话交互一致）
+    gameDialog.addEventListener('click', function() {
+        if (dialogTimer) { clearTimeout(dialogTimer); dialogTimer = null; }
+        if (dialogTypeTimer) { clearInterval(dialogTypeTimer); dialogTypeTimer = null; }
+        gameDialog.classList.remove('show');
+    });
     // ===== 像素 Oshiro 行为：默认四处游逛，害怕才坐 =====
     var pixelOshiro = document.getElementById('pixelOshiro');
     var OS_SRC = {
@@ -351,42 +344,82 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     function osSetSrc(name) {
         if (pixelOshiro.src.indexOf(name) === -1) pixelOshiro.src = name;
     }
-
-    function osCurX() {
-        return parseFloat(pixelOshiro.style.left || '40');
+    // ===== 全屏二维游走：随机选点 + 避开弹框 =====
+    function osCurXY() {
+        return {
+            x: parseFloat(pixelOshiro.style.left || '40'),
+            y: parseFloat(pixelOshiro.style.top || '60')
+        };
     }
-
+    function osGroundY() {
+        return Math.max(56, window.innerHeight - (pixelOshiro.offsetHeight || 320) - 8);
+    }
+    function osBlockedAt(tx, ty) {
+        var zones = [];
+        var dlg = document.getElementById('gameDialog');
+        if (dlg && dlg.classList.contains('show')) zones.push(dlg.getBoundingClientRect());
+        var chat = document.getElementById('oshiroChatDialog');
+        if (chat && chat.classList.contains('show')) zones.push(chat.getBoundingClientRect());
+        var w = pixelOshiro.offsetWidth || 320, h = pixelOshiro.offsetHeight || 320;
+        for (var i = 0; i < zones.length; i++) {
+            var r = zones[i], m = 16;
+            if (!r || (r.width === 0 && r.height === 0)) continue;
+            if (tx < r.right + m && tx + w > r.left - m && ty < r.bottom + m && ty + h > r.top - m) return true;
+        }
+        return false;
+    }
+    function osPickTarget() {
+        var spriteW = pixelOshiro.offsetWidth || 320;
+        var maxX = Math.max(60, window.innerWidth - spriteW - 10);
+        var minY = 56, maxY = osGroundY();
+        for (var t = 0; t < 8; t++) {
+            var cx = 10 + Math.random() * (maxX - 10);
+            var cy = minY + Math.random() * (maxY - minY);
+            if (!osBlockedAt(cx, cy)) return { x: cx, y: cy };
+        }
+        return { x: 10, y: maxY };
+    }
     function osWander() {
         if (osMode === 'sit' || osMode === 'greet' || osMode === 'trip') {
             osWanderTimer = setTimeout(osWander, 3000);
             return;
         }
-        var spriteW = pixelOshiro.offsetWidth || 320;
-        var maxX = Math.max(60, window.innerWidth - spriteW - 10);
-        var curX = osCurX();
-        var targetX = 10 + Math.random() * (maxX - 10);
-        var dist = Math.abs(targetX - curX);
-        var dur = Math.max(1500, Math.min(8000, dist * 14));
+        var cur = osCurXY();
+        var tgt = osPickTarget();
+        var dist = Math.sqrt((tgt.x - cur.x) * (tgt.x - cur.x) + (tgt.y - cur.y) * (tgt.y - cur.y));
+        var dur = Math.max(1500, Math.min(8000, dist * (12 + Math.random() * 5)));
 
         osSetSrc(OS_SRC.move);
-        pixelOshiro.style.transform = targetX < curX ? 'scaleX(-1)' : '';
-        pixelOshiro.style.transition = 'left ' + dur + 'ms linear';
-        pixelOshiro.style.left = targetX + 'px';
+        pixelOshiro.style.transform = tgt.x < cur.x ? 'scaleX(-1)' : '';
+        pixelOshiro.style.transition = 'left ' + dur + 'ms linear, top ' + dur + 'ms linear';
+        pixelOshiro.style.left = tgt.x + 'px';
+        pixelOshiro.style.top = tgt.y + 'px';
 
         osWanderTimer = setTimeout(function() {
             pixelOshiro.style.transform = '';
             if (osMode === 'sit') return;
             var roll = Math.random();
             if (roll < 0.06) {
-                osTrip();
+                osGotoGroundThen(osTrip);
             } else if (roll < 0.28) {
-                osSweep();
+                osGotoGroundThen(osSweep);
             } else if (roll < 0.36) {
-                osRest();
+                osGotoGroundThen(osRest);
             } else {
                 osWander();
             }
         }, dur + 200);
+    }
+    // 静止动作（绊倒/扫地/歇息）必须贴地：在半空就先走到地面再做
+    function osGotoGroundThen(fn) {
+        var cur = osCurXY();
+        var gy = osGroundY();
+        if (Math.abs(cur.y - gy) < 30) { fn(); return; }
+        var dur = Math.max(600, Math.abs(gy - cur.y) * 8);
+        osSetSrc(OS_SRC.move);
+        pixelOshiro.style.transition = 'top ' + dur + 'ms linear';
+        pixelOshiro.style.top = gy + 'px';
+        osWanderTimer = setTimeout(fn, dur + 120);
     }
 
     function osSweep() {
@@ -404,6 +437,8 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 
     function osSitScared() {
         osMode = 'sit';
+        pixelOshiro.style.transition = 'top 400ms ease';
+        pixelOshiro.style.top = osGroundY() + 'px';
         osSetSrc(OS_SRC.idle_ground);
         setTimeout(function() {
             if (osMode === 'sit') {
@@ -481,11 +516,10 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
         oshiroChatMessages.scrollTop = oshiroChatMessages.scrollHeight;
     }
     document.getElementById('ochSendBtn').addEventListener('click', function() {
-        var inp = document.getElementById('ochInput');
-        if (!inp.value.trim()) return;
-        document.getElementById('chatInput').value = inp.value;
-        inp.value = '';
         sendChat();
+    });
+    document.getElementById('ochInput').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') sendChat();
     });
     document.getElementById('ochInput').addEventListener('keydown', function(e) {
         if (e.key === 'Enter') document.getElementById('ochSendBtn').click();
@@ -577,19 +611,20 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     // ===== Oshiro AI 聊天 =====
     var chatHistory = [];
     function sendChat() {
-        var input = document.getElementById('chatInput');
-        var btn = document.getElementById('chatBtn');
+        var input = document.getElementById('ochInput');
+        var btn = document.getElementById('ochSendBtn');
+        if (!input) return;
         var msg = input.value.trim();
         if (!msg) return;
         chatHistory.push({role:'user', content:msg});
         appendOchMsg('user', msg);
         input.value = '';
-        btn.disabled = true;
+        if (btn) btn.disabled = true;
         api('/diary/oshiro-chat', 'POST', {
             message: msg,
             history: JSON.stringify(chatHistory.slice(-6))
         }).then(function(res) {
-            btn.disabled = false;
+            if (btn) btn.disabled = false;
             if (!res || !res.success) {
                 var fallback = '啊……我好像没听清。能再说一遍吗？';
                 chatHistory.push({role:'assistant', content:fallback});
@@ -603,13 +638,12 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
             appendOchMsg('assistant', reply);
             showOshiroDialog(reply, emotion);
         }).catch(function() {
-            btn.disabled = false;
+            if (btn) btn.disabled = false;
             var fallback = '诶？信号好像不太好……稍等一下？';
             appendOchMsg('assistant', fallback);
             showOshiroDialog(fallback, '不安');
         });
     }
-
     setTimeout(function() {
         var welcome = '欢迎来到 Celeste 山庄！我是 Oshiro，这里的每一间房都留着故事呢～想聊点什么吗？';
         appendOchMsg('assistant', welcome);

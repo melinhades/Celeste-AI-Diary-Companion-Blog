@@ -17,6 +17,7 @@
     <button id="homePosterBtn" title="回到主页 · My Mountain" onclick="location.href='index.html'">
         <img src="celeste-gui/mymountain_icon.png" alt="My Mountain">
     </button>
+    <button id="journalBackBtn" onclick="location.href='index.html'"><span class="x">✕</span>返回</button>
     <!-- 金羽毛游戏入口（右上角） -->
     <img id="pixelMadeline" src="celeste-gui/bounceline.gif" alt="Madeline" title="点我聊天">
     <div id="gameDialog">
@@ -82,16 +83,9 @@
             <span class="emotion-intensity" id="emotionIntensity"></span>
         </div>
         <div id="journalStage">
-            <button class="book-arrow" id="bookPrev" type="button"><img src="Atlases/Journal/poemArrow.png" alt="上一页" style="transform:scaleX(-1);"></button>
             <div id="journalBook"></div>
-            <button class="book-arrow" id="bookNext" type="button"><img src="Atlases/Journal/poemArrow.png" alt="下一页"></button>
             <div class="book-dots" id="bookDots"></div>
         </div>
-        <div class="diary-actions">
-            <button class="save-btn" id="saveBtn">SAVE</button>
-            <button id="testEmotionBtn">测试情绪检测</button>
-        </div>
-        <div id="emotionResult" style="margin-top:10px; padding:10px; background:var(--c-bg-panel); border-radius:4px; display:none; font-family:var(--chat-font); font-size:12px;"></div>
     </div>
 
     <div id="madeline-peeking">
