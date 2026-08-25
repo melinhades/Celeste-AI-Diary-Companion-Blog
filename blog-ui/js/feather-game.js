@@ -17,22 +17,19 @@
     let assetsLoaded = false;
     let opened = false, animId = null, lastTs = 0, elapsed = 0;
 
-    let windAngle = 0, targetWindAngle = 0;
-    let windStrength = 26, targetWindStrength = 26;
-    let gustCountdown = 6;
-
-    const feather = { x: GW / 2, y: GH / 2, vx: 0, vy: 0, rot: 0,
-        frame: 0, frameT: 0, dir: 1 };
+    const feather = { x: 0, y: 0, vy: 0, rot: 0, frame: 0, frameT: 0, dir: 1 };
     const particles = [];
-    const flows = [];
-    const floaters = [];
     const keys = {};
-    let pointerDown = false, lastPX = 0, lastPY = 0;
+    let upHeld = false;
+
+    const GRAVITY = 32;
+    const LIFT = -110;
+    const TERMINAL_VY = 60;
 
     const BREATH = [
-        { name: '吸气……', dur: 4, lift: -46 },
-        { name: '轻轻停一下', dur: 2, lift: 0 },
-        { name: '呼气……', dur: 6, lift: 34 }
+        { name: '吸气……', dur: 4 },
+        { name: '轻轻停一下', dur: 2 },
+        { name: '呼气……', dur: 9 }
     ];
     let breathIdx = 0, breathT = 0;
     let lastInGlow = false;
@@ -49,13 +46,12 @@
     ];
     let guideIdx = -1;
 
-    const goal = { x: GW / 2, y: GH / 2, w: 500, h: 300, tx: GW / 2, ty: GH / 2,
-        nextMove: 8, glow: 0 };
+    const goal = { y: 0, ty: 0, w: 400, h: 260, glow: 0, nextMove: 6 };
     let captionEl = null, audioCtx = null;
+    let floaters = [];
 
     function addFloater(text, x, y, color, size) {
-        floaters.push({ text: text, x: x, y: y, color: color || '#fff',
-            size: size || 15, life: 2.4, maxLife: 2.4 });
+        floaters.push({ text, x, y, color: color || '#fff', size: size || 15, life: 2.4, maxLife: 2.4 });
     }
 
     function showCaption(text) {
@@ -81,17 +77,6 @@
         } catch (e) {}
     }
 
-    function spawnFlow(x, y, dx, dy) {
-        flows.push({
-            x: x + (Math.random() - 0.5) * 40,
-            y: y + (Math.random() - 0.5) * 40,
-            vx: dx + (Math.random() - 0.5) * 50,
-            vy: dy + (Math.random() - 0.5) * 50,
-            s: 2.5 + Math.random() * 3.5,
-            life: 1.1 + Math.random() * 0.7,
-            maxLife: 1.8
-        });
-    }
     function loadImage(src) {
         return new Promise(res => {
             const img = new Image();
@@ -120,12 +105,12 @@
             '  <button id="featherCloseBtn">✕</button>' +
             '</div>' +
             '<div class="feather-caption"></div>' +
-            '<div class="feather-hint">羽毛会随着呼吸起伏 · 方向键或拖动可以轻轻送风 · 跟着光晕走就好 · Esc 随时离开</div>';
+            '<div class="feather-hint">按住 ↑ 让羽毛上升 · 松开它会慢慢落下 · Esc 随时离开</div>';
         const style = document.createElement('style');
         style.textContent =
             '#feather-overlay{position:fixed;inset:0;display:none;background:radial-gradient(ellipse at 50% 32%, rgba(64,36,66,.5), rgba(8,7,16,.97) 78%);z-index:1200;}' +
             '#feather-overlay.show{display:block;}' +
-            '#featherCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab;}' +
+            '#featherCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;}' +
             '.feather-header{position:absolute;top:18px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:16px;z-index:2;}' +
             '.feather-title{font-family:var(--pixel-font,monospace);font-size:15px;color:#ffe36d;letter-spacing:2px;text-shadow:0 0 12px rgba(255,227,109,.5);}' +
             '#featherCloseBtn{border:none;background:transparent;color:#8899bb;font-size:20px;cursor:pointer;}' +
@@ -140,63 +125,29 @@
         ctx = canvas.getContext('2d');
         captionEl = document.querySelector('.feather-caption');
         document.getElementById('featherCloseBtn').addEventListener('click', closeGame);
-        overlay.addEventListener('click', e => { if (e.target === overlay) closeGame(); });
 
         window.addEventListener('keydown', e => {
             keys[e.key] = true;
-            if (opened && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) e.preventDefault();
+            if (opened && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
             if (opened && e.key === 'Escape') closeGame();
         });
         window.addEventListener('keyup', e => { keys[e.key] = false; });
-
-        canvas.addEventListener('pointerdown', e => {
-            pointerDown = true;
-            const r = canvas.getBoundingClientRect();
-            lastPX = (e.clientX - r.left) * (GW / r.width);
-            lastPY = (e.clientY - r.top) * (GH / r.height);
-            canvas.setPointerCapture(e.pointerId);
-        });
-        canvas.addEventListener('pointermove', e => {
-            if (!pointerDown) return;
-            const r = canvas.getBoundingClientRect();
-            const px = (e.clientX - r.left) * (GW / r.width);
-            const py = (e.clientY - r.top) * (GH / r.height);
-            const dx = px - lastPX, dy = py - lastPY;
-            lastPX = px; lastPY = py;
-            for (let i = 0; i < 2; i++) spawnFlow(px, py, dx * 2.5, dy * 2.5);
-            const fdx = feather.x - px, fdy = feather.y - py;
-            if (Math.sqrt(fdx * fdx + fdy * fdy) < 150) {
-                feather.vx += dx * 1.4;
-                feather.vy += dy * 1.4;
-            }
-        });
-        canvas.addEventListener('pointerup', () => { pointerDown = false; });
     }
 
     function initParticles() {
         particles.length = 0;
-        const count = Math.round((GW * GH) / 12000);
-        for (let i = 0; i < Math.min(160, Math.max(50, count)); i++) {
+        const count = Math.min(120, Math.round((GW * GH) / 14000));
+        for (let i = 0; i < Math.max(50, count); i++) {
             particles.push({
                 x: Math.random() * GW,
                 y: Math.random() * GH,
-                s: 1.5 + Math.random() * 2.5,
-                tw: Math.random() * Math.PI * 2
+                r: 1 + Math.random() * 3,
+                speed: 20 + Math.random() * 30,
+                len: 2 + Math.random() * 3,
+                alpha: 0.3 + Math.random() * 0.4,
+                stretch: 0
             });
         }
-    }
-
-    function shortAngle(a) {
-        while (a > Math.PI) a -= Math.PI * 2;
-        while (a < -Math.PI) a += Math.PI * 2;
-        return a;
-    }
-
-    function windAt(x, y) {
-        const swirl = Math.sin(x * 0.012 + elapsed * 0.7) * Math.cos(y * 0.014 - elapsed * 0.5);
-        const ang = windAngle + swirl * 0.4;
-        const str = windStrength * (0.85 + 0.15 * Math.sin(elapsed * 1.2 + y * 0.02));
-        return { x: Math.cos(ang) * str, y: Math.sin(ang) * str * 0.6 };
     }
 
     function nextGuide() {
@@ -213,63 +164,35 @@
             breathT = 0;
             breathIdx = (breathIdx + 1) % BREATH.length;
         }
-        const cur = BREATH[breathIdx];
 
-        gustCountdown -= dt;
-        if (gustCountdown <= 0) {
-            targetWindAngle = (Math.random() - 0.5) * Math.PI * 2;
-            targetWindStrength = 18 + Math.random() * 22;
-            gustCountdown = 7 + Math.random() * 6;
+        upHeld = !!(keys['ArrowUp'] || keys['w']);
+
+        if (upHeld) {
+            feather.vy += LIFT * dt;
+        } else {
+            feather.vy += GRAVITY * dt;
         }
-        windAngle += shortAngle(targetWindAngle - windAngle) * Math.min(1, dt * 0.8);
-        windStrength += (targetWindStrength - windStrength) * Math.min(1, dt * 0.8);
-
-        const w = windAt(feather.x, feather.y);
-        let ax = (w.x - feather.vx) * 1.1;
-        let ay = (w.y - feather.vy) * 1.1 + cur.lift;
-        let kx = 0, ky = 0;
-
-        if (keys['ArrowLeft'] || keys['a']) { ax -= 90; kx = -90; }
-        if (keys['ArrowRight'] || keys['d']) { ax += 90; kx = 90; }
-        if (keys['ArrowUp'] || keys['w']) { ay -= 70; ky = -70; }
-        if (keys['ArrowDown'] || keys['s']) { ay += 70; ky = 70; }
-        if (kx !== 0 || ky !== 0) {
-            const len = Math.sqrt(kx * kx + ky * ky) || 1;
-            for (let i = 0; i < 3; i++) {
-                spawnFlow(feather.x - kx / len * 36, feather.y - ky / len * 36, kx * 1.6, ky * 1.6);
-            }
-        }
-
-        feather.vx += ax * dt;
-        feather.vy += ay * dt;
-        feather.vx *= Math.pow(0.72, dt);
-        feather.vy *= Math.pow(0.72, dt);
-        feather.x += feather.vx * dt;
+        feather.vy = Math.max(-80, Math.min(TERMINAL_VY, feather.vy));
         feather.y += feather.vy * dt;
-        const spd = Math.sqrt(feather.vx * feather.vx + feather.vy * feather.vy);
-        if (spd > 40 && Math.random() < dt * 30) {
-            spawnFlow(feather.x - feather.vx / spd * 26, feather.y - feather.vy / spd * 26,
-                feather.vx * 0.5, feather.vy * 0.5);
-        }
-        const pad = 18;
-        if (feather.x < pad) { feather.x = pad; feather.vx = Math.abs(feather.vx) * 0.4; }
-        if (feather.x > GW - pad) { feather.x = GW - pad; feather.vx = -Math.abs(feather.vx) * 0.4; }
-        if (feather.y < pad) { feather.y = pad; feather.vy = Math.abs(feather.vy) * 0.4; }
-        if (feather.y > GH - pad) { feather.y = GH - pad; feather.vy = -Math.abs(feather.vy) * 0.4; }
+        feather.x = GW / 2;
 
-        goal.nextMove -= dt;
-        if (goal.nextMove <= 0) {
-            goal.tx = GW / 2 + (Math.random() - 0.5) * GW * 0.5;
-            goal.ty = GH / 2 + (Math.random() - 0.5) * GH * 0.4;
-            goal.nextMove = 10 + Math.random() * 8;
+        const pad = 20;
+        if (feather.y < pad) { feather.y = pad; feather.vy = 0; }
+        if (feather.y > GH - pad) { feather.y = GH - pad; feather.vy = 0; }
+
+        // 框跟随呼吸：吸气升，呼气降，屏息停
+        const cur = BREATH[breathIdx];
+        if (cur.name === '吸气……') {
+            goal.ty = GH * 0.3;
+        } else if (cur.name === '呼气……') {
+            goal.ty = GH * 0.7;
         }
-        const gdx = goal.tx - goal.x, gdy = goal.ty - goal.y;
-        goal.x += gdx * Math.min(1, dt * 0.4);
-        goal.y += gdy * Math.min(1, dt * 0.4);
+        const gdy = goal.ty - goal.y;
+        const speed = gdy > 0 ? dt * 0.25 : dt * 0.4;
+        goal.y += gdy * Math.min(1, speed);
         goal.glow = Math.max(0, goal.glow - dt * 0.4);
 
-        const inGlow = Math.abs(feather.x - goal.x) < goal.w / 2 &&
-            Math.abs(feather.y - goal.y) < goal.h / 2;
+        const inGlow = Math.abs(feather.y - goal.y) < goal.h / 2;
         if (inGlow && !lastInGlow) {
             playSoftChime();
             goal.glow = 1;
@@ -278,10 +201,9 @@
         }
         lastInGlow = inGlow;
 
-        const targetRot = Math.max(-0.5, Math.min(0.5, feather.vx * 0.004)) + Math.sin(elapsed * 2.2) * 0.05;
-        feather.rot += (targetRot - feather.rot) * Math.min(1, dt * 5);
-        const airspeed = Math.sqrt(feather.vx * feather.vx + feather.vy * feather.vy);
-        const flapSpeed = Math.max(2, Math.min(8, airspeed * 0.04));
+        feather.rot = Math.max(-0.3, Math.min(0.3, feather.vy * 0.004)) + Math.sin(elapsed * 2.2) * 0.04;
+
+        const flapSpeed = Math.max(2, Math.min(8, Math.abs(feather.vy) * 0.06));
         feather.frameT += dt * flapSpeed;
         if (feather.frameT >= 1) {
             feather.frameT = 0;
@@ -291,32 +213,25 @@
         }
 
         for (const p of particles) {
-            const pw = windAt(p.x, p.y);
-            let pvx = pw.x * 1.2, pvy = pw.y * 1.2;
-            const ddx = p.x - feather.x, ddy = p.y - feather.y;
-            const d2 = ddx * ddx + ddy * ddy;
-            if (d2 < 25600) {
-                const f = 1 - Math.sqrt(d2) / 160;
-                pvx += feather.vx * 0.9 * f;
-                pvy += feather.vy * 0.9 * f;
+            if (upHeld) {
+                p.stretch = Math.min(1, p.stretch + dt * 2.5);
+            } else {
+                p.stretch = Math.max(0, p.stretch - dt * 2);
             }
-            p.x += pvx * dt;
-            p.y += pvy * dt;
-            p.tw += dt * 2;
-            if (p.x < -8) p.x = GW + 6;
-            if (p.x > GW + 8) p.x = -6;
-            if (p.y < -8) p.y = GH + 6;
-            if (p.y > GH + 8) p.y = -6;
+            const dir = p.stretch > 0.5 ? -1 : 1;
+            const spd = p.speed * (1 + p.stretch * 3);
+            p.y += dir * spd * dt;
+            p.len = 2 + p.stretch * (10 + p.speed * 0.3);
+
+            if (dir === 1 && p.y > GH + p.len) {
+                p.y = -p.len;
+                p.x = Math.random() * GW;
+            } else if (dir === -1 && p.y < -p.len) {
+                p.y = GH + p.len;
+                p.x = Math.random() * GW;
+            }
         }
-        for (let i = flows.length - 1; i >= 0; i--) {
-            const fl = flows[i];
-            fl.life -= dt;
-            fl.x += fl.vx * dt;
-            fl.y += fl.vy * dt;
-            fl.vx *= Math.pow(0.35, dt);
-            fl.vy *= Math.pow(0.35, dt);
-            if (fl.life <= 0) flows.splice(i, 1);
-        }
+
         for (let i = floaters.length - 1; i >= 0; i--) {
             const f = floaters[i];
             f.life -= dt;
@@ -325,33 +240,25 @@
         }
     }
 
-    function breathProgress() {
-        const cur = BREATH[breathIdx];
-        return breathT / cur.dur;
-    }
-
     function drawGoal() {
         const cur = BREATH[breathIdx];
-        const x = goal.x - goal.w / 2, y = goal.y - goal.h / 2;
-        ctx.save();
+        const x = GW / 2 - goal.w / 2;
+        const y = goal.y - goal.h / 2;
         if (images.box) {
-            ctx.shadowColor = 'rgba(255,227,109,' + (0.35 + goal.glow * 0.5) + ')';
-            ctx.shadowBlur = 18 + goal.glow * 30;
+            ctx.save();
             ctx.globalAlpha = 0.85 + goal.glow * 0.15;
             ctx.drawImage(images.box, x, y, goal.w, goal.h);
+            ctx.restore();
         } else {
             ctx.fillStyle = 'rgba(255,227,109,' + (0.06 + goal.glow * 0.1) + ')';
             ctx.fillRect(x, y, goal.w, goal.h);
         }
-        ctx.restore();
 
         if (images.border) {
             const b = images.border;
             const s = (goal.w * 0.62) / b.width;
             const bw = b.width * s, bh = b.height * s;
             ctx.save();
-            ctx.shadowColor = 'rgba(255,227,109,.7)';
-            ctx.shadowBlur = 10 + goal.glow * 20;
             ctx.globalAlpha = 0.55 + goal.glow * 0.45;
             ctx.drawImage(b, x, y - bh * 0.25, bw, bh);
             ctx.save();
@@ -366,39 +273,52 @@
         ctx.font = '16px sans-serif';
         ctx.textAlign = 'center';
         ctx.fillStyle = 'rgba(255,240,214,' + (0.55 + 0.35 * Math.sin(elapsed * 1.6)) + ')';
-        ctx.fillText(cur.name, goal.x, goal.y + goal.h / 2 + 34);
+        ctx.fillText(cur.name, GW / 2, goal.y + goal.h / 2 + 34);
         ctx.restore();
     }
+
     function render() {
         ctx.clearRect(0, 0, GW, GH);
         ctx.fillStyle = '#0a0d18';
         ctx.fillRect(0, 0, GW, GH);
 
+        // 圆点粒子：批量画
         ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
         for (const p of particles) {
-            const alpha = 0.22 * (0.7 + 0.3 * Math.sin(p.tw));
-            ctx.globalAlpha = alpha;
-            if (images.particle) {
-                ctx.drawImage(images.particle, p.x - p.s, p.y - p.s, p.s * 2, p.s * 2);
+            if (p.stretch < 0.3) {
+                ctx.moveTo(p.x + p.r, p.y);
+                ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
             }
         }
-        for (const fl of flows) {
-            const t = Math.max(0, fl.life / fl.maxLife);
-            if (images.particle) {
-                ctx.globalAlpha = t * 0.25;
-                ctx.drawImage(images.particle, fl.x - fl.s * 2, fl.y - fl.s * 2, fl.s * 4, fl.s * 4);
-                ctx.globalAlpha = t * 0.85;
-                ctx.drawImage(images.particle, fl.x - fl.s, fl.y - fl.s, fl.s * 2, fl.s * 2);
+        ctx.globalAlpha = 0.45;
+        ctx.fill();
+        ctx.restore();
+
+        // 线条粒子：批量画
+        ctx.save();
+        ctx.strokeStyle = '#fff';
+        ctx.lineCap = 'round';
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        for (const p of particles) {
+            if (p.stretch >= 0.3) {
+                const dir = p.stretch > 0.5 ? -1 : 1;
+                const lineLen = p.len + p.stretch * p.speed * 0.4;
+                ctx.moveTo(p.x, p.y);
+                ctx.lineTo(p.x, p.y + lineLen * dir);
             }
         }
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
         ctx.restore();
 
         drawGoal();
 
         const fimg = images.feather[feather.frame];
         if (fimg) {
-            const scale = 2.4;
+            const scale = 1.6;
             const fw = fimg.width * scale, fh = fimg.height * scale;
             ctx.save();
             ctx.translate(feather.x, feather.y);
@@ -432,8 +352,8 @@
         GW = window.innerWidth;
         GH = window.innerHeight;
         if (canvas) { canvas.width = GW; canvas.height = GH; }
-        feather.x = Math.min(Math.max(feather.x, 18), GW - 18);
-        feather.y = Math.min(Math.max(feather.y, 18), GH - 18);
+        feather.x = GW / 2;
+        feather.y = Math.min(Math.max(feather.y, 20), GH - 20);
     }
     window.addEventListener('resize', () => { if (opened) resizeCanvas(); });
 
@@ -443,22 +363,16 @@
         if (!overlay) buildOverlay();
         await ensureAssets();
         resizeCanvas();
-        feather.x = GW / 2; feather.y = GH / 2;
-        feather.vx = 0; feather.vy = 0;
-        windAngle = targetWindAngle = 0;
-        windStrength = targetWindStrength = 26;
-        gustCountdown = 6;
-        floaters.length = 0;
-        flows.length = 0;
+        feather.x = GW / 2;
+        feather.y = GH / 2;
+        feather.vy = 0;
+        floaters = [];
         breathIdx = 0; breathT = 0;
         guideIdx = -1;
         lastInGlow = false;
         initParticles();
-        goal.x = goal.tx = GW / 2;
         goal.y = goal.ty = GH / 2;
         goal.glow = 0;
-        goal.tx = GW / 2 + (Math.random() - 0.5) * GW * 0.5;
-        goal.ty = GH / 2 + (Math.random() - 0.5) * GH * 0.4;
         goal.nextMove = 6 + Math.random() * 6;
         overlay.classList.add('show');
         opened = true;

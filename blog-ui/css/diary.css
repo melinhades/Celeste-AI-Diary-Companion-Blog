@@ -935,3 +935,31 @@ body::before {
 .pe-actions button:hover{background:rgba(255,227,109,.2);}
 .pe-actions button.pe-close{border-color:#888;color:#aaa;}
 
+#featherGameBtn {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 900;
+    width: 96px;
+    height: 96px;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    overflow: visible;
+    cursor: pointer;
+    background: transparent;
+    box-shadow: none;
+    filter: drop-shadow(0 0 6px rgba(170,220,255,.8)) drop-shadow(0 0 16px rgba(120,190,255,.45));
+    transition: transform .2s, filter .2s;
+}
+#featherGameBtn img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+#featherGameBtn:hover {
+    transform: scale(1.2) translateY(-4px);
+    filter: drop-shadow(0 8px 20px rgba(255,170,60,.9)) drop-shadow(0 0 30px rgba(255,140,40,.5));
+}
+

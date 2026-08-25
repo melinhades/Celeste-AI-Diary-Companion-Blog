@@ -27,9 +27,19 @@
             <div id="gameDialogText"></div>
         </div>
     </div>
-    <button id="featherGameBtn" title="金羽毛" style="position:fixed; top:14px; right:16px; z-index:900; width:64px; height:64px; padding:8px; background:transparent; border:none; cursor:pointer; filter:drop-shadow(0 0 8px rgba(255,170,60,.95)) drop-shadow(0 0 18px rgba(255,140,40,.5)); transition:transform .2s;">
-        <img src="celeste-feather/feather0.png" alt="金羽毛" style="width:100%; height:100%; object-fit:contain; display:block;">
+    <button id="featherGameBtn" title="金羽毛" style="position:fixed; top:14px; right:16px; z-index:900; width:64px; height:64px; padding:0; background:transparent; border:none; cursor:pointer; transition:transform .3s ease, filter .3s ease; filter:drop-shadow(0 4px 12px rgba(255,170,60,.6));">
+        <img src="celeste-gui/loop.gif" alt="金羽毛" style="width:100%; height:100%; object-fit:contain; display:block;">
     </button>
+    <!-- 羽毛随笔弹框 -->
+    <div id="featherNoteBox" style="display:none; position:fixed; top:90px; right:16px; z-index:901; width:260px; background:rgba(22,34,60,.95); border:2px solid rgba(255,230,109,.4); border-radius:10px; padding:16px; box-shadow:0 8px 24px rgba(0,0,0,.4);">
+        <div style="color:#ffe36d; font-size:13px; margin-bottom:8px; font-family:'Renogare','CelesteZH',sans-serif;">🪶 写一根羽毛</div>
+        <input id="featherInput" type="text" maxlength="100" placeholder="一句话，轻轻放下..." style="width:100%; padding:8px 10px; border:1px solid rgba(255,230,109,.4); border-radius:6px; background:rgba(255,255,255,.08); color:#fff; font-size:13px; outline:none; font-family:inherit;">
+        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
+            <button id="featherCancel" style="padding:4px 12px; border:1px solid rgba(255,255,255,.3); border-radius:4px; background:transparent; color:rgba(255,255,255,.6); cursor:pointer; font-size:12px;">取消</button>
+            <button id="featherSave" style="padding:4px 12px; border:none; border-radius:4px; background:#ffe36d; color:#222; cursor:pointer; font-size:12px; font-weight:bold;">放下</button>
+        </div>
+        <div id="featherToast" style="display:none; color:#ffe36d; font-size:12px; text-align:center; margin-top:8px;">羽毛已飘走～</div>
+    </div>
     <!-- BGM 播放器（隐藏，自动播放） -->
     <audio id="bgmPlayer" loop autoplay>
         <source src="bgm/exhale.mp3" type="audio/mpeg">
@@ -96,5 +106,47 @@
     <script src="js/api.js"></script>
     <script src="js/feather-game.js"></script>
     <script src="js/diary.js"></script>
+    <script>
+    (function() {
+        const btn = document.getElementById('featherGameBtn');
+        const box = document.getElementById('featherNoteBox');
+        const input = document.getElementById('featherInput');
+        const toast = document.getElementById('featherToast');
+
+        btn.addEventListener('click', function() {
+            if (box.style.display === 'none') {
+                box.style.display = 'block';
+                input.value = '';
+                toast.style.display = 'none';
+                input.focus();
+            } else {
+                box.style.display = 'none';
+            }
+        });
+
+        document.getElementById('featherCancel').addEventListener('click', function() {
+            box.style.display = 'none';
+        });
+
+        document.getElementById('featherSave').addEventListener('click', saveFeather);
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') saveFeather();
+        });
+
+        function saveFeather() {
+            const val = input.value.trim();
+            if (!val) return;
+            api('/feather', 'POST', { content: val }).then(function(res) {
+                if (res.success) {
+                    toast.style.display = 'block';
+                    input.value = '';
+                    setTimeout(function() {
+                        box.style.display = 'none';
+                    }, 1200);
+                }
+            });
+        }
+    })();
+    </script>
 </body>
 </html>
