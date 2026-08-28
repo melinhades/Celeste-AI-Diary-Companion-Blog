@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="icon/OIP.webp" type="image/webp">
+    <title>消息 · Celeste Blog</title>
+    <link rel="stylesheet" href="css/common.css">
+    <style>
+    body::after {
+        content:''; position:fixed; inset:0;
+        background:url('celeste-areas/ForsakenCity01.png') center/cover no-repeat;
+        opacity:0.25; pointer-events:none; z-index:0;
+    }
+    .msg-layout { padding:24px 20px; position:relative; z-index:3; max-width:760px; margin:0 auto; }
+    .msg-title { font-size:22px; font-weight:700; color:#e8e8f0; margin-bottom:6px; display:flex; align-items:center; gap:10px; }
+    .msg-sub { font-size:13px; color:rgba(200,210,255,.45); margin-bottom:22px; }
+    .msg-item {
+        display:flex; align-items:center; gap:14px;
+        padding:14px 18px; margin-bottom:10px;
+        background:rgba(22,34,60,.72); border:1px solid rgba(120,200,255,.12);
+        border-radius:10px; cursor:pointer;
+        transition:transform .2s, border-color .2s, box-shadow .2s;
+        backdrop-filter:blur(8px);
+        animation:msgIn .45s ease both;
+    }
+    @keyframes msgIn { from{opacity:0; transform:translateY(14px);} to{opacity:1; transform:none;} }
+    .msg-item:hover { transform:translateX(6px); border-color:rgba(255,227,109,.5); box-shadow:0 4px 18px rgba(0,0,0,.35); }
+    .msg-item.unread { border-left:3px solid #ffe36d; background:rgba(30,44,76,.85); }
+    .msg-icon { font-size:22px; flex-shrink:0; filter:drop-shadow(0 0 6px rgba(255,227,109,.4)); }
+    .msg-body { flex:1; min-width:0; }
+    .msg-line1 { font-size:14px; color:#e8e8f0; margin-bottom:4px; }
+    .msg-line1 b { color:#ffe36d; font-weight:600; }
+    .msg-line2 { font-size:12px; color:rgba(200,210,255,.5); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .msg-time { font-size:11px; color:rgba(200,210,255,.35); flex-shrink:0; }
+    .msg-empty { text-align:center; color:rgba(200,210,255,.4); padding:60px 20px; font-size:14px; line-height:2; }
+    </style>
+</head>
+<body>
+    <canvas id="snowCanvas" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;"></canvas>
+
+    <header class="header">
+        <div class="container header-inner">
+            <a href="index.html" class="logo"><img src="celeste-gui/logo.png" alt="Celeste"></a>
+            <nav class="nav">
+                <a href="index.html" class="nav-link">Home</a>
+                <a href="archives.html" class="nav-link">Archives</a>
+                <a href="diary.html" class="nav-link" title="Diary with Madeline">Diary</a>
+            </nav>
+            <div class="header-right" id="headerRight"></div>
+        </div>
+    </header>
+
+    <div class="msg-layout">
+        <div class="msg-title">🔔 消息</div>
+        <div class="msg-sub">来自山间的风：谁给你的文字点了赞、留了言，都会飘到这里。</div>
+        <div id="msgList"><div class="msg-empty">正在收信…</div></div>
+    </div>
+
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script>
+    initHeader();
+
+    if (!localStorage.getItem('token')) {
+        document.getElementById('msgList').innerHTML = '<div class="msg-empty">请先<a href="login.html" style="color:#ffe36d">登录</a>，才能收到消息哦。</div>';
+    } else {
+        loadMessages();
+    }
+
+    function fmtTime(ts) {
+        if (!ts) return '';
+        const d = new Date(Number(ts));
+        const now = new Date();
+        const diff = now - d;
+        if (diff < 60000) return '刚刚';
+        if (diff < 3600000) return Math.floor(diff / 60000) + ' 分钟前';
+        if (diff < 86400000) return Math.floor(diff / 3600000) + ' 小时前';
+        return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    }
+
+    function loadMessages() {
+        api('/notifications/list', 'GET').then(res => {
+            const box = document.getElementById('msgList');
+            if (!res.success || !res.data || res.data.length === 0) {
+                box.innerHTML = '<div class="msg-empty">山顶很安静，还没有消息。<br>去写点什么，或者给别人点个赞吧～</div>';
+                return;
+            }
+            box.innerHTML = res.data.map((n, i) => {
+                const isLike = n.type === 'like';
+                const verb = isLike ? '赞了' : '评论了';
+                const icon = isLike ? '❤️' : '💬';
+                return '<div class="msg-item' + (Number(n.isRead) === 0 ? ' unread' : '') + '" style="animation-delay:' + (i * 0.06) + 's" onclick="location.href=\'article.html?id=' + n.articleId + '\'">' +
+                    '<span class="msg-icon">' + icon + '</span>' +
+                    '<div class="msg-body">' +
+                        '<div class="msg-line1"><b>' + escHtml(n.fromName || '有人') + '</b> ' + verb + '你的文章</div>' +
+                        '<div class="msg-line2">《' + escHtml(n.articleTitle || '已删除的文章') + '》</div>' +
+                    '</div>' +
+                    '<span class="msg-time">' + fmtTime(n.createDate) + '</span>' +
+                '</div>';
+            }).join('');
+            // 展示后全部标记已读，铃铛清零
+            setTimeout(() => {
+                api('/notifications/readAll', 'POST').then(() => refreshBell());
+            }, 1200);
+        }).catch(() => {
+            document.getElementById('msgList').innerHTML = '<div class="msg-empty">收信失败了，稍后再试试…</div>';
+        });
+    }
+
+    // ===== 雪花（与首页同款，精简） =====
+    (function () {
+        const cv = document.getElementById('snowCanvas');
+        const c = cv.getContext('2d');
+        function resize() { cv.width = innerWidth; cv.height = innerHeight; }
+        resize(); addEventListener('resize', resize);
+        const fs = [];
+        for (let i = 0; i < 70; i++) fs.push({
+            x: Math.random() * innerWidth, y: Math.random() * innerHeight,
+            r: Math.random() * 3 + 1, sp: Math.random() * 1.5 + 0.5,
+            w: Math.random() * 0.5 - 0.25, o: Math.random() * 0.6 + 0.2,
+            sw: Math.random() * Math.PI * 2, sws: Math.random() * 0.02 + 0.01
+        });
+        (function loop() {
+            c.clearRect(0, 0, cv.width, cv.height);
+            for (const f of fs) {
+                f.y += f.sp; f.sw += f.sws;
+                f.x += Math.sin(f.sw) * 0.5 + f.w;
+                if (f.y > cv.height + 10) { f.y = -10; f.x = Math.random() * cv.width; }
+                if (f.x > cv.width + 10) f.x = -10;
+                if (f.x < -10) f.x = cv.width + 10;
+                c.beginPath(); c.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+                c.fillStyle = 'rgba(255,255,255,' + f.o + ')'; c.fill();
+            }
+            requestAnimationFrame(loop);
+        })();
+    })();
+</script>
+</body>
+</html>
