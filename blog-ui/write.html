@@ -203,6 +203,9 @@
     .chat-input button:hover:not(:disabled) { background: #ffeb85; }
     .chat-input button:disabled { background: #555; color: #999; cursor: not-allowed; }
 
+    /* 像素 Madeline：强制 56px，任何姿势都不缩放 */
+    #wpPixelMadeline { width: 56px; height: 56px; object-fit: contain; object-position: center bottom; }
+
     /* ===== 游戏对话框（与 diary 完全一致，madeline.png textbox 素材） ===== */
     #wpGameDialog {
         position: fixed;

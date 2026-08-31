@@ -83,7 +83,7 @@
     function pmGroundY() { return window.innerHeight - pm.offsetHeight - 8; }
     function pmSetSrc(name) {
         if (pm.src.indexOf(name) === -1) pm.src = name;
-        pmCur = name; pmApplySize(); pmCalibrate(name);
+        pmCur = name; pmApplySize();
     }
     function pmCalibrate(src) {
         if (pmCal[src] !== undefined) return;
@@ -112,11 +112,8 @@
         im.src = src;
     }
     function pmApplySize() {
-        const cur = pmCal[pmCur];
-        let s = 1;
-        if (pmMinFrac && cur) s = Math.min(2.5, pmMinFrac / cur);
-        pm.style.width = Math.round(PM_BASE_SIZE * s) + 'px';
-        pm.style.height = Math.round(PM_BASE_SIZE * s) + 'px';
+        pm.style.width = '56px';
+        pm.style.height = '56px';
     }
 
     const blockedZones = [];
@@ -296,7 +293,7 @@
         if (emotion === '\u4e0d\u5f00\u5fc3') voice = Math.random() < 0.5 ? 'sad' : 'sadder';
         const variant = VOICE_VARIANTS[Math.floor(Math.random() * VOICE_VARIANTS.length)];
         const num = String(Math.floor(Math.random() * 10) + 1).padStart(2, '0');
-        const src = 'celeste-sounds/' + voice + '/' + variant + '/' + voice + '_' + variant + '_' + num + '.wav';
+        const src = 'celeste-sounds/madeline/' + voice + '/' + variant + '/' + voice + '_' + variant + '_' + num + '.wav';
         try { blipAudio.src = src; blipAudio.volume = 0.8; blipAudio.playbackRate = 0.94 + Math.random() * 0.12; blipAudio.currentTime = 0; blipAudio.play().catch(() => {}); } catch (e) {}
     }
     ['pointerdown', 'keydown'].forEach(ev => window.addEventListener(ev, () => { window.__audioGestured = true; }, { once: true }));

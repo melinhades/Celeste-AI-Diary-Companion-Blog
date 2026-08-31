@@ -51,18 +51,41 @@ public class ChatServiceImpl implements ChatService {
         // 2. 组装消息：system(人设+记忆) + 最近10轮 + 当前消息
         List<AiMessage> messages = new ArrayList<>();
         messages.add(new AiMessage("system", PromptBuilder.chatSystem(persona, memories)));
+
+        // 2.5 RAG 知识库检索：她的日记分片 + 记忆，相关才拼入
+        List<com.mszlu.blog.vo.ContextChunk> context = memoryService.searchContext(userId, content, 5);
+        if (!context.isEmpty()) {
+            messages.add(new AiMessage("system", PromptBuilder.contextBlock(context)));
+        }
+
         for (ChatMessage history : recentHistory(userId)) {
             messages.add(new AiMessage(history.getRole(), history.getContent()));
         }
         messages.add(new AiMessage("user", content));
 
-        // 3. 调 AI
-        String reply = aiClient.chat(messages);
-        if (reply == null) {
+        // 3. 调 AI（JSON 模式：回复 + 情绪一起给）
+        String raw = aiClient.chat(messages, true);
+        if (raw == null) {
             return Result.fail(500, "它这会儿不想说话（AI 调用失败），稍后再试");
         }
+        String reply = raw.trim();
+        String emotion = "默认";
+        try {
+            com.alibaba.fastjson.JSONObject obj = com.alibaba.fastjson.JSON.parseObject(reply);
+            String r = obj.getString("reply");
+            if (r != null && !r.isBlank()) reply = r.trim();
+            String em = obj.getString("emotion");
+            String[] valid = {"默认", "不安", "惊讶", "怨恨", "不开心", "可爱", "无语"};
+            if (em != null) {
+                for (String v : valid) {
+                    if (v.equals(em.trim())) { emotion = v; break; }
+                }
+            }
+        } catch (Exception e) {
+            // JSON 解析失败：当作纯文本回复，情绪回落默认
+        }
 
-        // 4. 落库
+        // 4. 落库（只存纯回复，不存 JSON）
         long now = System.currentTimeMillis();
         saveMessage(userId, "user", content, now);
         saveMessage(userId, "assistant", reply, now + 1);
@@ -75,6 +98,7 @@ public class ChatServiceImpl implements ChatService {
         ChatMessageVo vo = new ChatMessageVo();
         vo.setRole("assistant");
         vo.setContent(reply);
+        vo.setEmotion(emotion);
         vo.setPersonaName(persona.getName());
         vo.setCreateDate(now);
         return Result.success(vo);

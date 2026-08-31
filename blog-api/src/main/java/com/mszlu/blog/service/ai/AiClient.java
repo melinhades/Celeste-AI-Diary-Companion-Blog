@@ -28,6 +28,9 @@ public class AiClient {
     @Value("${ai.model:THUDM/GLM-4-9B-0414}")
     private String model;
 
+    @Value("${ai.embedding-model:BAAI/bge-m3}")
+    private String embeddingModel;
+
     private final RestTemplate restTemplate;
 
     public AiClient() {
@@ -98,5 +101,36 @@ public class AiClient {
 
     public String chat(List<AiMessage> messages) {
         return chat(messages, false);
+    }
+
+    /**
+     * 文本向量化：调 SiliconFlow /embeddings，失败返回 null（调用方需降级处理）
+     */
+    public float[] embed(String text) {
+        if (text == null || text.trim().isEmpty()) return null;
+        JSONObject body = new JSONObject();
+        body.put("model", embeddingModel);
+        body.put("input", text.length() > 1500 ? text.substring(0, 1500) : text);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(apiKey);
+
+        try {
+            ResponseEntity<String> response = restTemplate.postForEntity(
+                    baseUrl + "/embeddings",
+                    new HttpEntity<>(body.toJSONString(), headers),
+                    String.class);
+            JSONObject json = JSON.parseObject(response.getBody());
+            JSONArray data = json.getJSONArray("data");
+            if (data == null || data.isEmpty()) return null;
+            JSONArray vec = data.getJSONObject(0).getJSONArray("embedding");
+            float[] out = new float[vec.size()];
+            for (int i = 0; i < vec.size(); i++) out[i] = vec.getFloatValue(i);
+            return out;
+        } catch (Exception e) {
+            System.err.println("Embedding 调用失败: " + e.getMessage());
+            return null;
+        }
     }
 }

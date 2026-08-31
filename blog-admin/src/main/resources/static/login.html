@@ -7,83 +7,81 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #0b1026;
             min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            display: flex; align-items: center; justify-content: center;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            overflow: hidden; position: relative;
         }
+        /* ===== 极光背景：三层流动光带 ===== */
+        .aurora { position: fixed; inset: 0; overflow: hidden; z-index: 0; }
+        .aurora::before, .aurora::after {
+            content: ''; position: absolute; width: 140vw; height: 140vw;
+            top: -60vw; left: 50%; border-radius: 50%;
+            filter: blur(90px); opacity: .5;
+        }
+        .aurora::before {
+            background: radial-gradient(closest-side, rgba(0,255,180,.35), transparent 70%);
+            transform: translateX(-60%);
+            animation: auroraDrift1 18s ease-in-out infinite alternate;
+        }
+        .aurora::after {
+            background: radial-gradient(closest-side, rgba(120,80,255,.35), transparent 70%);
+            transform: translateX(-30%);
+            animation: auroraDrift2 23s ease-in-out infinite alternate;
+        }
+        .aurora-band {
+            position: absolute; width: 120vw; height: 60vh; top: -10vh; left: -10vw;
+            background: linear-gradient(100deg, transparent 20%, rgba(0,200,255,.18) 45%, rgba(0,255,160,.22) 60%, transparent 80%);
+            filter: blur(40px);
+            animation: bandSway 14s ease-in-out infinite alternate;
+        }
+        @keyframes auroraDrift1 { from { transform: translateX(-70%) translateY(0) rotate(-8deg); } to { transform: translateX(-45%) translateY(6vh) rotate(6deg); } }
+        @keyframes auroraDrift2 { from { transform: translateX(-20%) translateY(4vh) rotate(10deg); } to { transform: translateX(-45%) translateY(-4vh) rotate(-6deg); } }
+        @keyframes bandSway { from { transform: skewX(-12deg) translateX(-4%); } to { transform: skewX(-6deg) translateX(6%); } }
+
         .login-box {
-            background: #fff;
-            border-radius: 12px;
-            padding: 48px 40px;
-            width: 380px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+            position: relative; z-index: 1;
+            background: rgba(16,22,48,.55);
+            backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+            border: 1px solid rgba(120,200,255,.18);
+            border-radius: 14px;
+            padding: 48px 40px; width: 380px;
+            box-shadow: 0 24px 70px rgba(0,0,0,.45);
         }
-        .login-box h2 {
-            text-align: center;
-            color: #333;
-            margin-bottom: 8px;
-            font-size: 24px;
-        }
-        .login-box p {
-            text-align: center;
-            color: #999;
-            margin-bottom: 32px;
-            font-size: 14px;
-        }
-        .form-group {
-            margin-bottom: 20px;
-        }
-        .form-group label {
-            display: block;
-            color: #555;
-            font-size: 14px;
-            margin-bottom: 6px;
-        }
+        .login-box h2 { text-align: center; color: #eaf2ff; margin-bottom: 8px; font-size: 24px; letter-spacing: 1px; }
+        .login-box p { text-align: center; color: rgba(200,215,255,.55); margin-bottom: 32px; font-size: 14px; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; color: rgba(200,215,255,.75); font-size: 14px; margin-bottom: 6px; }
         .form-group input {
-            width: 100%;
-            padding: 12px 16px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-size: 14px;
-            outline: none;
-            transition: border-color 0.2s;
+            width: 100%; padding: 12px 16px;
+            background: rgba(255,255,255,.06);
+            border: 1px solid rgba(120,200,255,.22);
+            border-radius: 8px; font-size: 14px; outline: none; color: #eaf2ff;
+            transition: border-color 0.2s, background 0.2s;
         }
-        .form-group input:focus {
-            border-color: #667eea;
-        }
+        .form-group input::placeholder { color: rgba(200,215,255,.3); }
+        .form-group input:focus { border-color: rgba(0,255,190,.7); background: rgba(255,255,255,.09); }
         .btn-login {
-            width: 100%;
-            padding: 13px;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: #fff;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            cursor: pointer;
-            margin-top: 8px;
-            transition: opacity 0.2s;
+            width: 100%; padding: 13px;
+            background: linear-gradient(135deg, #00c896, #4b7bff 60%, #8a5cff);
+            color: #fff; border: none; border-radius: 8px;
+            font-size: 16px; cursor: pointer; margin-top: 8px;
+            transition: opacity 0.2s, transform 0.15s;
         }
-        .btn-login:hover { opacity: 0.9; }
-        .error-msg {
-            color: #e74c3c;
-            font-size: 13px;
-            text-align: center;
-            margin-top: 12px;
-            display: none;
-        }
+        .btn-login:hover { opacity: .92; transform: translateY(-1px); }
+        .error-msg { color: #ff7a8a; font-size: 13px; text-align: center; margin-top: 12px; display: none; }
     </style>
 </head>
 <body>
+<div class="aurora"><div class="aurora-band"></div></div>
 <div class="login-box">
     <h2>博客管理后台</h2>
     <p>请使用管理员账号登录</p>
     <form action="/login" method="post">
         <div class="form-group">
             <label>用户名</label>
-            <input type="text" name="username" placeholder="请输入用户名" required autofocus>
+            <input type="text" name="username" placeholder="请输入用户名" required autofocus autocomplete="off">
         </div>
         <div class="form-group">
             <label>密码</label>
@@ -94,7 +92,6 @@
     <div class="error-msg" id="errorMsg"></div>
 </div>
 <script>
-    // 登录失败时 Spring Security 会重定向到 /login.html?error
     if (location.search.includes('error')) {
         const el = document.getElementById('errorMsg');
         el.textContent = '用户名或密码错误，请重试';

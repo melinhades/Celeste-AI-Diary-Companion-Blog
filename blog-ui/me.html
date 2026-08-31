@@ -79,6 +79,8 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
                         <img src="namespace/cassette.png" class="ceCassetteOutline" alt="">
                     </span>
                     <span id="ticketDiaryCount" style="margin-left:4px;">× 0</span>
+                    <img src="celeste-feather/feather0.png" alt="" style="width:24px; height:24px; image-rendering:pixelated; margin-left:10px;">
+                    <span id="ticketFeatherCount" style="margin-left:4px;">× 0</span>
                 </div>
             </div>
             <img class="ticketShine" id="ticketShine" src="" alt="">
@@ -163,6 +165,13 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 
     document.getElementById('ticketBerryCount').textContent = '× ' + berryBalance();
     document.getElementById('ticketDiaryCount').textContent = '× ' + diaries;
+
+    // 羽毛数：后端实时拉取
+    api('/feather/count', 'GET').then(res => {
+        if (res.success && res.data != null) {
+            document.getElementById('ticketFeatherCount').textContent = '× ' + res.data;
+        }
+    });
 
     // 图案铺满卡片
     const CARD_STAMPS = ['farewell', 'flag', 'goldberry', 'goldheart', 'heart', 'cassettes'];

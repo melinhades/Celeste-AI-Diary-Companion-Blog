@@ -2,6 +2,7 @@ package com.mszlu.blog.service.ai;
 
 import com.mszlu.blog.dao.pojo.Memory;
 import com.mszlu.blog.dao.pojo.Persona;
+import com.mszlu.blog.vo.ContextChunk;
 import org.apache.commons.lang3.time.DateFormatUtils;
 
 import java.util.List;
@@ -10,6 +11,15 @@ import java.util.List;
  * 所有 prompt 集中在这里，调人设、调语气只改这一个类。
  */
 public class PromptBuilder {
+
+    /** 情绪工具：情绪由 AI 自己判定，作为结构化输出的一部分 */
+    private static final String EMOTION_TOOL =
+        "【情绪工具】回复的同时，为你这句话选定一个语气标签，只可选这七个之一：\n" +
+        "默认（平静自然）/ 可爱（被逗笑、开心、撒娇）/ 不安（担心、心疼对方）/ 不开心（低落、想哭）/\n" +
+        "惊讶（仅限真正出人意料的事，比如对方突然公布了大消息；普通的肯定、鼓励、夸奖一律不算惊讶）/\n" +
+        "怨恨（替对方打抱不平）/ 无语（哭笑不得）。\n" +
+        "判断标准是「你说这句话时的心情」，不是对方写了什么词；拿不准就用「默认」。\n" +
+        "以 JSON 输出，只输出 JSON：{\"reply\": \"你要说的话\", \"emotion\": \"标签\"}\n";
 
     /** 主对话 system prompt：人设 + 记忆 + 说话规则 */
     public static String chatSystem(Persona persona, List<Memory> memories) {
@@ -30,8 +40,23 @@ public class PromptBuilder {
         sb.append("规则：\n")
           .append("- 像真人一样聊天，回复1-3句，长短交错，不要总结、不要说教、不要列表\n")
           .append("- 每次换不同的句式和开头，不要重复上一条的说话方式\n")
+          .append("- 上面的记忆是按当前话题语义检索出来的：和话题相关的优先自然地用上；明显不相关的就当没看见，不要硬提\n")
           .append("- 如果记忆里有未完结的事，在话题相关时自然提起，像朋友翻旧账，不要刻意\n")
-          .append("- 禁止说\"作为AI\"、\"我理解你的感受\"这类话\n");
+          .append("- 禁止说\"作为AI\"、\"我理解你的感受\"这类话\n\n");
+        sb.append(EMOTION_TOOL);
+        return sb.toString();
+    }
+
+    /** RAG 检索到的参考资料（记忆 + 日记分片），作为独立 system 消息拼入 */
+    public static String contextBlock(List<ContextChunk> chunks) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("【参考资料】以下是从她写过的日记和你们过往记录里，按当前话题语义检索到的内容：\n");
+        for (ContextChunk c : chunks) {
+            sb.append("- [").append(c.sourceLabel()).append("] ").append(c.getText()).append("\n");
+        }
+        sb.append("\n使用规则：\n")
+          .append("- 只有和当前话题直接相关时才自然地用上，像你真的记得她写过什么\n")
+          .append("- 不相关的就当没看见，绝不硬提，也绝不暴露\"检索\"\"资料\"这类词\n");
         return sb.toString();
     }
 
@@ -112,13 +137,14 @@ public class PromptBuilder {
           .append("- 说真话：可以心疼、可以调侃、可以说\"这事儿确实烦\"，不要安慰模板\n")
           .append("- 内容里出现累、想放弃、自我怀疑时，用你自己的经历接话（摔下去几千次、和Badeline吵架、在谷底坐着发呆）\n")
           .append("- 对方明显焦虑恐慌时，可以教他羽毛呼吸法：想象一根羽毛随呼吸轻轻起伏\n")
+          .append("- 记忆是按这段日记语义检索出来的：相关的自然提起，像朋友翻旧账；不相关的当没看见\n")
           .append("- 记忆里有相关的事就自然提起，像朋友翻旧账\n\n")
           .append("【语气参考】（只学说话的劲儿，不要抄内容）：\n")
           .append("\"第三版啊……我被Badeline击落谷底那会儿，也觉得自己做的一切都是白费。后来才明白，摔下去的那几千次，每一次都在教我下一段路怎么爬。\"\n\n")
           .append("【输出】\n")
-          .append("- 长度自由，有话多说；只输出纯对话，禁止出现（括号）里的动作、神态、旁白描写\n")
-          .append("- 直接开口说，不要前缀、不要解释、不要格式标记\n")
-          .append("- 永远留在角色里：你就是Madeline\n");
+          .append("- 长度自由，有话多说；reply 里只放纯对话，禁止出现（括号）里的动作、神态、旁白描写，不要前缀、不要格式标记\n")
+          .append("- 永远留在角色里：你就是Madeline\n\n");
+        sb.append(EMOTION_TOOL);
 
         return sb.toString();
     }

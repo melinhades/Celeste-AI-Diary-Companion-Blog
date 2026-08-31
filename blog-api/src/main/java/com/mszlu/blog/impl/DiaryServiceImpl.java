@@ -76,6 +76,9 @@ public class DiaryServiceImpl implements DiaryService {
         // 这里我们调用 extractAsync，用户内容为日记内容，AI 回复为空字符串。
         memoryService.extractAsync(userId, param.getContent(), "");
 
+        // 日记分片 + 向量化，进 RAG 知识库（异步，不阻塞保存）
+        memoryService.chunkDiary(userId, diary.getId(), diary.getTitle(), param.getContent());
+
         return Result.success(diary.getId());
     }
 
@@ -209,14 +212,21 @@ public class DiaryServiceImpl implements DiaryService {
         var messages = new ArrayList<AiMessage>();
         messages.add(new AiMessage("system", PromptBuilder.diaryCompanion(persona, memories, draftSnippet)));
 
-        String reply = aiClient.chat(messages);
+        String reply = aiClient.chat(messages, true);
         if (reply == null) {
             return Result.fail(500, "Madeline 这会儿不想说话（AI 调用失败），稍后再试");
         }
 
         String feedback = reply.trim();
-        String emotion = scanHerEmotion(feedback);
-        String[] validEmotions = {"默认", "不安", "惊讶", "怨恨", "不开心", "可爱", "无语"};
+        String emotion = "默认";
+        try {
+            JSONObject obj = JSON.parseObject(feedback);
+            String r = obj.getString("reply");
+            if (r != null && !r.isBlank()) feedback = r.trim();
+            emotion = normalizeHerEmotion(obj.getString("emotion"));
+        } catch (Exception e) {
+            emotion = "默认";
+        }
 
         DiaryCompanion companion = new DiaryCompanion();
         companion.setUserId(userId);
@@ -250,18 +260,12 @@ public class DiaryServiceImpl implements DiaryService {
         }
         return best;
     }
-    private String scanHerEmotion(String reply) {
-        String[][] table = {
-                {"可爱", "哈哈", "嘿嘿", "（笑", "太好", "真棒", "开心", "♥"},
-                {"惊讶", "诶", "哇，", "啊？", "真的吗", "居然"},
-                {"不安", "我有点担心", "担心你", "小心"},
-                {"怨恨", "可恶", "气死", "讨厌"},
-                {"无语", "服了", "离谱"},
-                {"不开心", "唉", "想哭"}
-        };
-        for (String[] row : table) {
-            for (int i = 1; i < row.length; i++) {
-                if (reply.contains(row[i])) return row[0];
+    /** 情绪白名单校验：AI 给的标签不合法就回落默认 */
+    private String normalizeHerEmotion(String emotion) {
+        String[] valid = {"默认", "不安", "惊讶", "怨恨", "不开心", "可爱", "无语"};
+        if (emotion != null) {
+            for (String v : valid) {
+                if (v.equals(emotion.trim())) return v;
             }
         }
         return "默认";
@@ -291,66 +295,109 @@ public class DiaryServiceImpl implements DiaryService {
     }
 
     @Override
+    public Result snapReflect(DiaryParam param) {
+        SysUser user = UserThreadLocal.get();
+        if (user == null) return Result.fail(403, "未登录");
+        String content = param.getContent() == null ? "" : param.getContent();
+        if (content.isEmpty()) return Result.fail(400, "内容为空");
+        String snippet = content.substring(0, Math.min(1200, content.length()));
+        String prompt = "你是 Madeline，Celeste 的爬山女孩。你温暖、真诚、细腻。\n"
+                + "这是用户这段时间写下的日记合集：\n———\n" + snippet + "\n———\n\n"
+                + "请以 Madeline 的身份，回望这段日子，写一段简短温柔的感言（2-3 句）：先说说这些日记里最让你留意的东西，再给一句暖心的话。\n"
+                + "不要说教，不要罗列，像写在明信片背面的几行字。\n"
+                + "直接输出文字，不要 JSON，不要引号。";
+        String reply = aiClient.chat(new java.util.ArrayList<>(java.util.Arrays.asList(
+                new AiMessage("user", prompt))));
+        if (reply == null || reply.isEmpty()) {
+            reply = "这段日子回头看，每一页都写得认真。山记得你的每一步。";
+        }
+        java.util.Map<String, Object> data = new java.util.HashMap<>();
+        data.put("message", reply.trim());
+        return Result.success(data);
+    }
+
+    @Override
     public Result oshiroChat(String message, String historyJson) {
+        try {
+            List<String> history;
+            if (historyJson == null || historyJson.isBlank()) {
+                history = new ArrayList<>();
+            } else {
+                history = JSON.parseArray(historyJson, String.class);
+            }
+            String prompt = PromptBuilder.oshiroChat(history);
+            String reply = aiClient.chat(new ArrayList<>(java.util.Arrays.asList(
+                    new AiMessage("user", prompt))));
+            return Result.success(reply);
+        } catch (Exception e) {
+            return Result.success("（Oshiro 正在擦茶壶，耳朵有点红，没听清。你可以再说一遍吗？）");
+        }
+    }
+
+    @Override
+    public Result postcardMessage() {
         SysUser user = UserThreadLocal.get();
         if (user == null) {
-            return Result.fail(403, "未登录，请先登录");
+            return Result.fail(403, "未登录");
         }
+        String userId = user.getId();
+        String userName = user.getNickname() != null ? user.getNickname() : user.getAccount();
 
-        List<String> history = new java.util.ArrayList<>();
-        if (historyJson != null && !historyJson.isEmpty()) {
-            try {
-                com.alibaba.fastjson.JSONArray arr = com.alibaba.fastjson.JSON.parseArray(historyJson);
-                for (int i = 0; i < arr.size(); i++) {
-                    com.alibaba.fastjson.JSONObject obj = arr.getJSONObject(i);
-                    String role = obj.getString("role");
-                    String content = obj.getString("content");
-                    if ("user".equals(role)) {
-                        history.add("客人说：" + content);
-                    } else {
-                        history.add("Oshiro说：" + content);
-                    }
-                }
-            } catch (Exception ignored) {}
-        }
+        // 查找昨天的日记
+        long now = System.currentTimeMillis();
+        long yesterdayStart = now - 24 * 60 * 60 * 1000L;
+        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Diary> wrapper =
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
+        wrapper.eq(Diary::getUserId, userId);
+        wrapper.ge(Diary::getCreateDate, new Date(yesterdayStart));
+        wrapper.le(Diary::getCreateDate, new Date(now));
+        wrapper.orderByDesc(Diary::getCreateDate);
+        wrapper.last("limit 1");
+        Diary yesterdayDiary = diaryMapper.selectOne(wrapper);
 
-        var messages = new ArrayList<AiMessage>();
-        messages.add(new AiMessage("system", PromptBuilder.oshiroChat(history)));
-        messages.add(new AiMessage("user", message));
+        String diaryContent = yesterdayDiary != null ? yesterdayDiary.getContent() : "";
 
-        String reply = aiClient.chat(messages);
+        Persona persona = personaService.getActive(userId);
+        String prompt = PromptBuilder.dailyPostcard(userName, diaryContent);
+        String reply = aiClient.chat(
+                new java.util.ArrayList<>(java.util.Arrays.asList(
+                        new AiMessage("user", prompt))));
+
         if (reply == null) {
-            return Result.fail(500, "Oshiro 这会儿有点恍惚（AI 调用失败），稍后再试");
+            reply = userName + "，新的一天开始了，记得对自己温柔一点。—— Madeline";
         }
 
-        String emotion = scanOshiroEmotion(reply.trim());
-        var result = new java.util.HashMap<String, Object>();
-        result.put("message", reply.trim());
-        result.put("emotion", emotion);
-        return Result.success(result);
+        java.util.Map<String, Object> data = new java.util.HashMap<>();
+        data.put("userName", userName);
+        data.put("message", reply);
+        data.put("hasDiary", yesterdayDiary != null);
+        return Result.success(data);
     }
 
-    private String scanOshiroEmotion(String reply) {
-        // 快乐→sidehappy，紧张→nervous，担心→worried，戏剧化→drama，失控→lostcontrol，严肃→serious
-        if (reply.contains("哈哈") || reply.contains("嘿嘿") || reply.contains("太好") || reply.contains("开心")) {
-            return "sidehappy";
-        }
-        if (reply.contains("诶？") || reply.contains("真的吗") || reply.contains("哇")) {
-            return "sidesuspicious";
-        }
-        if (reply.contains("担心") || reply.contains("小心") || reply.contains("别")) {
-            return "sideworried";
-        }
-        if (reply.contains("可恶") || reply.contains("气")) {
-            return "drama";
-        }
-        if (reply.contains("唉") || reply.contains("老了") || reply.contains("以前")) {
-            return "lostcontrol";
-        }
-        if (reply.contains("哼") || reply.contains("才不是")) {
-            return "serious";
-        }
-        return "normal";
-    }
+    @Override
+    public Result featherKeyword() {
+        SysUser user = UserThreadLocal.get();
+        if (user == null) return Result.fail(403, "未登录");
+        String userId = user.getId();
 
+        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Diary> wrapper =
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
+        wrapper.eq(Diary::getUserId, userId);
+        wrapper.orderByDesc(Diary::getUpdateDate);
+        wrapper.last("limit 1");
+        List<Diary> list = diaryMapper.selectList(wrapper);
+
+        if (list.isEmpty()) {
+            java.util.Map<String, Object> data = new java.util.HashMap<>();
+            data.put("keyword", null);
+            return Result.success(data);
+        }
+        String content = list.get(0).getContent();
+        String prompt = "从下面这段日记里提取一个最核心的关键词（2-4个汉字），只返回关键词本身，不要其他内容：\n\n" + content;
+        String reply = aiClient.chat(new java.util.ArrayList<>(java.util.Arrays.asList(
+                new AiMessage("user", prompt))));
+        java.util.Map<String, Object> data = new java.util.HashMap<>();
+        data.put("keyword", reply != null ? reply.trim().replaceAll("[\\s\\n]+", "") : null);
+        return Result.success(data);
+    }
 }

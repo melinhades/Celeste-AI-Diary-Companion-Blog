@@ -42,6 +42,20 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 .acts button.del { border-color:#e6517c; color:#ff9ab5; }
 .toast { position:fixed; left:50%; bottom:40px; transform:translateX(-50%) translateY(20px); background:rgba(22,34,60,.95); color:#ffe36d; border:1px solid #ffe36d; padding:10px 18px; border-radius:6px; opacity:0; transition:.3s; z-index:99; font-size:13px; }
 .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+
+/* ===== 明信片弹窗：每日明信片同款入场动画 ===== */
+#postcardExportModal { position:fixed; inset:0; z-index:1200; display:none; flex-direction:column; align-items:center; justify-content:center; gap:18px; background:rgba(5,5,20,.95); }
+#postcardExportModal.show { display:flex; }
+#postcardExportModal .pe-snow { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:0; }
+#postcardExportModal .pe-stage { display:flex; flex-direction:column; align-items:center; gap:18px; z-index:1; opacity:0; transform:translateX(-120%) rotate(-8deg); transition:opacity .8s ease, transform 1s cubic-bezier(0.34, 1.56, 0.64, 1); }
+#postcardExportModal .pe-stage.slide-in { opacity:1; transform:translateX(0) rotate(0deg); }
+#postcardExportModal canvas#postcardCanvas { max-width:92vw; max-height:74vh; border-radius:6px; box-shadow:0 16px 48px rgba(0,0,0,.7); background:#0f1729; filter:drop-shadow(0 8px 32px rgba(0,0,0,.6)); }
+#postcardExportModal .pe-actions { display:flex; gap:14px; opacity:0; transition:opacity .5s ease; }
+#postcardExportModal .pe-actions.show { opacity:1; }
+#postcardExportModal button { padding:9px 20px; border-radius:6px; cursor:pointer; font-size:13px; border:2px solid #ffe36d; background:rgba(22,34,60,.92); color:#ffe36d; font-family:inherit; }
+#postcardExportModal button:hover { background:rgba(255,230,109,.15); }
+
 /* ===== 篝火（从 diary 迁来） ===== */
 #strawberryBonfire{position:fixed;right:26px;bottom:24px;z-index:20;display:flex;flex-direction:column;align-items:flex-end;gap:8px;user-select:none;cursor:pointer;}
 .sb-straw{display:flex;align-items:center;gap:5px;padding:4px 11px;background:rgba(22,34,60,.9);border:2px solid rgba(255,230,109,.5);border-radius:8px;box-shadow:0 0 8px rgba(255,230,109,.25);font-family:'Press Start 2P',monospace;font-size:11px;color:#ff6b8a;}
@@ -59,6 +73,42 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 #berryTrophy{position:fixed;top:70px;right:16px;z-index:20;display:flex;gap:8px;padding:6px 10px;background:rgba(22,34,60,.85);border:1px dashed rgba(255,230,109,.4);border-radius:8px;}
 #berryTrophy img{width:26px;height:26px;image-rendering:pixelated;object-fit:contain;filter:drop-shadow(0 0 4px rgba(255,230,109,.5));}
 #berryTrophy.empty{display:none;}
+
+/* ===== 磁带选曲（cassette 收集品点歌） ===== */
+#cassetteBgm{position:fixed;left:22px;bottom:22px;z-index:25;user-select:none;}
+#cassetteBgmImg{width:56px;height:56px;image-rendering:pixelated;cursor:pointer;filter:drop-shadow(0 4px 10px rgba(0,0,0,.5));transition:transform .2s;}
+#cassetteBgmImg:hover{transform:scale(1.12);}
+#cassetteBgmPanel{position:absolute;left:0;bottom:66px;width:220px;display:none;background:rgba(22,34,60,.95);border:2px solid rgba(255,230,109,.5);border-radius:8px;padding:8px 0;box-shadow:0 8px 24px rgba(0,0,0,.5);}
+#cassetteBgmPanel.show{display:block;}
+#cassetteBgmPanel .cb-title{font-family:'Press Start 2P',monospace;font-size:9px;color:rgba(255,230,109,.7);letter-spacing:1px;padding:6px 14px 8px;border-bottom:1px solid rgba(255,230,109,.2);}
+#cassetteBgmPanel .cb-item{display:flex;align-items:center;gap:8px;padding:7px 14px;font-size:13px;color:rgba(255,255,255,.8);cursor:pointer;transition:background .15s;}
+#cassetteBgmPanel .cb-item:hover{background:rgba(255,230,109,.12);color:#ffe36d;}
+#cassetteBgmPanel .cb-item.on{color:#ffe36d;}
+#cassetteBgmPanel .cb-item.on::before{content:'▶';font-size:9px;color:#ffe36d;}
+#cassetteBgmPanel .cb-item:not(.on)::before{content:'';display:inline-block;width:9px;}
+/* ===== 快照卡：journal.png 按钮，悬停翻书，点开是明信片 ===== */
+.page.snapshot { background:url('celeste-gui/journal.png') center top/86% auto no-repeat; animation:none; }
+.page.snapshot:hover { animation:none; transform:translateY(-12px) scale(1.05); }
+.snap-tag { position:absolute; top:10px; right:12px; padding:2px 9px; background:rgba(255,227,109,.18); border:1px solid rgba(255,230,109,.55); border-radius:9px; font-family:'Press Start 2P',monospace; font-size:8px; color:#ffe36d; letter-spacing:1px; }
+
+/* ===== 快照详情：翻开的 Journal 跨页 ===== */
+#snapJournalModal { position:fixed; inset:0; z-index:1200; display:none; align-items:center; justify-content:center; background:rgba(4,6,14,.82); backdrop-filter:blur(3px); }
+#snapJournalModal.show { display:flex; }
+.sj-book { position:relative; width:min(860px,94vw); }
+.sj-bg { display:block; width:100%; border-radius:6px; box-shadow:0 18px 50px rgba(0,0,0,.7); }
+.sj-page { position:absolute; top:16%; height:68%; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; color:#3d3226; }
+.sj-left { left:9%; width:36%; }
+.sj-right { left:55%; width:36%; }
+.sj-tag { font-family:'Press Start 2P',monospace; font-size:9px; color:#a3812f; letter-spacing:2px; margin-bottom:12px; }
+.sj-title { font-size:30px; font-weight:700; color:#43372a; margin-bottom:8px; }
+.sj-date { font-size:13px; color:#8a7a5f; letter-spacing:1px; margin-bottom:20px; border-bottom:1px solid rgba(138,122,95,.4); padding-bottom:10px; }
+.sj-stats div { font-size:16px; line-height:2.4; color:#4a3e2e; }
+.sj-stats b { color:#a3812f; font-size:20px; margin:0 4px; }
+.sj-qlabel { font-size:12px; color:#8a7a5f; letter-spacing:2px; margin-bottom:14px; }
+.sj-quote { font-size:17px; line-height:2.1; color:#43372a; }
+.sj-sign { position:absolute; bottom:0; right:0; font-size:13px; color:#a3812f; }
+.sj-close { position:absolute; top:4%; right:3%; border:1px solid rgba(90,74,47,.5); background:rgba(255,250,235,.85); color:#5a4a2f; border-radius:6px; padding:6px 14px; font-size:13px; cursor:pointer; font-family:inherit; }
+.sj-close:hover { background:rgba(255,230,109,.5); }
 </style>
 </head>
 <body>
@@ -74,6 +124,14 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     </div>
 </div>
 <div id="berryTrophy" class="empty"></div>
+
+<!-- 磁带选曲 -->
+<div id="cassetteBgm">
+    <img id="cassetteBgmImg" src="celeste-collectables/cassette/idle00.png" alt="cassette" title="换一首">
+    <div id="cassetteBgmPanel">
+        <div class="cb-title">CASSETTE · 选一首</div>
+    </div>
+</div>
 
 <!-- BGM 播放器 -->
 <audio id="bgmPlayer" loop>
@@ -138,6 +196,9 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     })();
 
     const bgmPlayer = document.getElementById('bgmPlayer');
+    // 记住上次选的磁带
+    const savedBgmFile = localStorage.getItem('shelfBgmFile');
+    if (savedBgmFile) bgmPlayer.src = 'bgm/' + savedBgmFile;
     const savedTime = parseFloat(localStorage.getItem('bgmTimeShelf') || '0');
     if (savedTime > 0) bgmPlayer.currentTime = savedTime;
     bgmPlayer.volume = 0.3;
@@ -147,69 +208,134 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     document.addEventListener('click', tryPlayBGM);
     document.addEventListener('keydown', tryPlayBGM);
 
+    // ===== 磁带选曲：7 首收集曲目，点了就播，选择会记住 =====
+    (function () {
+        const BGM_LIST = [
+            { f: 'dearest-friends.mp3', n: 'Dearest Friends' },
+            { f: 'checking-in.mp3', n: 'Checking In' },
+            { f: 'exhale.mp3', n: 'Exhale' },
+            { f: 'farewell.mp3', n: 'Farewell' },
+            { f: 'madeline-and-theo.mp3', n: 'Madeline & Theo' },
+            { f: 'postcard.mp3', n: 'Postcard' },
+            { f: 'womanbird.mp3', n: 'Womanbird' }
+        ];
+        const img = document.getElementById('cassetteBgmImg');
+        const panel = document.getElementById('cassetteBgmPanel');
+
+        // 磁带自己一直慢慢转（19 帧）
+        const frames = [];
+        for (let i = 0; i < 19; i++) frames.push('celeste-collectables/cassette/idle' + String(i).padStart(2, '0') + '.png');
+        frames.forEach(s => { const im = new Image(); im.src = s; });
+        let fi = 0;
+        setInterval(() => { fi = (fi + 1) % frames.length; img.src = frames[fi]; }, 110);
+
+        function renderList() {
+            panel.querySelectorAll('.cb-item').forEach(e => e.remove());
+            const cur = (bgmPlayer.src || '').split('/').pop();
+            BGM_LIST.forEach(t => {
+                const d = document.createElement('div');
+                d.className = 'cb-item' + (t.f === cur || (!cur && t.f === savedBgmFile) ? ' on' : '');
+                d.textContent = t.n;
+                d.addEventListener('click', () => {
+                    bgmPlayer.src = 'bgm/' + t.f;
+                    bgmPlayer.play().catch(() => {});
+                    localStorage.setItem('shelfBgmFile', t.f);
+                    localStorage.removeItem('bgmTimeShelf');
+                    renderList();
+                    pcPlay('ui_world_journal_page_cover_forward_01.wav');
+                });
+                panel.appendChild(d);
+            });
+        }
+        img.addEventListener('click', () => {
+            renderList();
+            panel.classList.toggle('show');
+        });
+        document.addEventListener('click', e => {
+            if (!panel.contains(e.target) && e.target !== img) panel.classList.remove('show');
+        });
+    })();
+
 function renderPostcardCanvas(canvas, title, dateStr, content, summary, strawCount) {
     var ctx = canvas.getContext('2d');
-    var W = 1200, H = 800;
-    canvas.width = W; canvas.height = H;
-    ctx.fillStyle = '#0f1729'; ctx.fillRect(0, 0, W, H);
-    var grad = ctx.createLinearGradient(0, 0, 0, 320);
-    grad.addColorStop(0, '#1a2744'); grad.addColorStop(1, '#0f1729');
-    ctx.fillStyle = grad; ctx.fillRect(0, 0, W, 320);
-    for (var i = 0; i < 50; i++) {
-        ctx.fillStyle = 'rgba(255,255,255,' + (Math.random() * 0.4 + 0.1) + ')';
-        var sx = Math.random() * W, sy = Math.random() * 260, ss = Math.random() * 2 + 0.5;
-        ctx.fillRect(Math.floor(sx), Math.floor(sy), ss, ss);
-    }
-    ctx.fillStyle = '#1e2d4a';
-    ctx.beginPath(); ctx.moveTo(0, 300);
-    ctx.lineTo(120, 170); ctx.lineTo(280, 230); ctx.lineTo(480, 110);
-    ctx.lineTo(680, 190); ctx.lineTo(880, 130); ctx.lineTo(1060, 200);
-    ctx.lineTo(W, 260); ctx.lineTo(W, 320); ctx.lineTo(0, 320);
-    ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#253552';
-    ctx.beginPath(); ctx.moveTo(0, 310);
-    ctx.lineTo(200, 250); ctx.lineTo(400, 280); ctx.lineTo(600, 220);
-    ctx.lineTo(800, 265); ctx.lineTo(1000, 235); ctx.lineTo(W, 285);
-    ctx.lineTo(W, 320); ctx.lineTo(0, 320);
-    ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#ffe36d';
-    ctx.font = '22px "Press Start 2P",monospace';
-    ctx.fillText('MOUNTAIN DIARY', 60, 380);
-    ctx.fillStyle = 'rgba(255,227,109,.45)';
-    ctx.font = '13px "Press Start 2P",monospace';
-    ctx.fillText(dateStr || '', 60, 410);
-    ctx.fillStyle = '#ffe36d';
-    ctx.fillRect(60, 425, W - 120, 2);
-    ctx.fillStyle = '#fff';
-    ctx.font = '24px "Renogare","Microsoft YaHei",sans-serif';
-    var dt = (title || '无题').substring(0, 36);
-    ctx.fillText(dt, 60, 470);
-    ctx.fillStyle = 'rgba(255,255,255,.82)';
-    ctx.font = '15px "Renogare","CelesteZH","Microsoft YaHei",sans-serif';
-    var snip = (content || '').substring(0, 280);
-    var words = snip.split('');
-    var line = '', ly = 510, mh = 630, ml = Math.floor((W - 120) / 15);
-    for (var ci = 0; ci < words.length; ci++) {
-        if (words[ci] === '\n') { ctx.fillText(line, 60, ly); line = ''; ly += 28; if (ly > mh) break; continue; }
-        if ((line + words[ci]).length > ml) { ctx.fillText(line, 60, ly); line = words[ci]; ly += 28; if (ly > mh) break; }
-        else line += words[ci];
-    }
-    if (line && ly <= mh) ctx.fillText(line, 60, ly);
-    if (summary) {
-        var sy2 = Math.min(ly + 45, 660);
-        ctx.fillStyle = 'rgba(255,227,109,.5)';
-        ctx.fillRect(60, sy2 - 12, W - 120, 1);
-        ctx.fillStyle = 'rgba(255,227,109,.75)';
-        ctx.font = '14px "Renogare","CelesteZH","Microsoft YaHei",sans-serif';
-        var st = summary.substring(0, 80);
-        ctx.fillText('\u201c' + st + '\u201d', 80, sy2 + 14);
-    }
-    ctx.fillStyle = 'rgba(255,255,255,.35)';
-    ctx.font = '11px "Press Start 2P",monospace';
-    ctx.fillText('\u00d7' + (strawCount || 0) + '  \u2014 Madeline', 60, H - 36);
-    ctx.fillStyle = 'rgba(255,230,109,.25)';
-    for (var bx = 0; bx < W; bx += 8) { ctx.fillRect(bx, 0, 4, 4); ctx.fillRect(bx, H - 4, 4, 4); }
-    for (var by = 0; by < H; by += 8) { ctx.fillRect(0, by, 4, 4); ctx.fillRect(W - 4, by, 4, 4); }
+    var INK = '#8f4a3c';
+    var INK_SOFT = 'rgba(143,74,60,.78)';
+    return loadPostcardImg().then(function (img) {
+        var W = 1200, H = 800;
+        if (img) {
+            H = Math.round(W * img.naturalHeight / img.naturalWidth);
+            canvas.width = W; canvas.height = H;
+            ctx.drawImage(img, 0, 0, W, H);
+        } else {
+            canvas.width = W; canvas.height = H;
+            ctx.fillStyle = '#f2e2d5'; ctx.fillRect(0, 0, W, H);
+            ctx.strokeStyle = INK_SOFT; ctx.lineWidth = 3;
+            ctx.strokeRect(18, 18, W - 36, H - 36);
+        }
+
+        // ===== To: 两条横线上写标题和日期 =====
+        ctx.fillStyle = INK;
+        ctx.font = 'italic 30px "Renogare","CelesteZH","Microsoft YaHei",sans-serif';
+        ctx.fillText((title || '无题').substring(0, 26), W * 0.14, H * 0.130);
+        ctx.font = 'italic 19px "Renogare","CelesteZH","Microsoft YaHei",sans-serif';
+        ctx.fillStyle = INK_SOFT;
+        ctx.fillText(dateStr || '', W * 0.14, H * 0.200);
+
+        // ===== 中间大片书写区：内容总结（【】里的字红色高亮） =====
+        var RED_INK = '#c8433a';
+        var snip = (content || '').substring(0, 300);
+        var segs = [], mSeg, reSeg = /【([^】]*)】/g, lastI = 0;
+        while ((mSeg = reSeg.exec(snip)) !== null) {
+            if (mSeg.index > lastI) segs.push({ t: snip.slice(lastI, mSeg.index), r: false });
+            segs.push({ t: mSeg[1], r: true });
+            lastI = reSeg.lastIndex;
+        }
+        if (lastI < snip.length) segs.push({ t: snip.slice(lastI), r: false });
+        ctx.font = '21px "Renogare","CelesteZH","Microsoft YaHei",sans-serif';
+        var ly = H * 0.34, mh = H * 0.62, lx = W * 0.07, maxX = W * 0.56, x = lx;
+        for (var si = 0; si < segs.length; si++) {
+            var chars = segs[si].t.split('');
+            for (var ci = 0; ci < chars.length; ci++) {
+                var ch = chars[ci];
+                if (ch === '\n') { x = lx; ly += 36; continue; }
+                var cw = ctx.measureText(ch).width;
+                if (x + cw > maxX) { x = lx; ly += 36; }
+                if (ly > mh) break;
+                ctx.fillStyle = segs[si].r ? RED_INK : INK;
+                ctx.fillText(ch, x, ly);
+                x += cw;
+            }
+            if (ly > mh) break;
+        }
+        if (x > lx) ly += 36;
+
+        // ===== 金句（最打动的一句）=====
+        if (summary) {
+            var sy2 = Math.min(ly + 20, H * 0.74);
+            ctx.strokeStyle = 'rgba(143,74,60,.35)'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(W * 0.07, sy2 - 10); ctx.lineTo(W * 0.57, sy2 - 10); ctx.stroke();
+            ctx.fillStyle = INK;
+            ctx.font = 'italic 20px "Renogare","CelesteZH";'
+            ctx.fillText('\u201c' + summary.substring(0, 60) + '\u201d', W * 0.08, sy2 + 22);
+        }
+
+        // ===== 落款（右下角，避开素材左下角的 Postcard~）=====
+        ctx.fillStyle = INK_SOFT;
+        ctx.font = 'italic 17px "Renogare","CelesteZH";'
+        ctx.textAlign = 'right';
+        ctx.fillText('\u00d7' + (strawCount || 0) + '  \u2014 Madeline', W * 0.92, H * 0.9);
+        ctx.textAlign = 'left';
+    });
+}
+var PC_IMG = null;
+function loadPostcardImg() {
+    return new Promise(function (res) {
+        if (PC_IMG) return res(PC_IMG);
+        var im = new Image();
+        im.onload = function () { PC_IMG = im; res(im); };
+        im.onerror = function () { res(null); };
+        im.src = 'celeste-gui/postcard.png';
+    });
 }
 var PC_SOUNDS = {};
 function pcPlay(name) {
@@ -226,13 +352,33 @@ function exportPostcard(data) {
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'postcardExportModal';
-        modal.innerHTML = '<canvas id="postcardCanvas"></canvas><div class="pe-actions"><button id="peDownload">\u2b07 下载明信片</button><button class="pe-close" id="peClose">\u2715 关闭</button></div>';
+        modal.innerHTML = '<canvas class="pe-snow" id="peSnow"></canvas>' +
+            '<div class="pe-stage"><canvas id="postcardCanvas"></canvas>' +
+            '<div class="pe-actions"><button id="peDownload">\u2b07 下载明信片</button><button class="pe-close" id="peClose">Keep \u2665</button></div></div>';
         document.body.appendChild(modal);
-        document.getElementById('peClose').addEventListener('click', function() { modal.classList.remove('show'); pcPlay('ui_main_postcard_variants_out.wav'); });
-        modal.addEventListener('click', function(e) { if (e.target === modal) { modal.classList.remove('show'); pcPlay('ui_main_postcard_variants_out.wav'); } });
+        var closePe = function() {
+            pcPlay('ui_main_postcard_variants_out.wav');
+            stopPeSnow();
+            modal.style.transition = 'opacity .6s ease';
+            modal.style.opacity = '0';
+            setTimeout(function () {
+                modal.classList.remove('show');
+                modal.style.opacity = '';
+                modal.style.transition = '';
+                modal.querySelector('.pe-stage').classList.remove('slide-in');
+                modal.querySelector('.pe-actions').classList.remove('show');
+            }, 600);
+        };
+        document.getElementById('peClose').addEventListener('click', closePe);
+        modal.addEventListener('click', function(e) { if (e.target === modal) closePe(); });
     }
     var canvas = document.getElementById('postcardCanvas');
-    renderPostcardCanvas(canvas, data.title, data.date, data.content, data.summary, parseInt(localStorage.getItem('diarySaveCount') || '0'));
+    renderPostcardCanvas(canvas, data.title, data.date, data.content, data.summary, parseInt(localStorage.getItem('diarySaveCount') || '0')).then(function () {
+        modal.classList.add('show');
+        startPeSnow();
+        setTimeout(function () { modal.querySelector('.pe-stage').classList.add('slide-in'); }, 400);
+        setTimeout(function () { modal.querySelector('.pe-actions').classList.add('show'); }, 1600);
+    });
     document.getElementById('peDownload').onclick = function() {
         var url = canvas.toDataURL('image/png');
         var a = document.createElement('a');
@@ -240,8 +386,45 @@ function exportPostcard(data) {
         a.href = url;
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
     };
-    modal.classList.add('show');
     pcPlay('ui_main_postcard_variants_in.wav');
+}
+
+// ===== 弹窗内飘雪（与每日明信片同款，精简版） =====
+var peSnowRaf = null, peFlakes = [];
+function startPeSnow() {
+    var cv = document.getElementById('peSnow');
+    if (!cv || peSnowRaf) return;
+    var c = cv.getContext('2d');
+    cv.width = window.innerWidth; cv.height = window.innerHeight;
+    peFlakes = [];
+    for (var i = 0; i < 60; i++) {
+        peFlakes.push({
+            x: Math.random() * cv.width, y: Math.random() * cv.height,
+            r: Math.random() * 2.5 + 1, sp: Math.random() * 1.2 + 0.4,
+            w: Math.random() * 0.4 - 0.2, o: Math.random() * 0.5 + 0.2,
+            sw: Math.random() * Math.PI * 2, sws: Math.random() * 0.02 + 0.01
+        });
+    }
+    function loop() {
+        c.clearRect(0, 0, cv.width, cv.height);
+        for (var j = 0; j < peFlakes.length; j++) {
+            var f = peFlakes[j];
+            f.y += f.sp; f.sw += f.sws;
+            f.x += Math.sin(f.sw) * 0.5 + f.w;
+            if (f.y > cv.height + 10) { f.y = -10; f.x = Math.random() * cv.width; }
+            if (f.x > cv.width + 10) f.x = -10;
+            if (f.x < -10) f.x = cv.width + 10;
+            c.beginPath();
+            c.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+            c.fillStyle = 'rgba(255,255,255,' + f.o + ')';
+            c.fill();
+        }
+        peSnowRaf = requestAnimationFrame(loop);
+    }
+    loop();
+}
+function stopPeSnow() {
+    if (peSnowRaf) { cancelAnimationFrame(peSnowRaf); peSnowRaf = null; }
 }
 
 (async function () {
@@ -333,6 +516,7 @@ function exportPostcard(data) {
     }
     cards.addEventListener('click', ev => {
         const c = ev.target.closest('.page');
+        if (c && c.classList.contains('snapshot')) return;
         if (c) { playPageSfx('forward'); showDetail(+c.dataset.i); }
     });
 
@@ -344,7 +528,7 @@ function exportPostcard(data) {
         let reelTimer = null, reelFi = 0, reelCur = null;
         cards.addEventListener('mouseover', e => {
             const p = e.target.closest('.page');
-            if (!p || p === reelCur) return;
+            if (!p || p.classList.contains('snapshot') || p === reelCur) return;
             reelCur = p; reelFi = 0;
             if (reelTimer) clearInterval(reelTimer);
             reelTimer = setInterval(() => {
@@ -354,7 +538,7 @@ function exportPostcard(data) {
         });
         cards.addEventListener('mouseout', e => {
             const p = e.target.closest('.page');
-            if (!p || !reelCur || (e.relatedTarget && p.contains(e.relatedTarget))) return;
+            if (!p || p.classList.contains('snapshot') || !reelCur || (e.relatedTarget && p.contains(e.relatedTarget))) return;
             if (reelTimer) { clearInterval(reelTimer); reelTimer = null; }
             reelCur.style.backgroundImage = '';
             reelCur = null;
@@ -378,6 +562,171 @@ function exportPostcard(data) {
         else showToast(res.msg || '删除失败');
     });
     await load();
+
+    // ================================================================
+    // ===== 快照：一段时间后，Madeline 把这段日子做成一张明信片 =====
+    // 书架上悬停自己翻书，点开是明信片（variants 音效）
+    // ================================================================
+    (function () {
+        const EMOTION_DICT = {
+            '开心': ['开心', '高兴', '快乐', '哈哈', '太棒', '喜欢', '幸福', '笑', '兴奋', '顺利'],
+            '悲伤': ['难过', '伤心', '哭', '失落', '遗憾', '心痛', '委屈', '崩溃'],
+            '孤独': ['孤独', '一个人', '寂寞', '没人', '想念', '空荡'],
+            '不安': ['焦虑', '紧张', '担心', '害怕', '不安', '慌', '压力', '失眠'],
+            '愤怒': ['生气', '愤怒', '烦躁', '讨厌', '气死', '火大'],
+            '满足': ['满足', '踏实', '安心', '平静', '值得', '感恩', '治愈'],
+            '希望': ['期待', '希望', '明天', '以后', '加油', '计划', '梦想'],
+            '惊讶': ['没想到', '居然', '竟然', '惊', '突然', '万万']
+        };
+        function countEmotion(texts) {
+            const scores = {};
+            for (const t of texts) {
+                for (const emo in EMOTION_DICT) {
+                    for (const kw of EMOTION_DICT[emo]) {
+                        const m = t.split(kw).length - 1;
+                        if (m > 0) scores[emo] = (scores[emo] || 0) + m;
+                    }
+                }
+            }
+            let best = null, max = 0;
+            for (const emo in scores) { if (scores[emo] > max) { max = scores[emo]; best = emo; } }
+            return best || '平静';
+        }
+        function extractQuote(entries) {
+            const sents = [];
+            for (const e of entries) {
+                const parts = String(e.content || '').split(/(?<=[。！？!?])|[\n]/);
+                for (const p of parts) {
+                    const s = p.trim();
+                    if (s.length >= 6 && s.length <= 46) sents.push(s);
+                }
+            }
+            if (!sents.length) return '这段日子字还不多，但每一页都算数。';
+            let best = sents[0], bestScore = -1;
+            for (const s of sents) {
+                let score = 0;
+                for (const emo in EMOTION_DICT) {
+                    if (EMOTION_DICT[emo].some(kw => s.indexOf(kw) !== -1)) score += 2;
+                }
+                score += Math.min(s.length, 30) / 15;
+                score += Math.random();
+                if (score > bestScore) { bestScore = score; best = s; }
+            }
+            return best;
+        }
+        function getSnaps() { try { return JSON.parse(localStorage.getItem('diarySnapshots') || '[]'); } catch (e) { return []; } }
+        function setSnaps(s) { localStorage.setItem('diarySnapshots', JSON.stringify(s)); }
+
+        // ===== 检查是否到了生成快照的时候 =====
+        async function maybeGenerate() {
+            const now = Date.now();
+            const snaps = getSnaps();
+            const inRange = (days) => data.filter(d => {
+                const t = new Date(d.updateDate || d.createDate).getTime();
+                return !isNaN(t) && now - t <= days * 86400000;
+            });
+            const hasType = (type, fromT) => snaps.some(s => s.type === type && s.createdAt >= fromT);
+            const created = [];
+
+            const week = inRange(7);
+            if (week.length >= 3 && !hasType('week', now - 7 * 86400000)) {
+                created.push(await buildSnap('week', week, '周快照'));
+            }
+            const month = inRange(30);
+            if (month.length >= 8 && !hasType('month', now - 30 * 86400000)) {
+                created.push(await buildSnap('month', month, '月快照'));
+            }
+            if (created.length) {
+                setSnaps(created.concat(snaps));
+                renderSnapCards();
+                pcPlay('ui_main_postcard_variants_in.wav');
+                showToast(created.length > 1 ? '两张新快照明信片收进书架了' : '一张新的快照明信片收进书架了');
+            }
+            async function buildSnap(type, list, label) {
+                const times = list.map(d => new Date(d.updateDate || d.createDate).getTime()).sort((a, b) => a - b);
+                let reflect = '';
+                try {
+                    const joined = list.map(d => d.content || '').join('\n').slice(0, 1200);
+                    const res = await api('/diary/snap-reflect', 'POST', { content: joined });
+                    if (res.success && res.data && res.data.message) reflect = res.data.message;
+                } catch (e) {}
+                return {
+                    id: type + '-' + now,
+                    type: type,
+                    label: label,
+                    from: fmt(times[0]),
+                    to: fmt(times[times.length - 1]),
+                    count: list.length,
+                    topEmotion: countEmotion(list.map(d => d.content || '')),
+                    quote: extractQuote(list),
+                    reflect: reflect,
+                    createdAt: now
+                };
+            }
+        }
+
+        // ===== 书架上的快照卡 =====
+        function snapCardHtml(s) {
+            return '<div class="page snapshot" data-snap="' + s.id + '">' +
+                '<div class="snap-tag">SNAPSHOT</div>' +
+                '<div class="page-date">' + fmt(s.createdAt) + '</div>' +
+                '<div class="page-t">' + s.label + '</div>' +
+                '<div class="page-s">' + s.count + ' 篇日记 · 你最近常常感到「' + s.topEmotion + '」。<br>点开，是一张明信片。</div>' +
+                '</div>';
+        }
+        function renderSnapCards() {
+            cards.querySelectorAll('.page.snapshot').forEach(el => el.remove());
+            const snaps = getSnaps();
+            if (!snaps.length) return;
+            cards.insertAdjacentHTML('afterbegin', snaps.map(snapCardHtml).join(''));
+        }
+
+        // ===== 悬停：快照卡自己一页页翻（spread1→2→3 循环） =====
+        (function () {
+            const SPREADS = ['celeste-journal/spread1.webp', 'celeste-journal/spread2.webp', 'celeste-journal/spread3.webp'];
+            SPREADS.forEach(s => { const im = new Image(); im.src = s; });
+            let snapTimer = null, snapFi = 0, snapCur = null;
+            cards.addEventListener('mouseover', e => {
+                const p = e.target.closest('.page.snapshot');
+                if (!p || p === snapCur) return;
+                snapCur = p; snapFi = 0;
+                if (snapTimer) clearInterval(snapTimer);
+                p.style.backgroundImage = 'url(' + SPREADS[0] + ')';
+                snapTimer = setInterval(() => {
+                    snapFi = (snapFi + 1) % SPREADS.length;
+                    if (snapCur) snapCur.style.backgroundImage = 'url(' + SPREADS[snapFi] + ')';
+                }, 420);
+            });
+            cards.addEventListener('mouseout', e => {
+                const p = e.target.closest('.page.snapshot');
+                if (!p || !snapCur || (e.relatedTarget && p.contains(e.relatedTarget))) return;
+                if (snapTimer) { clearInterval(snapTimer); snapTimer = null; }
+                snapCur.style.backgroundImage = '';
+                snapCur = null;
+            });
+        })();
+
+        // ===== 点击：做成明信片，内容总结写在上面（variants 音效） =====
+        function openSnapPostcard(s) {
+            const body = s.reflect || ('这段日子，你写下了 ' + s.count + ' 篇日记。');
+            exportPostcard({
+                title: s.label + ' · 共 ' + s.count + ' 篇',
+                date: fmt(s.createdAt),
+                content: body + '\n\n你最近常常感到【' + s.topEmotion + '】。',
+                summary: s.quote
+            });
+        }
+        cards.addEventListener('click', ev => {
+            const c = ev.target.closest('.page.snapshot');
+            if (!c) return;
+            const s = getSnaps().find(x => x.id === c.dataset.snap);
+            if (s) openSnapPostcard(s);
+        });
+
+        // ===== 入场：先渲染已有快照，再检查要不要生成新的 =====
+        renderSnapCards();
+        setTimeout(maybeGenerate, 800);
+    })();
 })();
 
     // ===== 篝火渲染（原版 campfire 逐帧动画） =====
@@ -385,7 +734,7 @@ function exportPostcard(data) {
         const TROPHIES = {
             goldberry: 'celeste-collectables/goldberry/idle00.png',
             cassette: 'celeste-collectables/cassette/idle00.png',
-            heartgem: 'celeste-collectables/heartgem/0/00.png',
+            heartgem: 'celeste-collectables/heartgem/0/spin00.png',
             moonberry: 'celeste-collectables/moonberry/normal00.png'
         };
         let owned = [];
@@ -414,7 +763,12 @@ function exportPostcard(data) {
         setInterval(() => {
             trophy.querySelectorAll('img').forEach(im => {
                 if (im.dataset.id === 'heartgem') {
-                    im.src = 'celeste-collectables/heartgem/' + heartTier() + '/' + String(tfi % 14).padStart(2, '0') + '.png';
+                    const tier = heartTier();
+                    if (tier >= 3) {
+                        im.src = 'celeste-collectables/heartgem/3/FakeHeart' + String(tfi % 33).padStart(4, '0') + '.png';
+                    } else {
+                        im.src = 'celeste-collectables/heartgem/' + tier + '/spin' + String(tfi % 11).padStart(2, '0') + '.png';
+                    }
                     return;
                 }
                 const f = TROPHY_FRAMES[im.dataset.id];

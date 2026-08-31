@@ -61,10 +61,22 @@ public class DiaryController {
         return diaryService.summary(param);
     }
 
+    /** 快照明信片：Madeline 对这段时间日记的感言 */
+    @PostMapping("snap-reflect")
+    public Result snapReflect(@RequestBody DiaryParam param) {
+        return diaryService.snapReflect(param);
+    }
+
     /** Oshiro 旅馆聊天 */
     @PostMapping("oshiro-chat")
     public Result oshiroChat(@RequestBody OshiroChatParam param) {
         return diaryService.oshiroChat(param.getMessage(), param.getHistory());
+    }
+
+    /** 羽毛关键词提取 */
+    @GetMapping("feather-keyword")
+    public Result featherKeyword() {
+        return diaryService.featherKeyword();
     }
 
     /** 请求体体：用于 companion 接口 */

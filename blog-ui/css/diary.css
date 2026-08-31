@@ -849,12 +849,10 @@ body::before {
     white-space:nowrap;
 }
 .cover-stamps {
-    position:absolute; left:50%; bottom:8%; transform:translateX(-50%);
-    display:flex; gap:6px; align-items:center;
+    position:absolute; left:0; bottom:0; width:100%; height:100%;
     pointer-events:none; user-select:none; z-index:3;
 }
 .cover-stamps img {
-    width:clamp(18px, 4vw, 44px); height:auto; display:block;
     filter:drop-shadow(0 2px 3px rgba(60,15,5,.45));
 }
 /* 游戏同款圆点：白色实心+深描边为当前页，粉色为未读 */

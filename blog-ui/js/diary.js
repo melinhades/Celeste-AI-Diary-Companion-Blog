@@ -86,8 +86,8 @@
         dotsBox.appendChild(d);
     });
     dotsBox.children[0].classList.add('on');
-    // ===== 日记图案：每写一篇日记多一个，8 个 Celeste 图标按固定顺序 =====
-    const JOURNAL_STAMPS = ['farewell', 'flag', 'goldberry', 'goldheart', 'heart', 'cassettes', 'cheatmode', 'assist'];
+    // ===== 日记图案：每写一篇日记多一个，7 个 Celeste 图标按固定顺序 =====
+    const JOURNAL_STAMPS = ['farewell', 'flag', 'goldberry', 'goldheart', 'heart', 'cassettes', 'assist'];
     let renderCoverStamps = function () {};
     const coverEl = document.getElementById('bookCover');
     if (coverEl) {
@@ -125,18 +125,31 @@
             pcName.textContent = pc.userName;
             pcMsg.textContent = pc.message;
         });
-        // 图案：已得数量 = diarySaveCount（最多 8 个），横排贴在封面下方
+        // ... existing code ...
+        // 图案：已得数量 = diarySaveCount（最多 8 个），按 STAMP_LAYOUT 固定位置贴
+        const STAMP_LAYOUT = [
+            { size: 796, bottom: 49, left: 11, rot: -3 },
+            { size: 564, bottom: 74, left: 22, rot: -3 },
+            { size: 868, bottom: 26, left: 70, rot: 27 },
+            { size: 862, bottom: 22, left: 1, rot: 32 },
+            { size: 677, bottom: 69, left: 52, rot: 0 },
+            { size: 493, bottom: 18, left: 55, rot: -5 },
+            { size: 1000, bottom: 73, left: 21, rot: 0 }
+        ];
         const stampsBox = document.createElement('div');
         stampsBox.className = 'cover-stamps';
+        stampsBox.style.cssText = 'position:absolute;left:0;bottom:0;width:100%;height:100%;transform:none;display:block;pointer-events:none;z-index:3;';
         coverEl.appendChild(stampsBox);
         renderCoverStamps = function () {
             const n = Math.min(parseInt(localStorage.getItem('diarySaveCount') || '0'), JOURNAL_STAMPS.length);
             stampsBox.innerHTML = '';
             for (let i = 0; i < n; i++) {
+                const c = STAMP_LAYOUT[i];
+                if (!c) continue;
                 const im = document.createElement('img');
                 im.src = 'celeste-journal/' + JOURNAL_STAMPS[i] + '.png';
                 im.alt = JOURNAL_STAMPS[i];
-                im.style.transform = 'rotate(' + (i % 2 ? 3 : -3) + 'deg)';
+                im.style.cssText = 'position:absolute;left:' + c.left + '%;bottom:' + c.bottom + '%;width:' + c.size + 'px;height:auto;display:block;transform:translateX(-50%) rotate(' + c.rot + 'deg);filter:drop-shadow(0 2px 3px rgba(60,15,5,.45));';
                 stampsBox.appendChild(im);
             }
         };
@@ -144,6 +157,7 @@
         coverEl.addEventListener('click', () => {
             if (bookCur === 0) { jpPlay('forward'); bookGoto(1); }
         });
+// ... existing code ...
     }
     // 底部圆点旁的白色"下一页"箭头（游戏同款）
     const dotNext = document.createElement('button');
@@ -212,7 +226,6 @@
         '可爱': 'celeste-portraits/madeline/peaceful00.png',
         '无语': 'celeste-portraits/madeline/deadpan00.png'
     };
-    // ... existing code ...
     const PORTRAIT_FRAMES = { normal: 7, panic: 5, surprised: 7, angry: 7, sad: 7, peaceful: 4, deadpan: 9 };
     let portraitAnimTimer = null;
     function startPortraitAnim(emotion) {
@@ -229,7 +242,6 @@
         }, 120);
     }
     function stopPortraitAnim() { clearInterval(portraitAnimTimer); portraitAnimTimer = null; }
-// ... existing code ...
     const emotionBgMap = {
         '默认': 'celeste-areas/bg_default.png',
         '平静': 'celeste-areas/bg_calm.png',
@@ -412,7 +424,8 @@
             const histBubble = newMadelineRow(emotion);
             histBubble.textContent = msg;
             let sentenceBuf = '';
-            let voiceEmotion = (emotion && emotion !== '默认') ? emotion : inferReplyEmotion(msg);
+            const aiLocked = !!(emotion && emotion !== '默认');
+            let voiceEmotion = aiLocked ? emotion : inferReplyEmotion(msg);
             if (useGameDialog) {
                 gameDialogText.textContent = '';
                 let speakCount = 0;
@@ -437,8 +450,10 @@
                     histBubble.textContent += ch;
                     chatMessages.scrollTop = chatMessages.scrollHeight;
                     if (/[。！？!?]/.test(ch)) {
-                        const inferred = inferSentenceEmotion(sentenceBuf);
-                        voiceEmotion = (inferred !== '默认') ? inferred : nextDefaultVoice();
+                        if (!aiLocked) {
+                            const inferred = inferSentenceEmotion(sentenceBuf);
+                            voiceEmotion = (inferred !== '默认') ? inferred : nextDefaultVoice();
+                        }
                         sentenceBuf = '';
                     } else if (!/[\s…，,、；;：:（）()*]/.test(ch)) {
                         sentenceBuf += ch;
@@ -484,7 +499,7 @@
         try {
             const res = await api('/chat', 'POST', { content: text });
             if (res.success && res.data) {
-                addMadelineMessage(res.data.content || '...', inferReplyEmotion(res.data.content || ''));
+                addMadelineMessage(res.data.content || '...', res.data.emotion || '默认');
             } else {
                 addMadelineMessage('Hmm... I didn\'t catch that. Say it again?', '默认');
             }
@@ -524,7 +539,7 @@
             const res = await api('/chat', 'POST', { content: text });
             if (res.success && res.data) {
                 const reply = res.data.content || '...';
-                addMadelineMessage(reply, inferReplyEmotion(reply));
+                addMadelineMessage(reply, res.data.emotion || '默认');
             } else {
                 addMadelineMessage('Hmm... I didn\'t catch that. Say it again?', '默认');
             }
@@ -717,25 +732,30 @@
     }
 
 // ===== 每日明信片：当天缓存，一天只有一张 =====
+    var dailyPostcardInFlight = null;
     async function getDailyPostcard() {
         const today = new Date().toDateString();
         try {
             const cached = JSON.parse(localStorage.getItem('dailyPostcardCache') || 'null');
             if (cached && cached.date === today && cached.message) return cached;
         } catch (e) {}
-        try {
-            const res = await api('/diary/daily-postcard', 'GET');
-            if (res && res.success && res.data && res.data.message) {
-                const out = {
-                    date: today,
-                    userName: res.data.userName || localStorage.getItem('nickname') || 'Traveler',
-                    message: res.data.message
-                };
-                localStorage.setItem('dailyPostcardCache', JSON.stringify(out));
-                return out;
-            }
-        } catch (e) {}
-        return { date: today, userName: localStorage.getItem('nickname') || 'Traveler', message: 'A brand new day. Be gentle with yourself.' };
+        if (dailyPostcardInFlight) return dailyPostcardInFlight;
+        dailyPostcardInFlight = (async () => {
+            try {
+                const res = await api('/diary/daily-postcard', 'GET');
+                if (res && res.success && res.data && res.data.message) {
+                    const out = {
+                        date: today,
+                        userName: res.data.userName || localStorage.getItem('nickname') || 'Traveler',
+                        message: res.data.message
+                    };
+                    localStorage.setItem('dailyPostcardCache', JSON.stringify(out));
+                    return out;
+                }
+            } catch (e) {}
+            return { date: today, userName: localStorage.getItem('nickname') || 'Traveler', message: 'A brand new day. Be gentle with yourself.' };
+        })();
+        return dailyPostcardInFlight;
     }
     // ===== 每日明信片主流程 =====
     async function showDailyPostcard() {
@@ -1299,13 +1319,164 @@ function inferReplyEmotion(text) {
         }
     });
 
+    // ... existing code ...
+    // ===== 保存特效：帧动画出现在日记本右下角 =====
+    // ... existing code ...
+    // ===== 保存特效：帧动画出现在日记本右下角 =====
+    const SAVE_FRAMES = [];
+    for (let i = 0; i <= 20; i++) {
+        SAVE_FRAMES.push('save/saveIcon' + String(i).padStart(5, '0') + '.png');
+    }
+    const saveIcons = [];
+
+    // ===== 草莓音效（外层作用域，供 saveDiary 调用） =====
+    const berrySound = new Audio('celeste-sounds/strawberry.wav');
+    berrySound.volume = 0.7;
+    function playBerrySound() {
+        if (!window.__audioGestured) return;
+        try { berrySound.currentTime = 0; berrySound.play().catch(() => {}); } catch (e) {}
+    }
+// ===== 保存成功音效 =====
+    const saveSuccessSound = new Audio('celeste-sounds/ui_main_savefile_rename_start.wav');
+    saveSuccessSound.volume = 0.7;
+    function playSaveSuccessSound() {
+        if (!window.__audioGestured) return;
+        try { saveSuccessSound.currentTime = 0; saveSuccessSound.play().catch(() => {}); } catch (e) {}
+    }
+
+    function initSaveIcons() {
+        pageEls.forEach((page, idx) => {
+            const img = document.createElement('img');
+            img.src = 'save/nonanimated.png';
+            img.alt = 'save';
+            img.style.cssText = 'position:absolute; bottom:8%; right:15%; width:110px; height:110px; z-index:10; cursor:pointer; image-rendering:pixelated;';
+            img.addEventListener('click', function() {
+                if (contentInput && contentInput.value.trim()) {
+                    playSaveAnimation();
+                    saveDiary();
+                }
+            });
+            page.appendChild(img);
+            saveIcons.push(img);
+        });
+    }
+    initSaveIcons();
+
+    function playSaveAnimation() {
+        const curIcon = saveIcons[bookCur];
+        if (!curIcon) return;
+        let frame = 0;
+        curIcon.src = SAVE_FRAMES[0];
+        const timer = setInterval(() => {
+            frame++;
+            if (frame >= SAVE_FRAMES.length) {
+                clearInterval(timer);
+                curIcon.src = 'save/nonanimated.png';
+                return;
+            }
+            curIcon.src = SAVE_FRAMES[frame];
+        }, 60);
+    }
+    // ================================================================
+    // ===== 主线4：草莓与篝火（收集系统） =====
+    // ================================================================
+    function berryBalanceLocal() {
+        return window.berryBalance();
+    }
+    function applyBerryBgm() {
+        const p = localStorage.getItem('berryBgm');
+        const src = document.querySelector('#bgmPlayer source');
+        if (src && p) { src.src = 'bgm/' + p + '.mp3'; }
+    }
+
+    function refreshShopUI() {
+        const c = document.getElementById('sbCount');
+        if (c) c.textContent = berryBalanceLocal();
+    }
+    function initStrawberryShop() {
+        if (document.getElementById('strawberryBonfire')) return;
+        const w = document.createElement('div');
+        w.id = 'strawberryBonfire';
+        w.title = '我的草莓';
+        w.innerHTML =
+            '<div class="sb-straw"><img src="celeste-collectables/strawberry.png" alt="strawberry"><span id="sbCount">0</span></div>';
+        document.body.appendChild(w);
+        w.addEventListener('click', () => {
+            addMadelineMessage('你现在有 ' + berryBalanceLocal() + ' 颗草莓，慢慢攒，山顶有好东西等着你～', '可爱');
+        });
+        refreshShopUI();
+    }
+    function updateBonfire(d) {
+        const fire = document.getElementById('sbFire');
+        const cnt = document.getElementById('sbCount');
+        if (!fire || !cnt) return;
+        cnt.textContent = d.total;
+        const s = d.streak;
+        let sz, clr, clr2, show = false;
+        if (s >= 30)      { sz = 26; clr = '#ff4444'; clr2 = '#ffe36d'; show = true; }
+        else if (s >= 7)  { sz = 20; clr = '#ff6600'; clr2 = '#ffcc00'; show = true; }
+        else if (s >= 3)  { sz = 15; clr = '#ff8800'; clr2 = '#ffaa33'; show = true; }
+        else if (s >= 1)  { sz = 9;  clr = '#ffaa44'; clr2 = '#ffcc66'; show = true; }
+        else              { sz = 0; clr = '#888'; clr2 = '#aaa'; }
+        fire.querySelectorAll('.sb-flame,.sb-spark,.sb-smoke,.sb-label').forEach(e => e.remove());
+        if (show) {
+            const fl = document.createElement('div');
+            fl.className = 'sb-flame';
+            fl.style.cssText = 'width:' + sz + 'px;height:' + (sz * 1.4) + 'px;background:radial-gradient(ellipse at bottom,' + clr2 + ',' + clr + ' 70%,transparent);box-shadow:0 0 ' + (sz / 2) + 'px ' + clr + ';';
+            fire.insertBefore(fl, fire.firstChild);
+            if (s >= 3) for (let i = 0; i < 2; i++) {
+                const sp = document.createElement('div');
+                sp.className = 'sb-spark';
+                sp.style.cssText = 'left:' + (30 + Math.random() * 40) + '%;bottom:' + (4 + sz * 0.6) + 'px;animation-delay:' + (Math.random() * 1.2) + 's;';
+                fire.appendChild(sp);
+            }
+            const lb = document.createElement('div');
+            lb.className = 'sb-label';
+            lb.textContent = s >= 30 ? '\u2605' + s : s + '天';
+            fire.appendChild(lb);
+        } else {
+            const sm = document.createElement('div');
+            sm.className = 'sb-smoke';
+            sm.style.cssText = 'left:50%;bottom:6px;transform:translateX(-50%);';
+            fire.insertBefore(sm, fire.firstChild);
+        }
+    }
+    function onSaveStreak() {
+        const today = new Date().toDateString();
+        const last = localStorage.getItem('diaryLastSaveDate') || '';
+        const prev = parseInt(localStorage.getItem('diaryStreak') || '0');
+        let streak;
+        if (!last) streak = 1;
+        else if (last === today) streak = prev;
+        else {
+            const y = new Date(); y.setDate(y.getDate() - 1);
+            streak = (last === y.toDateString()) ? prev + 1 : 1;
+        }
+        localStorage.setItem('diaryStreak', String(streak));
+        localStorage.setItem('diaryLastSaveDate', today);
+        const total = parseInt(localStorage.getItem('diarySaveCount') || '0');
+        updateBonfire({ total: total, streak: streak });
+        const lines3 = ['三天了！篝火生起来了……我们在这里扎营了。', '连续三天！山上的篝火最温暖。'];
+        const lines7 = ['一周了！你真的坚持下来了……我很感动。', '七天连续，这篝火够照亮整个山脊了。'];
+        const lines30 = ['三十天……你已经是山上的老朋友了。', '传说连续写三十天日记的人，能看见山顶的星星。'];
+        if (streak === 3) addMadelineMessage(lines3[Math.floor(Math.random() * lines3.length)], '可爱');
+        if (streak === 7) addMadelineMessage(lines7[Math.floor(Math.random() * lines7.length)], '可爱');
+        if (streak === 30) addMadelineMessage(lines30[Math.floor(Math.random() * lines30.length)], '可爱');
+
+        refreshShopUI();
+    }
     // ===== 保存日记（含最终分析 + 状态重置） =====
     async function saveDiary() {
+
         const title = titleInput.value.trim();
         const content = contentInput.value.trim();
         if (!content) { showToast('写点什么再保存吧~', 'error'); return; }
         if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
+
+        playSaveAnimation();
+
         try {
+// ... existing code ...
             const extras = [];
             for (let i = 0; i < localStorage.length; i++) {
                 const k = localStorage.key(i);
@@ -1325,15 +1496,27 @@ function inferReplyEmotion(text) {
                 companionState.peakIntensity = 0;
                 updateThemeByEmotion('默认');
 
+                // ... existing code ...
                 const companionRes = await api('/diary/companion', 'POST', { draft: content });
                 if (companionRes.success && companionRes.data) {
                     const feedback = companionRes.data.feedback || '';
                     const emotion = companionRes.data.emotion || '默认';
                     if (feedback && !isRepeatedSpeech(feedback)) { rememberSpeech(feedback); addMadelineMessage(feedback, emotion); }
                     updateThemeByEmotion(emotion);
+
+                    // 情绪低落时，金羽毛游戏自动出现
+                    if (['悲伤', '孤独', '不开心', '不安', '愤怒'].includes(emotion)) {
+                        setTimeout(function() {
+                            addMadelineMessage('写完了。……这根金羽毛给你，跟着它呼吸一会儿吧。', '可爱');
+                            setTimeout(function() {
+                                if (window.FeatherGame) window.FeatherGame.open();
+                            }, 2000);
+                        }, 3000);
+                    }
                 }
 
                 showToast(editingDiaryId ? '更新成功！' : '保存成功！', 'success');
+                playSaveSuccessSound();
                 pmCelebrate();
                 pmSummarize();
                 if (!editingDiaryId) {
@@ -1359,6 +1542,7 @@ function inferReplyEmotion(text) {
                 showToast(res.msg || '保存失败', 'error');
             }
         } catch (e) {
+            console.error('保存流程异常:', e);
             showToast('网络错误', 'error');
         }
         if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'SAVE'; }
@@ -1423,7 +1607,7 @@ function inferReplyEmotion(text) {
     const PM_FRAMES = {};
     PM_FRAMES[PM_SRC.fall] = (function () {
         const a = [];
-        // Deleted:for (let i = 0; i < 12; i++) a.push('celeste-player/fallPose' + String(i).padStart(2, '0') + '.png');
+
         for (let i = 0; i < 11; i++) a.push('celeste-player/fallPose' + String(i).padStart(2, '0') + '.png');
         return a;
     })();
@@ -1777,9 +1961,22 @@ function inferReplyEmotion(text) {
         if (!found) { pmState.x = 8; pmState.y = 60; }
     }
     window.addEventListener('resize', () => { pmState.y = Math.min(pmState.y, pmGroundY()); });
+    // ... existing code ...
     window.addEventListener('feather-finished', () => {
         addMadelineMessage('回来啦。刚才跟着羽毛的那一会儿，心里是不是安静了一点？', '可爱');
     });
+    window.addEventListener('feather-landed', (e) => {
+        const kw = e.detail && e.detail.keyword;
+        if (bookCur === 0) { bookGoto(1); }
+        if (kw && titleInput) {
+            titleInput.value = kw;
+            titleInput.focus();
+            addMadelineMessage('羽毛落在纸上了。上面那个词，是它想跟你说的。写不写都行。', '可爱');
+        } else {
+            addMadelineMessage('羽毛落下了，纸已经翻开。想写就写，不想写也没关系。', '可爱');
+        }
+    });
+// ... existing code ...
     let lastComfortAt = 0;
     function pmComfort() {
         if (performance.now() - lastComfortAt < 10 * 60 * 1000) return;
@@ -2124,101 +2321,6 @@ function inferReplyEmotion(text) {
             await showDailyPostcard();
         }
 
-    // ================================================================
-    // ===== 主线4：草莓与篝火（收集系统） =====
-    // ================================================================
-        const berrySound = new Audio('celeste-sounds/strawberry.wav');
-        berrySound.volume = 0.7;
-        function playBerrySound() {
-            if (!window.__audioGestured) return;
-            try { berrySound.currentTime = 0; berrySound.play().catch(() => {}); } catch (e) {}
-        }
-
-        function berryBalance() {
-            return window.berryBalance();
-        }
-        function applyBerryBgm() {
-            const p = localStorage.getItem('berryBgm');
-            const src = document.querySelector('#bgmPlayer source');
-            if (src && p) { src.src = 'bgm/' + p + '.mp3'; }
-        }
-
-        function refreshShopUI() {
-            const c = document.getElementById('sbCount');
-            if (c) c.textContent = berryBalance();
-        }
-        function initStrawberryShop() {
-            if (document.getElementById('strawberryBonfire')) return;
-            const w = document.createElement('div');
-            w.id = 'strawberryBonfire';
-            w.title = '我的草莓';
-            w.innerHTML =
-                '<div class="sb-straw"><img src="celeste-collectables/strawberry.png" alt="strawberry"><span id="sbCount">0</span></div>';
-            document.body.appendChild(w);
-            w.addEventListener('click', () => {
-                addMadelineMessage('你现在有 ' + berryBalance() + ' 颗草莓，慢慢攒，山顶有好东西等着你～', '可爱');
-            });
-            refreshShopUI();
-        }
-    function updateBonfire(d) {
-        const fire = document.getElementById('sbFire');
-        const cnt = document.getElementById('sbCount');
-        if (!fire || !cnt) return;
-        cnt.textContent = d.total;
-        const s = d.streak;
-        let sz, clr, clr2, show = false;
-        if (s >= 30)      { sz = 26; clr = '#ff4444'; clr2 = '#ffe36d'; show = true; }
-        else if (s >= 7)  { sz = 20; clr = '#ff6600'; clr2 = '#ffcc00'; show = true; }
-        else if (s >= 3)  { sz = 15; clr = '#ff8800'; clr2 = '#ffaa33'; show = true; }
-        else if (s >= 1)  { sz = 9;  clr = '#ffaa44'; clr2 = '#ffcc66'; show = true; }
-        else              { sz = 0; clr = '#888'; clr2 = '#aaa'; }
-        fire.querySelectorAll('.sb-flame,.sb-spark,.sb-smoke,.sb-label').forEach(e => e.remove());
-        if (show) {
-            const fl = document.createElement('div');
-            fl.className = 'sb-flame';
-            fl.style.cssText = 'width:' + sz + 'px;height:' + (sz * 1.4) + 'px;background:radial-gradient(ellipse at bottom,' + clr2 + ',' + clr + ' 70%,transparent);box-shadow:0 0 ' + (sz / 2) + 'px ' + clr + ';';
-            fire.insertBefore(fl, fire.firstChild);
-            if (s >= 3) for (let i = 0; i < 2; i++) {
-                const sp = document.createElement('div');
-                sp.className = 'sb-spark';
-                sp.style.cssText = 'left:' + (30 + Math.random() * 40) + '%;bottom:' + (4 + sz * 0.6) + 'px;animation-delay:' + (Math.random() * 1.2) + 's;';
-                fire.appendChild(sp);
-            }
-            const lb = document.createElement('div');
-            lb.className = 'sb-label';
-            lb.textContent = s >= 30 ? '\u2605' + s : s + '天';
-            fire.appendChild(lb);
-        } else {
-            const sm = document.createElement('div');
-            sm.className = 'sb-smoke';
-            sm.style.cssText = 'left:50%;bottom:6px;transform:translateX(-50%);';
-            fire.insertBefore(sm, fire.firstChild);
-        }
-    }
-    function onSaveStreak() {
-        const today = new Date().toDateString();
-        const last = localStorage.getItem('diaryLastSaveDate') || '';
-        const prev = parseInt(localStorage.getItem('diaryStreak') || '0');
-        let streak;
-        if (!last) streak = 1;
-        else if (last === today) streak = prev;
-        else {
-            const y = new Date(); y.setDate(y.getDate() - 1);
-            streak = (last === y.toDateString()) ? prev + 1 : 1;
-        }
-        localStorage.setItem('diaryStreak', String(streak));
-        localStorage.setItem('diaryLastSaveDate', today);
-        const total = parseInt(localStorage.getItem('diarySaveCount') || '0');
-        updateBonfire({ total: total, streak: streak });
-        const lines3 = ['三天了！篝火生起来了……我们在这里扎营了。', '连续三天！山上的篝火最温暖。'];
-        const lines7 = ['一周了！你真的坚持下来了……我很感动。', '七天连续，这篝火够照亮整个山脊了。'];
-        const lines30 = ['三十天……你已经是山上的老朋友了。', '传说连续写三十天日记的人，能看见山顶的星星。'];
-        if (streak === 3) addMadelineMessage(lines3[Math.floor(Math.random() * lines3.length)], '可爱');
-        if (streak === 7) addMadelineMessage(lines7[Math.floor(Math.random() * lines7.length)], '可爱');
-        if (streak === 30) addMadelineMessage(lines30[Math.floor(Math.random() * lines30.length)], '可爱');
-
-        refreshShopUI();
-    }
 
     // ================================================================
     // ===== 主线7：明信片导出 =====

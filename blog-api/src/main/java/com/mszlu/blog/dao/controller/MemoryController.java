@@ -27,4 +27,10 @@ public class MemoryController {
     public Result resolve(@PathVariable("id") String id) {
         return memoryService.resolve(id);
     }
+
+    /** 一次性运维：给存量记忆回填向量 */
+    @PostMapping("reindex")
+    public Result reindex() {
+        return memoryService.reindex();
+    }
 }

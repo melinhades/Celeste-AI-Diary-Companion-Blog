@@ -46,9 +46,17 @@
     ];
     let guideIdx = -1;
 
-    const goal = { y: 0, ty: 0, w: 400, h: 260, glow: 0, nextMove: 6 };
+    const goal = { y: 0, ty: 0, w: 400, h: 260, glow: 0 };
     let captionEl = null, audioCtx = null;
     let floaters = [];
+
+    // ===== 羽毛改进：关键词 + 速度选择 + 着陆 =====
+    let featherKeyword = null;
+    let featherSpeed = 1; // 1=正常, 0.6=慢, 1.5=快
+    let breathCycles = 0;
+    let landingPhase = false;
+    let landingT = 0;
+    let speedChosen = false;
 
     function addFloater(text, x, y, color, size) {
         floaters.push({ text, x, y, color: color || '#fff', size: size || 15, life: 2.4, maxLife: 2.4 });
@@ -104,6 +112,14 @@
             '  <span class="feather-title">GOLDEN FEATHER · 跟着羽毛呼吸</span>' +
             '  <button id="featherCloseBtn">✕</button>' +
             '</div>' +
+            '<div class="feather-speed-choice" style="display:none;">' +
+            '  <div class="fsc-text">这根羽毛想怎么飘？</div>' +
+            '  <div class="fsc-options">' +
+            '    <button class="fsc-btn" data-speed="0.6">慢慢飘</button>' +
+            '    <button class="fsc-btn" data-speed="1">像平时一样</button>' +
+            '    <button class="fsc-btn" data-speed="1.5">快一点</button>' +
+            '  </div>' +
+            '</div>' +
             '<div class="feather-caption"></div>' +
             '<div class="feather-hint">按住 ↑ 让羽毛上升 · 松开它会慢慢落下 · Esc 随时离开</div>';
         const style = document.createElement('style');
@@ -115,6 +131,11 @@
             '.feather-title{font-family:var(--pixel-font,monospace);font-size:15px;color:#ffe36d;letter-spacing:2px;text-shadow:0 0 12px rgba(255,227,109,.5);}' +
             '#featherCloseBtn{border:none;background:transparent;color:#8899bb;font-size:20px;cursor:pointer;}' +
             '#featherCloseBtn:hover{color:#fff;}' +
+            '.feather-speed-choice{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;z-index:5;}' +
+            '.fsc-text{font-family:var(--chat-font,sans-serif);font-size:18px;color:rgba(255,240,214,.9);margin-bottom:24px;letter-spacing:2px;}' +
+            '.fsc-options{display:flex;gap:16px;justify-content:center;}' +
+            '.fsc-btn{padding:12px 24px;border:1px solid rgba(255,230,109,.5);border-radius:8px;background:rgba(255,230,109,.08);color:#ffe36d;font-size:15px;cursor:pointer;transition:all .3s;}' +
+            '.fsc-btn:hover{background:rgba(255,230,109,.2);transform:scale(1.05);}' +
             '.feather-caption{position:absolute;bottom:70px;left:50%;transform:translateX(-50%);max-width:560px;text-align:center;font-family:var(--chat-font,sans-serif);font-size:15px;line-height:1.8;color:rgba(255,240,214,.92);letter-spacing:1px;text-shadow:0 0 14px rgba(0,0,0,.8);opacity:0;transition:opacity .8s ease;z-index:2;}' +
             '.feather-caption.show{opacity:1;}' +
             '.feather-hint{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);font-family:var(--chat-font,monospace);font-size:12px;color:rgba(255,255,255,.35);letter-spacing:1px;z-index:2;}';
@@ -125,6 +146,16 @@
         ctx = canvas.getContext('2d');
         captionEl = document.querySelector('.feather-caption');
         document.getElementById('featherCloseBtn').addEventListener('click', closeGame);
+
+        overlay.querySelectorAll('.fsc-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                featherSpeed = parseFloat(this.dataset.speed);
+                speedChosen = true;
+                overlay.querySelector('.feather-speed-choice').style.display = 'none';
+                showCaption('好，跟着这根羽毛的节奏。');
+                startBreathGame();
+            });
+        });
 
         window.addEventListener('keydown', e => {
             keys[e.key] = true;
@@ -155,7 +186,31 @@
         showCaption(GUIDES[guideIdx]);
     }
 
+    function startBreathGame() {
+        breathCycles = 0;
+        landingPhase = false;
+        lastTs = performance.now();
+        animId = requestAnimationFrame(loop);
+    }
+
     function update(dt) {
+        if (landingPhase) {
+            landingT += dt;
+            feather.vy += 20 * dt;
+            feather.y += feather.vy * dt;
+            feather.rot *= 0.95;
+            if (feather.y >= GH * 0.75) {
+                feather.y = GH * 0.75;
+                finishLanding();
+            }
+            for (const p of particles) {
+                p.stretch = Math.max(0, p.stretch - dt * 3);
+                p.y += p.speed * 0.3 * dt;
+                if (p.y > GH + 5) { p.y = -5; p.x = Math.random() * GW; }
+            }
+            return;
+        }
+
         elapsed += dt;
 
         const phase = BREATH[breathIdx];
@@ -163,14 +218,23 @@
         if (breathT >= phase.dur) {
             breathT = 0;
             breathIdx = (breathIdx + 1) % BREATH.length;
+            if (breathIdx === 0) {
+                breathCycles++;
+                if (breathCycles >= 2) {
+                    startLanding();
+                    return;
+                }
+            }
         }
 
         upHeld = !!(keys['ArrowUp'] || keys['w']);
 
+        const grav = GRAVITY * featherSpeed;
+        const lift = LIFT * featherSpeed;
         if (upHeld) {
-            feather.vy += LIFT * dt;
+            feather.vy += lift * dt;
         } else {
-            feather.vy += GRAVITY * dt;
+            feather.vy += grav * dt;
         }
         feather.vy = Math.max(-80, Math.min(TERMINAL_VY, feather.vy));
         feather.y += feather.vy * dt;
@@ -180,7 +244,6 @@
         if (feather.y < pad) { feather.y = pad; feather.vy = 0; }
         if (feather.y > GH - pad) { feather.y = GH - pad; feather.vy = 0; }
 
-        // 框跟随呼吸：吸气升，呼气降，屏息停
         const cur = BREATH[breathIdx];
         if (cur.name === '吸气……') {
             goal.ty = GH * 0.3;
@@ -240,6 +303,25 @@
         }
     }
 
+    function startLanding() {
+        landingPhase = true;
+        landingT = 0;
+        feather.vy = 0;
+        showCaption('羽毛要落下了……落在纸上，你可以开始写了。');
+    }
+
+    function finishLanding() {
+        if (!landingPhase) return;
+        landingPhase = false;
+        if (animId) cancelAnimationFrame(animId);
+        animId = null;
+        opened = false;
+        overlay.classList.remove('show');
+        window.dispatchEvent(new CustomEvent('feather-landed', {
+            detail: { keyword: featherKeyword }
+        }));
+    }
+
     function drawGoal() {
         const cur = BREATH[breathIdx];
         const x = GW / 2 - goal.w / 2;
@@ -282,7 +364,6 @@
         ctx.fillStyle = '#0a0d18';
         ctx.fillRect(0, 0, GW, GH);
 
-        // 圆点粒子：批量画
         ctx.save();
         ctx.fillStyle = '#fff';
         ctx.beginPath();
@@ -296,7 +377,6 @@
         ctx.fill();
         ctx.restore();
 
-        // 线条粒子：批量画
         ctx.save();
         ctx.strokeStyle = '#fff';
         ctx.lineCap = 'round';
@@ -314,7 +394,7 @@
         ctx.stroke();
         ctx.restore();
 
-        drawGoal();
+        if (!landingPhase) drawGoal();
 
         const fimg = images.feather[feather.frame];
         if (fimg) {
@@ -324,6 +404,15 @@
             ctx.translate(feather.x, feather.y);
             ctx.rotate(feather.rot);
             ctx.drawImage(fimg, -fw / 2, -fh / 2, fw, fh);
+
+            // 羽毛上挂关键词
+            if (featherKeyword) {
+                ctx.globalAlpha = 0.85;
+                ctx.font = '14px "Renogare","CelesteZH",sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = 'rgba(255,230,180,.9)';
+                ctx.fillText(featherKeyword, 0, -fh / 2 - 10);
+            }
             ctx.restore();
         }
 
@@ -340,12 +429,12 @@
     }
 
     function loop(ts) {
-        if (!opened) return;
+        if (!opened && !landingPhase) return;
         const dt = Math.min(0.05, (ts - lastTs) / 1000 || 0.016);
         lastTs = ts;
         update(dt);
         render();
-        animId = requestAnimationFrame(loop);
+        if (opened || landingPhase) animId = requestAnimationFrame(loop);
     }
 
     function resizeCanvas() {
@@ -370,22 +459,32 @@
         breathIdx = 0; breathT = 0;
         guideIdx = -1;
         lastInGlow = false;
+        speedChosen = false;
+        landingPhase = false;
         initParticles();
         goal.y = goal.ty = GH / 2;
         goal.glow = 0;
-        goal.nextMove = 6 + Math.random() * 6;
         overlay.classList.add('show');
         opened = true;
-        lastTs = performance.now();
-        animId = requestAnimationFrame(loop);
-        showCaption('我在缆车上恐慌发作的时候，Theo 教了我这个。想象你托着一根羽毛，跟着它呼吸就好。');
-        nextGuideTimer = setTimeout(nextGuide, 8000);
+
+        // 获取关键词
+        try {
+            const res = await api('/diary/feather-keyword', 'GET');
+            if (res.success && res.data && res.data.keyword) {
+                featherKeyword = res.data.keyword;
+            }
+        } catch (e) { featherKeyword = null; }
+
+        // 显示速度选择
+        overlay.querySelector('.feather-speed-choice').style.display = 'block';
     }
 
     function closeGame() {
         if (overlay) overlay.classList.remove('show');
         opened = false;
+        landingPhase = false;
         if (animId) cancelAnimationFrame(animId);
+        animId = null;
         if (nextGuideTimer) { clearTimeout(nextGuideTimer); nextGuideTimer = null; }
         window.dispatchEvent(new CustomEvent('feather-finished'));
     }

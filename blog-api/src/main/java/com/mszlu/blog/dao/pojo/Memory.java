@@ -27,5 +27,8 @@ public class Memory {
     /** 上次被拼进 prompt 的时间戳 */
     private Long lastMentionedTime;
 
+    /** 内容向量（JSON 数组字符串），RAG 语义检索用 */
+    private String embedding;
+
     private Long createDate;
 }
