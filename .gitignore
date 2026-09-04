@@ -38,3 +38,27 @@ logs/
 ### Application ###
 application-dev.properties
 application-prod.properties
+uploads/
+
+### Blog-UI Art Assets (keep js/, css/, *.html, *.md) ###
+blog-ui/Atlases/
+blog-ui/bgm/
+blog-ui/celeste-areas/
+blog-ui/celeste-collectables/
+blog-ui/celeste-feather/
+blog-ui/celeste-font-en/
+blog-ui/celeste-gui/
+blog-ui/celeste-icons/
+blog-ui/celeste-journal/
+blog-ui/celeste-mountain/
+blog-ui/celeste-player/
+blog-ui/celeste-portraits/
+blog-ui/celeste-sounds/
+blog-ui/fonts/
+blog-ui/icon/
+blog-ui/namespace/
+blog-ui/save/
+blog-ui/sounds/
+
+### Fix Scripts ###
+fix-*.js
