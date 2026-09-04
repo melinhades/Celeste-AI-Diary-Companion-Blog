@@ -6,12 +6,17 @@
 ![Last Updated](https://img.shields.io/badge/Last%20Updated-August%202026-blue.svg?style=for-the-badge)
 ![Frontend: Vanilla JS](https://img.shields.io/badge/Frontend-Vanilla%20JS-blueviolet.svg?style=for-the-badge)
 ![AI Engine: GLM-4](https://img.shields.io/badge/AI%20Engine-GLM--4-purple.svg?style=for-the-badge)
+![Diary+Blog](https://img.shields.io/badge/Diary%2FBlog-50%25%2F50%25-orange.svg?style=for-the-badge)
 
-An AI-powered diary companion blog system based on the Celeste (Celeste) theme: Java 17 + Spring Boot backend, native HTML/CSS/JS frontend, with AI companions providing immersive diary-writing experiences throughout.
+A unique dual-platform system that combines private AI-assisted diary writing with optional public blog sharing. Built on the Celeste (Celeste) theme using Java 17 + Spring Boot backend and native HTML/CSS/JS frontend, this platform offers immersive AI companionship for personal reflection while providing the tools to transform meaningful entries into public blog posts.
 
 ## 📋 Project Overview
 
+The Celeste AI Diary Companion Blog offers a unique hybrid experience where users maintain private AI-assisted diaries that can optionally be shared as public blog posts. 
+
 Users write diaries here, with AI companion **Madeline** (warm, sincere, delicate) providing constant companionship: offering writing feedback, proactive check-ins, chatting, feather breathing gameplay, daily postcards, and bookshelf snapshot postcards. The innkeeper **Oshiro** (tsundere) permanently resides on the shop page.
+
+This dual-platform approach creates a meaningful flow: intimate personal reflections in the diary can evolve into thoughtful blog entries when users choose to share their insights with others.
 
 ### ✨ Features Highlight
 
@@ -20,10 +25,12 @@ Users write diaries here, with AI companion **Madeline** (warm, sincere, delicat
 | 🤖 **AI Companionship** | Madeline provides intelligent, emotionally-aware interactions | ✅ Complete |
 | 🎮 **Interactive Games** | Feather breathing game for relaxation | ✅ Complete |
 | 💌 **Memory System** | Daily postcards & monthly snapshots | ✅ Complete |
-| 📝 **Rich Diary Writing** | Formatted text with auto-save | ✅ Complete |
-| 🏪 **Strawberry Economy** | Earn rewards through writing | ✅ Complete |
-| 👕 **Customization** | Themes & personalization options | 🔄 In Progress |
-| 📊 **Analytics** | Emotion tracking & insights | 🔄 In Progress |
+| 📝 **Private Diary Writing** | Secure, formatted text with auto-save & AI feedback | ✅ Complete |
+| 🌐 **Public Blog Sharing** | Transform diary entries into blog posts with one click | ✅ Complete |
+| 🔄 **Diary-to-Blog Flow** | Seamless transition from private reflection to public sharing | ✅ Complete |
+| 🏪 **Strawberry Economy** | Earn rewards through writing & engagement | ✅ Complete |
+| 👕 **Customization** | Themes, decorations & personalization options | 🔄 In Progress |
+| 📊 **Analytics** | Emotion tracking, writing insights & engagement metrics | 🔄 In Progress |
 
 ### System Architecture
 
@@ -34,6 +41,7 @@ Users write diaries here, with AI companion **Madeline** (warm, sincere, delicat
 - **Development Environment**: Windows 11 + IntelliJ + IntelliJ IDEA + PowerShell
 
 ## 📁 Project Structure
+
 
 ```
 blog/
@@ -74,6 +82,60 @@ blog/
 ├── fix-*.js               # Fix scripts
 └── 如何在浏览器访问.md    # Browser access guide
 ```
+## 📸 Screenshots
+
+### 🔐 Login
+
+> *"This is Madeline. Let's climb together."*
+
+<p align="center">
+  <img src="docs/screenshots/login.png" alt="Login Page" width="720">
+</p>
+
+The gateway to your climbing journey. A parchment-textured card floats on a starry night sky — Madeline's avatar greets you at the top, with clean account/password fields below. New users can jump to registration via the "Sign up" link. The entire login flow uses Celeste's signature warm paper-on-dark aesthetic.
+
+### 🏠 Index (Blog Feed)
+
+> *Where your reflections become stories worth sharing.*
+
+<p align="center">
+  <img src="docs/screenshots/index.png" alt="Index Page" width="720">
+</p>
+
+The main hub of the public blog. Articles are displayed as elegant dark cards with metadata (author, date, read time, likes), filterable by category (`All` / `Tech` / `Life` / `Study`) and searchable via the header bar. The right sidebar surfaces **Popular** posts and a **Tags** cloud for discovery. Top navigation provides quick access to Archives, My Space, article writing, and logout.
+
+### 📖 Diary
+
+> *Every word has warmth, every day has meaning.*
+
+<p align="center">
+  <img src="docs/screenshots/diary.png" alt="Diary Page" width="720">
+</p>
+
+The heart of the application — a postcard-style diary reader where Madeline presents your past entries as beautiful mailed letters (complete with stamps and postmarks). At the bottom, Madeline herself appears in a Celeste-style dialogue box, providing real-time companionship and emotional support. Decorative collectables (strawberries, cassettes, blue birds, golden hearts) float around the page, tracking your writing journey. The feather game button in the corner offers a breathing exercise whenever you need a moment of calm.
+
+### 🌟 My Space
+
+> *Your personal summit — every step counted.*
+
+<p align="center">
+  <img src="docs/screenshots/namespace.png" alt="My Space Page" width="720">
+</p>
+
+A character-themed profile dashboard set against Celeste's rocky mountain backdrop. Your ticket-card displays collected stickers and avatars, while a stats panel tracks your **strawberry** (🍓 writing rewards), **cassette** (📼 memories), and **chili** (🌶️ challenges) balances. Celeste NPCs — Theo with his camera, Granny on her porch — share the scene with you, making your space feel alive and inhabited.
+
+### ✍️ Write Article
+
+> *From private thoughts to public stories — one Publish away.*
+
+<p align="center">
+  <img src="docs/screenshots/write.png" alt="Write Article Page" width="720">
+</p>
+
+A full Markdown editor set against a dreamy purple twilight sky with a soaring bird silhouette. The toolbar supports rich formatting (Bold, Headings, Code Blocks, Quotes, Links, Lists, Images), plus Celeste-specific tools: **Madeline** (insert character references), **润色/Polish** (AI-assisted text refinement), and **生成文章/Generate Article** (AI-powered article generation). Articles can be saved as drafts or published directly to the blog feed, completing the diary-to-blog flow.
+
+## 🚀 Quick Start
+<!-- ... existing code ... -->
 
 ## 🚀 Quick Start
 
@@ -176,8 +238,10 @@ blog/
   - Token usage tracking and optimization
 
 #### Core Business Logic
-- `impl/DiaryServiceImpl.java`: Primary diary management service
+- `impl/DiaryServiceImpl.java`: Primary diary & blog management service
   - Complete CRUD operations for diary entries
+  - Blog post creation from selected diary entries
+  - Privacy controls for diary-to-blog transitions
   - `companion()`: Real-time AI feedback during writing
   - `summary()`: Automatic diary summarization for previews
   - `snapReflect()`: Monthly reflection generation (emotion trend analysis)
@@ -383,8 +447,13 @@ For persistent issues, please consult the detailed troubleshooting guide in [TRO
 1. **Verify Current Functionality**: Confirm monthly snapshot lazy fill + backend restart after snapshot reflections display normally
 2. **完善遗留项**: Handle user feedback from AI handover document section 6遗留项
 3. **提交管理**: When user says "submit", organize proposed commit information by功能 blocks
-4. **性能优化**: Optimize retrieval and rendering performance for large diary volumes
-5. **功能扩展**: Consider adding more AI interaction scenarios and theme customization
+4. **性能优化**: Optimize retrieval and rendering performance for large diary and blog volumes
+5. **功能扩展**: 
+   - Enhance diary-to-blog workflow with more sharing options
+   - Add blog-specific features (comments, tags, categories)
+   - Improve discoverability of public blog content
+   - Consider adding more AI interaction scenarios and theme customization
+6. **社区功能**: Explore lightweight social features for blog readers while maintaining diary privacy
 
 ## 📄 Related Documents
 
