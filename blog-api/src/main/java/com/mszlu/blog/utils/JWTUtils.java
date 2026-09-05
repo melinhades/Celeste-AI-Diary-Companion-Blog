@@ -6,33 +6,46 @@ import io.jsonwebtoken.Jwt;
 import io.jsonwebtoken.JwtBuilder;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.security.Keys;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
+import java.security.Key;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
+@Component
 @Slf4j
 public class JWTUtils {
 
-    private static final String jwtToken = "123456Mszlu!@###$$";
+    @Value("${jwt.secret:123456Mszlu!@###$$}")
+    private String jwtSecret;
 
-    public static String createToken(String userId){
+    @Value("${jwt.expiration:2592000000}") // 30天 默认毫秒
+    private long jwtExpiration;
+
+    private Key getSigningKey() {
+        return Keys.hmacShaKeyFor(jwtSecret.getBytes());
+    }
+
+    public String createToken(String userId){
         Map<String,Object> claims = new HashMap<>();
         claims.put("userId",userId);
         JwtBuilder jwtBuilder = Jwts.builder()
-                .signWith(SignatureAlgorithm.HS256, jwtToken) // 签发算法，秘钥为jwtToken
-                .setClaims(claims) // body数据，要唯一，自行设置
-                .setIssuedAt(new Date()) // 设置签发时间
-                .setExpiration(new Date(System.currentTimeMillis() + 30L * 24 * 60 * 60 * 1000));// 三十天的有效时间
+                .signWith(getSigningKey()) // 使用配置的签名密钥
+                .setClaims(claims)
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + jwtExpiration));
         String token = jwtBuilder.compact();
         return token;
     }
 
-    public static Map<String, Object> checkToken(String token){
+    public Map<String, Object> checkToken(String token){
         try {
-            Jwt parse = Jwts.parser().setSigningKey(jwtToken).parse(token);
+            Jwt parse = Jwts.parserBuilder().setSigningKey(getSigningKey()).build().parse(token);
             return (Map<String, Object>) parse.getBody();
         } catch (ExpiredJwtException e) {
             log.warn("JWT token expired: {}", e.getMessage());

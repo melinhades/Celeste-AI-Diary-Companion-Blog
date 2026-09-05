@@ -19,14 +19,16 @@ public class ThreadPoolConfig {
         executor.setCorePoolSize(5);
         // 设置最大线程数
         executor.setMaxPoolSize(20);
-        //配置队列大小
-        executor.setQueueCapacity(Integer.MAX_VALUE);
+        //配置队列大小 - 有界队列防止 OOM
+        executor.setQueueCapacity(1000);
         // 设置线程活跃时间（秒）
         executor.setKeepAliveSeconds(60);
         // 设置默认线程名称
-        executor.setThreadNamePrefix("码神之路博客项目");
+        executor.setThreadNamePrefix("blog-task-");
         // 等待所有任务结束后再关闭线程池
         executor.setWaitForTasksToCompleteOnShutdown(true);
+        // 设置拒绝策略：由调用线程处理，防止任务丢失
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         //执行初始化
         executor.initialize();
         return executor;

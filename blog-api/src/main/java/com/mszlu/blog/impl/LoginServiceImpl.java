@@ -12,18 +12,20 @@ import com.mszlu.blog.vo.params.LoginParam;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
-import org.apache.commons.codec.digest.DigestUtils;
 
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 @Service
 public class LoginServiceImpl implements LoginService {
-    private static final String salt = "mszlu!@###";
     @Autowired
     private SysUserService sysUserService;
     @Autowired
     private RedisTemplate<String, String> redisTemplate;
+    @Autowired
+    private JWTUtils jwtUtils;
+    @Autowired
+    private org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder passwordEncoder;
 
     @Override
     public Result login(LoginParam loginParam) {
@@ -32,12 +34,11 @@ public class LoginServiceImpl implements LoginService {
         if (StringUtils.isBlank(account) || StringUtils.isBlank(password)) {
             return Result.fail(ErrorCode.PARAMS_ERROR.getCode(), ErrorCode.PARAMS_ERROR.getMsg());
         }
-        password = DigestUtils.md5Hex(password + salt);
-        SysUser sysUser = sysUserService.findUser(account, password);
-        if (sysUser == null) {
+        SysUser sysUser = sysUserService.findUserByAccount(account);
+        if (sysUser == null || !passwordEncoder.matches(password, sysUser.getPassword())) {
             return Result.fail(ErrorCode.ACCOUNT_PWD_NOT_EXIST.getCode(), ErrorCode.ACCOUNT_PWD_NOT_EXIST.getMsg());
         }
-        String token = JWTUtils.createToken(sysUser.getId());
+        String token = jwtUtils.createToken(sysUser.getId());
         redisTemplate.opsForValue().set("Token_" + token, JSON.toJSONString(sysUser), 30, TimeUnit.DAYS);
         java.util.Map<String, Object> data = new java.util.HashMap<>();
         data.put("token", token);
@@ -52,7 +53,7 @@ public class LoginServiceImpl implements LoginService {
         if (StringUtils.isBlank(token)) {
             return null;
         }
-        Map<String, Object> stringObjectMap = JWTUtils.checkToken(token);
+        Map<String, Object> stringObjectMap = jwtUtils.checkToken(token);
         if (stringObjectMap == null) {
             return null;
         }
@@ -86,7 +87,7 @@ public class LoginServiceImpl implements LoginService {
         sysUser = new SysUser();
         sysUser.setNickname(nickname);
         sysUser.setAccount(account);
-        sysUser.setPassword(DigestUtils.md5Hex(password + salt));
+        sysUser.setPassword(passwordEncoder.encode(password));
         sysUser.setCreateDate(System.currentTimeMillis());
         sysUser.setLastLogin(System.currentTimeMillis());
         sysUser.setAvatar("/static/img/logo.b3a48c0.png");
