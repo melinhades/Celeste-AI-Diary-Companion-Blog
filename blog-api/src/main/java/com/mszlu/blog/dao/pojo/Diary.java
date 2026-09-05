@@ -24,6 +24,12 @@ public class Diary {
     /** 日记内容 */
     private String content;
 
+    /** 主情绪（AI 分析，如：平静） */
+    private String emotion;
+
+    /** 结构化情绪分析 JSON */
+    private String emotionDetail;
+
     /** 创建时间 */
     private Date createDate;
 

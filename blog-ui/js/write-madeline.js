@@ -80,7 +80,10 @@
     window.addEventListener('resize', resizeSnow);
 
     // ===================== 行为树 =====================
-    function pmGroundY() { return window.innerHeight - pm.offsetHeight - 8; }
+    function pmGroundY() {
+        if (performance.now() - zoneTs > 500) refreshZoneCache();
+        return groundYCache;
+    }
     function pmSetSrc(name) {
         if (pm.src.indexOf(name) === -1) pm.src = name;
         pmCur = name; pmApplySize();
@@ -112,18 +115,29 @@
         im.src = src;
     }
     function pmApplySize() {
-        pm.style.width = '56px';
-        pm.style.height = '56px';
+        pm.style.setProperty('width', '56px', 'important');
+        pm.style.setProperty('height', '56px', 'important');
     }
 
     const blockedZones = [];
+    // ===== 布局缓存：帧循环不再逐帧 getBoundingClientRect =====
+    let zoneRects = [], pmW = 56, pmH = 56, groundYCache = 0, zoneTs = -1e9;
+    function refreshZoneCache() {
+        zoneRects = blockedZones.map(z => ({ r: z.getBoundingClientRect(), m: z.margin || 14 }));
+        pmW = pm.offsetWidth || pmW;
+        pmH = pm.offsetHeight || pmH;
+        groundYCache = window.innerHeight - pmH - 8;
+        zoneTs = performance.now();
+    }
+    setInterval(refreshZoneCache, 300);
+    window.addEventListener('resize', refreshZoneCache);
     function blockedAt(tx, ty) {
-        for (const z of blockedZones) {
-            const r = z.getBoundingClientRect();
-            const m = z.margin || 14;
+        if (performance.now() - zoneTs > 500) refreshZoneCache();
+        for (const z of zoneRects) {
+            const r = z.r, m = z.m;
             if (!r || (r.width === 0 && r.height === 0)) continue;
-            if (tx < r.right + m && tx + pm.offsetWidth > r.left - m &&
-                ty < r.bottom + m && ty + pm.offsetHeight > r.top - m) return true;
+            if (tx < r.right + m && tx + pmW > r.left - m &&
+                ty < r.bottom + m && ty + pmH > r.top - m) return true;
         }
         return false;
     }
@@ -153,7 +167,7 @@
         const nearGround = st.y > pmGroundY() - 60;
         const hour = new Date().getHours();
         const night = hour >= 23 || hour < 6;
-        const sitP = night ? 0.38 : 0.18, funP = 0.14, walkP = 0.48;
+        const sitP = night ? 0.30 : 0.14, funP = 0.16, walkP = 0.40, lookP = 0.14;
         const r = Math.random();
         if (r < sitP && nearGround) {
             st.mode = 'sit'; st.modeUntil = now + 6000 + Math.random() * 10000; pmSetSrc(PM_SRC.sit);
@@ -162,6 +176,9 @@
             st.poseUntil = now + 1800; st.poseReturn = PM_SRC.move; pmSetSrc(PM_SRC.fun);
         } else if (r < sitP + funP + walkP) {
             pmStartWalk(now); if (Math.random() < 0.4) st.hopT = 0;
+        } else if (r < sitP + funP + walkP + lookP) {
+            // 站立张望（用 fun 素材）
+            st.mode = 'lookaround'; st.modeUntil = now + 2200 + Math.random() * 2000; pmSetSrc(PM_SRC.fun);
         } else {
             st.mode = 'idle'; st.modeUntil = now + 1200 + Math.random() * 2000; pmSetSrc(PM_SRC.move);
         }
@@ -184,11 +201,16 @@
                 const hour = new Date().getHours();
                 if (Math.random() < ((hour >= 23 || hour < 6) ? 0.6 : 0.3)) {
                     st.mode = 'sleep'; st.modeUntil = now + 20000 + Math.random() * 25000; pmSetSrc(PM_SRC.sleep);
+                } else if (Math.random() < 0.5) {
+                    // 坐下后起身张望
+                    st.mode = 'lookaround'; st.modeUntil = now + 2000 + Math.random() * 2000; pmSetSrc(PM_SRC.fun);
                 } else pmStartWalk(now);
             } else if (st.mode === 'sleep') {
                 st.mode = 'wake'; st.modeUntil = now + 2300; pmSetSrc(PM_SRC.wake);
             } else if (st.mode === 'wake') {
                 st.mode = 'idle'; st.modeUntil = 0; pmNextMode(now);
+            } else if (st.mode === 'lookaround') {
+                pmStartWalk(now);
             } else pmNextMode(now);
         }
     }
@@ -221,7 +243,7 @@
                 st.mode = 'idle'; st.modeUntil = now + 600 + Math.random() * 1200;
             }
         }
-        st.x = Math.max(4, Math.min(st.x, window.innerWidth - pm.offsetWidth - 4));
+        st.x = Math.max(4, Math.min(st.x, window.innerWidth - pmW - 4));
         st.y = Math.max(60, Math.min(st.y, pmGroundY()));
         if (blockedAt(st.x, st.y)) pmStartWalk(now);
 
@@ -356,13 +378,14 @@
             } else {
                 const histBubble = newChatRow(emotion);
                 histBubble.textContent = '';
-                let sc = 0;
+                let sc = 0, typeI = 0;
                 for (const ch of msg) {
                     histBubble.textContent += ch;
-                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                    if (++typeI % 3 === 0) chatMessages.scrollTop = chatMessages.scrollHeight;
                     if (!/[\s。！？!?…，,、；;：:（）()*]/.test(ch)) { sc++; if (sc % 3 === 1) playSpeak(emotion); }
                     await sleep(45 + Math.random() * 20);
                 }
+                chatMessages.scrollTop = chatMessages.scrollHeight;
                 if (msgs.length > 1) await sleep(240 + Math.random() * 200);
             }
         }
@@ -493,7 +516,7 @@
             '.polish-loading-text{color:#ffe36d;font-size:14px;font-family:"Renogare","CelesteZH",sans-serif;text-align:center;text-shadow:0 1px 4px rgba(0,0,0,.8);}' +
             '.loading-dots::after{content:"";animation:ldDots 1.5s steps(4,end) infinite;}' +
             '@keyframes ldDots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}' +
-            '#wpPixelMadeline{position:fixed;left:0;top:0;width:56px;height:56px;object-fit:contain;object-position:center bottom;z-index:800;image-rendering:pixelated;cursor:pointer;user-select:none;}';
+            '#wpPixelMadeline{position:fixed;left:0;top:0;width:56px !important;height:56px !important;z-index:800;image-rendering:pixelated;cursor:pointer;user-select:none;}';
 
         document.head.appendChild(style);
 

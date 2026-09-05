@@ -91,14 +91,52 @@
 
     #articleLoadingOverlay {
         position: fixed; inset: 0; z-index: 9999;
-        background: var(--article-loading-color);
+        background-color: #050514;
         display: flex; flex-direction: column;
         align-items: center; justify-content: center;
     }
+    /* 登录页同款夜空：月光晕 */
+    #articleLoadingOverlay::before {
+        content: ''; position: absolute; inset: 0; pointer-events: none;
+        background-image:
+            radial-gradient(circle at 78% 16%, rgba(180,200,255,.16), transparent 32%),
+            radial-gradient(circle at 18% 82%, rgba(90,110,180,.10), transparent 40%);
+    }
+    /* 登录页同款闪烁星星 */
+    #articleLoadingOverlay .ld-stars, #articleLoadingOverlay .ld-stars2 {
+        position: absolute; inset: 0; pointer-events: none; width: 1px; height: 1px; background: transparent;
+    }
+    #articleLoadingOverlay .ld-stars {
+        box-shadow: 12vw 8vh 0 1px rgba(255,255,255,.8), 34vw 22vh 0 rgba(255,255,255,.5), 58vw 6vh 0 1px rgba(255,255,255,.7),
+                    82vw 18vh 0 rgba(255,255,255,.4), 46vw 12vh 0 rgba(255,255,255,.55), 90vw 40vh 0 1px rgba(255,255,255,.6),
+                    8vw 34vh 0 rgba(255,255,255,.45), 68vw 30vh 0 rgba(255,255,255,.5), 24vw 46vh 0 1px rgba(255,255,255,.65),
+                    94vw 8vh 0 rgba(255,255,255,.4), 52vw 40vh 0 rgba(255,255,255,.35), 16vw 16vh 0 rgba(255,255,255,.5);
+        animation: starTwinkle 4.5s ease-in-out infinite;
+    }
+    #articleLoadingOverlay .ld-stars2 {
+        box-shadow: 20vw 12vh 0 rgba(255,255,255,.5), 42vw 5vh 0 1px rgba(255,255,255,.7), 72vw 22vh 0 rgba(255,255,255,.45),
+                    6vw 26vh 0 rgba(255,255,255,.5), 60vw 34vh 0 rgba(255,255,255,.4), 86vw 12vh 0 1px rgba(255,255,255,.6),
+                    30vw 38vh 0 rgba(255,255,255,.35), 96vw 30vh 0 rgba(255,255,255,.45), 48vw 24vh 0 rgba(255,255,255,.5),
+                    14vw 42vh 0 rgba(255,255,255,.3), 64vw 10vh 0 rgba(255,255,255,.4), 38vw 48vh 0 rgba(255,255,255,.35);
+        animation: starTwinkle 6s ease-in-out 1.6s infinite;
+    }
+    /* 加载层内雪花画布 + 底部雪带（登录页同款） */
+    #articleLoadingOverlay #ldSnowCanvas {
+        position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;
+    }
+    #articleLoadingOverlay .ld-snow-strip {
+        position: absolute; left: 0; right: 0; bottom: 0; height: 80px;
+        background: url('celeste-areas/snow-front.png') repeat-x bottom/220px auto;
+        animation: snowDrift 45s linear infinite;
+        opacity: .5; pointer-events: none;
+    }
+    @keyframes snowDrift { from{background-position-x:0} to{background-position-x:-440px} }
     #articleLoadingOverlay .loading-madeline {
         width: 120px; height: 120px;
-        background-size: contain; background-repeat: no-repeat; background-position: center;
+        background-size: 100% 100%; background-repeat: no-repeat; background-position: center;
+        image-rendering: pixelated;
         animation: loadingRun 0.72s steps(9) infinite;
+        position: relative; z-index: 1;
     }
     @keyframes loadingRun {
         0%   { background-image: url('celeste-gui/loading/00.png'); }
@@ -116,6 +154,7 @@
         font-family: 'Renogare', 'CelesteZH', sans-serif; font-size: 18px;
         letter-spacing: 3px;
         text-shadow: 0 0 12px rgba(255,227,109,0.4);
+        position: relative; z-index: 1;
     }
     #articleLoadingOverlay .loading-dots::after {
         content: ''; animation: dots 1.5s steps(4, end) infinite;
@@ -126,6 +165,7 @@
         50%  { content: '..'; }
         75%  { content: '...'; }
     }
+    @keyframes starTwinkle { 0%,100%{opacity:.25} 50%{opacity:.9} }
 
     /* 心之宝石点赞 */
     #likeBar { display: none; justify-content: center; margin: 0 0 20px; }
@@ -147,6 +187,10 @@
 
     <!-- 加载动画 -->
     <div id="articleLoadingOverlay">
+        <div class="ld-stars"></div>
+        <div class="ld-stars2"></div>
+        <canvas id="ldSnowCanvas"></canvas>
+        <div class="ld-snow-strip"></div>
         <div class="loading-madeline"></div>
         <div class="loading-text">LOADING<span class="loading-dots"></span></div>
     </div>
@@ -220,6 +264,41 @@
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
 <script>
+    // ===== 加载层内雪花（snow-bgm 同款，登录页风格） =====
+    (function () {
+        const c = document.getElementById('ldSnowCanvas');
+        if (!c) return;
+        const ctx = c.getContext('2d');
+        function resize() { c.width = window.innerWidth; c.height = window.innerHeight; }
+        resize();
+        window.addEventListener('resize', resize);
+        const flakes = [];
+        for (let i = 0; i < 80; i++) {
+            flakes.push({
+                x: Math.random() * c.width, y: Math.random() * c.height,
+                r: Math.random() * 3 + 1, speed: Math.random() * 1.5 + 0.5,
+                wind: Math.random() * 0.5 - 0.25, opacity: Math.random() * 0.6 + 0.2,
+                swing: Math.random() * Math.PI * 2, swingSpeed: Math.random() * 0.02 + 0.01
+            });
+        }
+        (function loop() {
+            if (!document.getElementById('ldSnowCanvas')) return;
+            ctx.clearRect(0, 0, c.width, c.height);
+            for (const f of flakes) {
+                f.y += f.speed; f.swing += f.swingSpeed;
+                f.x += Math.sin(f.swing) * 0.5 + f.wind;
+                if (f.y > c.height + 10) { f.y = -10; f.x = Math.random() * c.width; }
+                if (f.x > c.width + 10) f.x = -10;
+                if (f.x < -10) f.x = c.width + 10;
+                ctx.beginPath();
+                ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255,255,255,' + f.opacity + ')';
+                ctx.fill();
+            }
+            requestAnimationFrame(loop);
+        })();
+    })();
+
     // ===== 雪花粒子系统 =====
     const snowCanvas = document.getElementById('snowCanvas');
     const snowCtx = snowCanvas.getContext('2d');

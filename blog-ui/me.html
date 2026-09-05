@@ -6,6 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="icon/OIP.webp" type="image/webp">
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<link rel="preload" href="celeste-font-en/Renogare-Regular.otf" as="font" type="font/otf" crossorigin>
+<link rel="preload" href="fonts/NotoSansCJKsc-Medium.otf" as="font" type="font/otf" crossorigin>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; }
 @font-face { font-family:'Renogare'; src:url('celeste-font-en/Renogare-Regular.otf') format('opentype'); font-display:swap; }
@@ -43,7 +45,7 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 .cePoemPage { position:relative; max-width:520px; margin:0 auto 24px; text-align:center; cursor:pointer; }
 .cePoemPage img { display:block; width:100%; height:auto; }
 .cePoemPage span { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-size:15px; color:#35312a; max-width:75%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.cePoemPage input { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-size:15px; color:#35312a; background:transparent; border:none; border-bottom:1px dashed rgba(53,49,42,.4); text-align:center; width:75%; outline:none; font-family:inherit; }
+.cePoemPage input { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-size:15px; color:#35312a; background:transparent; border:none; border-bottom:1px dashed rgba(53,49,42,.4); text-align:center; width:75%; outline:none; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; }
 
 </style>
 </head>
@@ -96,6 +98,15 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 
 <script src="js/api.js"></script>
 <script>
+    // 字体就绪后强制刷新，让 input 立即切到 Renogare（不需要点击）
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function() {
+            document.body.style.visibility = 'hidden';
+            void document.body.offsetHeight;
+            document.body.style.visibility = '';
+        });
+    }
+
     const meBgm = document.getElementById('meBgm');
     const meBgmTime = parseFloat(localStorage.getItem('bgmTimeMe') || '0');
     if (meBgmTime > 0) meBgm.currentTime = meBgmTime;

@@ -8,6 +8,8 @@
     <link rel="stylesheet" href="css/common.css">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
+    /* 暗色配色方案：输入法合成/插入区、选区、滚动条都走暗色，防止插入历史文本时露白底 */
+    :root { color-scheme: dark; }
     .nav-diary-btn {
         display:inline-block;
         cursor:pointer;
@@ -59,7 +61,7 @@
     .write-meta input { flex: 1; min-width: 200px; }
     .write-footer { display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(138, 43, 226, 0.2); }
     .char-count { font-size: 12px; color: #8b8ba0; text-align: right; margin-top: 6px; }
-    body { background: url('celeste-areas/Summit-ch7-complete.png') center center / cover no-repeat fixed; }
+    body { background: url('celeste-areas/Summit-ch7-complete.png') center center / cover no-repeat fixed; background-color: #0b0c22; }
 
     /* ===== 历史记录框（与 diary 页完全一致，card.png 素材） ===== */
     #madeline-chat-dialog {
@@ -204,7 +206,7 @@
     .chat-input button:disabled { background: #555; color: #999; cursor: not-allowed; }
 
     /* 像素 Madeline：强制 56px，任何姿势都不缩放 */
-    #wpPixelMadeline { width: 56px; height: 56px; object-fit: contain; object-position: center bottom; }
+    #wpPixelMadeline { width: 56px !important; height: 56px !important; }
 
     /* ===== 游戏对话框（与 diary 完全一致，madeline.png textbox 素材） ===== */
     #wpGameDialog {
@@ -294,6 +296,19 @@
         <button class="toolbar-btn" id="toolbarGenBtn" style="border-color:rgba(120,220,255,.5);color:#78dcff;"><img src="celeste-collectables/cassette.png" alt="">生成文章</button>
     </div>
     <textarea class="write-body" id="articleBody" placeholder="Start writing... Markdown supported" oninput="updateCount()"></textarea>
+    <script>
+    // 微软拼音插入历史文本后，强制重绘让 Renogare 立即生效
+    (function() {
+        var ab = document.getElementById('articleBody');
+        if (ab) {
+            ab.addEventListener('compositionend', function() {
+                this.style.fontFamily = '';
+                void this.offsetHeight;
+                this.style.fontFamily = "'Renogare','CelesteZH','Microsoft YaHei',sans-serif";
+            });
+        }
+    })();
+    </script>
     <div class="char-count" id="charCount">0 chars</div>
     <div id="imgPreviewBar" style="display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 10px;"></div>
 
@@ -339,6 +354,7 @@
     style.textContent =
         '#genRunner{position:fixed;z-index:2100;width:52px;height:52px;image-rendering:pixelated;pointer-events:none;display:none;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5));transform:translate(-50%,-96%);}' +
         '#genWaitOverlay{position:fixed;right:28px;bottom:28px;z-index:2099;display:none;flex-direction:column;align-items:center;gap:6px;pointer-events:none;}' +
+                '#genWaitOverlay.show{display:flex;}' +
         '.gen-wait-anim{width:84px;height:84px;background-size:contain;background-repeat:no-repeat;background-position:center;filter:drop-shadow(0 2px 8px rgba(0,0,0,.5));}' +
         '.gen-wait-text{color:#ffe36d;font-size:14px;text-align:center;text-shadow:0 1px 4px rgba(0,0,0,.8);}' +
         '#genFallLayer{position:fixed;inset:0;z-index:2050;display:none;pointer-events:none;}' +
@@ -379,7 +395,7 @@
 
     const waitOverlay = document.createElement('div');
     waitOverlay.id = 'genWaitOverlay';
-    waitOverlay.innerHTML = '<div class="gen-wait-anim"></div><div class="gen-wait-text">Thinking<span class="loading-dots"></span></div>';
+    waitOverlay.innerHTML = '<div class="gen-wait-anim"></div><div class="gen-wait-text">Loading<span class="loading-dots"></span></div>';
     document.body.appendChild(waitOverlay);
 
     const RUN_FRAMES = [];
@@ -477,7 +493,7 @@
         let ok = false, text = '';
         waitShow();
         try {
-            const res = await api('/chat', 'POST', { content: prompt });
+            const res = await api('/chat/generate-article', 'POST', { content: prompt });
             if (res.success && res.data && res.data.content) { ok = true; text = res.data.content; }
         } catch (e) { }
         if (btn) btn.disabled = false;
@@ -499,16 +515,15 @@
         if (bodyEl.value && !bodyEl.value.endsWith('\n')) bodyEl.value += '\n\n';
         startRun();
         moveRunner(bodyEl);
-        let n = 0;
-        for (const ch of text) {
-            bodyEl.value += ch;
-            n++;
-            if (n % 2 === 0) {
-                bodyEl.scrollTop = bodyEl.scrollHeight;
-                moveRunner(bodyEl);
-                if (typeof updateCount === 'function') updateCount();
-            }
-            await new Promise(r => setTimeout(r, 14));
+        const chars = [...text];
+        let ci = 0;
+        while (ci < chars.length) {
+            bodyEl.value += chars.slice(ci, ci + 3).join('');
+            ci += 3;
+            bodyEl.scrollTop = bodyEl.scrollHeight;
+            moveRunner(bodyEl);
+            if (typeof updateCount === 'function') updateCount();
+            await new Promise(r => setTimeout(r, 42));
         }
         stopRun();
         decision.classList.add('show');

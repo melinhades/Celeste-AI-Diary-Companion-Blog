@@ -67,6 +67,12 @@ public class DiaryController {
         return diaryService.snapReflect(param);
     }
 
+    /** 情绪分析：AI 对日记内容的详细情绪分析 */
+    @PostMapping("emotion-analyze")
+    public Result emotionAnalyze(@RequestBody DiaryParam param) {
+        return diaryService.emotionAnalyze(param);
+    }
+
     /** Oshiro 旅馆聊天 */
     @PostMapping("oshiro-chat")
     public Result oshiroChat(@RequestBody OshiroChatParam param) {

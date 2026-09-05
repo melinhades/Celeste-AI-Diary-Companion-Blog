@@ -3,9 +3,11 @@ package com.mszlu.blog.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.mszlu.blog.dao.mapper.FeatherMapper;
 import com.mszlu.blog.dao.pojo.Feather;
+import com.mszlu.blog.dao.pojo.SysUser;
 import com.mszlu.blog.service.FeatherService;
 import com.mszlu.blog.utils.UserThreadLocal;
 import com.mszlu.blog.vo.Result;
+import com.mszlu.blog.vo.params.ErrorCode;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -22,7 +24,11 @@ public class FeatherServiceImpl implements FeatherService {
 
     @Override
     public Result save(String content) {
-        String userId = UserThreadLocal.get().getId();
+        SysUser user = UserThreadLocal.get();
+        if (user == null) {
+            return Result.fail(ErrorCode.NO_LOGIN.getCode(), "未登录");
+        }
+        String userId = user.getId();
         if (content == null || content.trim().isEmpty()) {
             return Result.fail(400, "羽毛不能为空");
         }
@@ -43,7 +49,11 @@ public class FeatherServiceImpl implements FeatherService {
 
     @Override
     public Result count() {
-        String userId = UserThreadLocal.get().getId();
+        SysUser user = UserThreadLocal.get();
+        if (user == null) {
+            return Result.fail(ErrorCode.NO_LOGIN.getCode(), "未登录");
+        }
+        String userId = user.getId();
         long count = featherMapper.selectCount(
                 new LambdaQueryWrapper<Feather>().eq(Feather::getUserId, userId));
         Map<String, Object> data = new HashMap<>();
@@ -53,7 +63,11 @@ public class FeatherServiceImpl implements FeatherService {
 
     @Override
     public Result recent(int limit) {
-        String userId = UserThreadLocal.get().getId();
+        SysUser user = UserThreadLocal.get();
+        if (user == null) {
+            return Result.fail(ErrorCode.NO_LOGIN.getCode(), "未登录");
+        }
+        String userId = user.getId();
         List<Feather> list = featherMapper.selectList(
                 new LambdaQueryWrapper<Feather>()
                         .eq(Feather::getUserId, userId)

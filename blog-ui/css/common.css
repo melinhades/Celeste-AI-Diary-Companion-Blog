@@ -1,4 +1,5 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
+html { background: #0f0c29; }
 @font-face {
     font-family: 'Renogare';
     src: url('../celeste-font-en/Renogare-Regular.otf') format('opentype');

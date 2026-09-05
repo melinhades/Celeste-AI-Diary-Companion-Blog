@@ -7,6 +7,7 @@ import com.mszlu.blog.dao.pojo.Memory;
 import com.mszlu.blog.dao.pojo.Persona;
 import com.mszlu.blog.dao.pojo.SysUser;
 import com.mszlu.blog.service.ChatService;
+import com.mszlu.blog.service.DiaryService;
 import com.mszlu.blog.service.MemoryService;
 import com.mszlu.blog.service.PersonaService;
 import com.mszlu.blog.service.ai.AiClient;
@@ -36,6 +37,8 @@ public class ChatServiceImpl implements ChatService {
     @Autowired
     private MemoryService memoryService;
     @Autowired
+    private DiaryService diaryService;
+    @Autowired
     private AiClient aiClient;
 
     @Override
@@ -56,6 +59,12 @@ public class ChatServiceImpl implements ChatService {
         List<com.mszlu.blog.vo.ContextChunk> context = memoryService.searchContext(userId, content, 5);
         if (!context.isEmpty()) {
             messages.add(new AiMessage("system", PromptBuilder.contextBlock(context)));
+        }
+
+        // 2.6 最近情绪画像：让她的关心接得上用户昨天/前天的状态
+        String emotionNote = diaryService.recentEmotionNote(userId);
+        if (emotionNote != null && !emotionNote.isEmpty()) {
+            messages.add(new AiMessage("system", PromptBuilder.emotionBlock(emotionNote)));
         }
 
         for (ChatMessage history : recentHistory(userId)) {
@@ -83,6 +92,17 @@ public class ChatServiceImpl implements ChatService {
             }
         } catch (Exception e) {
             // JSON 解析失败：当作纯文本回复，情绪回落默认
+        }
+
+        // 兜底：如果 reply 为空或仍是 JSON 垃圾，重试一次（非 JSON 模式）
+        if (reply.isEmpty() || reply.startsWith("{")) {
+            String fallback = aiClient.chat(messages, false);
+            if (fallback != null && !fallback.isBlank()) {
+                reply = fallback.trim();
+                emotion = "默认";
+            } else {
+                reply = "嗯……我在听，你继续说？";
+            }
         }
 
         // 4. 落库（只存纯回复，不存 JSON）

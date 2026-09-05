@@ -22,9 +22,9 @@
     const keys = {};
     let upHeld = false;
 
-    const GRAVITY = 32;
-    const LIFT = -110;
-    const TERMINAL_VY = 60;
+    const GRAVITY = 55;      // 下落加速度（原 32 太慢，羽毛追不上下降的框）
+    const LIFT = -135;       // 上升加速度
+    const TERMINAL_VY = 110; // 下落终端速度（原 60 太慢，导致很难落在框上）
 
     const BREATH = [
         { name: '吸气……', dur: 4 },
@@ -45,18 +45,43 @@
         '心里那阵风再大，也会停的'
     ];
     let guideIdx = -1;
+    // ===== Madeline 全程陪伴：在游戏内随呼吸节奏说话，作为情绪调节 =====
+    const BREATH_LINES = {
+        '吸气……': ['跟着羽毛，把气慢慢吸满……', '吸气的时候，想象羽毛轻轻往上飘', '把气吸进肚子里，肩膀别端着'],
+        '轻轻停一下': ['停一下，就一两秒，不用急', '屏住的时候，别绷着身子', '这一刻，什么都不用做'],
+        '呼气……': ['慢慢呼出来，让肩膀沉下去', '呼气的时候，把紧张一起吐出去', '跟着羽毛往下，慢一点，再慢一点']
+    };
+    const OPEN_LINES = ['来，跟着这根羽毛，我陪你一起呼吸。', '别怕，我在这儿，咱们慢慢来。', '把注意力放在羽毛上，其他的先放一放。'];
+    const CLOSE_LINES = ['羽毛落下了……你看，你做到了。', '呼吸平稳了吧，我一直都在。', '风停了。想写点什么，或者就这样待一会儿，都行。'];
+    // 检测到情绪后，Madeline 先说的“羽毛建议”，说完再淡入游戏，过渡更自然
+    const SUGGEST_LINES = {
+        '悲伤': '心里沉沉的……要不要跟我一起，跟着这根羽毛慢慢呼吸一会儿？',
+        '孤独': '一个人扛着，有点累吧。来，我陪你跟着羽毛喘口气。',
+        '不开心': '情绪有点低是不是？先别急，我们跟着羽毛呼吸一下下。',
+        '不安': '心里发慌的时候，呼吸最管用了。跟我一起，看着这根羽毛。',
+        '愤怒': '火气别憋着，跟我一起，跟着羽毛把它一点点呼出去。',
+        '怨恨': '这些念头太重了。先放一放，跟我跟着羽毛呼吸一会儿。'
+    };
+    const MADELINE_STEM = 'peaceful';
+    const MADELINE_FRAMES = 4;
+    let madelinePanel = null, madelineImg = null, madelineTextEl = null;
+    let madelinePortraitTimer = null, madelineFi = 0;
+    let madelineSayToken = 0;
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+    function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+    let breathPhaseCount = 0;
 
     const goal = { y: 0, ty: 0, w: 400, h: 260, glow: 0 };
     let captionEl = null, audioCtx = null;
     let floaters = [];
 
-    // ===== 羽毛改进：关键词 + 速度选择 + 着陆 =====
-    let featherKeyword = null;
-    let featherSpeed = 1; // 1=正常, 0.6=慢, 1.5=快
+    // ===== 羽毛呼吸：自动定速 + 着陆 =====
+    let featherSpeed = 1; // 1=正常, 0.8=略慢（情绪低落时自动放慢，但不至于追不上框）
     let breathCycles = 0;
     let landingPhase = false;
     let landingT = 0;
-    let speedChosen = false;
+    let closing = false; // 收尾淡出阶段：保留画面与台词，避免被立即清空
 
     function addFloater(text, x, y, color, size) {
         floaters.push({ text, x, y, color: color || '#fff', size: size || 15, life: 2.4, maxLife: 2.4 });
@@ -66,6 +91,41 @@
         if (!captionEl) return;
         captionEl.textContent = text;
         captionEl.classList.add('show');
+    }
+
+    // Madeline 头像帧循环：游戏全程都在动
+    function startMadelinePortrait() {
+        clearInterval(madelinePortraitTimer);
+        madelineFi = 0;
+        if (madelineImg) madelineImg.src = 'Atlases/Portraits/madeline/' + MADELINE_STEM + '00.png';
+        madelinePortraitTimer = setInterval(() => {
+            if (!opened && !landingPhase && !closing) { clearInterval(madelinePortraitTimer); madelinePortraitTimer = null; return; }
+            madelineFi = (madelineFi + 1) % MADELINE_FRAMES;
+            if (madelineImg) madelineImg.src = 'Atlases/Portraits/madeline/' + MADELINE_STEM + String(madelineFi).padStart(2, '0') + '.png';
+        }, 150);
+    }
+    function stopMadelinePortrait() {
+        clearInterval(madelinePortraitTimer);
+        madelinePortraitTimer = null;
+    }
+
+    // Madeline 说话：逐字打字 + 说话音，新的一句会打断上一句
+    async function madelineSay(text) {
+        const token = ++madelineSayToken;
+        if (!madelineTextEl || !madelinePanel) return;
+        madelinePanel.classList.add('show');
+        madelineTextEl.textContent = '';
+        let speakCount = 0;
+        for (const ch of text) {
+            if (token !== madelineSayToken) return;
+            if (!opened && !landingPhase && !closing) return;
+            madelineTextEl.textContent += ch;
+            if (!/[\s…，,、；;：:（）()*]/.test(ch)) {
+                speakCount++;
+                if (speakCount % 3 === 1 && window.playSpeakSound) window.playSpeakSound('可爱');
+            }
+            await sleep(48);
+        }
     }
 
     function playSoftChime() {
@@ -112,30 +172,31 @@
             '  <span class="feather-title">GOLDEN FEATHER · 跟着羽毛呼吸</span>' +
             '  <button id="featherCloseBtn">✕</button>' +
             '</div>' +
-            '<div class="feather-speed-choice" style="display:none;">' +
-            '  <div class="fsc-text">这根羽毛想怎么飘？</div>' +
-            '  <div class="fsc-options">' +
-            '    <button class="fsc-btn" data-speed="0.6">慢慢飘</button>' +
-            '    <button class="fsc-btn" data-speed="1">像平时一样</button>' +
-            '    <button class="fsc-btn" data-speed="1.5">快一点</button>' +
+            '<div class="feather-madeline">' +
+            '  <div class="feather-madeline-portrait"><img id="featherMadelineImg" src="celeste-portraits/madeline/peaceful00.png" alt=""></div>' +
+            '  <div class="feather-madeline-box">' +
+            '    <div class="feather-madeline-name">Madeline</div>' +
+            '    <div class="feather-madeline-text" id="featherMadelineText"></div>' +
             '  </div>' +
             '</div>' +
             '<div class="feather-caption"></div>' +
             '<div class="feather-hint">按住 ↑ 让羽毛上升 · 松开它会慢慢落下 · Esc 随时离开</div>';
         const style = document.createElement('style');
         style.textContent =
-            '#feather-overlay{position:fixed;inset:0;display:none;background:radial-gradient(ellipse at 50% 32%, rgba(64,36,66,.5), rgba(8,7,16,.97) 78%);z-index:1200;}' +
-            '#feather-overlay.show{display:block;}' +
+            '#feather-overlay{position:fixed;inset:0;opacity:0;pointer-events:none;background:radial-gradient(ellipse at 50% 32%, rgba(64,36,66,.5), rgba(8,7,16,.97) 78%);z-index:1200;transition:opacity .7s ease;}' +
+            '#feather-overlay.show{opacity:1;pointer-events:auto;}' +
             '#featherCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;}' +
             '.feather-header{position:absolute;top:18px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:16px;z-index:2;}' +
             '.feather-title{font-family:var(--pixel-font,monospace);font-size:15px;color:#ffe36d;letter-spacing:2px;text-shadow:0 0 12px rgba(255,227,109,.5);}' +
             '#featherCloseBtn{border:none;background:transparent;color:#8899bb;font-size:20px;cursor:pointer;}' +
             '#featherCloseBtn:hover{color:#fff;}' +
-            '.feather-speed-choice{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;z-index:5;}' +
-            '.fsc-text{font-family:var(--chat-font,sans-serif);font-size:18px;color:rgba(255,240,214,.9);margin-bottom:24px;letter-spacing:2px;}' +
-            '.fsc-options{display:flex;gap:16px;justify-content:center;}' +
-            '.fsc-btn{padding:12px 24px;border:1px solid rgba(255,230,109,.5);border-radius:8px;background:rgba(255,230,109,.08);color:#ffe36d;font-size:15px;cursor:pointer;transition:all .3s;}' +
-            '.fsc-btn:hover{background:rgba(255,230,109,.2);transform:scale(1.05);}' +
+            '.feather-madeline{position:absolute;bottom:44px;left:50%;transform:translateX(-50%) translateY(24px);width:min(94vw,700px);min-height:100px;z-index:3;display:flex;align-items:center;gap:18px;padding:20px 30px;background:url("celeste-portraits/textbox/madeline.png") center / 100% 100% no-repeat;opacity:0;pointer-events:none;transition:opacity .25s ease,transform .25s ease;}' +
+            '.feather-madeline.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto;}' +
+            '.feather-madeline-portrait{width:84px;height:84px;flex:none;border-radius:6px;overflow:hidden;}' +
+            '.feather-madeline-portrait img{width:100%;height:100%;object-fit:cover;display:block;}' +
+            '.feather-madeline-box{flex:1;min-width:0;background:transparent;border:none;padding:0;}' +
+            '.feather-madeline-name{font-family:var(--pixel-font,monospace);font-size:13px;color:#FFEB3B;margin-bottom:5px;}' +
+            '.feather-madeline-text{font-family:"Renogare","CelesteZH","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.7;color:#fff;word-break:break-word;min-height:24px;}' +
             '.feather-caption{position:absolute;bottom:70px;left:50%;transform:translateX(-50%);max-width:560px;text-align:center;font-family:var(--chat-font,sans-serif);font-size:15px;line-height:1.8;color:rgba(255,240,214,.92);letter-spacing:1px;text-shadow:0 0 14px rgba(0,0,0,.8);opacity:0;transition:opacity .8s ease;z-index:2;}' +
             '.feather-caption.show{opacity:1;}' +
             '.feather-hint{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);font-family:var(--chat-font,monospace);font-size:12px;color:rgba(255,255,255,.35);letter-spacing:1px;z-index:2;}';
@@ -145,18 +206,10 @@
         canvas = document.getElementById('featherCanvas');
         ctx = canvas.getContext('2d');
         captionEl = document.querySelector('.feather-caption');
+        madelinePanel = document.querySelector('.feather-madeline');
+        madelineImg = document.getElementById('featherMadelineImg');
+        madelineTextEl = document.getElementById('featherMadelineText');
         document.getElementById('featherCloseBtn').addEventListener('click', closeGame);
-
-        overlay.querySelectorAll('.fsc-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                featherSpeed = parseFloat(this.dataset.speed);
-                speedChosen = true;
-                overlay.querySelector('.feather-speed-choice').style.display = 'none';
-                showCaption('好，跟着这根羽毛的节奏。');
-                startBreathGame();
-            });
-        });
-
         window.addEventListener('keydown', e => {
             keys[e.key] = true;
             if (opened && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
@@ -225,6 +278,10 @@
                     return;
                 }
             }
+            // 每换一个呼吸阶段，Madeline 说一句对应引导（降低频率：每3个阶段才说1次）
+            breathPhaseCount++;
+            const lines = BREATH_LINES[BREATH[breathIdx].name];
+            if (lines && breathPhaseCount % 3 === 1) madelineSay(pick(lines));
         }
 
         upHeld = !!(keys['ArrowUp'] || keys['w']);
@@ -236,7 +293,7 @@
         } else {
             feather.vy += grav * dt;
         }
-        feather.vy = Math.max(-80, Math.min(TERMINAL_VY, feather.vy));
+        feather.vy = Math.max(-105, Math.min(TERMINAL_VY, feather.vy));
         feather.y += feather.vy * dt;
         feather.x = GW / 2;
 
@@ -260,7 +317,6 @@
             playSoftChime();
             goal.glow = 1;
             addFloater('~', feather.x, feather.y - 40, 'rgba(255,227,109,.9)', 20);
-            nextGuide();
         }
         lastInGlow = inGlow;
 
@@ -307,21 +363,29 @@
         landingPhase = true;
         landingT = 0;
         feather.vy = 0;
-        showCaption('羽毛要落下了……落在纸上，你可以开始写了。');
+        madelineSay(pick(CLOSE_LINES));
     }
 
     function finishLanding() {
         if (!landingPhase) return;
+        // 收尾：停物理循环，但保留画面与 Madeline 的收尾台词，稍作停留后整体淡出，过渡自然
         landingPhase = false;
+        opened = false;
+        closing = true;
         if (animId) cancelAnimationFrame(animId);
         animId = null;
-        opened = false;
-        overlay.classList.remove('show');
-        window.dispatchEvent(new CustomEvent('feather-landed', {
-            detail: { keyword: featherKeyword }
-        }));
+        setTimeout(() => {
+            if (overlay) overlay.classList.remove('show');
+            window.dispatchEvent(new CustomEvent('feather-landed'));
+            // 淡出动画结束后再真正清空状态
+            setTimeout(() => {
+                closing = false;
+                stopMadelinePortrait();
+                madelineSayToken++;
+                if (madelinePanel) madelinePanel.classList.remove('show');
+            }, 750);
+        }, 1600);
     }
-
     function drawGoal() {
         const cur = BREATH[breathIdx];
         const x = GW / 2 - goal.w / 2;
@@ -404,18 +468,8 @@
             ctx.translate(feather.x, feather.y);
             ctx.rotate(feather.rot);
             ctx.drawImage(fimg, -fw / 2, -fh / 2, fw, fh);
-
-            // 羽毛上挂关键词
-            if (featherKeyword) {
-                ctx.globalAlpha = 0.85;
-                ctx.font = '14px "Renogare","CelesteZH",sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillStyle = 'rgba(255,230,180,.9)';
-                ctx.fillText(featherKeyword, 0, -fh / 2 - 10);
-            }
             ctx.restore();
         }
-
         for (const f of floaters) {
             const t = f.life / f.maxLife;
             ctx.globalAlpha = Math.min(1, t * 1.6);
@@ -448,7 +502,7 @@
 
     let nextGuideTimer = null;
 
-    async function openGame() {
+    async function openGame(mood) {
         if (!overlay) buildOverlay();
         await ensureAssets();
         resizeCanvas();
@@ -457,9 +511,9 @@
         feather.vy = 0;
         floaters = [];
         breathIdx = 0; breathT = 0;
+        breathPhaseCount = 0;
         guideIdx = -1;
         lastInGlow = false;
-        speedChosen = false;
         landingPhase = false;
         initParticles();
         goal.y = goal.ty = GH / 2;
@@ -467,29 +521,44 @@
         overlay.classList.add('show');
         opened = true;
 
-        // 获取关键词
-        try {
-            const res = await api('/diary/feather-keyword', 'GET');
-            if (res.success && res.data && res.data.keyword) {
-                featherKeyword = res.data.keyword;
-            }
-        } catch (e) { featherKeyword = null; }
+        // 自动判断羽毛节奏：情绪低落时慢慢飘，其余按正常节奏，打开即开始
+        const lowMoods = ['悲伤', '孤独', '不开心', '不安', '愤怒'];
+        featherSpeed = (mood && lowMoods.indexOf(mood) !== -1) ? 0.8 : 1;
 
-        // 显示速度选择
-        overlay.querySelector('.feather-speed-choice').style.display = 'block';
+        // Madeline 全程陪伴：头像动起来 + 开口引导呼吸
+        startMadelinePortrait();
+        madelineSay(pick(OPEN_LINES));
+        startBreathGame();
+    }
+
+    // 工具：检测到情绪后调用——先让 Madeline 把“羽毛建议”说完，收起对话框，再淡入金羽毛游戏
+    async function suggestThenOpen(emotion) {
+        const line = SUGGEST_LINES[emotion] || '我们一起跟着这根羽毛呼吸一下，好吗？';
+        if (typeof window.addMadelineMessage === 'function') {
+            // 等 Madeline 把这句建议逐字说完（await 队列 Promise）
+            try { await window.addMadelineMessage(line, emotion || '默认', true); } catch (e) {}
+        }
+        // 说完后停顿一下让玩家读完，再收起日记页对话框，避免“话没说完就开始”
+        await sleep(1000);
+        if (typeof window.hideGameDialog === 'function') { try { window.hideGameDialog(); } catch (e) {} }
+        openGame(emotion);
     }
 
     function closeGame() {
         if (overlay) overlay.classList.remove('show');
         opened = false;
         landingPhase = false;
+        closing = false;
         if (animId) cancelAnimationFrame(animId);
         animId = null;
         if (nextGuideTimer) { clearTimeout(nextGuideTimer); nextGuideTimer = null; }
+        stopMadelinePortrait();
+        madelineSayToken++;
+        if (madelinePanel) madelinePanel.classList.remove('show');
         window.dispatchEvent(new CustomEvent('feather-finished'));
     }
 
-    window.FeatherGame = { open: openGame, close: closeGame };
+    window.FeatherGame = { open: openGame, close: closeGame, suggestThenOpen: suggestThenOpen };
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', bindBtn);
@@ -497,7 +566,6 @@
         bindBtn();
     }
     function bindBtn() {
-        const btn = document.getElementById('featherGameBtn');
-        if (btn) btn.addEventListener('click', openGame);
+        // 按钮点击由 diary.html 内联脚本控制（情绪分支），此处不再绑定
     }
 })();

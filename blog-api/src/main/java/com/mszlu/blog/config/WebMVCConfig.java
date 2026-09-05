@@ -45,6 +45,8 @@ public class WebMVCConfig implements WebMvcConfigurer {
                 .addPathPatterns("/proactive/**")
                 .addPathPatterns("/diary/**")
                 .addPathPatterns("/upload")
+                .addPathPatterns("/feather")
+                .addPathPatterns("/feather/**")
                 .excludePathPatterns("/chat/test-ai");
     }
 

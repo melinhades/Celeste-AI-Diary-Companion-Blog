@@ -39,7 +39,12 @@ public class LoginServiceImpl implements LoginService {
         }
         String token = JWTUtils.createToken(sysUser.getId());
         redisTemplate.opsForValue().set("Token_" + token, JSON.toJSONString(sysUser), 30, TimeUnit.DAYS);
-        return Result.success(token);
+        java.util.Map<String, Object> data = new java.util.HashMap<>();
+        data.put("token", token);
+        String nickname = sysUser.getNickname();
+        data.put("nickname", (nickname != null && !nickname.isEmpty()) ? nickname : sysUser.getAccount());
+        data.put("account", sysUser.getAccount());
+        return Result.success(data);
     }
 
     @Override

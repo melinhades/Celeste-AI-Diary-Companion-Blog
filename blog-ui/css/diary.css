@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   --c-bg-night:    #1B2A4A;
   --c-bg-panel:    #2C3E50;
   --c-sky:         #A8E6CF;
@@ -696,10 +696,8 @@ body::before {
 #pixelMadeline {
     position: fixed;
     left: 0; top: 0;
-    width: 56px;
-    height: 56px;
-    object-fit: contain;
-    object-position: center bottom;
+    width: 56px !important;
+    height: 56px !important;
     z-index: 800;
     image-rendering: pixelated;
     cursor: pointer;

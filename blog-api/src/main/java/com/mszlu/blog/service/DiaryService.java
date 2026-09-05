@@ -35,10 +35,14 @@ public interface DiaryService {
     /** 快照明信片：Madeline 对这段时间日记的感言 */
     Result snapReflect(DiaryParam param);
 
+    /** 情绪分析：AI 对日记内容的详细情绪分析 */
+    Result emotionAnalyze(DiaryParam param);
+
+    /** 最近情绪画像：给次日对话、主动关怀等场景用的文字描述，没有则返回空串 */
+    String recentEmotionNote(String userId);
+
     /** Oshiro 旅馆聊天 */
     Result oshiroChat(String message, String historyJson);
-
-    Result postcardMessage();
 
     Result featherKeyword();
 }

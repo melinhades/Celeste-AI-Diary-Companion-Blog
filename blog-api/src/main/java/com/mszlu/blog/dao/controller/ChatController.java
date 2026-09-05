@@ -30,6 +30,20 @@ public class ChatController {
         return chatService.chat(param);
     }
 
+    /** 文章生成：裸调 AI，不套 Madeline 人设、不开 JSON 模式、不写入聊天历史 */
+    @PostMapping("generate-article")
+    public Result generateArticle(@RequestBody ChatParam param) {
+        String reply = aiClient.chat(
+                Arrays.asList(new AiMessage("user", param.getContent())),
+                false);
+        if (reply == null) {
+            return Result.fail(500, "AI 调用失败，请查看控制台日志");
+        }
+        java.util.Map<String, Object> data = new java.util.HashMap<>();
+        data.put("content", reply);
+        return Result.success(data);
+    }
+
     @GetMapping("history")
     public Result history(@RequestParam(defaultValue = "50") Integer limit) {
         return chatService.history(limit);

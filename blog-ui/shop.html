@@ -123,6 +123,38 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 #oshiroChatDialog .chat-input button { padding:8px 14px; border:none; border-radius:6px; background:#FFEB3B; color:#111; cursor:pointer; font-size:14px; letter-spacing:1px; font-family:'Renogare','CelesteZH',sans-serif; box-shadow:inset 0 -2px #111111; }
 #oshiroChatDialog .chat-input button:hover { background:#ffeb85; }
 
+/* ===== 煤球精灵（dustCreature 图层叠加） ===== */
+#dustSprite {
+    position: fixed;
+    left: 140px;
+    top: 320px;
+    z-index: 935;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-drag: none;
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,.45));
+}
+#dustSprite .dust-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transform-origin: 50% 100%;
+    transition: transform .15s ease;
+    animation: dustIdle 2.4s ease-in-out infinite;
+}
+#dustSprite.moving .dust-inner { animation: dustHop .45s ease-in-out infinite; }
+#dustSprite.squish .dust-inner { animation: none; transform: scale(1.3, .55); }
+#dustSprite img {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    image-rendering: pixelated;
+    pointer-events: none;
+}
+@keyframes dustIdle { 0%,100% { transform: scale(1,1); } 50% { transform: scale(1.05,.95); } }
+@keyframes dustHop { 0%,100% { transform: translateY(0) scale(1,1); } 50% { transform: translateY(-7px) scale(.95,1.06); } }
+
 </style>
 </head>
 <body>
@@ -136,6 +168,9 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 <audio id="bgmPlayer"></audio>
 
 <img id="pixelOshiro" src="celeste-gui/oshiro-appear.gif" alt="Oshiro" title="Oshiro">
+
+<!-- 煤球精灵：图层由 JS 动态叠加 -->
+<div id="dustSprite"><div class="dust-inner"></div></div>
 
 <div id="gameDialog">
     <img id="gameDialogOverlay" src="Atlases/Portraits/textbox/oshiro_overlay.png" alt="">
@@ -401,10 +436,14 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
             var roll = Math.random();
             if (roll < 0.06) {
                 osGotoGroundThen(osTrip);
-            } else if (roll < 0.28) {
+            } else if (roll < 0.22) {
                 osGotoGroundThen(osSweep);
-            } else if (roll < 0.36) {
+            } else if (roll < 0.32) {
                 osGotoGroundThen(osRest);
+            } else if (roll < 0.42) {
+                osGotoGroundThen(osGreet);
+            } else if (roll < 0.50) {
+                osGotoGroundThen(osSideLook);
             } else {
                 osWander();
             }
@@ -433,6 +472,31 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     function osRest() {
         osSetSrc(OS_SRC.idle);
         setTimeout(osWander, 2500 + Math.random() * 2000);
+    }
+
+    // 新行为：招呼客人（side 素材，侧身挥手）
+    function osGreet() {
+        osSetSrc(OS_SRC.side);
+        var greetLines = ['欢迎光临！今天想喝点什么？', '您来啦，快请进～', '今天天气不错呢，适合住一晚。'];
+        if (Math.random() < 0.4) {
+            showOshiroDialog(greetLines[Math.floor(Math.random() * greetLines.length)], '可爱');
+        }
+        setTimeout(function() {
+            osSetSrc(OS_SRC.idle);
+            setTimeout(osWander, 1200 + Math.random() * 1000);
+        }, 2800);
+    }
+
+    // 新行为：侧身张望（side 素材，四处看看）
+    function osSideLook() {
+        osSetSrc(OS_SRC.side);
+        setTimeout(function() {
+            osSetSrc(OS_SRC.idle);
+            setTimeout(function() {
+                osSetSrc(OS_SRC.side);
+                setTimeout(osWander, 1800 + Math.random() * 1200);
+            }, 1500);
+        }, 1500);
     }
 
     function osSitScared() {
@@ -632,8 +696,8 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
                 showOshiroDialog(fallback, '不安');
                 return;
             }
-            var reply = res.data.message;
-            var emotion = res.data.emotion || '默认';
+            var reply = (typeof res.data === 'object' && res.data !== null) ? (res.data.message || '') : (res.data || '');
+            var emotion = (typeof res.data === 'object' && res.data !== null) ? (res.data.emotion || '默认') : '默认';
             chatHistory.push({role:'assistant', content:reply});
             appendOchMsg('assistant', reply);
             showOshiroDialog(reply, emotion);
@@ -649,6 +713,122 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
         appendOchMsg('assistant', welcome);
         showOshiroDialog(welcome, '可爱');
     }, 2500);
+
+    // ===== 煤球精灵：图层叠加 + 四处游逛 =====
+    (function() {
+        var DUST_DIR = 'celeste-gui/dustCreature/';
+        var DUST_SCALE = 4; // 统一放大倍率（像素图整数倍才清晰）
+        var sprite = document.getElementById('dustSprite');
+        var inner = sprite.querySelector('.dust-inner');
+
+        function addLayer(src) {
+            var im = new Image();
+            im.src = DUST_DIR + src;
+            im.addEventListener('load', function() {
+                im.style.width = im.naturalWidth * DUST_SCALE + 'px';
+                im.style.height = im.naturalHeight * DUST_SCALE + 'px';
+            });
+            inner.appendChild(im);
+            return im;
+        }
+
+        // 身体（3帧抖动）+ 质感层（3帧）+ 眼睛（3帧）
+        var baseImgs = ['base00.png', 'base01.png', 'base02.png'].map(addLayer);
+        var overlayImgs = ['overlay00.png', 'overlay01.png', 'overlay02.png'].map(addLayer);
+        var eyeImgs = ['eyes00.png', 'eyes01.png', 'eyes02.png'].map(addLayer);
+        var deadImg = addLayer('deadEyes.png');
+        deadImg.style.display = 'none';
+
+        // 容器尺寸跟 base 第 0 帧走
+        baseImgs[0].addEventListener('load', function() {
+            sprite.style.width = baseImgs[0].naturalWidth * DUST_SCALE + 'px';
+            sprite.style.height = baseImgs[0].naturalHeight * DUST_SCALE + 'px';
+        });
+
+        function showFrame(list, idx) {
+            list.forEach(function(im, i) { im.style.display = i === idx ? 'block' : 'none'; });
+        }
+
+        // 身体呼吸抖动
+        var dustFi = 0;
+        setInterval(function() {
+            dustFi = (dustFi + 1) % 3;
+            showFrame(baseImgs, dustFi);
+            showFrame(overlayImgs, dustFi);
+        }, 450);
+
+        // 偶尔眨眼/瞟一眼
+        setInterval(function() {
+            if (dustBusy || Math.random() >= 0.35) return;
+            var f = 1 + Math.floor(Math.random() * 2);
+            showFrame(eyeImgs, f);
+            setTimeout(function() { if (!dustBusy) showFrame(eyeImgs, 0); }, 280);
+        }, 2200);
+
+        // ===== 游逛 =====
+        var dustBusy = false;
+        function dustXY() {
+            return { x: parseFloat(sprite.style.left || '140'), y: parseFloat(sprite.style.top || '320') };
+        }
+        function dustGroundY() {
+            return Math.max(60, window.innerHeight - (sprite.offsetHeight || 64) - 10);
+        }
+        function dustPick() {
+            var w = sprite.offsetWidth || 64;
+            var maxX = Math.max(20, window.innerWidth - w - 12);
+            var minY = 80, maxY = dustGroundY();
+            if (Math.random() < 0.7) {
+                // 大多数时候贴地小跑
+                return { x: 12 + Math.random() * (maxX - 12), y: maxY - Math.random() * 30 };
+            }
+            return { x: 12 + Math.random() * (maxX - 12), y: minY + Math.random() * (maxY - minY) };
+        }
+        function dustWander() {
+            if (dustBusy) { setTimeout(dustWander, 1200); return; }
+            var cur = dustXY(), tgt = dustPick();
+            var dist = Math.sqrt(Math.pow(tgt.x - cur.x, 2) + Math.pow(tgt.y - cur.y, 2));
+            var dur = Math.max(900, Math.min(6000, dist * (9 + Math.random() * 6)));
+            sprite.classList.add('moving');
+            sprite.style.transform = tgt.x < cur.x ? 'scaleX(-1)' : '';
+            sprite.style.transition = 'left ' + dur + 'ms linear, top ' + dur + 'ms linear';
+            sprite.style.left = tgt.x + 'px';
+            sprite.style.top = tgt.y + 'px';
+            setTimeout(function() {
+                sprite.classList.remove('moving');
+                sprite.style.transform = '';
+                var rest = Math.random() < 0.25 ? 1500 + Math.random() * 2000 : 300 + Math.random() * 900;
+                setTimeout(dustWander, rest);
+            }, dur + 80);
+        }
+        setTimeout(dustWander, 1500);
+
+        // ===== 点击：压扁 + 晕倒眼 + 受惊蹦走 =====
+        sprite.addEventListener('click', function() {
+            if (dustBusy) return;
+            dustBusy = true;
+            sprite.classList.add('squish');
+            showFrame(eyeImgs, -1);
+            deadImg.style.display = 'block';
+            setTimeout(function() {
+                sprite.classList.remove('squish');
+                deadImg.style.display = 'none';
+                showFrame(eyeImgs, 0);
+                var cur = dustXY();
+                var w = sprite.offsetWidth || 64;
+                var dir = Math.random() < 0.5 ? -1 : 1;
+                var runX = Math.max(12, Math.min(window.innerWidth - w - 12, cur.x + dir * (120 + Math.random() * 160)));
+                sprite.classList.add('moving');
+                sprite.style.transform = runX < cur.x ? 'scaleX(-1)' : '';
+                sprite.style.transition = 'left 500ms ease-out';
+                sprite.style.left = runX + 'px';
+                setTimeout(function() {
+                    sprite.classList.remove('moving');
+                    sprite.style.transform = '';
+                    dustBusy = false;
+                }, 520);
+            }, 700);
+        });
+    })();
 </script>
 </body>
 </html>

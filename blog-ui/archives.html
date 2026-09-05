@@ -63,6 +63,8 @@
         .archive-count { font-size: 12px; color: #a78bfa; background: rgba(138, 43, 226, 0.2); padding: 2px 8px; border-radius: 10px; border: 1px solid rgba(138, 43, 226, 0.3); }
         .year-group { opacity: 0; transform: translateY(24px); transition: opacity 0.6s ease, transform 0.6s ease; }
         .year-group.in-view { opacity: 1; transform: translateY(0); }
+        /* 底部透明化：消除白色带 */
+        .footer { background:transparent; border:none; backdrop-filter:none; }
     </style>
 </head>
 <body>
@@ -239,7 +241,7 @@
     };
     const style = document.createElement('style');
     style.textContent =
-        '#arcMadeline{position:fixed;left:0;bottom:14px;z-index:300;width:56px;height:56px;image-rendering:pixelated;cursor:pointer;user-select:none;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5));}' +
+        '#arcMadeline{position:fixed;left:0;bottom:14px;z-index:300;width:56px !important;height:56px !important;image-rendering:pixelated;cursor:pointer;user-select:none;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5));}' +
         '#arcBubble{position:fixed;z-index:301;background:rgba(22,34,60,.95);border:2px solid #ffe36d;border-radius:8px;color:#ffe36d;font-size:12px;padding:6px 12px;pointer-events:none;opacity:0;transition:opacity .3s;white-space:nowrap;}' +
         '#arcBubble.show{opacity:1;}';
     document.head.appendChild(style);
@@ -295,19 +297,24 @@
 
     function pickNext(now) {
         const r = Math.random();
-        if (r < 0.45) {
+        if (r < 0.38) {
             st.mode = 'walk';
             st.modeUntil = now + 2000 + Math.random() * 3000;
             if (Math.random() < 0.3) st.dir *= -1;
             pm.src = SRC.move;
-        } else if (r < 0.75) {
+        } else if (r < 0.55) {
             st.mode = 'idle';
             st.modeUntil = now + 800 + Math.random() * 1400;
             pm.src = SRC.move;
-        } else {
+        } else if (r < 0.75) {
             st.mode = 'sit';
             st.modeUntil = now + 2200 + Math.random() * 2200;
             pm.src = SRC.sit;
+        } else {
+            // 站立张望（用 fun 素材）
+            st.mode = 'lookaround';
+            st.modeUntil = now + 1800 + Math.random() * 1800;
+            pm.src = SRC.fun;
         }
     }
 

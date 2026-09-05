@@ -64,6 +64,9 @@ public class DiaryServiceImpl implements DiaryService {
             diaryMapper.insert(diary);
         }
 
+        // 情绪分析：异步跑，结果落库，供次日对话/周月汇总消费
+        analyzeEmotionAsync(diary.getId(), param.getContent());
+
         // 保存成功后，异步提取记忆（复用 chat 的方式）
         // 这里我们取日记内容的前200字作为用户内容，AI 回复为空（因为日记没有 AI 回复）
         // 或者我们可以不提取记忆？但需求说：保存日记后异步提取记忆（照搬现有 extractAsync 模式）
@@ -80,6 +83,45 @@ public class DiaryServiceImpl implements DiaryService {
         memoryService.chunkDiary(userId, diary.getId(), diary.getTitle(), param.getContent());
 
         return Result.success(diary.getId());
+    }
+
+    /** 保存后异步做结构化情绪分析并写回日记行 */
+    private void analyzeEmotionAsync(String diaryId, String content) {
+        if (content == null || content.trim().isEmpty()) return;
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                String snippet = content.substring(0, Math.min(1500, content.length()));
+                String reply = aiClient.chat(new java.util.ArrayList<>(java.util.Arrays.asList(
+                        new AiMessage("user", PromptBuilder.emotionAnalyze(snippet)))));
+                java.util.Map<String, Object> data = parseEmotionReply(reply, snippet);
+                Diary upd = new Diary();
+                upd.setId(diaryId);
+                upd.setEmotion(String.valueOf(data.get("topEmotion")));
+                upd.setEmotionDetail(JSON.toJSONString(data));
+                diaryMapper.updateById(upd);
+            } catch (Exception ignored) {
+            }
+        });
+    }
+
+    /** 最近情绪画像：最近3天内最新一篇有情绪数据的日记 */
+    @Override
+    public String recentEmotionNote(String userId) {
+        try {
+            java.util.Calendar cal = java.util.Calendar.getInstance();
+            cal.add(java.util.Calendar.DAY_OF_MONTH, -3);
+            com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Diary> wrapper =
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
+            wrapper.eq(Diary::getUserId, userId);
+            wrapper.isNotNull(Diary::getEmotionDetail);
+            wrapper.ge(Diary::getCreateDate, cal.getTime());
+            wrapper.orderByDesc(Diary::getCreateDate);
+            wrapper.last("limit 1");
+            Diary d = diaryMapper.selectOne(wrapper);
+            return PromptBuilder.emotionNote(d);
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     @Override
@@ -122,22 +164,33 @@ public class DiaryServiceImpl implements DiaryService {
         String userId = user.getId();
         String userName = user.getNickname() != null ? user.getNickname() : user.getAccount();
 
-        // 查找昨天的日记
-        long now = System.currentTimeMillis();
-        long yesterdayStart = now - 24 * 60 * 60 * 1000L;
+        // 查找昨天的日记（自然日：昨天 00:00 ~ 今天 00:00，不再用 now-24h 滑动窗口）
+        java.util.Calendar cal = java.util.Calendar.getInstance();
+        cal.set(java.util.Calendar.HOUR_OF_DAY, 0);
+        cal.set(java.util.Calendar.MINUTE, 0);
+        cal.set(java.util.Calendar.SECOND, 0);
+        cal.set(java.util.Calendar.MILLISECOND, 0);
+        Date todayStart = cal.getTime();
+        cal.add(java.util.Calendar.DAY_OF_MONTH, -1);
+        Date yesterdayStart = cal.getTime();
         com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Diary> wrapper =
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
         wrapper.eq(Diary::getUserId, userId);
-        wrapper.ge(Diary::getCreateDate, new Date(yesterdayStart));
-        wrapper.le(Diary::getCreateDate, new Date(now));
+        wrapper.ge(Diary::getCreateDate, yesterdayStart);
+        wrapper.lt(Diary::getCreateDate, todayStart);
         wrapper.orderByDesc(Diary::getCreateDate);
         wrapper.last("limit 1");
         Diary yesterdayDiary = diaryMapper.selectOne(wrapper);
 
         String diaryContent = yesterdayDiary != null ? yesterdayDiary.getContent() : "";
+        if (diaryContent != null && diaryContent.length() > 1200) {
+            diaryContent = diaryContent.substring(0, 1200);
+        }
 
-        Persona persona = personaService.getActive(userId);
-        String prompt = PromptBuilder.dailyPostcard(userName, diaryContent);
+        String emotionNote = yesterdayDiary != null
+                ? PromptBuilder.emotionNote(yesterdayDiary)
+                : recentEmotionNote(userId);
+        String prompt = PromptBuilder.dailyPostcard(userName, diaryContent, emotionNote);
         String reply = aiClient.chat(
                 new java.util.ArrayList<>(java.util.Arrays.asList(
                         new AiMessage("user", prompt))));
@@ -170,12 +223,16 @@ public class DiaryServiceImpl implements DiaryService {
         Diary recentDiary = diaryMapper.selectOne(wrapper);
 
         String context = recentDiary != null ? recentDiary.getContent() : "";
+        String emotionNote = recentDiary != null
+                ? PromptBuilder.emotionNote(recentDiary)
+                : recentEmotionNote(userId);
         String prompt;
         if (!context.isEmpty()) {
             prompt = "你是Madeline，Celeste的爬山女孩。你温暖、真诚、细腻。\n"
+                   + (emotionNote.isEmpty() ? "" : "【你记得的她最近的情绪状态】\n" + emotionNote + "\n\n")
                    + "用户最近写了日记：\n———\n" + context.substring(0, Math.min(200, context.length())) + "\n———\n\n"
                    + "请以Madeline的身份，主动给用户发一条简短的消息（1句话），像朋友关心朋友那样。\n"
-                   + "可以提起日记里的事、可以鼓励、可以问候，不要说教。\n"
+                   + "可以提起日记里的事、可以顺着情绪状态关心，不要说教，绝不暴露\"情绪分析\"\"数据\"这类词。\n"
                    + "直接输出文字，不要JSON，不要引号。";
         } else {
             prompt = "你是Madeline，Celeste的爬山女孩。你温暖、真诚、细腻。\n"
@@ -208,9 +265,10 @@ public class DiaryServiceImpl implements DiaryService {
         String userId = user.getId();
         Persona persona = personaService.getActive(userId);
         List<Memory> memories = memoryService.getRelevant(userId, draftSnippet);
+        String emotionNote = recentEmotionNote(userId);
 
         var messages = new ArrayList<AiMessage>();
-        messages.add(new AiMessage("system", PromptBuilder.diaryCompanion(persona, memories, draftSnippet)));
+        messages.add(new AiMessage("system", PromptBuilder.diaryCompanion(persona, memories, draftSnippet, emotionNote)));
 
         String reply = aiClient.chat(messages, true);
         if (reply == null) {
@@ -301,7 +359,10 @@ public class DiaryServiceImpl implements DiaryService {
         String content = param.getContent() == null ? "" : param.getContent();
         if (content.isEmpty()) return Result.fail(400, "内容为空");
         String snippet = content.substring(0, Math.min(1200, content.length()));
+        String emotionCtx = (param.getEmotion() == null || param.getEmotion().isEmpty())
+                ? "" : "【这段时间已统计好的情绪数据】\n" + param.getEmotion() + "\n\n";
         String prompt = "你是 Madeline，Celeste 的爬山女孩。你温暖、真诚、细腻。\n"
+                + emotionCtx
                 + "这是用户这段时间写下的日记合集：\n———\n" + snippet + "\n———\n\n"
                 + "请以 Madeline 的身份，回望这段日子，写一段简短温柔的感言（2-3 句）：先说说这些日记里最让你留意的东西，再给一句暖心的话。\n"
                 + "不要说教，不要罗列，像写在明信片背面的几行字。\n"
@@ -316,6 +377,86 @@ public class DiaryServiceImpl implements DiaryService {
         return Result.success(data);
     }
 
+    private static final java.util.Set<String> EMOTION_WHITELIST = new java.util.HashSet<>(java.util.Arrays.asList(
+            "开心", "平静", "期待", "满足", "不安", "悲伤", "孤独", "愤怒", "惊讶", "疲惫"));
+
+    @Override
+    public Result emotionAnalyze(DiaryParam param) {
+        SysUser user = UserThreadLocal.get();
+        if (user == null) return Result.fail(403, "未登录");
+        String content = param.getContent() == null ? "" : param.getContent();
+        if (content.isEmpty()) return Result.fail(400, "内容为空");
+        String snippet = content.substring(0, Math.min(1500, content.length()));
+        String reply = aiClient.chat(new java.util.ArrayList<>(java.util.Arrays.asList(
+                new AiMessage("user", PromptBuilder.emotionAnalyze(snippet)))));
+        return Result.success(parseEmotionReply(reply, snippet));
+    }
+
+    /** 解析 AI 情绪分析结果；解析失败时降级为关键词统计 */
+    private java.util.Map<String, Object> parseEmotionReply(String reply, String snippet) {
+        java.util.Map<String, Object> data = new java.util.HashMap<>();
+        try {
+            String json = reply == null ? "" : reply.trim();
+            int start = json.indexOf('{');
+            int end = json.lastIndexOf('}');
+            if (start < 0 || end <= start) throw new IllegalArgumentException("no json");
+            json = json.substring(start, end + 1);
+            com.alibaba.fastjson.JSONObject obj = JSON.parseObject(json);
+            com.alibaba.fastjson.JSONArray arr = obj.getJSONArray("emotions");
+            java.util.List<java.util.Map<String, Object>> emotions = new java.util.ArrayList<>();
+            String top = null;
+            if (arr != null) {
+                for (int i = 0; i < arr.size() && i < 4; i++) {
+                    com.alibaba.fastjson.JSONObject e = arr.getJSONObject(i);
+                    String name = e.getString("name");
+                    Integer percent = e.getInteger("percent");
+                    if (name == null || !EMOTION_WHITELIST.contains(name.trim())) continue;
+                    java.util.Map<String, Object> item = new java.util.HashMap<>();
+                    item.put("name", name.trim());
+                    item.put("percent", percent == null ? 0 : Math.max(0, Math.min(100, percent)));
+                    emotions.add(item);
+                    if (top == null) top = name.trim();
+                }
+            }
+            if (emotions.isEmpty()) throw new IllegalArgumentException("no valid emotion");
+            data.put("emotions", emotions);
+            data.put("topEmotion", top);
+            Integer intensity = obj.getInteger("intensity");
+            data.put("intensity", intensity == null ? 3 : Math.max(1, Math.min(5, intensity)));
+            String valence = obj.getString("valence");
+            data.put("valence", "positive".equals(valence) || "negative".equals(valence) ? valence : "neutral");
+            String energy = obj.getString("energy");
+            data.put("energy", "high".equals(energy) || "low".equals(energy) ? energy : "medium");
+            java.util.List<String> events = new java.util.ArrayList<>();
+            com.alibaba.fastjson.JSONArray evArr = obj.getJSONArray("events");
+            if (evArr != null) {
+                for (int i = 0; i < evArr.size() && i < 3; i++) {
+                    String ev = evArr.getString(i);
+                    if (ev != null && !ev.trim().isEmpty() && ev.trim().length() <= 50) events.add(ev.trim());
+                }
+            }
+            data.put("events", events);
+            String concern = obj.getString("concern");
+            data.put("concern", concern == null ? "" : concern.trim());
+            String key = obj.getString("keySentence");
+            data.put("keySentence", key == null ? "" : key.trim());
+        } catch (Exception e) {
+            String fallback = scanEmotion(snippet);
+            java.util.Map<String, Object> item = new java.util.HashMap<>();
+            item.put("name", fallback);
+            item.put("percent", 100);
+            data.put("emotions", java.util.Collections.singletonList(item));
+            data.put("topEmotion", fallback);
+            data.put("intensity", 3);
+            data.put("valence", "neutral");
+            data.put("energy", "medium");
+            data.put("events", new java.util.ArrayList<String>());
+            data.put("concern", "");
+            data.put("keySentence", "");
+        }
+        return data;
+    }
+
     @Override
     public Result oshiroChat(String message, String historyJson) {
         try {
@@ -328,50 +469,19 @@ public class DiaryServiceImpl implements DiaryService {
             String prompt = PromptBuilder.oshiroChat(history);
             String reply = aiClient.chat(new ArrayList<>(java.util.Arrays.asList(
                     new AiMessage("user", prompt))));
-            return Result.success(reply);
+            if (reply == null || reply.isBlank()) {
+                reply = "（Oshiro 正在擦茶壶，耳朵有点红，没听清。你可以再说一遍吗？）";
+            }
+            java.util.Map<String, Object> data = new java.util.HashMap<>();
+            data.put("message", reply.trim());
+            data.put("emotion", "默认");
+            return Result.success(data);
         } catch (Exception e) {
-            return Result.success("（Oshiro 正在擦茶壶，耳朵有点红，没听清。你可以再说一遍吗？）");
+            java.util.Map<String, Object> fallback = new java.util.HashMap<>();
+            fallback.put("message", "（Oshiro 正在擦茶壶，耳朵有点红，没听清。你可以再说一遍吗？）");
+            fallback.put("emotion", "不安");
+            return Result.success(fallback);
         }
-    }
-
-    @Override
-    public Result postcardMessage() {
-        SysUser user = UserThreadLocal.get();
-        if (user == null) {
-            return Result.fail(403, "未登录");
-        }
-        String userId = user.getId();
-        String userName = user.getNickname() != null ? user.getNickname() : user.getAccount();
-
-        // 查找昨天的日记
-        long now = System.currentTimeMillis();
-        long yesterdayStart = now - 24 * 60 * 60 * 1000L;
-        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Diary> wrapper =
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
-        wrapper.eq(Diary::getUserId, userId);
-        wrapper.ge(Diary::getCreateDate, new Date(yesterdayStart));
-        wrapper.le(Diary::getCreateDate, new Date(now));
-        wrapper.orderByDesc(Diary::getCreateDate);
-        wrapper.last("limit 1");
-        Diary yesterdayDiary = diaryMapper.selectOne(wrapper);
-
-        String diaryContent = yesterdayDiary != null ? yesterdayDiary.getContent() : "";
-
-        Persona persona = personaService.getActive(userId);
-        String prompt = PromptBuilder.dailyPostcard(userName, diaryContent);
-        String reply = aiClient.chat(
-                new java.util.ArrayList<>(java.util.Arrays.asList(
-                        new AiMessage("user", prompt))));
-
-        if (reply == null) {
-            reply = userName + "，新的一天开始了，记得对自己温柔一点。—— Madeline";
-        }
-
-        java.util.Map<String, Object> data = new java.util.HashMap<>();
-        data.put("userName", userName);
-        data.put("message", reply);
-        data.put("hasDiary", yesterdayDiary != null);
-        return Result.success(data);
     }
 
     @Override

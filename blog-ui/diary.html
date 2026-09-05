@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -7,6 +7,20 @@
     <title>Madeline - 写日记</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Patrick+Hand&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/diary.css">
+    <style>
+        /* ===== 羽毛随笔弹框：poempage 纸页 + 登录页同款滑入动画 ===== */
+        #featherNoteBox {
+            background:url('celeste-gui/poempage.png') center/100% 100% no-repeat;
+            border:none;
+            border-radius:0;
+            filter:drop-shadow(0 8px 32px rgba(0,0,0,.6));
+            opacity:0;
+            transform:translateX(calc(-100vw - 100%)) rotate(-8deg);
+            transition:opacity .8s ease, transform 1s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        #featherNoteBox.slide-in { opacity:1; transform:translateX(0) rotate(0deg); }
+        #featherSave:hover { background:#c4a882 !important; color:#fff !important; }
+    </style>
 
 </head>
 <body>
@@ -31,14 +45,14 @@
         <img src="celeste-gui/loop.gif" alt="金羽毛" style="width:100%; height:100%; object-fit:contain; display:block;">
     </button>
     <!-- 羽毛随笔弹框 -->
-    <div id="featherNoteBox" style="display:none; position:fixed; top:90px; right:16px; z-index:901; width:260px; background:rgba(22,34,60,.95); border:2px solid rgba(255,230,109,.4); border-radius:10px; padding:16px; box-shadow:0 8px 24px rgba(0,0,0,.4);">
-        <div style="color:#ffe36d; font-size:13px; margin-bottom:8px; font-family:'Renogare','CelesteZH',sans-serif;">🪶 写一根羽毛</div>
-        <input id="featherInput" type="text" maxlength="100" placeholder="一句话，轻轻放下..." style="width:100%; padding:8px 10px; border:1px solid rgba(255,230,109,.4); border-radius:6px; background:rgba(255,255,255,.08); color:#fff; font-size:13px; outline:none; font-family:inherit;">
+    <div id="featherNoteBox" style="display:none; position:fixed; top:90px; right:16px; z-index:901; width:260px; padding:18px 16px;">
+        <div style="color:#5a3e36; font-size:13px; margin-bottom:8px; font-family:'Renogare','CelesteZH',sans-serif;">🪶 写一根羽毛</div>
+        <input id="featherInput" type="text" maxlength="100" placeholder="一句话，轻轻放下..." style="width:100%; padding:8px 10px; border:1px solid #c4a882; border-radius:6px; background:rgba(255,252,245,.75); color:#3a2018; font-size:13px; outline:none; font-family:inherit;">
         <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
-            <button id="featherCancel" style="padding:4px 12px; border:1px solid rgba(255,255,255,.3); border-radius:4px; background:transparent; color:rgba(255,255,255,.6); cursor:pointer; font-size:12px;">取消</button>
-            <button id="featherSave" style="padding:4px 12px; border:none; border-radius:4px; background:#ffe36d; color:#222; cursor:pointer; font-size:12px; font-weight:bold;">放下</button>
+            <button id="featherCancel" style="padding:4px 12px; border:1px solid #c4a882; border-radius:4px; background:transparent; color:#8a6f5c; cursor:pointer; font-size:12px;">取消</button>
+            <button id="featherSave" style="padding:4px 12px; border:2px solid #c4a882; border-radius:4px; background:rgba(255,248,240,.8); color:#5a3e36; cursor:pointer; font-size:12px; font-weight:bold;">放下</button>
         </div>
-        <div id="featherToast" style="display:none; color:#ffe36d; font-size:12px; text-align:center; margin-top:8px;">羽毛已飘走～</div>
+        <div id="featherToast" style="display:none; color:#5a3e36; font-size:12px; text-align:center; margin-top:8px;">羽毛已飘走～</div>
     </div>
     <!-- BGM 播放器（隐藏，自动播放） -->
     <audio id="bgmPlayer" loop autoplay>
@@ -85,13 +99,6 @@
     <!-- 日记编辑区 -->
     <div class="editor-wrapper">
         <img src="celeste-gui/journal.png" alt="Journal" style="display:block; margin:0 auto 6px auto; height:72px; filter:drop-shadow(0 0 6px rgba(255,235,59,0.4));">
-        <div id="emotion-wave"><canvas id="waveCanvas"></canvas></div>
-        <div id="emotion-analysis-bar">
-            <span class="emotion-label">Madeline 感知到</span>
-            <div class="emotion-track"><div class="emotion-fill" id="emotionFill"></div></div>
-            <div class="emotion-tags" id="emotionTags"></div>
-            <span class="emotion-intensity" id="emotionIntensity"></span>
-        </div>
         <div id="journalStage">
             <div id="journalBook"></div>
             <div class="book-dots" id="bookDots"></div>
@@ -108,24 +115,44 @@
     <script src="js/diary.js"></script>
     <script>
     (function() {
-        const btn = document.getElementById('featherGameBtn');
-        const box = document.getElementById('featherNoteBox');
-        const input = document.getElementById('featherInput');
-        const toast = document.getElementById('featherToast');
+        var btn = document.getElementById('featherGameBtn');
+        var box = document.getElementById('featherNoteBox');
+        var input = document.getElementById('featherInput');
+        var toast = document.getElementById('featherToast');
 
+        function isBadMood() {
+            var emo = (typeof currentEmotion !== 'undefined') ? currentEmotion : (localStorage.getItem('lastEmotion') || '默认');
+            return ['悲伤', '孤独', '不开心', '不安', '愤怒', '怨恨'].indexOf(emo) !== -1;
+        }
         btn.addEventListener('click', function() {
-            if (box.style.display === 'none') {
-                box.style.display = 'block';
-                input.value = '';
-                toast.style.display = 'none';
-                input.focus();
+            var emo = (typeof currentEmotion !== 'undefined') ? currentEmotion : (localStorage.getItem('lastEmotion') || '默认');
+            if (isBadMood()) {
+                // 情绪不好：Madeline 先说一句羽毛建议，再淡入金羽毛游戏（过渡自然）
+                window._featherBadMood = true;
+                if (window.FeatherGame) {
+                    if (window.FeatherGame.suggestThenOpen) window.FeatherGame.suggestThenOpen(emo);
+                    else window.FeatherGame.open(emo);
+                }
             } else {
-                box.style.display = 'none';
+                // 情绪好：先随笔，右下角羽毛按钮点击才游戏
+                if (box.style.display === 'none' || !box.style.display) {
+                    box.style.display = 'block';
+                    box.classList.remove('slide-in');
+                    void box.offsetWidth;
+                    box.classList.add('slide-in');
+                    input.value = '';
+                    toast.style.display = 'none';
+                    input.focus();
+                } else {
+                    box.style.display = 'none';
+                    box.classList.remove('slide-in');
+                }
             }
         });
 
         document.getElementById('featherCancel').addEventListener('click', function() {
             box.style.display = 'none';
+            box.classList.remove('slide-in');
         });
 
         document.getElementById('featherSave').addEventListener('click', saveFeather);
@@ -134,16 +161,38 @@
         });
 
         function saveFeather() {
-            const val = input.value.trim();
+            var val = input.value.trim();
             if (!val) return;
+            var saveBtn = document.getElementById('featherSave');
+            if (saveBtn) saveBtn.disabled = true;
             api('/feather', 'POST', { content: val }).then(function(res) {
-                if (res.success) {
+                if (saveBtn) saveBtn.disabled = false;
+                if (res && res.success) {
+                    toast.textContent = '羽毛已飘走～';
+                    toast.style.color = '#5a3e36';
                     toast.style.display = 'block';
                     input.value = '';
                     setTimeout(function() {
                         box.style.display = 'none';
+                        box.classList.remove('slide-in');
+                        toast.style.display = 'none';
                     }, 1200);
+                    // 情绪好时：随笔写完 → 开游戏（Madeline 在游戏内陪伴）
+                    if (!isBadMood()) {
+                        setTimeout(function() {
+                            if (window.FeatherGame) window.FeatherGame.open();
+                        }, 800);
+                    }
+                } else {
+                    toast.textContent = (res && res.msg) ? res.msg : '没存上，再试一次吧';
+                    toast.style.color = '#c0392b';
+                    toast.style.display = 'block';
                 }
+            }).catch(function() {
+                if (saveBtn) saveBtn.disabled = false;
+                toast.textContent = '网络不太顺，再试一次吧';
+                toast.style.color = '#c0392b';
+                toast.style.display = 'block';
             });
         }
     })();

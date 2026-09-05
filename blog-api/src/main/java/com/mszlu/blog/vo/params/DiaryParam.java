@@ -16,4 +16,7 @@ public class DiaryParam {
 
     /** 内容 */
     private String content;
+
+    /** 情绪数据（可选：保存时的分析结果 / 快照时的聚合摘要） */
+    private String emotion;
 }

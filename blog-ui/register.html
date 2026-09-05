@@ -6,42 +6,68 @@
     <link rel="icon" href="icon/OIP.webp" type="image/webp">
     <title>Register - Celeste Blog</title>
     <link rel="stylesheet" href="css/common.css">
+    <link rel="preload" href="celeste-font-en/Renogare-Regular.otf" as="font" type="font/otf" crossorigin>
+    <link rel="preload" href="fonts/NotoSansCJKsc-Medium.otf" as="font" type="font/otf" crossorigin>
     <style>
-        body { display:flex; align-items:center; justify-content:center; min-height:100vh; }
-        body::after {
-            content:''; position:fixed; inset:0;
-            background:url('celeste-areas/ForsakenCity01.png') center/cover no-repeat;
-            opacity:.25; pointer-events:none; z-index:0;
+        body { display:flex; align-items:center; justify-content:center; min-height:100vh; background:#050514; }
+        /* ===== 明信片同款夜空：月光晕 + 两层闪烁星星 ===== */
+        body::before {
+            content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+            background-image:
+                radial-gradient(circle at 78% 16%, rgba(180,200,255,.16), transparent 32%),
+                radial-gradient(circle at 18% 82%, rgba(90,110,180,.10), transparent 40%);
         }
+        .stars, .stars2 { position:fixed; inset:0; pointer-events:none; z-index:0; width:1px; height:1px; background:transparent; }
+        .stars {
+            box-shadow: 12vw 8vh 0 1px rgba(255,255,255,.8), 34vw 22vh 0 rgba(255,255,255,.5), 58vw 6vh 0 1px rgba(255,255,255,.7),
+                        82vw 18vh 0 rgba(255,255,255,.4), 46vw 12vh 0 rgba(255,255,255,.55), 90vw 40vh 0 1px rgba(255,255,255,.6),
+                        8vw 34vh 0 rgba(255,255,255,.45), 68vw 30vh 0 rgba(255,255,255,.5), 24vw 46vh 0 1px rgba(255,255,255,.65),
+                        94vw 8vh 0 rgba(255,255,255,.4), 52vw 40vh 0 rgba(255,255,255,.35), 16vw 16vh 0 rgba(255,255,255,.5);
+            animation:starTwinkle 4.5s ease-in-out infinite;
+        }
+        .stars2 {
+            box-shadow: 20vw 12vh 0 rgba(255,255,255,.5), 42vw 5vh 0 1px rgba(255,255,255,.7), 72vw 22vh 0 rgba(255,255,255,.45),
+                        6vw 26vh 0 rgba(255,255,255,.5), 60vw 34vh 0 rgba(255,255,255,.4), 86vw 12vh 0 1px rgba(255,255,255,.6),
+                        30vw 38vh 0 rgba(255,255,255,.35), 96vw 30vh 0 rgba(255,255,255,.45), 48vw 24vh 0 rgba(255,255,255,.5),
+                        14vw 42vh 0 rgba(255,255,255,.3), 64vw 10vh 0 rgba(255,255,255,.4), 38vw 48vh 0 rgba(255,255,255,.35);
+            animation:starTwinkle 6s ease-in-out 1.6s infinite;
+        }
+        @keyframes starTwinkle { 0%,100%{opacity:.25} 50%{opacity:.9} }
+        /* ===== 注册卡片：poempage 纸页 + 明信片同款出场 ===== */
         .register-box {
-            background:rgba(22,34,60,.92);
-            border:2px solid #ffe36d;
-            border-radius:10px;
-            padding:36px;
-            width:400px;
-            box-shadow:0 8px 40px rgba(0,0,0,.6), 0 0 24px rgba(255,227,109,.15);
+            background:url('celeste-gui/poempage.png') center/100% 100% no-repeat;
+            border:none; border-radius:0;
+            padding:48px 44px 40px;
+            width:440px;
             position:relative; z-index:1;
+            filter:drop-shadow(0 8px 32px rgba(0,0,0,.6));
+            opacity:0;
+            transform:translateX(-120%) rotate(-8deg);
+            transition:opacity .8s ease, transform 1s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
+        .register-box.slide-in { opacity:1; transform:translateX(0) rotate(0deg); }
         .register-box h2 {
-            text-align:center; font-size:20px; color:#ffe36d;
-            font-family:'Courier New', monospace; letter-spacing:2px; margin-bottom:6px;
+            text-align:center; font-size:20px; color:#3a2018;
+            font-family:'Renogare','CelesteZH',sans-serif; letter-spacing:2px; margin-bottom:6px;
         }
-        .register-box .sub { text-align:center; color:#7788aa; font-size:13px; margin-bottom:22px; }
-        .register-madeline { display:block; width:64px; height:64px; border-radius:50%; margin:0 auto 14px; border:2px solid #ffe36d; box-shadow:0 0 14px rgba(255,227,109,.4); }
+        .register-box .sub { text-align:center; color:#8a6f5c; font-size:13px; margin-bottom:22px; }
+        .register-madeline { display:block; width:64px; height:64px; border-radius:50%; margin:0 auto 14px; border:2px solid #c4a882; box-shadow:0 0 14px rgba(196,168,130,.5); }
         .register-box .form-group { margin-bottom:14px; }
-        .register-box .form-group label { color:#aab8d0; font-size:13px; }
-        .register-box .form-control { background:#0f1830; border:1px solid #3a4a6a; color:#e8e8f0; }
-        .register-box .form-control:focus { border-color:#ffe36d; box-shadow:0 0 10px rgba(255,227,109,.3); background:#141f3a; }
+        .register-box .form-group label { color:#5a3e36; font-size:13px; }
+        .register-box .form-control { background:rgba(255,252,245,.75); border:1px solid #c4a882; color:#3a2018; font-family:'Renogare','CelesteZH',sans-serif; }
+        .register-box .form-control::placeholder { color:#b09a82; }
+        .register-box .form-control:focus { border-color:#5a3e36; box-shadow:0 0 10px rgba(196,168,130,.45); background:rgba(255,252,245,.95); }
         .register-box .btn-primary {
-            width:100%; padding:13px; font-size:15px; margin-top:6px;
-            background:#ffe36d; color:#111; font-weight:bold;
-            border-radius:6px; box-shadow:inset 0 -3px #c9a93f;
-            font-family:'Courier New', monospace; letter-spacing:4px;
+            width:auto; padding:10px 32px; font-size:14px; margin:6px auto 0; display:block;
+            border:2px solid #c4a882; background:rgba(255,248,240,.8); color:#5a3e36; font-weight:bold;
+            border-radius:4px; box-shadow:none;
+            font-family:'Renogare','CelesteZH',sans-serif; letter-spacing:2px;
+            cursor:pointer;
         }
-        .register-box .btn-primary:hover { background:#ffeb85; transform:none; box-shadow:inset 0 -3px #c9a93f, 0 0 14px rgba(255,227,109,.5); }
-        .register-footer { text-align:center; margin-top:16px; font-size:13px; color:#7788aa; }
-        .register-footer a { color:#ffe36d; }
-        .register-footer a:hover { text-shadow:0 0 8px rgba(255,227,109,.6); }
+        .register-box .btn-primary:hover { background:#c4a882; color:#fff; transform:none; box-shadow:none; }
+        .register-footer { text-align:center; margin-top:16px; font-size:13px; color:#8a6f5c; }
+        .register-footer a { color:#5a3e36; font-weight:bold; border-bottom:1px solid #c4a882; }
+        .register-footer a:hover { text-shadow:none; color:#3a2018; }
         .snow-strip {
             position:fixed; left:0; right:0; bottom:0;
             height:80px;
@@ -52,6 +78,37 @@
             opacity:.5;
         }
         @keyframes snowDrift { from{background-position-x:0} to{background-position-x:-440px} }
+        /* ===== 注册加载：article 同款 Madeline 跑步，背景直接透出登录页夜空+雪花 ===== */
+        #regLoadingOverlay {
+            position:fixed; inset:0; z-index:9999;
+            display:flex; flex-direction:column; align-items:center; justify-content:center;
+            opacity:0; pointer-events:none; transition:opacity .35s ease;
+        }
+        #regLoadingOverlay.show { opacity:1; pointer-events:auto; }
+        #regLoadingOverlay .loading-madeline {
+            width:120px; height:120px; position:relative; z-index:1;
+            background-size:100% 100%; background-repeat:no-repeat; background-position:center;
+            image-rendering:pixelated;
+            animation:loadingRun 0.72s steps(9) infinite;
+        }
+        @keyframes loadingRun {
+            0%   { background-image:url('celeste-gui/loading/00.png'); }
+            11%  { background-image:url('celeste-gui/loading/01.png'); }
+            22%  { background-image:url('celeste-gui/loading/02.png'); }
+            33%  { background-image:url('celeste-gui/loading/03.png'); }
+            44%  { background-image:url('celeste-gui/loading/04.png'); }
+            55%  { background-image:url('celeste-gui/loading/05.png'); }
+            66%  { background-image:url('celeste-gui/loading/06.png'); }
+            77%  { background-image:url('celeste-gui/loading/07.png'); }
+            88%  { background-image:url('celeste-gui/loading/08.png'); }
+        }
+        #regLoadingOverlay .loading-text {
+            margin-top:20px; color:#ffe36d; position:relative; z-index:1;
+            font-family:'Renogare','CelesteZH',sans-serif; font-size:18px; letter-spacing:3px;
+            text-shadow:0 0 12px rgba(255,227,109,.4);
+        }
+        #regLoadingOverlay .loading-dots::after { content:''; animation:dots 1.5s steps(4, end) infinite; }
+        @keyframes dots { 0%{content:''} 25%{content:'.'} 50%{content:'..'} 75%{content:'...'} }
     </style>
 </head>
 <body>
@@ -59,101 +116,59 @@
     <audio id="bgmPlayer" loop autoplay>
         <source src="bgm/postcard.mp3" type="audio/mpeg">
     </audio>
+    <!-- 夜空星星（明信片同款背景） -->
+    <div class="stars"></div>
+    <div class="stars2"></div>
     <!-- 雪花粒子系统（index 同款） -->
     <canvas id="snowCanvas" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;"></canvas>
     <div class="snow-strip"></div>
+    <!-- 注册加载动画（article 同款 Madeline 跑步） -->
+    <div id="regLoadingOverlay">
+        <div class="loading-madeline"></div>
+        <div class="loading-text">LOADING<span class="loading-dots"></span></div>
+    </div>
+    <script>
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function() {
+            document.body.style.visibility = 'hidden';
+            void document.body.offsetHeight;
+            document.body.style.visibility = '';
+        });
+    }
+    </script>
 <div class="register-box">
     <img class="register-madeline" src="celeste-portraits/madeline/peaceful00.png" alt="Madeline">
     <h2>NEW TRAVELER</h2>
     <p class="sub">Start your climb up the mountain.</p>
     <div class="form-group">
-        <label>账号</label>
-        <input class="form-control" type="text" id="account" placeholder="请输入账号（字母/数字）" autofocus>
+        <label>Account</label>
+        <input class="form-control" type="text" id="account" placeholder="Letters and numbers only" autofocus>
     </div>
     <div class="form-group">
-        <label>昵称</label>
-        <input class="form-control" type="text" id="nickname" placeholder="请输入昵称">
+        <label>Nickname</label>
+        <input class="form-control" type="text" id="nickname" placeholder="Choose a nickname">
     </div>
     <div class="form-group">
-        <label>密码</label>
-        <input class="form-control" type="password" id="password" placeholder="请输入密码（至少6位）">
+        <label>Password</label>
+        <input class="form-control" type="password" id="password" placeholder="At least 6 characters">
     </div>
     <div class="form-group">
-        <label>确认密码</label>
-        <input class="form-control" type="password" id="password2" placeholder="再次输入密码" onkeyup="if(event.key==='Enter')doRegister()">
+        <label>Confirm Password</label>
+        <input class="form-control" type="password" id="password2" placeholder="Re-enter password" onkeyup="if(event.key==='Enter')doRegister()">
     </div>
     <div class="form-error" id="errMsg"></div>
-    <button class="btn btn-primary" onclick="doRegister()" id="regBtn">注 册</button>
-    <div class="register-footer">已有账号？<a href="login.html">立即登录</a></div>
+    <button class="btn btn-primary" onclick="doRegister()" id="regBtn">Sign Up</button>
+    <div class="register-footer">Already have an account? <a href="login.html">Log in</a></div>
 </div>
 <script src="js/api.js"></script>
+<script src="js/snow-bgm.js"></script>
 <script>
     if (localStorage.getItem('token')) location.href = 'index.html';
 
-    // ===== 雪花粒子系统（index 同款） =====
-    const snowCanvas = document.getElementById('snowCanvas');
-    const snowCtx = snowCanvas.getContext('2d');
-    let snowflakes = [];
-    let snowAnimFrame = null;
-
-    function resizeSnowCanvas() {
-        snowCanvas.width = window.innerWidth;
-        snowCanvas.height = window.innerHeight;
-    }
-
-    function createSnowflake() {
-        return {
-            x: Math.random() * snowCanvas.width,
-            y: -10,
-            r: Math.random() * 3 + 1,
-            speed: Math.random() * 1.5 + 0.5,
-            wind: Math.random() * 0.5 - 0.25,
-            opacity: Math.random() * 0.6 + 0.2,
-            swing: Math.random() * Math.PI * 2,
-            swingSpeed: Math.random() * 0.02 + 0.01
-        };
-    }
-
-    function initSnowflakes() {
-        snowflakes = [];
-        for (let i = 0; i < 80; i++) {
-            const f = createSnowflake();
-            f.y = Math.random() * snowCanvas.height;
-            snowflakes.push(f);
-        }
-    }
-
-    function drawSnowflakes() {
-        snowCtx.clearRect(0, 0, snowCanvas.width, snowCanvas.height);
-        for (const f of snowflakes) {
-            f.y += f.speed;
-            f.swing += f.swingSpeed;
-            f.x += Math.sin(f.swing) * 0.5 + f.wind;
-            if (f.y > snowCanvas.height + 10) { f.y = -10; f.x = Math.random() * snowCanvas.width; }
-            if (f.x > snowCanvas.width + 10) f.x = -10;
-            if (f.x < -10) f.x = snowCanvas.width + 10;
-            snowCtx.beginPath();
-            snowCtx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
-            snowCtx.fillStyle = `rgba(255,255,255,${f.opacity})`;
-            snowCtx.fill();
-        }
-        snowAnimFrame = requestAnimationFrame(drawSnowflakes);
-    }
-
-    function startSnow() { resizeSnowCanvas(); initSnowflakes(); drawSnowflakes(); }
-    window.addEventListener('resize', resizeSnowCanvas);
-    startSnow();
-
-    // ===== BGM（index 同款：进度接续 + 自动播放兜底） =====
-    const bgmPlayer = document.getElementById('bgmPlayer');
-    const savedTime = parseFloat(localStorage.getItem('bgmTime') || '0');
-    if (savedTime > 0) bgmPlayer.currentTime = savedTime;
-    bgmPlayer.volume = 0.25;
-    bgmPlayer.play().catch(() => {});
-    setInterval(() => { localStorage.setItem('bgmTime', bgmPlayer.currentTime); }, 2000);
-    function tryPlayBGM() { bgmPlayer.play().then(() => { document.removeEventListener('click', tryPlayBGM); document.removeEventListener('keydown', tryPlayBGM); }).catch(() => {}); }
-    document.addEventListener('click', tryPlayBGM);
-    document.addEventListener('keydown', tryPlayBGM);
+    // 明信片同款出场：纸页从左侧带旋转滑入
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        document.querySelector('.register-box').classList.add('slide-in');
+    }));
 
     // ===== 音效 =====
     function playSfx(name) {
@@ -165,41 +180,44 @@
         } catch (e) { /* 无声降级 */ }
     }
 
-    // 点击"立即登录"音效，播完主体再跳页（登录页会识别标记，不重复播进入音效）
-    document.querySelector('.register-footer a').addEventListener('click', e => {
-        e.preventDefault();
-        playSfx('ui_main_assistmode_whistle_page1.wav');
-        try { sessionStorage.setItem('sfxNavAt', String(Date.now())); } catch (err) {}
-        setTimeout(() => location.href = 'login.html', 700);
-    });
+    // 进入注册界面音效（每次进入都播；被自动播放策略拦截时，首次点击/按键补播）
+    (function () {
+        const src = 'celeste-sounds/ui_main_assistmode_whistle_page2.wav';
+        const tryPlay = () => { const a = new Audio(src); a.volume = 0.8; return a.play(); };
+        tryPlay().catch(() => {
+            const h = () => { tryPlay().catch(() => {}); document.removeEventListener('click', h); document.removeEventListener('keydown', h); };
+            document.addEventListener('click', h);
+            document.addEventListener('keydown', h);
+        });
+    })();
 
     function doRegister() {
-        playSfx('ui_main_assistmode_whistle_page2.wav');
         const account = document.getElementById('account').value.trim();
         const nickname = document.getElementById('nickname').value.trim();
         const password = document.getElementById('password').value.trim();
         const password2 = document.getElementById('password2').value.trim();
         document.getElementById('errMsg').style.display = 'none';
 
-        if (!account) { showErr('请输入账号'); return; }
-        if (account.length < 3) { showErr('账号至少3个字符'); return; }
-        if (!nickname) { showErr('请输入昵称'); return; }
-        if (!password) { showErr('请输入密码'); return; }
-        if (password.length < 6) { showErr('密码至少6位'); return; }
-        if (password !== password2) { showErr('两次密码不一致'); return; }
+        if (!account) { showErr('Please enter your account'); return; }
+        if (account.length < 3) { showErr('Account must be at least 3 characters'); return; }
+        if (!nickname) { showErr('Please enter a nickname'); return; }
+        if (!password) { showErr('Please enter a password'); return; }
+        if (password.length < 6) { showErr('Password must be at least 6 characters'); return; }
+        if (password !== password2) { showErr('Passwords do not match'); return; }
 
         const btn = document.getElementById('regBtn');
-        btn.disabled = true; btn.textContent = '注册中...';
+        btn.disabled = true; btn.textContent = 'Signing up...';
         document.querySelector('.register-madeline').src = 'celeste-portraits/madeline/determined00.png';
 
         api('/register', 'POST', { account, password, nickname }).then(res => {
-            btn.disabled = false; btn.textContent = '注 册';
+            btn.disabled = false; btn.textContent = 'Sign Up';
             if (res.success) {
                 playSfx('ui_main_assistmode_whistle_page3.wav');
-                showToast('注册成功，请登录', 'success');
-                setTimeout(() => location.href = 'login.html', 1500);
+                document.querySelector('.register-box').style.display = 'none';
+                document.getElementById('regLoadingOverlay').classList.add('show');
+                setTimeout(() => { location.href = 'login.html'; }, 1200);
             } else {
-                showErr(res.msg || '注册失败，账号可能已存在');
+                showErr(res.msg || 'Registration failed, account may already exist');
             }
         });
     }

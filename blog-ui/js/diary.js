@@ -1,4 +1,4 @@
-﻿(function() {
+(function() {
     // ===== Celeste 日记本（红书封面 + 单页内页） =====
     const BOOK_PAGES = [
         { src: 'Atlases/Journal/cover.png', cover: true, fields: [] },
@@ -125,7 +125,6 @@
             pcName.textContent = pc.userName;
             pcMsg.textContent = pc.message;
         });
-        // ... existing code ...
         // 图案：已得数量 = diarySaveCount（最多 8 个），按 STAMP_LAYOUT 固定位置贴
         const STAMP_LAYOUT = [
             { size: 796, bottom: 49, left: 11, rot: -3 },
@@ -157,7 +156,6 @@
         coverEl.addEventListener('click', () => {
             if (bookCur === 0) { jpPlay('forward'); bookGoto(1); }
         });
-// ... existing code ...
     }
     // 底部圆点旁的白色"下一页"箭头（游戏同款）
     const dotNext = document.createElement('button');
@@ -368,14 +366,33 @@
         row.appendChild(bubble);
         chatMessages.appendChild(row);
         chatMessages.scrollTop = chatMessages.scrollHeight;
-        return bubble;
+        return { bubble, avImg };
     }
+    // 头部头像动画：历史记录框顶部「Madeline」一栏的头像帧循环，情绪随 currentEmotion 变化
+    let headerAvatarAnimTimer = null;
+    let headerAvatarEmo = null;
+    let headerAvatarFi = 0;
+    function startHeaderAvatarAnim() {
+        if (headerAvatarAnimTimer) return;
+        headerAvatarAnimTimer = setInterval(() => {
+            if (!chatOpen) return;
+            const emo = currentEmotion || '默认';
+            const src = avatarMap[emo] || avatarMap['默认'];
+            const stem = src.split('/').pop().replace(/00\.png$/, '');
+            const n = PORTRAIT_FRAMES[stem] || 1;
+            if (emo !== headerAvatarEmo) { headerAvatarEmo = emo; headerAvatarFi = 0; }
+            if (n <= 1) { chatAvatar.src = src; return; }
+            chatAvatar.src = 'Atlases/Portraits/madeline/' + stem + String(headerAvatarFi).padStart(2, '0') + '.png';
+            headerAvatarFi = (headerAvatarFi + 1) % n;
+        }, 120);
+    }
+    startHeaderAvatarAnim();
     const gameDialog = document.getElementById('gameDialog');
+// ... existing code ...
     const gameDialogPortraitImg = document.getElementById('gameDialogPortraitImg');
     const gameDialogText = document.getElementById('gameDialogText');
     let gameDialogHideTimer = null;
 
-    // ... existing code ...
     function openGameDialog(emotion) {
         startPortraitAnim(emotion);
         const pmCenter = pmState.x + pm.offsetWidth / 2;
@@ -384,7 +401,6 @@
         gameDialogPortraitImg.parentElement.style.transform = onRight ? 'scaleX(-1)' : '';
         gameDialog.classList.add('show');
     }
-// ... existing code ...
         function scheduleGameDialogHide() {
             clearTimeout(gameDialogHideTimer);
             gameDialogHideTimer = setTimeout(() => {
@@ -397,11 +413,18 @@
             stopPortraitAnim();
             gameDialog.classList.remove('show');
         });
-// ... existing code ...
     let msgQueue = Promise.resolve();
-    function addMadelineMessage(text, emotion) {
-        msgQueue = msgQueue.then(() => doAddMadelineMessage(text, emotion)).catch(e => console.warn('说话失败:', e));
+    function addMadelineMessage(text, emotion, forceGameDialog) {
+        msgQueue = msgQueue.then(() => doAddMadelineMessage(text, emotion, forceGameDialog)).catch(e => console.warn('说话失败:', e));
+        return msgQueue; // 返回队列 Promise，便于调用方 await「说完」后再做后续（如淡入金羽毛）
     }
+    window.addMadelineMessage = addMadelineMessage;
+    // 供金羽毛过渡工具调用：立即收起日记页 Madeline 对话框（说完建议、停顿后再淡入游戏）
+    window.hideGameDialog = function() {
+        clearTimeout(gameDialogHideTimer);
+        stopPortraitAnim();
+        gameDialog.classList.remove('show');
+    };
     let lastUserInputTime = 0;
     async function waitUserPause(maxWait) {
         const start = Date.now();
@@ -409,19 +432,19 @@
             await sleep(200);
         }
     }
-    async function doAddMadelineMessage(text, emotion) {
+    async function doAddMadelineMessage(text, emotion, forceGameDialog) {
         text = String(text || '').replace(/[（(][^（）()]*[）)]/g, '').trim();
         if (!text) return;
         await waitUserPause(6000);
         const messages = splitIntoMessages(text);
-        const useGameDialog = !chatOpen;
+        const useGameDialog = forceGameDialog || !chatOpen;
         if (useGameDialog) {
             clearTimeout(gameDialogHideTimer);
             openGameDialog(emotion);
         }
         let lastMsgEmotion = emotion || '默认';
         for (const msg of messages) {
-            const histBubble = newMadelineRow(emotion);
+            const { bubble: histBubble } = newMadelineRow(emotion);
             histBubble.textContent = msg;
             let sentenceBuf = '';
             const aiLocked = !!(emotion && emotion !== '默认');
@@ -445,10 +468,10 @@
                 if (messages.length > 1) await sleep(1000 + Math.random() * 600);
             } else {
                 histBubble.textContent = '';
-                let speakCount = 0;
+                let speakCount = 0, typeI = 0;
                 for (const ch of msg) {
                     histBubble.textContent += ch;
-                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                    if (++typeI % 3 === 0) chatMessages.scrollTop = chatMessages.scrollHeight;
                     if (/[。！？!?]/.test(ch)) {
                         if (!aiLocked) {
                             const inferred = inferSentenceEmotion(sentenceBuf);
@@ -462,6 +485,7 @@
                     }
                     await sleep(45 + Math.random() * 20);
                 }
+                chatMessages.scrollTop = chatMessages.scrollHeight;
                 if (messages.length > 1) await sleep(240 + Math.random() * 200);
             }
             lastMsgEmotion = voiceEmotion;
@@ -499,12 +523,12 @@
         try {
             const res = await api('/chat', 'POST', { content: text });
             if (res.success && res.data) {
-                addMadelineMessage(res.data.content || '...', res.data.emotion || '默认');
+                addMadelineMessage(res.data.content || '...', res.data.emotion || '默认', true);
             } else {
-                addMadelineMessage('Hmm... I didn\'t catch that. Say it again?', '默认');
+                addMadelineMessage('Hmm... I didn\'t catch that. Say it again?', '默认', true);
             }
         } catch (e) {
-            addMadelineMessage('Network issue... try again?', '默认');
+            addMadelineMessage('Network issue... try again?', '默认', true);
         }
     }
 
@@ -733,11 +757,18 @@
 
 // ===== 每日明信片：当天缓存，一天只有一张 =====
     var dailyPostcardInFlight = null;
+    function capPostcardWords(text, maxWords) {
+        const words = String(text || '').trim().split(/\s+/);
+        if (words.length <= maxWords) return String(text || '').trim();
+        return words.slice(0, maxWords).join(' ') + '…';
+    }
     async function getDailyPostcard() {
         const today = new Date().toDateString();
         try {
             const cached = JSON.parse(localStorage.getItem('dailyPostcardCache') || 'null');
-            if (cached && cached.date === today && cached.message) return cached;
+            if (cached && cached.date === today && cached.message) {
+                return { date: cached.date, userName: cached.userName, message: capPostcardWords(cached.message, 25) };
+            }
         } catch (e) {}
         if (dailyPostcardInFlight) return dailyPostcardInFlight;
         dailyPostcardInFlight = (async () => {
@@ -747,7 +778,7 @@
                     const out = {
                         date: today,
                         userName: res.data.userName || localStorage.getItem('nickname') || 'Traveler',
-                        message: res.data.message
+                        message: capPostcardWords(res.data.message, 25)
                     };
                     localStorage.setItem('dailyPostcardCache', JSON.stringify(out));
                     return out;
@@ -827,7 +858,6 @@
 
 
 
-    // ... existing code ...
     const VOICE_DIRS = {
         '默认': 'determined',
         '不安': 'upset',
@@ -881,6 +911,7 @@
             a.play().catch(() => {});
         } catch (e) { /* 无声降级 */ }
     }
+    window.playSpeakSound = playSpeakSound;
 // ===== 回复语气推理：从她说的话推断语气，逐句切换音色 =====
 const REPLY_JOY = ['哈哈','嘿嘿','哇','太棒','真好','开心','耶','嗯嗯','加油','你可以','我相信','没问题','好呀','一起'];
 const REPLY_SURPRISE = ['诶','哎','居然','竟然','没想到','真的吗','天哪','真的假的','原来'];
@@ -899,12 +930,11 @@ function inferSentenceEmotion(sentence) {
     check(REPLY_SOOTHE, '不安');
     check(REPLY_SAD, '不开心');
     check(REPLY_SPEECHLESS, '无语');
-    if (bestScore > 0) return best;
-    if (/[!！]/.test(sentence)) return '惊讶';
-    return '默认';
+    if (bestScore >= 2) return best;  // 至少匹配 2 个关键词才切换情绪
+    return '默认';  // 单个感叹号不再触发"惊讶"
 }
-// "默认"不再只用 determined，随机轮换让语气有呼吸感
-const VOICE_POOL_DEFAULT = ['默认', '默认', '可爱', '冒泡', '惊讶'];
+// "默认"占大多数，偶尔用"可爱"增加呼吸感，不再频繁切换
+const VOICE_POOL_DEFAULT = ['默认', '默认', '默认', '默认', '可爱'];
 function nextDefaultVoice() { return VOICE_POOL_DEFAULT[Math.floor(Math.random() * VOICE_POOL_DEFAULT.length)]; }
 function inferReplyEmotion(text) {
     const t = String(text || '');
@@ -997,7 +1027,6 @@ function inferReplyEmotion(text) {
     // ================================================================
 
     // ===== 配置常量 =====
-    // ... existing code ...
     const REALTIME_CONFIG = {
         MIN_CHARS_FOR_AI: 8,
         MIN_NEW_CHARS_FOR_AI: 30,
@@ -1040,52 +1069,6 @@ function inferReplyEmotion(text) {
     };
     // ===== DOM 引用 =====
     const peekingEl = document.getElementById('madeline-peeking');
-    const emotionBar = document.getElementById('emotion-analysis-bar');
-    const emotionFill = document.getElementById('emotionFill');
-    const emotionTagsEl = document.getElementById('emotionTags');
-    const emotionIntensityEl = document.getElementById('emotionIntensity');
-    const emotionWaveEl = document.getElementById('emotion-wave');
-    const waveCanvas = document.getElementById('waveCanvas');
-
-    // ===== 情绪波形可视化 =====
-    const waveCtx = waveCanvas.getContext('2d');
-    let waveAnimFrame = null;
-
-    function initWaveCanvas() {
-        waveCanvas.width = waveCanvas.offsetWidth * 2;
-        waveCanvas.height = waveCanvas.offsetHeight * 2;
-        waveCtx.scale(2, 2);
-    }
-    initWaveCanvas();
-
-    function drawWave() {
-        const w = waveCanvas.offsetWidth;
-        const h = waveCanvas.offsetHeight;
-        waveCtx.clearRect(0, 0, w, h);
-        const color = REALTIME_CONFIG.EMOTION_COLORS[companionState.currentEmotion] || '#A8E6CF';
-        const intensity = companionState.peakIntensity / 10;
-        const amplitude = h * 0.3 * Math.max(0.2, intensity);
-        const now = Date.now() / 1000;
-        const speed = companionState.isTyping ? 3 : 1;
-
-        waveCtx.beginPath();
-        waveCtx.moveTo(0, h / 2);
-        for (let x = 0; x < w; x++) {
-            const t = x / w;
-            const y = h / 2 + Math.sin(t * 6 + now * speed) * amplitude
-                + Math.sin(t * 10 + now * speed * 1.5) * amplitude * 0.3
-                + Math.sin(t * 15 + now * speed * 0.7) * amplitude * 0.15;
-            waveCtx.lineTo(x, y);
-        }
-        waveCtx.strokeStyle = color;
-        waveCtx.lineWidth = 1.5;
-        waveCtx.globalAlpha = 0.6;
-        waveCtx.stroke();
-        waveCtx.globalAlpha = 1;
-
-        waveAnimFrame = requestAnimationFrame(drawWave);
-    }
-    drawWave();
 
     // ===== 本地快速情绪分析（每次输入都触发） =====
     function analyzeLocalEmotion(text) {
@@ -1124,33 +1107,6 @@ function inferReplyEmotion(text) {
         return { emotion: maxEmotion, intensity, scores, topEmotions: sorted };
     }
 
-    // ===== 更新情绪分析条 UI =====
-    function updateEmotionBar(analysis) {
-        emotionBar.classList.add('show');
-        emotionWaveEl.classList.add('show');
-        const pct = (analysis.intensity / 10) * 100;
-        const color = REALTIME_CONFIG.EMOTION_COLORS[analysis.emotion] || '#A8E6CF';
-        emotionFill.style.width = pct + '%';
-        emotionFill.style.background = color;
-        emotionIntensityEl.textContent = analysis.emotion + ' ' + analysis.intensity + '/10';
-        emotionIntensityEl.style.color = color;
-
-        const allEmotions = ['默认','不安','惊讶','怨恨','不开心','可爱','无语'];
-        emotionTagsEl.innerHTML = '';
-        for (const em of allEmotions) {
-            const tag = document.createElement('span');
-            tag.className = 'emotion-tag';
-            if (analysis.topEmotions.includes(em) || em === analysis.emotion) {
-                tag.classList.add('active');
-                if (em === analysis.emotion) {
-                    tag.style.background = color;
-                    tag.style.color = '#111';
-                }
-            }
-            tag.textContent = em;
-            emotionTagsEl.appendChild(tag);
-        }
-    }
 
     // ===== 检测新增的句子 =====
     function getNewSentences(oldText, newText) {
@@ -1248,9 +1204,6 @@ function inferReplyEmotion(text) {
                 companionState.localReactionCount = 0;
                 companionState.lastAiTime = Date.now();
 
-                const analysis = analyzeLocalEmotion(text);
-                updateEmotionBar(analysis);
-
                 companionState.emotionHistory.push({
                     emotion: userEmotion, time: Date.now(), trigger: triggerType
                 });
@@ -1280,13 +1233,11 @@ function inferReplyEmotion(text) {
         }, 500);
 
         if (text.length < REALTIME_CONFIG.MIN_CHARS_FOR_AI) {
-            emotionBar.classList.remove('show');
-            emotionWaveEl.classList.remove('show');
             return;
         }
 
         const analysis = analyzeLocalEmotion(text);
-        updateEmotionBar(analysis);
+
 
         const newSentences = getNewSentences(companionState.lastAnalyzedText, text);
         const newChars = text.length - companionState.lastAnalyzedLen;
@@ -1307,21 +1258,6 @@ function inferReplyEmotion(text) {
             }
         }
     });
-// ... existing code ...
-    // ===== 标题也监听（轻量） =====
-    titleInput.addEventListener('input', () => {
-        const title = titleInput.value.trim();
-        const content = contentInput.value.trim();
-        if (title.length > 2 && content.length > REALTIME_CONFIG.MIN_CHARS_FOR_AI) {
-            const combined = title + '。' + content;
-            const analysis = analyzeLocalEmotion(combined);
-            updateEmotionBar(analysis);
-        }
-    });
-
-    // ... existing code ...
-    // ===== 保存特效：帧动画出现在日记本右下角 =====
-    // ... existing code ...
     // ===== 保存特效：帧动画出现在日记本右下角 =====
     const SAVE_FRAMES = [];
     for (let i = 0; i <= 20; i++) {
@@ -1365,6 +1301,7 @@ function inferReplyEmotion(text) {
     function playSaveAnimation() {
         const curIcon = saveIcons[bookCur];
         if (!curIcon) return;
+        playSaveSuccessSound();
         let frame = 0;
         curIcon.src = SAVE_FRAMES[0];
         const timer = setInterval(() => {
@@ -1504,19 +1441,23 @@ function inferReplyEmotion(text) {
                     if (feedback && !isRepeatedSpeech(feedback)) { rememberSpeech(feedback); addMadelineMessage(feedback, emotion); }
                     updateThemeByEmotion(emotion);
 
-                    // 情绪低落时，金羽毛游戏自动出现
-                    if (['悲伤', '孤独', '不开心', '不安', '愤怒'].includes(emotion)) {
-                        setTimeout(function() {
-                            addMadelineMessage('写完了。……这根金羽毛给你，跟着它呼吸一会儿吧。', '可爱');
-                            setTimeout(function() {
-                                if (window.FeatherGame) window.FeatherGame.open();
-                            }, 2000);
-                        }, 3000);
+                    // 情绪低落 → Madeline 说完反馈后接着说羽毛建议，再淡入金羽毛游戏（过渡自然）；情绪好 → 先随笔
+                    if (emotion !== '默认') {
+                        const isBadMood = ['悲伤', '孤独', '不开心', '不安', '愤怒', '怨恨'].includes(emotion);
+                        window._featherBadMood = isBadMood;
+                        if (isBadMood) {
+                            if (window.FeatherGame && window.FeatherGame.suggestThenOpen) {
+                                window.FeatherGame.suggestThenOpen(emotion);
+                            } else {
+                                setTimeout(function() { if (window.FeatherGame) window.FeatherGame.open(emotion); }, 2500);
+                            }
+                        } else {
+                            setTimeout(function() { showFeatherNote(); }, 2500);
+                        }
                     }
                 }
 
                 showToast(editingDiaryId ? '更新成功！' : '保存成功！', 'success');
-                playSaveSuccessSound();
                 pmCelebrate();
                 pmSummarize();
                 if (!editingDiaryId) {
@@ -1531,8 +1472,7 @@ function inferReplyEmotion(text) {
                 editingDiaryId = null;
                 titleInput.value = '';
                 contentInput.value = '';
-                emotionBar.classList.remove('show');
-                emotionWaveEl.classList.remove('show');
+
                 for (let i = localStorage.length - 1; i >= 0; i--) {
                     const k = localStorage.key(i);
                     if (k && k.indexOf('jbook-') === 0) localStorage.removeItem(k);
@@ -1552,27 +1492,6 @@ function inferReplyEmotion(text) {
     window.addEventListener('keydown', e => {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveDiary(); }
     });
-
-    // ===== 测试情绪检测按钮 =====
-    // ===== 测试情绪检测按钮（按钮已移除，逻辑保留防 null） =====
-    // ===== 测试情绪检测按钮（按钮已移除，逻辑保留防 null） =====
-    const testBtn = document.getElementById('testEmotionBtn');
-    const emotionResult = document.getElementById('emotionResult');
-    if (testBtn && emotionResult) {
-        testBtn.addEventListener('click', () => {
-            const text = contentInput.value.trim();
-            if (!text) { emotionResult.style.display = 'none'; return; }
-            const analysis = analyzeLocalEmotion(text);
-            emotionResult.style.display = 'block';
-            emotionResult.innerHTML =
-                '<strong>情绪:</strong> ' + analysis.emotion + '<br>' +
-                '<strong>强度:</strong> ' + analysis.intensity + '/10<br>' +
-                '<strong>Top 情绪:</strong> ' + analysis.topEmotions.join(', ') + '<br>' +
-                '<strong>详细得分:</strong> ' + (Object.entries(analysis.scores).filter(function(p){ return p[1] > 0; }).map(function(p){ return p[0] + ':' + p[1]; }).join(', ') || '无');
-        });
-    }
-
-
     // ================================================================
     // ===== 初始化 =====
     // ================================================================
@@ -1602,8 +1521,29 @@ function inferReplyEmotion(text) {
         poseReturn: '',
         wasHopping: false
     };
+    // ===== 布局缓存：禁区 rect / 精灵尺寸 300ms 刷新一次，帧循环不再触发强制布局 =====
+    let layoutCache = { rects: [], bw: 56, bh: 56, groundY: 0, ts: -1e9 };
+    function refreshLayoutCache() {
+        const zones = [];
+        if (gameDialog.classList.contains('show')) zones.push({ r: gameDialog.getBoundingClientRect(), m: 14 });
+        const book = document.getElementById('journalBook');
+        if (book) zones.push({ r: book.getBoundingClientRect(), m: 14 });
+        const acts = document.querySelector('.diary-actions');
+        if (acts) zones.push({ r: acts.getBoundingClientRect(), m: 16 });
+        layoutCache.rects = zones;
+        layoutCache.bw = pm.offsetWidth || layoutCache.bw;
+        layoutCache.bh = pm.offsetHeight || layoutCache.bh;
+        layoutCache.groundY = window.innerHeight - layoutCache.bh - 8;
+        layoutCache.ts = performance.now();
+    }
+    setInterval(refreshLayoutCache, 300);
+    window.addEventListener('resize', refreshLayoutCache);
+    window.addEventListener('scroll', refreshLayoutCache, true);
 
-    function pmGroundY() { return window.innerHeight - pm.offsetHeight - 8; }
+    function pmGroundY() {
+        if (performance.now() - layoutCache.ts > 500) refreshLayoutCache();
+        return layoutCache.groundY;
+    }
     const PM_FRAMES = {};
     PM_FRAMES[PM_SRC.fall] = (function () {
         const a = [];
@@ -1612,6 +1552,10 @@ function inferReplyEmotion(text) {
         return a;
     })();
     let pmFrameTimer = null;
+    function pmForceSize() {
+        pm.style.setProperty('width', '56px', 'important');
+        pm.style.setProperty('height', '56px', 'important');
+    }
     function pmSetSrc(name) {
         if (pmFrameTimer) { clearInterval(pmFrameTimer); pmFrameTimer = null; }
         const frames = PM_FRAMES[name];
@@ -1622,32 +1566,34 @@ function inferReplyEmotion(text) {
                 i++;
                 if (i >= frames.length) { clearInterval(pmFrameTimer); pmFrameTimer = null; return; }
                 pm.src = frames[i];
+                pmForceSize();
             }, 55);
         } else if (pm.src.indexOf(name) === -1) {
             pm.src = name;
         }
         pmCurName = name;
+        pmForceSize();
     }
 
     let zoneScoldUntil = 0;
     let pmCaution = false;
-    function blockedAt(tx, ty) {
-        const zones = [];
-        if (gameDialog.classList.contains('show')) zones.push({ r: gameDialog.getBoundingClientRect(), m: 14 });
-        const book = document.getElementById('journalBook');
-        if (book) zones.push({ r: book.getBoundingClientRect(), m: 14 });
-        const acts = document.querySelector('.diary-actions');
-        if (acts) zones.push({ r: acts.getBoundingClientRect(), m: 26 });
-        const extra = performance.now() < zoneScoldUntil ? 26 : 0;
-        for (const z of zones) {
-            const r = z.r, m = z.m + extra;
+
+    function blockedAt(tx, ty, tight) {
+        if (performance.now() - layoutCache.ts > 500) refreshLayoutCache();
+        // tight 仅用于点击判定：不吃惩罚边距、边距减半、只算身体中心 40%，避免大图盒误判
+        const extra = (!tight && performance.now() < zoneScoldUntil) ? 12 : 0;
+        const bw = tight ? layoutCache.bw * 0.4 : layoutCache.bw;
+        const bh = tight ? layoutCache.bh * 0.4 : layoutCache.bh;
+        const bx = tight ? tx + layoutCache.bw * 0.3 : tx;
+        const by = tight ? ty + layoutCache.bh * 0.3 : ty;
+        for (const z of layoutCache.rects) {
+            const r = z.r, m = Math.round((tight ? z.m * 0.5 : z.m) + extra);
             if (!r || (r.width === 0 && r.height === 0)) continue;
-            if (tx < r.right + m && tx + pm.offsetWidth > r.left - m &&
-                ty < r.bottom + m && ty + pm.offsetHeight > r.top - m) return true;
+            if (bx < r.right + m && bx + bw > r.left - m &&
+                by < r.bottom + m && by + bh > r.top - m) return true;
         }
         return false;
     }
-
     function pmPickTarget() {
                 const gy = pmGroundY();
                 const maxX = window.innerWidth - pm.offsetWidth - 8;
@@ -1748,10 +1694,11 @@ function inferReplyEmotion(text) {
         const nearGround = pmState.y > pmGroundY() - 60;
         const hour = new Date().getHours();
         const night = hour >= 23 || hour < 6;
-        let sitP = gloomy ? 0.24 : 0.08;
-        let funP = lively ? 0.25 : 0.12;
-        let walkP = lively ? 0.62 : 0.6;
-        if (night) { sitP += 0.2; walkP -= 0.2; }
+        let sitP = gloomy ? 0.24 : 0.12;
+        let funP = lively ? 0.22 : 0.16;
+        let walkP = lively ? 0.48 : 0.45;
+        let lookP = 0.12;
+        if (night) { sitP += 0.15; walkP -= 0.15; }
         const r = Math.random();
         if (r < sitP && nearGround) {
             pmState.mode = 'sit';
@@ -1766,6 +1713,11 @@ function inferReplyEmotion(text) {
         } else if (r < sitP + funP + walkP) {
             pmStartWalk(now);
             if (lively && Math.random() < 0.5) pmState.hopT = 0;
+        } else if (r < sitP + funP + walkP + lookP) {
+            // 新增：站立张望（用 fun 素材，比 idle 用 move 更有趣）
+            pmState.mode = 'lookaround';
+            pmState.modeUntil = now + 2200 + Math.random() * 2000;
+            pmSetSrc(PM_SRC.fun);
         } else {
             pmState.mode = 'idle';
             pmState.modeUntil = now + 1200 + Math.random() * 2000;
@@ -1796,7 +1748,6 @@ function inferReplyEmotion(text) {
 // ... existing code ...
     function pmThink(now) {
         const e0 = companionState.currentEmotion;
-        pmBadeline(e0 === '悲伤' || e0 === '孤独' || e0 === '不开心', now);
         if (companionState.isTyping && pmState.mode !== 'celebrate') {
             if (pmState.mode !== 'peek') {
                 pmState.mode = 'peek';
@@ -1837,6 +1788,11 @@ function inferReplyEmotion(text) {
                     pmState.mode = 'sleep';
                     pmState.modeUntil = now + 20000 + Math.random() * 25000;
                     pmSetSrc(PM_SRC.sleep);
+                } else if (Math.random() < 0.5) {
+                    // 坐下后起身张望（用 fun 素材）
+                    pmState.mode = 'lookaround';
+                    pmState.modeUntil = now + 2000 + Math.random() * 2000;
+                    pmSetSrc(PM_SRC.fun);
                 } else {
                     pmStartWalk(now);
                 }
@@ -1848,6 +1804,9 @@ function inferReplyEmotion(text) {
                 pmState.mode = 'idle';
                 pmState.modeUntil = 0;
                 pmNextMode(now);
+            } else if (pmState.mode === 'lookaround') {
+                // 张望完毕，继续行走
+                pmStartWalk(now);
             } else {
                 pmNextMode(now);
             }
@@ -1899,15 +1858,12 @@ function inferReplyEmotion(text) {
                     pmSetSrc(PM_SRC.fun);
                 }
             }
-            // ... existing code ...
 
-            pmState.x = Math.max(4, Math.min(pmState.x, window.innerWidth - pm.offsetWidth - 4));
+            pmState.x = Math.max(4, Math.min(pmState.x, window.innerWidth - layoutCache.bw - 4));
             pmState.y = Math.max(60, Math.min(pmState.y, pmGroundY()));
-            // Deleted:if (pmCaution && pmState.mode !== 'peek' && blockedAt(pmState.x, pmState.y)) pmStartWalk(now);
             // 已经在走/逃跑途中不再重选目标，避免每帧换方向瞎动
             if (pmCaution && pmState.mode !== 'peek' && pmState.mode !== 'walk' && pmState.mode !== 'celebrate' && blockedAt(pmState.x, pmState.y)) pmStartWalk(now);
 
-// ... existing code ...
         }
 
         let hopOffset = 0;
@@ -1931,27 +1887,7 @@ function inferReplyEmotion(text) {
         pm.style.transform = 'translate(' + pmState.x + 'px,' + (pmState.y - hopOffset) + 'px)' + (pmState.dir < 0 ? ' scaleX(-1)' : '');
         requestAnimationFrame(pmLoop);
     }
-    const bd = document.createElement('img');
-    bd.id = 'pixelBadeline';
-    bd.style.cssText = 'position:fixed;left:0;top:0;z-index:99;pointer-events:none;opacity:0;transition:opacity .8s;image-rendering:pixelated;filter:drop-shadow(0 0 6px rgba(140,120,255,.45));';
-    document.body.appendChild(bd);
-    const BD_IDLE = [];
-    for (let i = 0; i < 9; i++) BD_IDLE.push('celeste-player/badeline/idle' + String(i).padStart(2, '0') + '.png');
-    BD_IDLE.forEach(s => { const im = new Image(); im.src = s; });
-    let bdOn = false, bdFi = 0;
-    setInterval(() => {
-        if (!bdOn) return;
-        bd.src = BD_IDLE[bdFi % BD_IDLE.length];
-        bdFi++;
-    }, 110);
-    function pmBadeline(gloomy, now) {
-        if (gloomy && !bdOn) { bdOn = true; bd.style.opacity = '0.92'; bd.style.width = '52px'; }
-        if (!gloomy && bdOn) { bdOn = false; bd.style.opacity = '0'; }
-        if (!bdOn) return;
-        const off = Math.sin(now / 700) * 5;
-        const bx = Math.min(window.innerWidth - 60, Math.max(8, pmState.x + pmState.dir * 72));
-        bd.style.transform = 'translate(' + bx + 'px,' + (pmState.y - 14 + off) + 'px)' + (pmState.dir < 0 ? ' scaleX(-1)' : '');
-    }
+
     requestAnimationFrame(pmLoop);
     if (pmCaution && blockedAt(pmState.x, pmState.y)) {
         let found = false;
@@ -1962,18 +1898,27 @@ function inferReplyEmotion(text) {
     }
     window.addEventListener('resize', () => { pmState.y = Math.min(pmState.y, pmGroundY()); });
     // ... existing code ...
-    window.addEventListener('feather-finished', () => {
-        addMadelineMessage('回来啦。刚才跟着羽毛的那一会儿，心里是不是安静了一点？', '可爱');
-    });
+    // ===== 金羽毛随笔弹框：程序化控制 =====
+    function showFeatherNote() {
+        var box = document.getElementById('featherNoteBox');
+        if (!box) return;
+        box.style.display = 'block';
+        box.classList.remove('slide-in');
+        void box.offsetWidth;
+        box.classList.add('slide-in');
+        var input = document.getElementById('featherInput');
+        if (input) { input.value = ''; input.focus(); }
+        var toast = document.getElementById('featherToast');
+        if (toast) toast.style.display = 'none';
+    }
+    window.showFeatherNote = showFeatherNote;
+    // Madeline 的陪伴已在游戏内完成，关闭/落地不再额外弹外部对话
+    window.addEventListener('feather-finished', () => {});
     window.addEventListener('feather-landed', (e) => {
-        const kw = e.detail && e.detail.keyword;
-        if (bookCur === 0) { bookGoto(1); }
-        if (kw && titleInput) {
-            titleInput.value = kw;
-            titleInput.focus();
-            addMadelineMessage('羽毛落在纸上了。上面那个词，是它想跟你说的。写不写都行。', '可爱');
+        if (window._featherBadMood) {
+            showFeatherNote();
         } else {
-            addMadelineMessage('羽毛落下了，纸已经翻开。想写就写，不想写也没关系。', '可爱');
+            if (bookCur === 0) { bookGoto(1); }
         }
     });
 // ... existing code ...
@@ -2041,7 +1986,7 @@ function inferReplyEmotion(text) {
     function pmScold() {
         addMadelineMessage(scoldLines[Math.floor(Math.random() * scoldLines.length)], '惊讶');
         pmCaution = true;
-        zoneScoldUntil = performance.now() + 8 * 60 * 1000;
+        zoneScoldUntil = performance.now() + 3 * 60 * 1000;
         pmState.poseUntil = performance.now() + 900;
         pmState.poseReturn = PM_SRC.move;
         pmSetSrc(PM_SRC.fun);
@@ -2069,7 +2014,7 @@ function inferReplyEmotion(text) {
         if (pmClickTimer) return;
         pmClickTimer = setTimeout(() => {
             pmClickTimer = null;
-            if (blockedAt(pmState.x, pmState.y)) pmScold();
+            if (blockedAt(pmState.x, pmState.y, true)) pmScold();
             else pmPet();
         }, 260);
     });
@@ -2238,11 +2183,26 @@ function inferReplyEmotion(text) {
         // BGM
         const bgmPlayer = document.getElementById('bgmPlayer');
         applyBerryBgm();
+        bgmPlayer.loop = true; // 显式确保循环：兜底防止进度 seek 到结尾等原因导致 loop 失效
         const savedDiaryTime = parseFloat(localStorage.getItem('bgmTimeDiary') || '0');
-        if (savedDiaryTime > 0) bgmPlayer.currentTime = savedDiaryTime;
+        // 仅在安全范围内恢复进度：接近/超过时长会把音频卡在结尾、不再循环，这种情况从头播
+        const hasDur = () => bgmPlayer.duration && !isNaN(bgmPlayer.duration);
+        const restoreBgmTime = () => {
+            if (savedDiaryTime > 0 && (!hasDur() || savedDiaryTime < bgmPlayer.duration - 1.5)) {
+                try { bgmPlayer.currentTime = savedDiaryTime; } catch (e) {}
+            }
+        };
+        if (bgmPlayer.readyState >= 1) restoreBgmTime();
+        else bgmPlayer.addEventListener('loadedmetadata', restoreBgmTime, { once: true });
+        // 兜底循环：万一 ended 触发（原生 loop 未生效，如曾 seek 到结尾），手动从头再播
+        bgmPlayer.addEventListener('ended', () => { bgmPlayer.currentTime = 0; bgmPlayer.play().catch(() => {}); });
         bgmPlayer.volume = 0.3;
         bgmPlayer.play().catch(() => {});
-        setInterval(() => { localStorage.setItem('bgmTimeDiary', bgmPlayer.currentTime); }, 2000);
+        // 保存进度时避开结尾，防止把 ≈时长 的值写回导致下次加载卡在结尾
+        setInterval(() => {
+            const t = bgmPlayer.currentTime;
+            if (t > 0 && (!hasDur() || t < bgmPlayer.duration - 1)) localStorage.setItem('bgmTimeDiary', t);
+        }, 2000);
         function tryPlayBGM() { bgmPlayer.play().then(() => { document.removeEventListener('click', tryPlayBGM); document.removeEventListener('keydown', tryPlayBGM); }).catch(() => {}); }
         document.addEventListener('click', tryPlayBGM);
         document.addEventListener('keydown', tryPlayBGM);

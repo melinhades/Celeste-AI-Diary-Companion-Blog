@@ -18,25 +18,9 @@ function initHeader() {
         setInterval(refreshBell, 30000);
     } else {
         el.innerHTML = `
-            <a href="login.html" class="btn btn-outline" onclick="return navSfx(event, 'login.html', 'ui_main_assistmode_whistle_page1.wav')">登录</a>
-            <a href="register.html" class="btn btn-primary" onclick="return navSfx(event, 'register.html', 'ui_main_assistmode_whistle_page2.wav')">注册</a>`;
+            <a href="login.html" class="btn btn-outline">登录</a>
+            <a href="register.html" class="btn btn-primary">注册</a>`;
     }
-}
-
-// ===== 导航音效：先播再跳转，避免页面切换把音效掐断 =====
-function playNavSfx(name) {
-    try {
-        const a = new Audio('celeste-sounds/' + name);
-        a.volume = 0.8;
-        a.play().catch(() => {});
-    } catch (e) { /* 无声降级 */ }
-}
-function navSfx(e, url, name) {
-    if (e && e.preventDefault) e.preventDefault();
-    playNavSfx(name);
-    try { sessionStorage.setItem('sfxNavAt', String(Date.now())); } catch (err) {}
-    setTimeout(() => location.href = url, 700);
-    return false;
 }
 
 function doLogout() {
@@ -46,17 +30,12 @@ function doLogout() {
         s.volume = 0.8;
         s.play().catch(() => {});
     } catch (e) { /* 无声降级 */ }
-    const go = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('nickname');
-        location.href = 'index.html';
-    };
+    localStorage.removeItem('token');
+    localStorage.removeItem('nickname');
     if (token) {
-        fetch('http://localhost:8888/logout', { headers: { 'Authorization': token } })
-            .finally(() => setTimeout(go, 900));
-    } else {
-        setTimeout(go, 900);
+        fetch('http://localhost:8888/logout', { headers: { 'Authorization': token } }).catch(() => {});
     }
+    initHeader();
 }
 
 function requireLogin() {
