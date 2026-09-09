@@ -16,4 +16,6 @@ public interface SysUserService {
     SysUser findUserByAccount(String account);
     //保存用户
     void save(SysUser sysUser);
+    //按 id 更新用户（旧明文密码登录成功后懒迁移为 BCrypt 用）
+    void updateById(SysUser sysUser);
 }

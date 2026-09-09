@@ -13,6 +13,9 @@
 body { min-height:100vh; background:url('celeste-gui/shelf-screen.png') center/cover no-repeat fixed; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; }
 .topbar { position:fixed; top:14px; left:16px; z-index:20; }
 .topbar a { display:inline-block; padding:8px 14px; background:rgba(22,34,60,.88); color:#ffe36d; border:2px solid #ffe36d; border-radius:6px; text-decoration:none; font-size:13px; box-shadow:0 0 10px rgba(255,230,109,.35); }
+.topbar a.nav-diary-btn { padding:0; background:none; border:none; box-shadow:none; cursor:pointer; transition:transform .2s, filter .2s; vertical-align:middle; }
+.topbar a.nav-diary-btn:hover { transform:scale(1.15); }
+.topbar a.nav-diary-btn img { height:40px; width:auto; display:block; filter:drop-shadow(0 0 10px rgba(255,235,59,.7)); }
 h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family:'Press Start 2P',monospace; font-size:15px; color:#ffe36d; text-shadow:0 2px 0 rgba(0,0,0,.6); letter-spacing:2px; z-index:20; }
 .wrap { max-width:1000px; margin:0 auto; padding:76px 20px 40px; }
 /* ===== 日记列表：memo 纸页完整展示 ===== */
@@ -194,7 +197,7 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 </head>
 <body>
 <h1>MEMORY SHELF</h1>
-<div class="topbar" style="display:none;"><a href="diary.html">← 回日记本</a></div>
+<div class="topbar"><a href="diary.html" class="nav-diary-btn" title="回到日记本 · Back to Diary"><img src="celeste-gui/journal.png" alt="Diary"></a></div>
 <canvas id="shelfSnow" style="position:fixed;inset:0;z-index:1;pointer-events:none;"></canvas>
 <div id="strawberryBonfire">
     <div class="sb-scene">

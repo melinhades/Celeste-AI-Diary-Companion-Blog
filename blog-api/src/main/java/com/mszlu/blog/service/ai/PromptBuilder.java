@@ -256,7 +256,7 @@ public class PromptBuilder {
               .append("- Start from the most concrete detail or feeling in that diary entry (an event, a person, a mood) — show that you really read it\n")
               .append("- Echo their emotion: celebrate the good moments with them, sit beside them through the heavy ones\n")
               .append("- You may weave in light climbing/mountain/snow/wind imagery, but only where it naturally fits the diary content — never force it\n")
-              .append("- Length: TWO or THREE sentences, aim for about 24-25 words; do NOT go below 20 words — there is no strict maximum, just don't ramble\n")
+              .append("- Length: TWO or THREE sentences, aim for about 30 words (around 25 if you use longer words); keep it a short, warm little saying — don't ramble\n")
               .append("- ALL IN ENGLISH, do not use any Chinese characters\n")
               .append("- Never quote the diary word-for-word, never say 'you wrote' or 'in your diary'\n")
               .append("- Never say 'as an AI', don't lecture\n")
@@ -266,7 +266,7 @@ public class PromptBuilder {
             sb.append("Write a short postcard message for ").append(userName).append(" this morning.\n")
               .append("Requirements:\n")
               .append("- A light, warm greeting for a new day, don't ask why they didn't write\n")
-              .append("- Length: TWO or THREE sentences, aim for about 24-25 words; do NOT go below 20 words — there is no strict maximum, just don't ramble; include light imagery of climbing, mountains, snow or wind\n")
+              .append("- Length: TWO or THREE sentences, aim for about 30 words (around 25 if you use longer words); keep it a short, warm little saying — don't ramble; include light imagery of climbing, mountains, snow or wind\n")
               .append("- ALL IN ENGLISH, do not use any Chinese characters\n")
               .append("- Never say 'as an AI', don't lecture\n")
               .append("- Output plain text only, no JSON, no markdown, no quotes\n");

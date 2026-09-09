@@ -78,4 +78,8 @@ public class SysUserServiceImpl implements SysUserService {
         //mybatis-plus
         this.sysUserMapper.insert(sysUser);
     }
+    @Override
+    public void updateById(SysUser sysUser){
+        this.sysUserMapper.updateById(sysUser);
+    }
 }

@@ -757,17 +757,22 @@
 
 // ===== 每日明信片：当天缓存，一天只有一张 =====
     var dailyPostcardInFlight = null;
-    function capPostcardWords(text, maxWords) {
-        const words = String(text || '').trim().split(/\s+/);
-        if (words.length <= maxWords) return String(text || '').trim();
-        return words.slice(0, maxWords).join(' ') + '…';
+    function capPostcardWords(text) {
+        const s = String(text || '').trim();
+        const words = s.split(/\s+/).filter(Boolean);
+        // 单词偏长（平均≥6字符）时收紧到 25 词，否则放宽到 30 词
+        const charCount = s.replace(/\s+/g, '').length;
+        const avgLen = words.length ? charCount / words.length : 0;
+        const limit = avgLen >= 6 ? 25 : 30;
+        if (words.length <= limit) return s;
+        return words.slice(0, limit).join(' ') + '…';
     }
     async function getDailyPostcard() {
         const today = new Date().toDateString();
         try {
             const cached = JSON.parse(localStorage.getItem('dailyPostcardCache') || 'null');
             if (cached && cached.date === today && cached.message) {
-                return { date: cached.date, userName: cached.userName, message: capPostcardWords(cached.message, 25) };
+                return { date: cached.date, userName: cached.userName, message: capPostcardWords(cached.message) };
             }
         } catch (e) {}
         if (dailyPostcardInFlight) return dailyPostcardInFlight;
@@ -778,7 +783,7 @@
                     const out = {
                         date: today,
                         userName: res.data.userName || localStorage.getItem('nickname') || 'Traveler',
-                        message: capPostcardWords(res.data.message, 25)
+                        message: capPostcardWords(res.data.message)
                     };
                     localStorage.setItem('dailyPostcardCache', JSON.stringify(out));
                     return out;
