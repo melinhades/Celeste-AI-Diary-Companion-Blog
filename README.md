@@ -10,6 +10,11 @@
 
 A unique dual-platform system that combines private AI-assisted diary writing with optional public blog sharing. Built on the Celeste (Celeste) theme using Java 17 + Spring Boot backend and native HTML/CSS/JS frontend, this platform offers immersive AI companionship for personal reflection while providing the tools to transform meaningful entries into public blog posts.
 
+> ⚠️ Important Notice
+This is an open‑source project for personal study and demonstration. **It is NOT an official project of Extremely OK Games / Celeste and has not obtained official authorization.**
+Celeste, Madeline and Oshiro are intellectual properties owned by Extremely OK Games.
+All assets within this repository are AI‑generated derivative fan‑works. **This repository does NOT contain or distribute any original resources extracted from the Celeste game.**
+This project is completely non‑commercial and for educational purposes only.
 ## 📋 Project Overview
 
 The Celeste AI Diary Companion Blog offers a unique hybrid experience where users maintain private AI-assisted diaries that can optionally be shared as public blog posts. 
