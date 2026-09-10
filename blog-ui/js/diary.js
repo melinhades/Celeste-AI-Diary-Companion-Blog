@@ -1162,6 +1162,7 @@ function inferReplyEmotion(text) {
             companionState.lastReactionLine = reaction;
             companionState.lastLocalReactTime = Date.now();
             updateThemeByEmotion(newEmotion);
+            if (isPositive(newEmotion)) pmBounce();
             addMadelineMessage(reaction, newEmotion);
         }
 
@@ -1206,6 +1207,8 @@ function inferReplyEmotion(text) {
                 companionState.currentEmotion = userEmotion;
                 companionState.previousEmotion = userEmotion;
                 if (userEmotion === '不开心') pmComfort();
+                else if (isPositive(userEmotion)) pmBounce();
+// ... existing code ...
                 companionState.localReactionCount = 0;
                 companionState.lastAiTime = Date.now();
 
@@ -1508,6 +1511,7 @@ function inferReplyEmotion(text) {
     const PM_SRC = {
         move: 'celeste-gui/madeline-move.gif',
         fun: 'celeste-gui/madeline-fun.gif',
+        bounce: 'celeste-gui/bounceline.gif',
         sit: 'celeste-gui/madeline-sitdown.gif',
         sleep: 'celeste-gui/madeline-sleep.gif',
         wake: 'celeste-gui/madeline-wakeup.gif',
@@ -1691,66 +1695,61 @@ function inferReplyEmotion(text) {
     }
 
 
-    // ... existing code ...
+    // ===== 接入共享内核 madeline-core.js：情绪分组 / 加权随机 / 模式表 / enterMode / 中断优先级 =====
+    const MC = window.MadelineCore;
+    const isPositive = MC.isPositive, isGloomy = MC.isGloomy, isNight = MC.isNight;
+    const weightedPick = MC.weightedPick;
+    const pmCore = MC.createCore({
+        state: pmState, src: PM_SRC, setSrc: pmSetSrc,
+        startWalk: pmStartWalk, groundY: pmGroundY, celebrate: pmCelebrate,
+        getEmotion: () => companionState.currentEmotion
+    });
+    const PM_MODES = pmCore.modes;
+    const enterMode = pmCore.enterMode;
+    const canInterrupt = pmCore.canInterrupt;
+    const tryInterrupt = pmCore.tryInterrupt;
+
     function pmNextMode(now) {
         const e = companionState.currentEmotion;
-        const gloomy = (e === '悲伤' || e === '孤独' || e === '不开心');
-        const lively = (e === '开心' || e === '可爱' || e === '惊讶');
+        const lively = isPositive(e), gloomy = isGloomy(e);
+        const night = isNight();
         const nearGround = pmState.y > pmGroundY() - 60;
-        const hour = new Date().getHours();
-        const night = hour >= 23 || hour < 6;
-        let sitP = gloomy ? 0.24 : 0.12;
-        let funP = lively ? 0.22 : 0.16;
-        let walkP = lively ? 0.48 : 0.45;
-        let lookP = 0.12;
-        if (night) { sitP += 0.15; walkP -= 0.15; }
-        const r = Math.random();
-        if (r < sitP && nearGround) {
-            pmState.mode = 'sit';
-            pmState.modeUntil = now + 6000 + Math.random() * 10000;
-            pmSetSrc(PM_SRC.sit);
-        } else if (r < sitP + funP) {
-            pmState.mode = 'idle';
-            pmState.modeUntil = now + 1900;
-            pmState.poseUntil = now + 1800;
-            pmState.poseReturn = PM_SRC.move;
-            pmSetSrc(PM_SRC.fun);
-        } else if (r < sitP + funP + walkP) {
-            pmStartWalk(now);
-            if (lively && Math.random() < 0.5) pmState.hopT = 0;
-        } else if (r < sitP + funP + walkP + lookP) {
-            // 新增：站立张望（用 fun 素材，比 idle 用 move 更有趣）
-            pmState.mode = 'lookaround';
-            pmState.modeUntil = now + 2200 + Math.random() * 2000;
-            pmSetSrc(PM_SRC.fun);
-        } else {
-            pmState.mode = 'idle';
-            pmState.modeUntil = now + 1200 + Math.random() * 2000;
-            pmSetSrc(PM_SRC.move);
-        }
+
+        const weights = [
+            ['walk',  lively ? 0.34 : 0.45],
+            ['bounce', (lively ? 0.26 : 0.05) * (night ? 0.4 : 1)],
+            ['fun',    0.16],
+            ['look',   0.12],
+            ['sit',    (gloomy ? 0.24 : 0.12) + (night ? 0.15 : 0)],
+        ];
+        // 过滤掉不满足前置条件的（如 sit/bounce 需贴地）
+        const pool = weights.filter(([k]) =>
+            (k === 'sit' || k === 'bounce') ? nearGround : true);
+        enterMode(weightedPick(pool), now);
+    }
+
+    // ===== 正向情绪触发：开心蹦跳（bounceline）——经中断优先级判定 =====
+    function pmBounce() {
+        if (chatOpen) return;
+        tryInterrupt('bounce', performance.now());
     }
 
     // ===== 情绪→身体：说完一句话后，用动作回应当前语气 =====
     function pmReactToEmotion(em) {
         if (chatOpen || pmState.mode === 'sleep' || pmState.mode === 'celebrate') return;
         const now = performance.now();
-        if (em === '可爱' || em === '惊讶') {
-            if (Math.random() < 0.6) {
-                pmState.mode = 'idle';
-                pmState.modeUntil = now + 1900;
-                pmState.poseUntil = now + 1800;
-                pmState.poseReturn = PM_SRC.move;
-                pmSetSrc(PM_SRC.fun);
+        if (isPositive(em)) {
+            if (Math.random() < 0.5) {
+                pmBounce();
+            } else if (Math.random() < 0.6) {
+                enterMode('fun', now);
             } else {
                 pmState.hopT = 0;
             }
-        } else if ((em === '不开心' || em === '不安') && Math.random() < 0.6) {
-            pmState.mode = 'sit';
-            pmState.modeUntil = now + 8000 + Math.random() * 4000;
-            pmSetSrc(PM_SRC.sit);
+        } else if (isGloomy(em) && Math.random() < 0.6) {
+            enterMode('sit', now);
         }
     }
-// ... existing code ...
     function pmThink(now) {
         const e0 = companionState.currentEmotion;
         if (companionState.isTyping && pmState.mode !== 'celebrate') {
@@ -1832,7 +1831,7 @@ function inferReplyEmotion(text) {
         if (!chatOpen) {
             pmThink(now);
             const speed = 120;
-            const movable = !posing && (pmState.mode === 'peek' || pmState.mode === 'walk' || pmState.mode === 'celebrate') && pmState.targetX !== null
+            const movable = !posing && (PM_MODES[pmState.mode] || {}).movable && pmState.targetX !== null;
             if (movable) {
                 const dx = pmState.targetX - pmState.x;
                 const dy = pmState.targetY - pmState.y;
@@ -1867,12 +1866,12 @@ function inferReplyEmotion(text) {
             pmState.x = Math.max(4, Math.min(pmState.x, window.innerWidth - layoutCache.bw - 4));
             pmState.y = Math.max(60, Math.min(pmState.y, pmGroundY()));
             // 已经在走/逃跑途中不再重选目标，避免每帧换方向瞎动
-            if (pmCaution && pmState.mode !== 'peek' && pmState.mode !== 'walk' && pmState.mode !== 'celebrate' && blockedAt(pmState.x, pmState.y)) pmStartWalk(now);
+            if (pmCaution && !(PM_MODES[pmState.mode] || {}).movable && blockedAt(pmState.x, pmState.y)) pmStartWalk(now);
 
         }
 
         let hopOffset = 0;
-        const hopping = pmState.hopT >= 0 && (pmState.mode === 'walk' || pmState.mode === 'celebrate') && !posing;
+        const hopping = pmState.hopT >= 0 && (PM_MODES[pmState.mode] || {}).canHop && !posing;
         if (pmState.hopT >= 0) {
             pmState.hopT += dt;
             if (pmState.hopT >= 0.5) {

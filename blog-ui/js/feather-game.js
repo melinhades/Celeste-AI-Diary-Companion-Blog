@@ -21,6 +21,7 @@
     const particles = [];
     const keys = {};
     let upHeld = false;
+    let featherThrust = 0; // 推力平滑量：0=自由下落，1=全力上升；按键切换时缓缓过渡，避免羽毛突然上下
 
     const GRAVITY = 55;      // 下落加速度（原 32 太慢，羽毛追不上下降的框）
     const LIFT = -135;       // 上升加速度
@@ -286,13 +287,11 @@
 
         upHeld = !!(keys['ArrowUp'] || keys['w']);
 
+        // 推力平滑：按下/松开不瞬间切换，而是缓缓加力或卸力，羽毛起落更连贯自然
+        featherThrust += ((upHeld ? 1 : 0) - featherThrust) * Math.min(1, dt * 3.5);
         const grav = GRAVITY * featherSpeed;
         const lift = LIFT * featherSpeed;
-        if (upHeld) {
-            feather.vy += lift * dt;
-        } else {
-            feather.vy += grav * dt;
-        }
+        feather.vy += (grav + (lift - grav) * featherThrust) * dt;
         feather.vy = Math.max(-105, Math.min(TERMINAL_VY, feather.vy));
         feather.y += feather.vy * dt;
         feather.x = GW / 2;
@@ -301,15 +300,18 @@
         if (feather.y < pad) { feather.y = pad; feather.vy = 0; }
         if (feather.y > GH - pad) { feather.y = GH - pad; feather.vy = 0; }
 
+        // 呼吸框上下：按相位进度走 easeInOutSine——两端慢、中间稍快，
+        // 像"慢慢升起 → 缓缓落下(中段略快) → 到底停一下 → 再升起"，不再线性突兀地移动
         const cur = BREATH[breathIdx];
+        const topY = GH * 0.3, botY = GH * 0.7;
+        const p = Math.min(1, breathT / cur.dur);
+        const eased = 0.5 - 0.5 * Math.cos(Math.PI * p);
         if (cur.name === '吸气……') {
-            goal.ty = GH * 0.3;
+            goal.y = botY + (topY - botY) * eased;   // 慢慢上升
         } else if (cur.name === '呼气……') {
-            goal.ty = GH * 0.7;
+            goal.y = topY + (botY - topY) * eased;   // 缓缓下降，中段稍快
         }
-        const gdy = goal.ty - goal.y;
-        const speed = gdy > 0 ? dt * 0.25 : dt * 0.4;
-        goal.y += gdy * Math.min(1, speed);
+        // 「轻轻停一下」阶段：goal.y 保持不变，自然悬停
         goal.glow = Math.max(0, goal.glow - dt * 0.4);
 
         const inGlow = Math.abs(feather.y - goal.y) < goal.h / 2;
@@ -383,12 +385,18 @@
                 stopMadelinePortrait();
                 madelineSayToken++;
                 if (madelinePanel) madelinePanel.classList.remove('show');
+                if (captionEl) captionEl.classList.remove('show');
+                // 落地后清空画布，删除残留的羽毛和框
+                if (!opened && !landingPhase) clearCanvas();
             }, 750);
         }, 1600);
     }
     function drawGoal() {
         const cur = BREATH[breathIdx];
-        const x = GW / 2 - goal.w / 2;
+        // 判定框左右轻微晃动：两层不同频率正弦叠加，慢而自然，画面更生动
+        const sway = Math.sin(elapsed * 0.8) * (GW * 0.018) + Math.sin(elapsed * 1.9) * (GW * 0.006);
+        const cx = GW / 2 + sway;
+        const x = cx - goal.w / 2;
         const y = goal.y - goal.h / 2;
         if (images.box) {
             ctx.save();
@@ -419,8 +427,12 @@
         ctx.font = '16px sans-serif';
         ctx.textAlign = 'center';
         ctx.fillStyle = 'rgba(255,240,214,' + (0.55 + 0.35 * Math.sin(elapsed * 1.6)) + ')';
-        ctx.fillText(cur.name, GW / 2, goal.y + goal.h / 2 + 34);
+        ctx.fillText(cur.name, cx, goal.y + goal.h / 2 + 34);
         ctx.restore();
+    }
+
+    function clearCanvas() {
+        if (ctx) ctx.clearRect(0, 0, GW, GH);
     }
 
     function render() {
@@ -506,9 +518,11 @@
         if (!overlay) buildOverlay();
         await ensureAssets();
         resizeCanvas();
+        clearCanvas();
         feather.x = GW / 2;
         feather.y = GH / 2;
         feather.vy = 0;
+        featherThrust = 0;
         floaters = [];
         breathIdx = 0; breathT = 0;
         breathPhaseCount = 0;
@@ -516,7 +530,8 @@
         lastInGlow = false;
         landingPhase = false;
         initParticles();
-        goal.y = goal.ty = GH / 2;
+        // 呼吸框从底部起，配合第一段「吸气」缓缓升起
+        goal.y = goal.ty = GH * 0.7;
         goal.glow = 0;
         overlay.classList.add('show');
         opened = true;
@@ -555,6 +570,9 @@
         stopMadelinePortrait();
         madelineSayToken++;
         if (madelinePanel) madelinePanel.classList.remove('show');
+        if (captionEl) captionEl.classList.remove('show');
+        // 等淡出动画走完再清空画布，删除羽毛和框的残留
+        setTimeout(() => { if (!opened && !landingPhase && !closing) clearCanvas(); }, 720);
         window.dispatchEvent(new CustomEvent('feather-finished'));
     }
 

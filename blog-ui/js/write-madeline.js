@@ -28,10 +28,11 @@
     const PM_SRC = {
         move: 'celeste-gui/madeline-move.gif',
         fun: 'celeste-gui/madeline-fun.gif',
+        bounce: 'celeste-gui/bounceline.gif',
         sit: 'celeste-gui/madeline-sitdown.gif',
         sleep: 'celeste-gui/madeline-sleep.gif',
         wake: 'celeste-gui/madeline-wakeup.gif',
-        fall: 'celeste-gui/madeline-fun.gif'
+        fall: 'celeste-gui/madeline-fallpose.gif'
     };
 
     const st = {
@@ -163,25 +164,34 @@
         st.modeUntil = now + 7000 + Math.random() * 5000;
         pmSetSrc(PM_SRC.move);
     }
+    // ===== 接入共享内核 madeline-core.js：加权随机 / 模式表 / enterMode =====
+    // write 页无情绪系统，walkHop 固定 0.4 保留原有随机蹦跳手感
+    const MC = window.MadelineCore;
+    const isNight = MC.isNight;
+    const weightedPick = MC.weightedPick;
+    const pmCore = MC.createCore({
+        state: st, src: PM_SRC, setSrc: pmSetSrc,
+        startWalk: pmStartWalk, groundY: pmGroundY,
+        walkHop: 0.4
+    });
+    const PM_MODES = pmCore.modes;
+    const enterMode = pmCore.enterMode;
+
     function pmNextMode(now) {
         const nearGround = st.y > pmGroundY() - 60;
-        const hour = new Date().getHours();
-        const night = hour >= 23 || hour < 6;
-        const sitP = night ? 0.30 : 0.14, funP = 0.16, walkP = 0.40, lookP = 0.14;
-        const r = Math.random();
-        if (r < sitP && nearGround) {
-            st.mode = 'sit'; st.modeUntil = now + 6000 + Math.random() * 10000; pmSetSrc(PM_SRC.sit);
-        } else if (r < sitP + funP) {
-            st.mode = 'idle'; st.modeUntil = now + 1900;
-            st.poseUntil = now + 1800; st.poseReturn = PM_SRC.move; pmSetSrc(PM_SRC.fun);
-        } else if (r < sitP + funP + walkP) {
-            pmStartWalk(now); if (Math.random() < 0.4) st.hopT = 0;
-        } else if (r < sitP + funP + walkP + lookP) {
-            // 站立张望（用 fun 素材）
-            st.mode = 'lookaround'; st.modeUntil = now + 2200 + Math.random() * 2000; pmSetSrc(PM_SRC.fun);
-        } else {
-            st.mode = 'idle'; st.modeUntil = now + 1200 + Math.random() * 2000; pmSetSrc(PM_SRC.move);
-        }
+        const night = isNight();
+        // 数据驱动：权重表 + 贴地过滤，enterMode 统一落地素材/时长/pose
+        const weights = [
+            ['walk',   night ? 0.34 : 0.40],
+            ['bounce', night ? 0.04 : 0.10],
+            ['fun',    0.16],
+            ['look',   0.14],
+            ['idle',   night ? 0.02 : 0.16],
+            ['sit',    night ? 0.30 : 0.14]
+        ];
+        const pool = weights.filter(([k]) =>
+            (k === 'sit' || k === 'bounce') ? nearGround : true);
+        enterMode(weightedPick(pool), now);
     }
     function pmThink(now) {
         if (st.mode === 'peek') return;
@@ -225,7 +235,7 @@
         const posing = st.poseUntil > 0;
         pmThink(now);
         const speed = 85;
-        const movable = !posing && (st.mode === 'walk' || st.mode === 'peek');
+        const movable = !posing && (PM_MODES[st.mode] || {}).movable;
         if (movable && st.tx !== null) {
             const dx = st.tx - st.x, dy = st.ty - st.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
@@ -248,14 +258,14 @@
         if (blockedAt(st.x, st.y)) pmStartWalk(now);
 
         let hopOffset = 0;
-        if (st.hopT >= 0 && st.mode === 'walk' && !posing) {
+        if (st.hopT >= 0 && (PM_MODES[st.mode] || {}).canHop && !posing) {
             st.hopT += dt;
             if (st.hopT >= 0.5) {
                 st.hopT = -1;
                 if (st.wasHopping) { st.poseUntil = now + 650; st.poseReturn = PM_SRC.move; pmSetSrc(PM_SRC.fall); }
             } else hopOffset = Math.sin((st.hopT / 0.5) * Math.PI) * 26;
         }
-        st.wasHopping = (st.hopT >= 0 && st.mode === 'walk' && !posing);
+        st.wasHopping = (st.hopT >= 0 && (PM_MODES[st.mode] || {}).canHop && !posing);
         if (hopOffset > 0) pmSetSrc(PM_SRC.move);
         pm.style.transform = 'translate(' + st.x + 'px,' + (st.y - hopOffset) + 'px)' + (st.dir < 0 ? ' scaleX(-1)' : '');
         requestAnimationFrame(pmLoop);
