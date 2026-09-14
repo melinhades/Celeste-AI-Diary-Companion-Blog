@@ -388,31 +388,52 @@
     }
     startHeaderAvatarAnim();
     const gameDialog = document.getElementById('gameDialog');
-// ... existing code ...
     const gameDialogPortraitImg = document.getElementById('gameDialogPortraitImg');
     const gameDialogText = document.getElementById('gameDialogText');
     let gameDialogHideTimer = null;
+    // 说话“世代号”：用户点关闭时 +1，正在逐字打字的循环据此立即中止，
+    // 避免“对话框已经关掉、她却在背后继续隐形说话”；她下次再说话时对话框会重新弹出
+    let gameDialogToken = 0;
+    // 文本框弹出/收起音效（Celeste 官方 madeline 文本框 in / out）
+    const GAME_DIALOG_SFX = {};
+    function playGameDialogSfx(which) {
+        try {
+            const name = 'textbox/ui_game_textbox_madeline_' + which + '.wav';
+            if (!GAME_DIALOG_SFX[name]) GAME_DIALOG_SFX[name] = new Audio('celeste-sounds/' + name);
+            const a = GAME_DIALOG_SFX[name];
+            a.currentTime = 0;
+            a.volume = 0.55;
+            a.play().catch(() => {});
+        } catch (e) { /* 无声降级 */ }
+    }
 
     function openGameDialog(emotion) {
+        if (!gameDialog.classList.contains('show')) playGameDialogSfx('in');
         startPortraitAnim(emotion);
         const pmCenter = pmState.x + pm.offsetWidth / 2;
         const onRight = pmCenter > window.innerWidth / 2;
 
         gameDialogPortraitImg.parentElement.style.transform = onRight ? 'scaleX(-1)' : '';
+        // 只在“真正从隐藏→显示”那一刻播放弹出音，避免连续说话时重复响
+
         gameDialog.classList.add('show');
     }
-        function scheduleGameDialogHide() {
-            clearTimeout(gameDialogHideTimer);
-            gameDialogHideTimer = setTimeout(() => {
-                stopPortraitAnim();
-                gameDialog.classList.remove('show');
-            }, 6000);
-        }
-        gameDialog.addEventListener('click', () => {
-            clearTimeout(gameDialogHideTimer);
-            stopPortraitAnim();
-            gameDialog.classList.remove('show');
-        });
+    // 统一收口：真正从“显示→隐藏”时才播放收起音效
+    function closeGameDialog() {
+        clearTimeout(gameDialogHideTimer);
+        stopPortraitAnim();
+        if (gameDialog.classList.contains('show')) playGameDialogSfx('out');
+        gameDialog.classList.remove('show');
+    }
+    function scheduleGameDialogHide() {
+        clearTimeout(gameDialogHideTimer);
+        gameDialogHideTimer = setTimeout(() => { closeGameDialog(); }, 6000);
+    }
+    gameDialog.addEventListener('click', () => {
+        // 强行关闭：作废当前这段说话（打字循环会立刻停下），下次她再说话时对话框会重新弹出
+        gameDialogToken++;
+        closeGameDialog();
+    });
     let msgQueue = Promise.resolve();
     function addMadelineMessage(text, emotion, forceGameDialog) {
         msgQueue = msgQueue.then(() => doAddMadelineMessage(text, emotion, forceGameDialog)).catch(e => console.warn('说话失败:', e));
@@ -421,9 +442,8 @@
     window.addMadelineMessage = addMadelineMessage;
     // 供金羽毛过渡工具调用：立即收起日记页 Madeline 对话框（说完建议、停顿后再淡入游戏）
     window.hideGameDialog = function() {
-        clearTimeout(gameDialogHideTimer);
-        stopPortraitAnim();
-        gameDialog.classList.remove('show');
+        gameDialogToken++;
+        closeGameDialog();
     };
     let lastUserInputTime = 0;
     async function waitUserPause(maxWait) {
@@ -438,12 +458,15 @@
         await waitUserPause(6000);
         const messages = splitIntoMessages(text);
         const useGameDialog = forceGameDialog || !chatOpen;
+        // 认领本次说话的世代号：用户中途点关闭会让 gameDialogToken 改变，据此立刻停下，不再隐形说话
+        const myToken = gameDialogToken;
         if (useGameDialog) {
             clearTimeout(gameDialogHideTimer);
             openGameDialog(emotion);
         }
         let lastMsgEmotion = emotion || '默认';
         for (const msg of messages) {
+            if (useGameDialog && myToken !== gameDialogToken) return; // 已被用户关闭，放弃后面还没说的话
             const { bubble: histBubble } = newMadelineRow(emotion);
             histBubble.textContent = msg;
             let sentenceBuf = '';
@@ -453,6 +476,7 @@
                 gameDialogText.textContent = '';
                 let speakCount = 0;
                 for (const ch of msg) {
+                    if (myToken !== gameDialogToken) return; // 用户中途关闭：立刻停下，不再隐形说话
                     gameDialogText.textContent += ch;
                     if (/[。！？!?]/.test(ch)) {
                         const inferred = inferSentenceEmotion(sentenceBuf);
@@ -491,8 +515,10 @@
             lastMsgEmotion = voiceEmotion;
         }
         pmReactToEmotion(lastMsgEmotion);
-        if (useGameDialog) stopPortraitAnim();
-        if (useGameDialog) scheduleGameDialogHide();
+        if (useGameDialog && myToken === gameDialogToken) {
+            stopPortraitAnim();
+            scheduleGameDialogHide();
+        }
     }
 // ... existing code ...
     function addUserMessage(text) {
@@ -1571,10 +1597,14 @@ function inferReplyEmotion(text) {
         if (frames) {
             let i = 0;
             pm.src = frames[0];
+            pm.style.width = (pm.src.includes('sitdown') || pm.src.includes('sleep') || pm.src.includes('wakeup')) ? '100px' : '56px';
+            pm.style.height = 'auto';
             pmFrameTimer = setInterval(() => {
                 i++;
                 if (i >= frames.length) { clearInterval(pmFrameTimer); pmFrameTimer = null; return; }
                 pm.src = frames[i];
+                pm.style.width = (pm.src.includes('sitdown') || pm.src.includes('sleep') || pm.src.includes('wakeup')) ? '100px' : '56px';
+                pm.style.height = 'auto';
                 pmForceSize();
             }, 55);
         } else if (pm.src.indexOf(name) === -1) {
@@ -1916,9 +1946,27 @@ function inferReplyEmotion(text) {
         if (toast) toast.style.display = 'none';
     }
     window.showFeatherNote = showFeatherNote;
-    // Madeline 的陪伴已在游戏内完成，关闭/落地不再额外弹外部对话
-    window.addEventListener('feather-finished', () => {});
+    // ===== 金羽毛“第二段”陪伴：游戏结束后，等画面淡出，Madeline 再回到日记页说一句收尾的话 =====
+    const FEATHER_AFTER_LINES = [
+        '呼吸平稳多了吧？我一直都在。想写点什么，或者就这样歇一会儿，都可以。',
+        '羽毛落下了，心里那块石头是不是也轻了一点？慢慢来，不着急。',
+        '做得很好。把刚才这份平静留着，需要的时候，我们随时再来一次。'
+    ];
+    let featherAfterBusy = false;
+    function sayAfterFeather() {
+        if (featherAfterBusy) return; // 一次游戏只收尾一句，落地/关闭不会重复触发
+        featherAfterBusy = true;
+        // 等淡出动画（约 .7s）走完，对话框再弹出，衔接更自然
+        setTimeout(() => {
+            const line = FEATHER_AFTER_LINES[Math.floor(Math.random() * FEATHER_AFTER_LINES.length)];
+            const done = addMadelineMessage(line, '可爱', true);
+            const release = () => { featherAfterBusy = false; };
+            if (done && done.then) done.then(release, release); else release();
+        }, 900);
+    }
+    window.addEventListener('feather-finished', () => { sayAfterFeather(); });
     window.addEventListener('feather-landed', (e) => {
+        sayAfterFeather();
         if (window._featherBadMood) {
             showFeatherNote();
         } else {

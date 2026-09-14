@@ -24,7 +24,17 @@
     const snowCtx = snowCanvas.getContext('2d');
     let snowflakes = [];
     let snowAnimFrame = null;
-
+    // ==================== 初始注入大小样式 ====================
+    const madelineSizeStyle = document.createElement('style');
+    madelineSizeStyle.textContent =
+        // 专门针对 sit, sleep, wake 三个动作把图片放大到 100px，加上 !important 强制覆盖原有的 56px
+        'img[src*="sitdown"], img[src*="sleep"], img[src*="wakeup"] {' +
+        'width: 100px !important;' +
+        'height: auto !important;' +
+        'max-width: none !important;' +
+        '}';
+    document.head.appendChild(madelineSizeStyle);
+// ========================================================
     const PM_SRC = {
         move: 'celeste-gui/madeline-move.gif',
         fun: 'celeste-gui/madeline-fun.gif',
@@ -87,6 +97,8 @@
     }
     function pmSetSrc(name) {
         if (pm.src.indexOf(name) === -1) pm.src = name;
+        pm.style.width = (pm.src.includes('sitdown') || pm.src.includes('sleep') || pm.src.includes('wakeup')) ? '100px' : '56px';
+        pm.style.height = 'auto';
         pmCur = name; pmApplySize();
     }
     function pmCalibrate(src) {

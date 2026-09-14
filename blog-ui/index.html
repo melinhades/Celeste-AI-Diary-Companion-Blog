@@ -9,6 +9,22 @@
     <link rel="stylesheet" href="css/index.css">
     <link rel="stylesheet" href="css/theme.css">
     <style>
+        * {
+            margin:0;
+            padding:0;
+            box-sizing:border-box;
+        }
+        audio {
+            display:none;
+        }
+        body {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        main {
+            flex: 1;
+        }
     body::after {
         content:'';
         position:fixed; inset:0;
@@ -24,7 +40,7 @@
         animation:snowDrift 45s linear infinite;
         pointer-events:none;
         z-index:2;
-        opacity:.5;
+        opacity:1.00;
     }
     @keyframes snowDrift { from{background-position-x:0} to{background-position-x:-440px} }
     .nav-diary-btn {
@@ -54,7 +70,13 @@
     .card-thumbs { display:flex; gap:10px; margin:12px 0 6px; flex-wrap:wrap; }
     .card-thumbs img { max-width:200px; max-height:140px; height:auto; border-radius:8px; border:1px solid rgba(255,235,59,.35); }
     /* 底部透明化：消除白色带 */
-    .footer { background:transparent; border:none; backdrop-filter:none; }
+    footer {
+        background:transparent;
+        border:none;
+        backdrop-filter:none;
+        margin: 0;
+        padding: 4px 0;
+    }
     </style>
 </head>
 <body>
@@ -65,7 +87,7 @@
     <!-- 雪花粒子系统 -->
     <canvas id="snowCanvas" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;"></canvas>
     <div class="snow-strip"></div>
-
+<main>
 <!-- 顶部导航 -->
 <header class="header">
     <div class="container header-inner">
@@ -124,7 +146,7 @@
 <footer class="footer">
     <div class="container">© 2026 Celeste Blog · Explore the stars</div>
 </footer>
-
+    </main>
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/snow-bgm.js"></script>

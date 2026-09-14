@@ -179,11 +179,12 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 
     // 羽毛数：后端实时拉取
     api('/feather/count', 'GET').then(res => {
+        console.log('羽毛返回', res);
         if (res.success && res.data != null) {
-            document.getElementById('ticketFeatherCount').textContent = '× ' + res.data;
+            // 重点：从对象里面取出数字属性，比如 .count
+            document.getElementById('ticketFeatherCount').textContent = '× ' + res.data.count;
         }
     });
-
     // 图案铺满卡片
     const CARD_STAMPS = ['farewell', 'flag', 'goldberry', 'goldheart', 'heart', 'cassettes'];
     (function renderCardStamps() {
@@ -226,8 +227,8 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
         const playTicketShine = createShine('ticketShine', 'ticketShine');
         function playShineLoop() {
             playCardShine();
-            setTimeout(playTicketShine, 130);
-            setTimeout(playShineLoop, 4000);
+            setTimeout(playTicketShine, 92);
+            setTimeout(playShineLoop, 2800);
         }
         playShineLoop();
     }

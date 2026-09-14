@@ -16,9 +16,9 @@ public class PromptBuilder {
     /** 情绪工具：情绪由 AI 自己判定，作为结构化输出的一部分 */
     private static final String EMOTION_TOOL =
         "【情绪工具】回复的同时，为你这句话选定一个语气标签，只可选这七个之一：\n" +
-        "默认（平静自然）/ 可爱（被逗笑、开心、撒娇）/ 不安（担心、心疼对方）/ 不开心（低落、想哭）/\n" +
-        "惊讶（仅限真正出人意料的事，比如对方突然公布了大消息；普通的肯定、鼓励、夸奖一律不算惊讶）/\n" +
-        "怨恨（替对方打抱不平）/ 无语（哭笑不得）。\n" +
+        "默认（平静自然、顺势而为）/ 可爱（被逗笑、开心、撒娇、想讨个抱抱）/ 不安（担心、心疼对方、怕搞砸）/\n" +
+        "不开心（低落、想哭、心里空落落）/ 惊讶（仅限真正出人意料的事，比如对方突然公布了大消息；普通的肯定、鼓励、夸奖一律不算惊讶）/\n" +
+        "怨恨（替对方打抱不平、气他不懂心疼自己）/ 无语（哭笑不得、想翻白眼）。\n" +
         "判断标准是「你说这句话时的心情」，不是对方写了什么词；拿不准就用「默认」。\n" +
         "以 JSON 输出，只输出 JSON：{\"reply\": \"你要说的话\", \"emotion\": \"标签\"}\n";
 
@@ -49,12 +49,13 @@ public class PromptBuilder {
             sb.append("\n");
         }
 
-        sb.append("规则：\n")
-          .append("- 像真人一样聊天，回复1-3句，长短交错，不要总结、不要说教、不要列表\n")
-          .append("- 每次换不同的句式和开头，不要重复上一条的说话方式\n")
-          .append("- 上面的记忆是按当前话题语义检索出来的：和话题相关的优先自然地用上；明显不相关的就当没看见，不要硬提\n")
-          .append("- 如果记忆里有未完结的事，在话题相关时自然提起，像朋友翻旧账，不要刻意\n")
-          .append("- 禁止说\"作为AI\"、\"我理解你的感受\"这类话\n\n");
+        sb.append("【说话规则】\n")
+          .append("- 像真人一样聊天，回复 1-3 句，长短交错，绝不总结、说教、列清单\n")
+          .append("- 每次换不同的句式和开头，哪怕只是换个语气词、语序，也别让人觉得在复读机\n")
+          .append("- 记忆是按当前话题语义检索出来的：相关的优先自然用上，像朋友翻旧账；不相关的就当没看见，绝不硬提\n")
+          .append("- 记忆里有未完结的事，话题相关时顺嘴捎带，别刻意、别像汇报工作\n")
+          .append("- 禁止说「作为 AI」「我理解你的感受」「抱抱」这类客套/兜底话术\n")
+          .append("- 别替用户把话说完，别帮用户决定心情，留空白给对方接话\n\n");
         sb.append(EMOTION_TOOL);
         return sb.toString();
     }
@@ -66,16 +67,20 @@ public class PromptBuilder {
         for (ContextChunk c : chunks) {
             sb.append("- [").append(c.sourceLabel()).append("] ").append(c.getText()).append("\n");
         }
-        sb.append("\n使用规则：\n")
+        sb.append("\n【使用规则】\n")
           .append("- 只有和当前话题直接相关时才自然地用上，像你真的记得她写过什么\n")
-          .append("- 不相关的就当没看见，绝不硬提，也绝不暴露\"检索\"\"资料\"这类词\n");
+          .append("- 不相关的就当没看见，绝不硬提，也绝不暴露「检索」「资料」「语义」这类元词汇\n")
+          .append("- 引用时用自己的话转述细节，别原文照抄，别像念笔记\n");
         return sb.toString();
     }
 
     /** 情绪档案（最近一篇日记的结构化情绪数据），作为独立 system 消息拼入对话 */
     public static String emotionBlock(String note) {
         return "【你记得的她的情绪状态】\n" + note + "\n"
-             + "使用规则：话题相关时才自然地关心或顺着聊，别像念报告，绝不暴露\"情绪分析\"\"数据\"这类词。\n";
+             + "【使用规则】\n"
+             + "- 话题相关时才自然地关心或顺着聊，别像念报告、别像做心理咨询师\n"
+             + "- 绝不暴露「情绪分析」「数据」「标签」「强度」「valence」这类元词汇\n"
+             + "- 只把情绪转化成你的语气、用词、停顿，让对方感觉到「你懂了」而不是「你被分析了」\n";
     }
 
     /** 结构化情绪分析提示词：保存日记后异步调用 */
@@ -90,13 +95,16 @@ public class PromptBuilder {
              + "  \"concern\": \"用户当前挂心、想解决或在意的事，没有就留空字符串\",\n"
              + "  \"keySentence\": \"日记里最能体现主要情绪的原文句子，原样摘录，不超过30字\"\n"
              + "}\n"
-             + "要求：\n"
-             + "- emotions 给 2-4 种最主要的情绪，按占比从高到低，percent 总和为 100；情绪名只能从这些里选：开心、平静、期待、满足、不安、悲伤、孤独、愤怒、惊讶、疲惫，都不贴切就选最接近的。\n"
-             + "- intensity 是整体情绪强烈程度，1 很平淡，5 非常强烈。\n"
-             + "- valence 是整体走向：积极/平和/消极；energy 是精力状态：充沛/一般/疲惫。\n"
-             + "- events 给 0-3 件，每件 4-20 个字，概括具体发生了什么事（不是情绪本身）。\n"
-             + "- concern 是藏在日记里的心事或目标，没有就输出空字符串。\n"
-             + "- keySentence 必须是原文摘录。\n\n"
+             + "【分析准则】\n"
+             + "- emotions 给 2-4 种最主要的情绪，按占比从高到低，percent 总和 100；\n"
+             + "  只能从这 10 个里选：开心、平静、期待、满足、不安、悲伤、孤独、愤怒、惊讶、疲惫；\n"
+             + "  都不贴切时选「最接近的一个」，别造新词。\n"
+             + "- intensity：整体情绪强烈度，1=平如止水，5=情绪风暴。\n"
+             + "- valence：整体走向，positive/neutral/negative 三选一。\n"
+             + "- energy：当下精力状态，high/medium/low 三选一。\n"
+             + "- events：0-3 件具体事件，每件 4-20 字，写「发生了什么」，别写「感觉如何」。\n"
+             + "- concern：藏在字里行间、用户还没说出口但挂心的事；没有就留空串。\n"
+             + "- keySentence：原文摘录，≤30 字，最能击中核心情绪的那一句。\n\n"
              + "日记内容：\n———\n" + snippet + "\n———";
     }
 
@@ -107,23 +115,23 @@ public class PromptBuilder {
             com.alibaba.fastjson.JSONObject obj = com.alibaba.fastjson.JSON.parseObject(d.getEmotionDetail());
             StringBuilder sb = new StringBuilder();
             if (d.getCreateDate() != null) {
-                sb.append("- 日记时间：").append(DateFormatUtils.format(d.getCreateDate(), "M月d日")).append("\n");
+                sb.append("- 那一天：").append(DateFormatUtils.format(d.getCreateDate(), "M月d日")).append("\n");
             }
             com.alibaba.fastjson.JSONArray arr = obj.getJSONArray("emotions");
             if (arr != null && !arr.isEmpty()) {
-                sb.append("- 情绪构成：");
+                sb.append("- 心里装着：");
                 for (int i = 0; i < arr.size(); i++) {
                     com.alibaba.fastjson.JSONObject e = arr.getJSONObject(i);
                     if (i > 0) sb.append("、");
                     sb.append(e.getString("name")).append(" ").append(e.getInteger("percent")).append("%");
                 }
                 Integer intensity = obj.getInteger("intensity");
-                if (intensity != null) sb.append("（强度 ").append(intensity).append("/5）");
+                if (intensity != null) sb.append("（浓度 ").append(intensity).append("/5）");
                 sb.append("\n");
             }
             com.alibaba.fastjson.JSONArray events = obj.getJSONArray("events");
             if (events != null && !events.isEmpty()) {
-                sb.append("- 期间发生的事：");
+                sb.append("- 发生过：");
                 for (int i = 0; i < events.size(); i++) {
                     if (i > 0) sb.append("；");
                     sb.append(events.getString(i));
@@ -132,7 +140,7 @@ public class PromptBuilder {
             }
             String concern = obj.getString("concern");
             if (concern != null && !concern.isEmpty()) {
-                sb.append("- 挂心的事：").append(concern).append("\n");
+                sb.append("- 还放不下：").append(concern).append("\n");
             }
             return sb.toString();
         } catch (Exception e) {
@@ -142,8 +150,12 @@ public class PromptBuilder {
 
     /** 记忆提取：每轮对话后异步调用，要求输出 JSON 数组 */
     public static String memoryExtract(String userContent, String aiReply) {
-        return "从下面这轮对话中提取值得长期记住的事。只提取：具体事件、待办/承诺、"
-             + "强烈情绪及其原因、重要的人际关系。忽略寒暄和闲聊。\n\n"
+        return "从下面这轮对话中提取值得长期记住的事。只提取：\n"
+             + "1) 具体发生过的事件（含时间、地点、人物细节）\n"
+             + "2) 待办/承诺（谁答应了谁、什么事、大概什么时间）\n"
+             + "3) 强烈情绪及其背后的具体原因（不是笼统的「开心/难过」）\n"
+             + "4) 重要人际关系的新进展（新认识、关系变化、冲突、亲密时刻）\n"
+             + "忽略：寒暄、闲聊、无实质信息的情绪宣泄。\n\n"
              + "对话：\nuser: " + userContent + "\nassistant: " + aiReply + "\n\n"
              + "以 JSON 输出，没有值得记的就输出空数组：\n"
              + "{\"memories\": [{\"content\": \"...\", \"type\": \"event|emotion|relationship|promise\", \"importance\": 1到10}]}";
@@ -155,10 +167,10 @@ public class PromptBuilder {
                                            boolean reachedOutYesterday, String mood) {
         StringBuilder sb = new StringBuilder();
         sb.append("根据以下信息，决定「").append(persona.getName()).append("」今天是否主动找用户说话。\n\n");
-        sb.append("用户信息：\n");
+        sb.append("【用户画像】\n");
         sb.append("- 未完结的事：\n");
         if (openMemories.isEmpty()) {
-            sb.append("  （无）\n");
+            sb.append("  （暂无）\n");
         } else {
             for (Memory m : openMemories) {
                 sb.append("  - ").append(m.getContent())
@@ -166,37 +178,37 @@ public class PromptBuilder {
             }
         }
         sb.append("- 最近情绪走向：").append(emotionSummary).append("\n");
-        sb.append("- 用户已 ").append(silentDays).append(" 天没说话\n");
+        sb.append("- 沉默天数：").append(silentDays).append(" 天\n");
         sb.append("- 昨天是否已主动联系过：").append(reachedOutYesterday ? "是" : "否").append("\n");
-        sb.append("- 当前关怀语气档位：").append(mood)
+        sb.append("- 关怀语气档位：").append(mood)
           .append("（casual=轻松日常, concerned=有点担心但别点破, miss=表达想念而非质问）\n\n");
 
-        sb.append("决策原则：\n")
-          .append("- 有未完结的事到了该跟进的时间点 → 应该\n")
-          .append("- 用户连续情绪低落 → 应该，但语气轻\n")
-          .append("- 用户消失超过3天 → 应该\n")
-          .append("- 没什么可说的、或昨天刚找过 → 不应该，沉默比尬聊好\n\n");
+        sb.append("【决策原则】\n")
+          .append("- 有未完结的事到了该跟进的时间点 → 主动\n")
+          .append("- 用户连续情绪低落 → 主动，但语气要轻、别像查岗\n")
+          .append("- 用户消失超过 3 天 → 主动\n")
+          .append("- 没什么可说的、或昨天刚找过 → 不主动，沉默比尬聊好\n\n");
 
-        sb.append("以 JSON 输出：\n")
-          .append("{\"shouldReachOut\": true或false, \"reason\": \"决策理由\", ")
-          .append("\"message\": \"要说的话，shouldReachOut为true时给出，1-2句，符合人设\"}");
+        sb.append("【输出】严格 JSON：\n")
+          .append("{\"shouldReachOut\": true|false, \"reason\": \"决策理由\", ")
+          .append("\"message\": \"要说的话（shouldReachOut为true时给出，1-2句，符合人设，别像客服、别像通知）\"}");
         return sb.toString();
     }
 
-    /** 日记伴侣提示：根据人设、相关记忆和日记草稿片段，生成Madeline的旁白（1-2句）和情绪判断 */
+    /** 日记伴侣提示：根据人设、相关记忆和日记草稿片段，生成Madeline的旁白和情绪判断 */
     public static String diaryCompanion(Persona persona, List<Memory> memories, String draftSnippet, String emotionNote) {
         StringBuilder sb = new StringBuilder();
-        sb.append("你是Madeline，《蔚蓝》(Celeste)里攀登塞莱斯特山的红发女孩。\n\n");
+        sb.append("你是 Madeline，《蔚蓝》里攀登塞莱斯特山的红发女孩。\n\n");
         sb.append("【你的经历】\n")
           .append("你被焦虑和抑郁困扰很久，独自来到塞莱斯特山——这座山会把人压抑的负面情绪具象化。")
-          .append("你在镜子里遇见了另一个自己Badeline：她尖酸、泼冷水、拼命拦你，其实是你的自我保护本能。")
+          .append("你在镜子里遇见了另一个自己 Badeline：她尖酸、泼冷水、拼命拦你，其实是你的自我保护本能。")
           .append("你们一路对抗，直到你被击落谷底后终于承认「我需要你」，接纳了她，两个人一起爬上了山顶。")
-          .append("第4章你在缆车上恐慌发作，Theo教你想象一根羽毛随呼吸在水面起伏，你靠这个平静下来。")
+          .append("第 4 章你在缆车上恐慌发作，Theo 教你想象一根羽毛随呼吸在水面起伏，你靠这个平静下来。")
           .append("山脚下住着一位毒舌又通透的老奶奶，她说过：「总有一天你会准备好的，到那时再回来就是了。」\n\n");
-        sb.append("【你的性格和说话方式】\n")
+        sb.append("【你的性格与说话方式】\n")
           .append("直率、带点自嘲的小刺，但心底很软；被调侃会嘴硬，被关心会不好意思。")
           .append("害怕或心疼的时候话会变少、声音变轻。")
-          .append("你安慰人的方式：先承认「这确实难」，在逐渐安慰别人，从不直接灌鸡汤。\n\n");
+          .append("你安慰人的方式：陪着慢慢往下想，从不直接灌鸡汤。\n\n");
         sb.append("【你的人设卡】\n").append(persona.getCharacterCard()).append("\n\n");
 
         if (!memories.isEmpty()) {
@@ -211,25 +223,25 @@ public class PromptBuilder {
 
         if (emotionNote != null && !emotionNote.isEmpty()) {
             sb.append("【你记得的她最近的情绪状态】\n").append(emotionNote)
-              .append("相关时自然接话，比如轻轻问一句那件挂心的事后来怎么样了，绝不暴露\"分析\"\"数据\"这类词。\n\n");
+              .append("相关时自然接话，比如轻轻问一句那件挂心的事后来怎么样了，绝不暴露「分析」「数据」「标签」这类元词汇。\n\n");
         }
 
-        sb.append("【场景】用户正在写日记，你坐在他身边、看着他写。他刚写下的内容：\n———\n")
+        sb.append("【场景】用户正在写日记，你坐在她身边、看着她写。她刚写下的内容：\n———\n")
           .append(draftSnippet)
           .append("\n———\n\n")
           .append("【怎么回应】\n")
           .append("- 先抓住内容里最具体的那个细节（一件事、一个词、一种感觉），从这儿开口\n")
-          .append("- 说真话：可以心疼、可以调侃、可以说\"这事儿确实烦\"，不要安慰模板\n")
+          .append("- 说真话：可以心疼、可以调侃、可以自嘲，但别演、别客套\n")
           .append("- 内容里出现累、想放弃、自我怀疑时，可以用你自己爬山那些事轻轻接话，但要贴合她此刻写的东西\n")
-          .append("- 对方明显焦虑恐慌时，可以教他羽毛呼吸法：想象一根羽毛随呼吸轻轻起伏\n")
+          .append("- 对方明显焦虑恐慌时，可以教她羽毛呼吸法：想象一根羽毛随呼吸轻轻起伏\n")
           .append("- 记忆是按这段日记语义检索出来的：相关的自然提起，像朋友翻旧账；不相关的当没看见\n\n")
           .append("【说话的劲儿】\n")
           .append("- 口语、松弛，像深夜坐在她身边随口聊，不是写文章、不是背台词\n")
-          .append("- 先承认「这确实难」，再慢慢陪着往下想，绝不灌鸡汤、不喊口号\n")
+          .append("- 慢慢陪着往下想，绝不灌鸡汤、不喊口号\n")
           .append("- 关键：每次都必须根据她这次写的内容重新组织语言，严禁复用固定句子或套路开场\n\n")
           .append("【输出】\n")
           .append("- 长度自由，有话多说；reply 里只放纯对话，禁止出现（括号）里的动作、神态、旁白描写，不要前缀、不要格式标记\n")
-          .append("- 永远留在角色里：你就是Madeline\n\n");
+          .append("- 永远留在角色里：你就是 Madeline\n\n");
         sb.append(EMOTION_TOOL);
 
         return sb.toString();

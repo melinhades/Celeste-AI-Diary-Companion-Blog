@@ -546,16 +546,19 @@
         startBreathGame();
     }
 
-    // 工具：检测到情绪后调用——先让 Madeline 把“羽毛建议”说完，收起对话框，再淡入金羽毛游戏
+    // 工具：检测到情绪后调用——【第一段·游戏开始前】让 Madeline 把“羽毛建议”完整说完、
+    // 留出读完的停顿，再收起日记页对话框淡入金羽毛游戏；【第二段·游戏结束后】由 diary.js 收尾
     async function suggestThenOpen(emotion) {
         const line = SUGGEST_LINES[emotion] || '我们一起跟着这根羽毛呼吸一下，好吗？';
         if (typeof window.addMadelineMessage === 'function') {
-            // 等 Madeline 把这句建议逐字说完（await 队列 Promise）
+            // await 队列 Promise：确保这句话（连同之前排队的话）逐字说完才继续，杜绝“话没说完就开始”
             try { await window.addMadelineMessage(line, emotion || '默认', true); } catch (e) {}
         }
-        // 说完后停顿一下让玩家读完，再收起日记页对话框，避免“话没说完就开始”
-        await sleep(1000);
+        // 说完后按句长留出读完的停顿（越长停越久，至少 1.4s），让玩家把这句话看完
+        await sleep(Math.min(2600, Math.max(1400, line.length * 45)));
         if (typeof window.hideGameDialog === 'function') { try { window.hideGameDialog(); } catch (e) {} }
+        // 对话框收起后再留一小段空隙，过渡更从容，然后淡入金羽毛游戏
+        await sleep(320);
         openGame(emotion);
     }
 

@@ -237,11 +237,12 @@
     const SRC = {
         move: 'celeste-gui/madeline-move.gif',
         fun: 'celeste-gui/madeline-fun.gif',
-        sit: 'celeste-gui/madeline-sitdown.gif'
+        sit: 'celeste-gui/madeline-sitdown.gif',
     };
     const style = document.createElement('style');
     style.textContent =
         '#arcMadeline{position:fixed;left:0;bottom:14px;z-index:300;width:56px !important;height:56px !important;image-rendering:pixelated;cursor:pointer;user-select:none;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5));}' +
+        '#arcMadeline[src*="madeline-sitdown.gif"] { width: 100px !important; height: auto !important; }' +
         '#arcBubble{position:fixed;z-index:301;background:rgba(22,34,60,.95);border:2px solid #ffe36d;border-radius:8px;color:#ffe36d;font-size:12px;padding:6px 12px;pointer-events:none;opacity:0;transition:opacity .3s;white-space:nowrap;}' +
         '#arcBubble.show{opacity:1;}';
     document.head.appendChild(style);

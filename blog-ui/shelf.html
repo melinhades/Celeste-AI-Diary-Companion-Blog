@@ -638,7 +638,8 @@ function stopPeSnow() {
     cards.addEventListener('click', ev => {
         const c = ev.target.closest('.shelf-row');
         if (!c || c.classList.contains('snapshot')) return;
-        playPageSfx('forward'); showDetail(+c.dataset.i);
+        // 点开往期日记：磁带预览音效（每周/每月快照明信片走各自的 variants 音效，不在此列）
+        pcPlay('cassette_preview_intro.wav'); showDetail(+c.dataset.i);
     });
 
     detail.querySelector('.back').addEventListener('click', showList);
