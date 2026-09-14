@@ -9,6 +9,26 @@
 
 A unique dual-platform system that combines private AI-assisted diary writing with optional public blog sharing. Built on the Celeste theme using Java 17 + Spring Boot backend and native HTML/CSS/JS frontend, this platform offers immersive AI companionship for personal reflection while providing the tools to transform meaningful entries into public blog posts.
 
+## 🌐 Live Demo
+
+✨ **The project is officially deployed and live! Welcome to visit!** ✨
+
+*   **Frontend Homepage (Blog & Diary)**: [https://instapix.icu](https://instapix.icu)
+*   **Alternate URL**: [https://www.instapix.icu](https://www.instapix.icu)
+*   **Backend API Service**: [https://api.instapix.icu](https://api.instapix.icu) *(Pure API service; a 404 on the root path is expected)*
+
+> **Tech Stack Deployment**:
+> Frontend is hosted on **Cloudflare Pages**, backend is deployed on **Render (Docker)**, and the cloud database uses **TiDB Cloud (Starter Free Tier)**.
+> CORS is configured between frontend and backend, utilizing HTTPS encrypted connections.
+
+---
+
+## 🛡️ Disclaimer
+
+This project is an **unofficial, non-commercial fan project**, intended for learning and exchange purposes only, and is not used for any commercial purposes.
+The copyrights for Celeste-related art, characters, music, fonts, etc., belong to **Extremely OK Games (Maddy Makes Games)**.
+If notified by the copyright holder, I will immediately remove the relevant content.
+
 ## 📋 Project Overview
 
 The Celeste AI Diary Companion Blog offers a unique hybrid experience where users maintain private AI-assisted diaries that can optionally be shared as public blog posts.
