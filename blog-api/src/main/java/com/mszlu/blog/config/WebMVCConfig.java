@@ -24,8 +24,7 @@ public class WebMVCConfig implements WebMvcConfigurer {
     public void addCorsMappings(CorsRegistry registry) {
         //解决跨域配置
         registry.addMapping("/**")
-                .allowedOrigins("http://localhost:8080", "http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:63342", "file://")
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                .allowedOrigins("http://localhost:8080", "http://localhost:3000", "https://instapix.icu", "https://www.instapix.icu")
                 .allowedHeaders("*")
                 .allowCredentials(true)
                 .maxAge(3600);
