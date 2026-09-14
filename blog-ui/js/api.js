@@ -1,5 +1,5 @@
-// API 基础地址，指向后端 8888 端口
-const BASE_URL = 'http://localhost:8888';
+
+const BASE_URL = 'https://api.instapix.icu';
 
 function api(path, method, body) {
     const options = {
