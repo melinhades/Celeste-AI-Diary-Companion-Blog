@@ -9,6 +9,32 @@
 
 A unique dual-platform system that combines private AI-assisted diary writing with optional public blog sharing. Built on the Celeste theme using Java 17 + Spring Boot backend and native HTML/CSS/JS frontend, this platform offers immersive AI companionship for personal reflection while providing the tools to transform meaningful entries into public blog posts.
 
+## 🌐 Live Demo
+
+✨ **The project is officially deployed and live! Welcome to visit!** ✨
+
+*   **Frontend Homepage (Blog & Diary)**: [https://instapix.icu](https://instapix.icu)
+*   **Alternate URL**: [https://www.instapix.icu](https://www.instapix.icu)
+*   **Backend API Service**: [https://api.instapix.icu](https://api.instapix.icu) *(Pure API service; a 404 on the root path is expected)*
+
+> **Tech Stack Deployment**:
+> Frontend is hosted on **Cloudflare Pages**, backend is deployed on **Render (Docker)**, and the cloud database uses **TiDB Cloud (Starter Free Tier)**.
+> CORS is configured between frontend and backend, utilizing HTTPS encrypted connections.
+
+---
+
+## 🎥 Demo Video
+
+👉 **[Click here to watch the demo video](https://www.bilibili.com/video/BV13QYT64EDX/?spm_id_from=333.1391.0.0&vd_source=fffad22c66e972e6b5cb2f2ce31f821d)**
+
+> ⚠️ **Note**: This project is deployed on free-tier services (Render + TiDB Cloud). Due to strict resource limits and automatic cold-start sleep policies, the real online experience may be slower than the video.
+
+## 🛡️ Disclaimer
+
+This project is an **unofficial, non-commercial fan project**, intended for learning and exchange purposes only, and is not used for any commercial purposes.
+The copyrights for Celeste-related art, characters, music, fonts, etc., belong to **Extremely OK Games (Maddy Makes Games)**.
+If notified by the copyright holder, I will immediately remove the relevant content.
+
 ## 📋 Project Overview
 
 The Celeste AI Diary Companion Blog offers a unique hybrid experience where users maintain private AI-assisted diaries that can optionally be shared as public blog posts.
@@ -16,6 +42,10 @@ The Celeste AI Diary Companion Blog offers a unique hybrid experience where user
 Users write diaries here, with AI companion **Madeline** (warm, sincere, delicate) providing constant companionship: offering writing feedback, proactive check-ins, chatting, feather breathing gameplay, daily postcards, and bookshelf snapshot postcards. The innkeeper **Oshiro** (tsundere) permanently resides on the shop page.
 
 This dual-platform approach creates a meaningful flow: intimate personal reflections in the diary can evolve into thoughtful blog entries when users choose to share their insights with others.
+
+
+> ⚠️ **Note**: This project is deployed on **free-tier services** (Render + TiDB Cloud + Upstash). Due to strict resource limits and automatic cold-start sleep policies, the real online experience may be **slower** than the video. The video showcases an ideal, unrestricted environment. Thank you for your patience!
+
 
 ### ✨ Features Highlight
 
@@ -283,6 +313,20 @@ A character-themed profile dashboard set against Celeste's rocky mountain backdr
 
 A full Markdown editor set against a dreamy purple twilight sky. Toolbar supports rich formatting plus Celeste-specific tools: **Madeline** (insert character refs), **润色/Polish** (AI refinement), **生成文章/Generate** (AI article generation).
 
+## 🪶 Golden Feather System
+
+<p align="center">
+  < img src="docs/screenshots/feather-game.png" alt="Golden Feather" width="720">
+</p >
+
+A dual-core healing module inspired by *Celeste*: **Reflective Journaling** + **Anxiety Relief**.
+
+*   **📝 Reflective Journaling**: Write scattered thoughts freely. Madeline listens warmly to untangle your mind.
+*   **🌬️ Anxiety Relief**: Follow the physics-based falling feather to breathe deeply and cool down when anxiety hits.
+
+**🎯 Workflow**: `Awareness (Write)` ➔ `Relief (Breathe)` ➔ `Reward (Get Feather)` ➔ `Restart`
+
+*Let every reflection be heard, and every anxiety find an exit.*
 ---
 
 ## 🚀 Quick Start
