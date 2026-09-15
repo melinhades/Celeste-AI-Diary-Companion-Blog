@@ -41,7 +41,6 @@ This dual-platform approach creates a meaningful flow: intimate personal reflect
 
 <p align="center">
   <a href="https://www.bilibili.com/video/BV13QYT64EDX/" target="_blank">
-    < img src="docs/screenshots/video-cover.png" alt="Watch Demo" width="720">
   </a >
   <br>
   <em>Click to watch the full demo video</em>
