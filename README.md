@@ -40,7 +40,11 @@ This dual-platform approach creates a meaningful flow: intimate personal reflect
 ## 🎥 Demo Video
 
 <p align="center">
-  <video src="docs/videos/demo.mp4" controls width="720" poster="docs/screenshots/diary.png"></video>
+  <a href="https://www.bilibili.com/video/BV13QYT64EDX/" target="_blank">
+    < img src="docs/screenshots/video-cover.png" alt="Watch Demo" width="720">
+  </a >
+  <br>
+  <em>Click to watch the full demo video</em>
 </p >
 
 > ⚠️ **Note**: This project is deployed on **free-tier services** (Render + TiDB Cloud + Upstash). Due to strict resource limits and automatic cold-start sleep policies, the real online experience may be **slower** than the video. The video showcases an ideal, unrestricted environment. Thank you for your patience!
