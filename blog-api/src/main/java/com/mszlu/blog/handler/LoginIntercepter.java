@@ -21,6 +21,7 @@ import javax.servlet.http.HttpServletResponse;
 public class LoginIntercepter implements HandlerInterceptor {
     @Autowired
     private LoginService loginService;
+
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)throws Exception{
         /**
@@ -29,11 +30,13 @@ public class LoginIntercepter implements HandlerInterceptor {
          * 3.如果token不为空，登录验证loginservice checkToken
          * 4.如果验证成功，放行即可
          */
-        if (!(handler instanceof HandlerMethod) ){
-            //handler 可能是RequestResourceHandler springboot程序默认访问静态资源 默认去class path下的static目录去查询
+        // 1. 如果是 OPTIONS 预检请求，直接放行，返回 true
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
             return true;
         }
-        String token=request.getHeader("Authorization");
+
+        // 2. 原有的 Token 校验逻辑（保持不变）
+        String token = request.getHeader("Authorization");
         log.info("=================request start===========================");
         String requestURI = request.getRequestURI();
         log.info("request uri:{}",requestURI);
