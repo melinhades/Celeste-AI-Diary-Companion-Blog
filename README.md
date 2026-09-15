@@ -316,7 +316,7 @@ A full Markdown editor set against a dreamy purple twilight sky. Toolbar support
 ## 🪶 Golden Feather System
 
 <p align="center">
-  < img src="docs/screenshots/feather-game.png" alt="Golden Feather" width="720">
+  <img src="docs/screenshots/feather-game.png" alt="Golden Feather" width="720">
 </p >
 
 A dual-core healing module inspired by *Celeste*: **Reflective Journaling** + **Anxiety Relief**.
