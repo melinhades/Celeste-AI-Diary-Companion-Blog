@@ -23,9 +23,11 @@ A unique dual-platform system that combines private AI-assisted diary writing wi
 
 ---
 
-### 🎥 Demo Video
+## 🎥 Demo Video
 
-[![Watch Demo]]([https://www.bilibili.com/video/BV13QY764EDX/](https://www.bilibili.com/video/BV13QYT64EDX/?spm_id_from=333.1387.homepage.video_card.click))
+👉 **[Click here to watch the demo video]([https://www.bilibili.com/video/BV13QY764EDX/](https://www.bilibili.com/video/BV13QYT64EDX/?spm_id_from=333.1387.homepage.video_card.click&vd_source=fffad22c66e972e6b5cb2f2ce31f821d))**
+
+> ⚠️ **Note**: This project is deployed on free-tier services (Render + TiDB Cloud). Due to strict resource limits and automatic cold-start sleep policies, the real online experience may be slower than the video.
 
 ## 🛡️ Disclaimer
 
