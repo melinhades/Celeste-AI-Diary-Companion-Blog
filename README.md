@@ -23,6 +23,16 @@ A unique dual-platform system that combines private AI-assisted diary writing wi
 
 ---
 
+## 🎥 Demo Video
+
+<p align="center">
+  <a href=" " target="_blank">
+    < img src="docs/screenshots/video-cover.png" alt="Watch Demo" width="720">
+  </a >
+  <br>
+  <em>Click to watch the full demo video</em>
+</p >
+
 ## 🛡️ Disclaimer
 
 This project is an **unofficial, non-commercial fan project**, intended for learning and exchange purposes only, and is not used for any commercial purposes.
@@ -37,14 +47,6 @@ Users write diaries here, with AI companion **Madeline** (warm, sincere, delicat
 
 This dual-platform approach creates a meaningful flow: intimate personal reflections in the diary can evolve into thoughtful blog entries when users choose to share their insights with others.
 
-## 🎥 Demo Video
-
-<p align="center">
-  <a href="https://www.bilibili.com/video/BV13QYT64EDX/" target="_blank">
-  </a >
-  <br>
-  <em>Click to watch the full demo video</em>
-</p >
 
 > ⚠️ **Note**: This project is deployed on **free-tier services** (Render + TiDB Cloud + Upstash). Due to strict resource limits and automatic cold-start sleep policies, the real online experience may be **slower** than the video. The video showcases an ideal, unrestricted environment. Thank you for your patience!
 
