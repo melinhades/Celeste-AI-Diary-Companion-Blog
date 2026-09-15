@@ -25,7 +25,7 @@ A unique dual-platform system that combines private AI-assisted diary writing wi
 
 ### 🎥 Demo Video
 
-[![Watch Demo](docs/screenshots/video-cover.png)](https://www.bilibili.com/video/BV13QY764EDX/)
+[![Watch Demo](docs/screenshots/diary.png)]([https://www.bilibili.com/video/BV13QY764EDX/](https://www.bilibili.com/video/BV13QYT64EDX/?spm_id_from=333.1387.homepage.video_card.click))
 
 ## 🛡️ Disclaimer
 
