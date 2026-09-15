@@ -37,6 +37,15 @@ Users write diaries here, with AI companion **Madeline** (warm, sincere, delicat
 
 This dual-platform approach creates a meaningful flow: intimate personal reflections in the diary can evolve into thoughtful blog entries when users choose to share their insights with others.
 
+## 🎥 Demo Video
+
+<p align="center">
+  <video src="docs/videos/demo.mp4" controls width="720" poster="docs/screenshots/diary.png"></video>
+</p >
+
+> ⚠️ **Note**: This project is deployed on **free-tier services** (Render + TiDB Cloud + Upstash). Due to strict resource limits and automatic cold-start sleep policies, the real online experience may be **slower** than the video. The video showcases an ideal, unrestricted environment. Thank you for your patience!
+
+
 ### ✨ Features Highlight
 
 | Feature | Description | Status |
@@ -303,6 +312,20 @@ A character-themed profile dashboard set against Celeste's rocky mountain backdr
 
 A full Markdown editor set against a dreamy purple twilight sky. Toolbar supports rich formatting plus Celeste-specific tools: **Madeline** (insert character refs), **润色/Polish** (AI refinement), **生成文章/Generate** (AI article generation).
 
+## 🪶 Golden Feather System
+
+<p align="center">
+  < img src="docs/screenshots/feather-game.png" alt="Golden Feather" width="720">
+</p >
+
+A dual-core healing module inspired by *Celeste*: **Reflective Journaling** + **Anxiety Relief**.
+
+*   **📝 Reflective Journaling**: Write scattered thoughts freely. Madeline listens warmly to untangle your mind.
+*   **🌬️ Anxiety Relief**: Follow the physics-based falling feather to breathe deeply and cool down when anxiety hits.
+
+**🎯 Workflow**: `Awareness (Write)` ➔ `Relief (Breathe)` ➔ `Reward (Get Feather)` ➔ `Restart`
+
+*Let every reflection be heard, and every anxiety find an exit.*
 ---
 
 ## 🚀 Quick Start
