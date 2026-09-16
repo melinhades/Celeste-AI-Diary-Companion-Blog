@@ -1002,3 +1002,12 @@ MIT License — see [LICENSE](LICENSE) for details.
 - [MyBatis-Plus](https://baomidou.com/) — Elegant database operations
 - [Spring Boot](https://spring.io/projects/spring-boot) — Productivity framework
 - All contributors who shaped this project
+- ## Star History
+
+<a href="https://www.star-history.com/?repos=melinhades%2Fceleste-ai-diary-companion-blog&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=melinhades/celeste-ai-diary-companion-blog&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=melinhades/celeste-ai-diary-companion-blog&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=melinhades/celeste-ai-diary-companion-blog&type=date&legend=top-left" />
+ </picture>
+</a>
