@@ -1,67 +1,164 @@
-# Celeste AI Diary Companion Blog
+<div align="center">
 
-![Java](https://img.shields.io/badge/Java-17%2B-orange.svg?style=for-the-badge&logo=java)
-![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.5.0-brightgreen.svg?style=for-the-badge&logo=spring)
-![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)
-![Frontend](https://img.shields.io/badge/Frontend-Vanilla%20JS-blueviolet.svg?style=for-the-badge)
-![AI Engine](https://img.shields.io/badge/AI%20Engine-GLM--4-purple.svg?style=for-the-badge)
-![Architecture](https://img.shields.io/badge/Architecture-Monorepo%20(Modular)-orange.svg?style=for-the-badge)
+<!-- ═══════════════════ HERO BANNER ═══════════════════ -->
+<img src="blog-ui/celeste-gui/background.jpg" alt="Madeline reaching for the summit" width="100%" style="border-radius:12px;">
 
-A unique dual-platform system that combines private AI-assisted diary writing with optional public blog sharing. Built on the Celeste theme using Java 17 + Spring Boot backend and native HTML/CSS/JS frontend, this platform offers immersive AI companionship for personal reflection while providing the tools to transform meaningful entries into public blog posts.
+<br>
 
-## 🌐 Live Demo
+<img src="blog-ui/celeste-gui/title.png" alt="CELESTE" width="320">
 
-✨ **The project is officially deployed and live! Welcome to visit!** ✨
+# 🏔️ AI Diary Companion Blog
 
-*   **Frontend Homepage (Blog & Diary)**: [https://instapix.icu](https://instapix.icu)
-*   **Alternate URL**: [https://www.instapix.icu](https://www.instapix.icu)
-*   **Backend API Service**: [https://api.instapix.icu](https://api.instapix.icu) *(Pure API service; a 404 on the root path is expected)*
+> *"Every step up the mountain is a word in your story."*
+> **让每一个字都有温度，让每一天都有意义。**
 
-> **Tech Stack Deployment**:
-> Frontend is hosted on **Cloudflare Pages**, backend is deployed on **Render (Docker)**, and the cloud database uses **TiDB Cloud (Starter Free Tier)**.
-> CORS is configured between frontend and backend, utilizing HTTPS encrypted connections.
+[![Java](https://img.shields.io/badge/Java-17%2B-orange.svg?style=for-the-badge&logo=openjdk&logoColor=white)](https://www.oracle.com/java/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.5.0-brightgreen.svg?style=for-the-badge&logo=spring&logoColor=white)](https://spring.io/projects/spring-boot)
+[![Frontend](https://img.shields.io/badge/Frontend-Vanilla%20JS-blueviolet.svg?style=for-the-badge&logo=javascript&logoColor=white)](https://developer.mozilla.org/docs/Web/JavaScript)
+[![AI](https://img.shields.io/badge/AI-GLM--4%20%2B%20bge--m3-purple.svg?style=for-the-badge&logo=openai&logoColor=white)](https://siliconflow.cn/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
+[![Architecture](https://img.shields.io/badge/Architecture-Monorepo%20(Modular)-orange.svg?style=for-the-badge)](pom.xml)
+
+</div>
 
 ---
 
-## 🎥 Demo Video
+## 🌐 Quick Links
 
-👉 **[Click here to watch the demo video](https://www.bilibili.com/video/BV13QYT64EDX/?spm_id_from=333.1391.0.0&vd_source=fffad22c66e972e6b5cb2f2ce31f821d)**
+| 🚀 Live Demo | 🎥 Demo Video | 📚 Docs |
+|:---:|:---:|:---:|
+| [**instapix.icu**](https://instapix.icu) | [**Bilibili**](https://www.bilibili.com/video/BV13QYT64EDX/) | [Contributing](CONTRIBUTING.md) · [Troubleshooting](TROUBLESHOOTING.md) |
 
-> ⚠️ **Note**: This project is deployed on free-tier services (Render + TiDB Cloud). Due to strict resource limits and automatic cold-start sleep policies, the real online experience may be slower than the video.
+> 🌤️ **Deployment Stack**: Frontend → Cloudflare Pages · Backend → Render (Docker) · Database → TiDB Cloud (Starter Free)
+
+---
+
+## 📖 Table of Contents
+
+- [💫 The Vision](#-the-vision)
+- [✨ Core Features](#-core-features)
+- [🖼️ Screenshots Gallery](#️-screenshots-gallery)
+- [🪶 Golden Feather System](#-golden-feather-system)
+- [🏗️ System Architecture](#️-system-architecture)
+- [📁 Project Structure](#-project-structure)
+- [🚀 Quick Start](#-quick-start)
+- [⚙️ Configuration Deep-Dive](#️-configuration-deep-dive)
+- [🎯 Core Features Explained](#-core-features-explained)
+- [📚 Technical Deep-Dive](#-technical-deep-dive)
+- [🧪 Testing & Quality](#-testing--quality)
+- [📦 Deployment Guide](#-deployment-guide)
+- [🤝 Contribution Guide](#-contribution-guide)
+- [❓ FAQ & Troubleshooting](#-faq--troubleshooting)
+- [📈 Roadmap](#-roadmap)
+- [📄 License & Acknowledgments](#-license--acknowledgments)
+
+---
+
+## 💫 The Vision
+
+> *In Celeste, Madeline climbs a mountain to confront her anxiety.*
+> *Here, you climb your own mountain — one diary entry at a time.*
+
+The **Celeste AI Diary Companion Blog** is a dual-platform system that merges **private AI-assisted diary writing** with **optional public blog sharing**. Inspired by the indie masterpiece *Celeste* (Extremely OK Games), every pixel, sound, and interaction is themed around Madeline's journey to the summit.
+
+Write your diaries here, and **Madeline** — warm, sincere, delicate — will be your constant climbing companion: offering writing feedback, proactive check-ins, cozy chats, feather-breathing gameplay, daily postcards, and bookshelf snapshots. The tsundere innkeeper **Oshiro** permanently resides in the shop.
+
+This dual-platform flow creates meaning: **intimate personal reflections in the diary can evolve into thoughtful blog entries** when you choose to share your insights with the world.
+
+> ⚠️ **Note**: This project runs on **free-tier services** (Render + TiDB Cloud + Upstash). Due to resource limits and cold-start sleep, the live experience may be **slower** than the demo video. Your patience is appreciated — every summit takes time. 🏔️
+
+---
+
+## ✨ Core Features
+
+<div align="center">
+  <img src="blog-ui/celeste-gui/mountain-poster.png" alt="Discover Celeste Mountain" width="280">
+</div>
+
+| 🏷️ | Feature | Description | Status |
+|:---:|---------|-------------|:---:|
+| <img src="blog-ui/celeste-icons/heartgem0.png" width="28"> | **AI Companionship** | Madeline provides intelligent, emotionally-aware interactions (7 emotion states) | ✅ |
+| <img src="blog-ui/celeste-collectables/cassette.png" width="28"> | **Memory System** | Daily postcards & monthly snapshot reflections (RAG-powered) | ✅ |
+| <img src="blog-ui/celeste-feather/feather0.png" width="28"> | **Feather Breathing Game** | Physics-based falling feather for anxiety relief | ✅ |
+| <img src="blog-ui/celeste-collectables/strawberry.png" width="28"> | **Strawberry Economy** | Earn 🍓 through writing, spend in Oshiro's shop | ✅ |
+| 📝 | **Private Diary Writing** | Secure, formatted text with auto-save & AI feedback | ✅ |
+| 🌐 | **Public Blog Sharing** | Transform diary entries into blog posts with one click | ✅ |
+| 🔄 | **Diary → Blog Flow** | Seamless transition from private reflection to public sharing | ✅ |
+| 👕 | **Customization** | Themes, decorations & personalization options | 🔄 |
+| 📊 | **Analytics** | Emotion tracking, writing insights & engagement metrics | 🔄 |
+| 🔒 | **Security Hardened** | BCrypt, JWT env-config, bounded pools, magic-number uploads | ✅ |
+| 📈 | **Observability Ready** | Actuator + Prometheus metrics, structured logging, health probes | ✅ |
+
+---
+
+## 🖼️ Screenshots Gallery
+
+### 🔐 Login — *"This is Madeline. Let's climb together."*
+
+<p align="center">
+  <img src="docs/screenshots/login.png" alt="Login Page" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
+</p>
+
+The gateway to your climbing journey — a parchment-textured card floats on a starry night sky, Madeline's avatar greets you at the top.
+
+### 🏠 Index — *Where your reflections become stories worth sharing.*
+
+<p align="center">
+  <img src="docs/screenshots/index.png" alt="Blog Index" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
+</p>
+
+The public blog hub — elegant dark cards with metadata, category filters (`All` / `Tech` / `Life` / `Study`), search bar, **Popular** posts and **Tags** cloud.
+
+### 📖 Diary — *Every word has warmth, every day has meaning.*
+
+<p align="center">
+  <img src="docs/screenshots/diary.png" alt="Diary Page" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
+</p>
+
+The heart of the app — a postcard-style diary reader where Madeline presents your past entries as mailed letters (stamps & postmarks included), with real-time companionship in a Celeste dialogue box.
+
+### 🌟 My Space — *Your personal summit — every step counted.*
+
+<p align="center">
+  <img src="docs/screenshots/namespace.png" alt="My Space" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
+</p>
+
+A character-themed profile dashboard against Celeste's rocky backdrop — ticket-card with collected stickers, and a stats panel tracking **strawberry** 🍓, **cassette** 📼, and **chili** 🌶️ balances.
+
+### ✍️ Write — *From private thoughts to public stories — one Publish away.*
+
+<p align="center">
+  <img src="docs/screenshots/write.png" alt="Write Article" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
+</p>
+
+A full Markdown editor under a dreamy purple twilight sky — toolbar supports rich formatting plus **Madeline** refs, **润色/Polish** (AI refinement), and **生成文章/Generate**.
+
+---
+
+## 🪶 Golden Feather System
+
+<p align="center">
+  <img src="docs/screenshots/feather-game.png" alt="Golden Feather" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
+</p>
+
+A dual-core healing module inspired by *Celeste*: **Reflective Journaling** + **Anxiety Relief**.
+
+| Module | How it works |
+|:---:|---------|
+| 📝 **Reflective Journaling** | Write scattered thoughts freely — Madeline listens warmly to untangle your mind. |
+| 🌬️ **Anxiety Relief** | Follow the physics-based falling feather to breathe deeply and cool down when anxiety hits. |
+
+**🎯 Workflow:** `Awareness (Write)` ➔ `Relief (Breathe)` ➔ `Reward (Get Feather)` ➔ `Restart`
+
+> *Let every reflection be heard, and every anxiety find an exit.*
+
+---
 
 ## 🛡️ Disclaimer
 
-This project is an **unofficial, non-commercial fan project**, intended for learning and exchange purposes only, and is not used for any commercial purposes.
-The copyrights for Celeste-related art, characters, music, fonts, etc., belong to **Extremely OK Games (Maddy Makes Games)**.
-If notified by the copyright holder, I will immediately remove the relevant content.
-
-## 📋 Project Overview
-
-The Celeste AI Diary Companion Blog offers a unique hybrid experience where users maintain private AI-assisted diaries that can optionally be shared as public blog posts.
-
-Users write diaries here, with AI companion **Madeline** (warm, sincere, delicate) providing constant companionship: offering writing feedback, proactive check-ins, chatting, feather breathing gameplay, daily postcards, and bookshelf snapshot postcards. The innkeeper **Oshiro** (tsundere) permanently resides on the shop page.
-
-This dual-platform approach creates a meaningful flow: intimate personal reflections in the diary can evolve into thoughtful blog entries when users choose to share their insights with others.
-
-
-> ⚠️ **Note**: This project is deployed on **free-tier services** (Render + TiDB Cloud + Upstash). Due to strict resource limits and automatic cold-start sleep policies, the real online experience may be **slower** than the video. The video showcases an ideal, unrestricted environment. Thank you for your patience!
-
-
-### ✨ Features Highlight
-
-| Feature | Description | Status |
-|---------|-------------|---------|
-| 🤖 **AI Companionship** | Madeline provides intelligent, emotionally-aware interactions | ✅ Complete |
-| 🎮 **Interactive Games** | Feather breathing game for relaxation | ✅ Complete |
-| 💌 **Memory System** | Daily postcards & monthly snapshots | ✅ Complete |
-| 📝 **Private Diary Writing** | Secure, formatted text with auto-save & AI feedback | ✅ Complete |
-| 🌐 **Public Blog Sharing** | Transform diary entries into blog posts with one click | ✅ Complete |
-| 🔄 **Diary-to-Blog Flow** | Seamless transition from private reflection to public sharing | ✅ Complete |
-| 🏪 **Strawberry Economy** | Earn rewards through writing & engagement | ✅ Complete |
-| 👕 **Customization** | Themes, decorations & personalization options | 🔄 In Progress |
-| 📊 **Analytics** | Emotion tracking, writing insights & engagement metrics | 🔄 In Progress |
-| 🔒 **Security Hardened** | BCrypt passwords, JWT env-config, bounded thread pools, magic-number upload validation | ✅ Complete |
-| 📈 **Observability Ready** | Actuator + Prometheus metrics, structured logging, health probes | ✅ Complete |
+This project is an **unofficial, non-commercial fan project** for learning and exchange only.
+Celeste-related art, characters, music, and fonts belong to **Extremely OK Games (Maddy Makes Games)**.
+If the copyright holder requests removal, relevant content will be removed immediately.
 
 ---
 
@@ -69,7 +166,7 @@ This dual-platform approach creates a meaningful flow: intimate personal reflect
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                          CELESTE BLOG ECOSYSTEM                             │
+│                        CELESTE BLOG ECOSYSTEM                              │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  ┌──────────────────┐      ┌──────────────────┐      ┌──────────────────┐  │
@@ -77,8 +174,7 @@ This dual-platform approach creates a meaningful flow: intimate personal reflect
 │  │  (Frontend)      │◄────►│  (Core API)      │◄────►│  (Admin Panel)   │  │
 │  │  Vanilla HTML/   │ REST │  Spring Boot     │      │  Spring Boot +   │  │
 │  │  CSS/JS          │      │  2.5.0 + MP      │      │  Spring Security │  │
-│  │  Port: 8080/     │      │  Port: 8888      │      │  Port: 8889      │  │
-│  │  Direct file     │      │                  │      │                  │  │
+│  │  Port: 8080      │      │  Port: 8888      │      │  Port: 8889      │  │
 │  └──────────────────┘      └────────┬─────────┘      └──────────────────┘  │
 │                                     │                                      │
 │                    ┌────────────────┼────────────────┐                     │
@@ -86,7 +182,7 @@ This dual-platform approach creates a meaningful flow: intimate personal reflect
 │              ┌─────▼─────┐    ┌─────▼─────┐    ┌─────▼─────┐             │
 │              │  MySQL    │    │   Redis   │    │ SiliconFlow│             │
 │              │  (blog)   │    │  (Cache/  │    │  (GLM-4 +  │             │
-│              │  Port 3306│    │  Session/ │    │  bge-m3)   │             │
+│              │  :3306    │    │  Session/ │    │  bge-m3)   │             │
 │              │           │    │  Token)   │    │  AI Gateway│             │
 │              └───────────┘    └───────────┘    └─────────────┘             │
 │                                                                             │
@@ -102,12 +198,12 @@ This dual-platform approach creates a meaningful flow: intimate personal reflect
 | **ORM** | MyBatis-Plus | 3.5.3.1 | Enhanced MyBatis with CRUD, pagination |
 | **Security** | Spring Security + JWT | 5.x / 0.9.1 | Stateless auth, BCrypt passwords |
 | **Cache/Session** | Redis + Lettuce | 6.x | Distributed cache, token store |
-| **AI Gateway** | SiliconFlow | - | GLM-4 (chat), bge-m3 (embedding) |
+| **AI Gateway** | SiliconFlow | — | GLM-4 (chat), bge-m3 (embedding) |
 | **Database** | MySQL | 5.7+/8.0 | Primary persistence |
 | **Monitoring** | Actuator + Micrometer + Prometheus | 2.5.x / 1.10+ | Metrics, health checks |
 | **Build** | Maven | 3.6+ | Multi-module build |
 | **Frontend** | Vanilla HTML/CSS/JS | ES6+ | Zero-build, framework-free |
-| **Fonts** | Renogare + CelesteZH | - | Pixel-perfect Celeste aesthetic |
+| **Fonts** | Renogare + CelesteZH | — | Pixel-perfect Celeste aesthetic |
 
 ---
 
@@ -147,94 +243,35 @@ blog/
 │       │   │   ├── UploadController.java     # File upload (magic-number validated)
 │       │   │   └── UserController.java       # User profile
 │       │   ├── dao/
-│       │   │   ├── controller/            # (Legacy, being consolidated)
 │       │   │   ├── mapper/                # MyBatis mappers
 │       │   │   ├── pojo/                  # Entity classes
-│       │   │   │   ├── Article.java
-│       │   │   │   ├── ArticleBody.java
-│       │   │   │   ├── Category.java
-│       │   │   │   ├── Comment.java
-│       │   │   │   ├── Diary.java
-│       │   │   │   ├── SysUser.java
-│       │   │   │   └── Tag.java
 │       │   │   └── dos/                   # Data objects for complex queries
 │       │   ├── handler/
 │       │   │   ├── AllExceptionHandler.java    # Global exception handling
 │       │   │   └── LoginIntercepter.java       # JWT auth interceptor
 │       │   ├── impl/                    # Service implementations
-│       │   │   ├── ChatServiceImpl.java
-│       │   │   ├── DiaryServiceImpl.java
-│       │   │   ├── FeatherServiceImpl.java
-│       │   │   ├── LoginServiceImpl.java       # BCrypt + JWT
-│       │   │   ├── MemoryServiceImpl.java
-│       │   │   ├── SysUserServiceImpl.java
-│       │   │   └── ...
 │       │   ├── service/                 # Service interfaces
-│       │   │   ├── ai/
-│       │   │   │   ├── AiClient.java           # GLM-4 client (JSON mode support)
-│       │   │   │   ├── PromptBuilder.java      # Centralized prompt engineering
-│       │   │   │   └── MemorySearchService.java
-│       │   │   ├── ArticleService.java
-│       │   │   ├── CategoryService.java
-│       │   │   ├── CommentsService.java
-│       │   │   ├── DiaryService.java
-│       │   │   ├── FeatherService.java
-│       │   │   ├── LoginService.java
-│       │   │   ├── MemoryService.java
-│       │   │   ├── SysUserService.java
-│       │   │   └── ThreadService.java      # Async view-count updates
+│       │   │   └── ai/
+│       │   │       ├── AiClient.java           # GLM-4 client (JSON mode)
+│       │   │       ├── PromptBuilder.java      # Centralized prompt engineering
+│       │   │       └── MemorySearchService.java
 │       │   ├── utils/
-│       │   │   ├── HttpContextUtils.java
-│       │   │   ├── IpUtils.java
 │       │   │   ├── JWTUtils.java               # JWT create/verify (env-configurable)
-│       │   │   ├── QiniuUtils.java
 │       │   │   └── UserThreadLocal.java        # Thread-local user context
 │       │   ├── vo/                      # View objects (API contracts)
-│       │   │   ├── Result.java
-│       │   │   ├── LoginUserVo.java
-│       │   │   └── params/              # Request/Response DTOs
-│       │   ├── common/
-│       │   │   ├── aop/
-│       │   │   │   ├── LogAnnotation.java      # Method-level audit logging
-│       │   │   │   └── LogAspect.java          # AOP logging impl
-│       │   │   └── cache/
-│       │   │       ├── Cache.java              # @Cache annotation
-│       │   │       └── CacheAspect.java        # Redis caching AOP
-│       │   └── AdminApp.java                    # (Legacy entry point)
+│       │   └── common/
+│       │       ├── aop/                        # Method-level audit logging
+│       │       └── cache/                      # Redis caching AOP
 │       └── resources/
-│           ├── application.properties        # Dev config (with env var placeholders)
-│           ├── application-prod.yml          # Production config (HikariCP, security headers, etc.)
+│           ├── application.properties        # Dev config
+│           ├── application-prod.yml          # Production config (HikariCP, security headers)
 │           └── log4j2.xml                    # Structured JSON logging
 ├── blog-admin/                          # Admin backend module
-│   ├── pom.xml
-│   └── src/main/
-│       ├── java/com/mszlu/blog/admin/
-│       │   ├── config/
-│       │   │   ├── MybatisPlusConfig.java
-│       │   │   └── SecurityConfig.java         # Spring Security form login + RBAC
-│       │   ├── controller/
-│       │   │   ├── AdminController.java
-│       │   │   └── HomeController.java
-│       │   ├── mapper/
-│       │   │   ├── AdminMapper.java
-│       │   │   └── PermissionMapper.java
-│       │   ├── pojo/
-│       │   │   ├── Admin.java
-│       │   │   └── Permission.java
-│       │   ├── service/
-│       │   │   ├── AdminService.java
-│       │   │   ├── AuthService.java            # URL-level permission check
-│       │   │   ├── PermissionService.java
-│       │   │   └── SecurityUserService.java    # UserDetailsService impl
-│       │   ├── vo/
-│       │   │   ├── Admin.java
-│       │   │   ├── Result.java
-│       │   │   └── PageResult.java
-│       │   ├── model/params/PageParam.java
-│       │   └── utils/PasswordGenerator.java
-│       └── resources/
-│           ├── application.properties
-│           └── application-prod.yml
+│   └── src/main/java/com/mszlu/blog/admin/
+│       ├── config/SecurityConfig.java         # Spring Security form login + RBAC
+│       ├── controller/                        # Admin endpoints
+│       ├── service/AuthService.java           # URL-level permission check
+│       └── ...
 └── blog-ui/                             # Frontend static assets
     ├── index.html                       # Blog index
     ├── diary.html                       # Diary main page
@@ -242,91 +279,11 @@ blog/
     ├── shelf.html                       # Bookshelf (snapshots)
     ├── shop.html                        # Oshiro Inn (strawberry economy)
     ├── me.html                          # Personal space
-    ├── archives.html                    # Article archives
-    ├── article.html                     # Article detail
+    ├── archives.html / article.html     # Blog archives & detail
     ├── login.html / register.html       # Auth pages
-    ├── css/
-    │   ├── common.css                   # Global styles, variables
-    │   └── diary.css                    # Diary-specific (~940 lines)
-    ├── js/
-    │   ├── api.js                       # API client + strawberry balance
-    │   ├── diary.js                     # Diary app core (~2400 lines)
-    │   ├── write-madeline.js            # Madeline pixel avatar (8 poses)
-    │   ├── feather-game.js              # Feather breathing game (Box2D-like)
-    │   ├── auth.js                      # Auth state management
-    │   ├── shelf.js                     # Bookshelf interactions
-    │   └── feather-game.js
-    ├── celeste-sounds/
-    │   └── madeline/                    # Voice lines (SE + dialogue)
-    ├── celeste-font-en/                 # Renogare font
-    ├── celeste-font-zh/                 # CelesteZH font
-    ├── celeste-gui/                     # UI textures (backgrounds, stamps)
-    └── uploads/                         # User uploads (gitignored)
+    ├── css/  js/  celeste-gui/  celeste-sounds/  celeste-font-en/ ...
 ```
 
----
-
-## 📸 Screenshots
-
-### 🔐 Login
-> *"This is Madeline. Let's climb together."*
-
-<p align="center">
-  <img src="docs/screenshots/login.png" alt="Login Page" width="720">
-</p>
-
-The gateway to your climbing journey. A parchment-textured card floats on a starry night sky — Madeline's avatar greets you at the top, with clean account/password fields below. New users can jump to registration via the "Sign up" link. The entire login flow uses Celeste's signature warm paper-on-dark aesthetic.
-
-### 🏠 Index (Blog Feed)
-> *Where your reflections become stories worth sharing.*
-
-<p align="center">
-  <img src="docs/screenshots/index.png" alt="Index Page" width="720">
-</p>
-
-The main hub of the public blog. Articles are displayed as elegant dark cards with metadata (author, date, read time, likes), filterable by category (`All` / `Tech` / `Life` / `Study`) and searchable via the header bar. The right sidebar surfaces **Popular** posts and a **Tags** cloud for discovery.
-
-### 📖 Diary
-> *Every word has warmth, every day has meaning.*
-
-<p align="center">
-  <img src="docs/screenshots/diary.png" alt="Diary Page" width="720">
-</p>
-
-The heart of the application — a postcard-style diary reader where Madeline presents your past entries as beautiful mailed letters (complete with stamps and postmarks). At the bottom, Madeline herself appears in a Celeste-style dialogue box, providing real-time companionship and emotional support.
-
-### 🌟 My Space
-> *Your personal summit — every step counted.*
-
-<p align="center">
-  <img src="docs/screenshots/namespace.png" alt="My Space Page" width="720">
-</p>
-
-A character-themed profile dashboard set against Celeste's rocky mountain backdrop. Your ticket-card displays collected stickers and avatars, while a stats panel tracks your **strawberry** (🍓 writing rewards), **cassette** (📼 memories), and **chili** (🌶️ challenges) balances.
-
-### ✍️ Write Article
-> *From private thoughts to public stories — one Publish away.*
-
-<p align="center">
-  <img src="docs/screenshots/write.png" alt="Write Article Page" width="720">
-</p>
-
-A full Markdown editor set against a dreamy purple twilight sky. Toolbar supports rich formatting plus Celeste-specific tools: **Madeline** (insert character refs), **润色/Polish** (AI refinement), **生成文章/Generate** (AI article generation).
-
-## 🪶 Golden Feather System
-
-<p align="center">
-  <img src="docs/screenshots/feather-game.png" alt="Golden Feather" width="720">
-</p >
-
-A dual-core healing module inspired by *Celeste*: **Reflective Journaling** + **Anxiety Relief**.
-
-*   **📝 Reflective Journaling**: Write scattered thoughts freely. Madeline listens warmly to untangle your mind.
-*   **🌬️ Anxiety Relief**: Follow the physics-based falling feather to breathe deeply and cool down when anxiety hits.
-
-**🎯 Workflow**: `Awareness (Write)` ➔ `Relief (Breathe)` ➔ `Reward (Get Feather)` ➔ `Restart`
-
-*Let every reflection be heard, and every anxiety find an exit.*
 ---
 
 ## 🚀 Quick Start
@@ -336,8 +293,8 @@ A dual-core healing module inspired by *Celeste*: **Reflective Journaling** + **
 - **Java 17+** (JDK 17 LTS recommended)
 - **Maven 3.6+**
 - **MySQL 5.7+ / 8.0**
-- **Redis 6+** (for caching & token storage)
-- **SiliconFlow API Key** (for GLM-4 & bge-m3)
+- **Redis 6+** (caching & token storage)
+- **SiliconFlow API Key** (GLM-4 & bge-m3)
 - **Node.js 18+** (optional, for frontend dev server)
 
 ### 1. Clone & Configure
@@ -350,13 +307,13 @@ cd blog
 mysql -u root -p -e "CREATE DATABASE blog CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 ```
 
-### 2. Environment Variables (Required for Production)
+### 2. Environment Variables
 
 Create `.env` or export in shell:
 
 ```bash
 # === Security (MUST CHANGE IN PROD) ===
-export JWT_SECRET="$(openssl rand -base64 48)"        # ≥32 chars, keep secret!
+export JWT_SECRET="$(openssl rand -base64 48)"
 export MYSQL_PASSWORD="your_strong_db_password"
 export REDIS_PASSWORD="your_redis_password"
 
@@ -387,30 +344,21 @@ mvn clean install -DskipTests
 # Run API module (port 8888)
 cd blog-api
 mvn spring-boot:run -Dspring-boot.run.profiles=dev
-# Or: java -jar target/blog-api-1.0-SNAPSHOT.jar --spring.profiles.active=prod
 ```
 
 ### 4. Run Admin (Optional)
 
 ```bash
 cd ../blog-admin
-mvn spring-boot:run -Dspring-boot.run.profiles=dev
-# Port 8889
+mvn spring-boot:run -Dspring-boot.run.profiles=dev   # Port 8889
 ```
 
 ### 5. Serve Frontend
 
 ```bash
 cd ../blog-ui
-
-# Option A: Python (simplest)
-python3 -m http.server 8080
-
-# Option B: Node.js
-npx serve .
-
-# Option C: VS Code Live Server / IntelliJ built-in
-# Just open index.html directly (CORS may need backend config)
+python3 -m http.server 8080        # Option A: Python (simplest)
+# npx serve .                      # Option B: Node.js
 ```
 
 ### 6. Access
@@ -431,7 +379,7 @@ npx serve .
 
 ---
 
-## 🔧 Configuration Deep-Dive
+## ⚙️ Configuration Deep-Dive
 
 ### Core Config (`blog-api/src/main/resources/application.properties`)
 
@@ -476,9 +424,7 @@ management.endpoint.health.show-details=always
 management.prometheus.metrics.export.enabled=true
 ```
 
-### Production Config (`blog-api/src/main/resources/application-prod.yml`)
-
-Key production hardening:
+### Production Config (`application-prod.yml`) — Key Hardening
 
 ```yaml
 spring:
@@ -491,36 +437,21 @@ spring:
       connection-timeout: 30000
   redis:
     lettuce:
-      pool:
-        max-active: 20
-        max-idle: 10
-        min-idle: 2
+      pool: { max-active: 20, max-idle: 10, min-idle: 2 }
 
-# Security headers
 server:
   headers:
     x-content-type-options: nosniff
     x-frame-options: DENY
     x-xss-protection: "1; mode=block"
 
-# Disable Swagger in prod
 springdoc:
-  api-docs:
-    enabled: false
-  swagger-ui:
-    enabled: false
+  api-docs: { enabled: false }
+  swagger-ui: { enabled: false }
 
-# Structured logging
 logging:
-  level:
-    root: INFO
-    com.mszlu.blog: INFO
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
-  file:
-    name: logs/blog-api.log
-    max-size: 100MB
-    max-history: 30
+  level: { root: INFO, com.mszlu.blog: INFO }
+  file: { name: logs/blog-api.log, max-size: 100MB, max-history: 30 }
 ```
 
 ---
@@ -532,12 +463,10 @@ logging:
 **Madeline** (GLM-4) — Warm, sincere, delicate personality:
 - **Real-time chat** with streaming responses
 - **Emotion analysis**: 7 valid states (default, cute, anxious, unhappy, surprised, resentful, speechless)
-- **Proactive care**: Daily 9:30 AM check-in messages via `ThreadService` + cron
-- **JSON mode**: Structured output `{reply, emotion, suggestions[]}` for UI integration
+- **Proactive care**: Daily 9:30 AM check-in via `ThreadService` + cron
+- **JSON mode**: Structured output `{reply, emotion, suggestions[]}`
 
-**Oshiro** (Tsundere innkeeper) — Shop page exclusive:
-- Unique prompt in `PromptBuilder.oshiroChat`
-- Strawberry economy interactions
+**Oshiro** (Tsundere innkeeper) — Shop page exclusive, with `PromptBuilder.oshiroChat` and strawberry economy interactions.
 
 **RAG Memory** (bge-m3 embeddings):
 - `MemoryServiceImpl.searchContext()` — Semantic search over diary history
@@ -576,17 +505,17 @@ logging:
 - **Strawberry Economy**: Earn 🍓 by writing, spend in Oshiro's shop for themes/decorations
 - **Pixel Avatars**: 8-direction Madeline sprite with spatial audio
 
-### 5. Security Hardening (Recently Added)
+### 5. Security Hardening
 
 | Area | Implementation |
 |------|----------------|
-| **Password Storage** | BCrypt (via Spring Security's `BCryptPasswordEncoder`) |
+| **Password Storage** | BCrypt (via `BCryptPasswordEncoder`) |
 | **JWT Secret** | Externalized to `JWT_SECRET` env var, supports rotation |
 | **Token Expiry** | 30 days (configurable via `jwt.expiration`) |
-| **Thread Pool** | Bounded queue (1000), `CallerRunsPolicy` rejection handler |
-| **File Upload** | Extension + MIME type + Magic number validation (PNG/JPEG/GIF/WEBP) |
+| **Thread Pool** | Bounded queue (1000), `CallerRunsPolicy` rejection |
+| **File Upload** | Extension + MIME type + Magic number validation |
 | **Dependencies** | Fastjson 1.2.101 (CVE fixes), MyBatis-Plus unified |
-| **Observability** | Actuator health/info/prometheus, Prometheus metrics export |
+| **Observability** | Actuator health/info/prometheus, Prometheus export |
 
 ---
 
@@ -609,7 +538,7 @@ logging:
 ```
 blog-ui/
 ├── index.html          → Blog feed (category filter, search, popular, tags)
-├── diary.html          → Postcard viewer + Madeline chat (2400-line diary.js)
+├── diary.html          → Postcard viewer + Madeline chat (~2400-line diary.js)
 ├── write.html          → Markdown editor + AI toolbar (Polish, Generate, Madeline)
 ├── shelf.html          → Bookshelf snapshots (grid, modal, export)
 ├── shop.html           → Oshiro Inn (dialogue, strawberry shop)
@@ -634,10 +563,10 @@ blog-ui/
 - Integration tests: None
 - Static analysis: None configured
 
-### Recommended Additions
+### Recommended Additions (Testcontainers)
 
 ```xml
-<!-- Add to parent pom.xml <dependencyManagement> -->
+<!-- Parent pom.xml <dependencyManagement> -->
 <dependency>
     <groupId>org.testcontainers</groupId>
     <artifactId>testcontainers-bom</artifactId>
@@ -646,7 +575,7 @@ blog-ui/
     <scope>import</scope>
 </dependency>
 
-<!-- Add to blog-api/pom.xml -->
+<!-- blog-api/pom.xml -->
 <dependency>
     <groupId>org.testcontainers</groupId>
     <artifactId>junit-jupiter</artifactId>
@@ -702,7 +631,7 @@ jobs:
 ### Docker Compose (Recommended for Prod)
 
 ```yaml
-# docker-compose.yml (place at project root)
+# docker-compose.yml
 version: '3.8'
 services:
   mysql:
@@ -710,8 +639,7 @@ services:
     environment:
       MYSQL_DATABASE: blog
       MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
-    volumes:
-      - mysql_data:/var/lib/mysql
+    volumes: [ mysql_data:/var/lib/mysql ]
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
@@ -721,8 +649,7 @@ services:
   redis:
     image: redis:7-alpine
     command: redis-server --requirepass ${REDIS_PASSWORD}
-    volumes:
-      - redis_data:/data
+    volumes: [ redis_data:/data ]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -739,10 +666,8 @@ services:
       QINIU_SECRET_KEY: ${QINIU_SECRET_KEY}
       AI_API_KEY: ${AI_API_KEY}
     depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
     restart: unless-stopped
 
   blog-admin:
@@ -752,8 +677,7 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       MYSQL_HOST: mysql
     depends_on:
-      mysql:
-        condition: service_healthy
+      mysql: { condition: service_healthy }
     restart: unless-stopped
 
   nginx:
@@ -771,11 +695,11 @@ volumes:
 ```
 
 **Nginx Config** (serves frontend + reverse proxies API):
+
 ```nginx
-# nginx.conf
 events { worker_connections 1024; }
 http {
-  upstream api { server blog-api:8888; }
+  upstream api   { server blog-api:8888; }
   upstream admin { server blog-admin:8889; }
 
   server {
@@ -787,16 +711,13 @@ http {
   server {
     listen 443 ssl http2;
     server_name your-domain.com;
-    ssl_certificate /etc/ssl/certs/cert.pem;
+    ssl_certificate     /etc/ssl/certs/cert.pem;
     ssl_certificate_key /etc/ssl/private/key.pem;
 
-    # Frontend
     location / {
       root /usr/share/nginx/html;
       try_files $uri $uri/ /index.html;
     }
-
-    # API
     location /api/ {
       proxy_pass http://api;
       proxy_set_header Host $host;
@@ -804,17 +725,13 @@ http {
       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
       proxy_set_header X-Forwarded-Proto $scheme;
     }
-
-    # Admin
     location /admin/ {
       proxy_pass http://admin;
       proxy_set_header Host $host;
       proxy_set_header X-Real-IP $remote_addr;
     }
-
-    # Actuator (internal only)
     location /actuator/ {
-      allow 10.0.0.0/8;  # VPC CIDR
+      allow 10.0.0.0/8;
       deny all;
       proxy_pass http://api;
     }
@@ -829,8 +746,8 @@ http {
 blog-api:
   replicaCount: 3
   resources:
-    limits: { cpu: "1000m", memory: "1Gi" }
-    requests: { cpu: "500m", memory: "512Mi" }
+    limits:   { cpu: "1000m", memory: "1Gi" }
+    requests: { cpu: "500m",  memory: "512Mi" }
   autoscaling:
     enabled: true
     minReplicas: 3
@@ -841,15 +758,8 @@ blog-api:
       valueFrom: { secretKeyRef: { name: blog-secrets, key: jwt-secret } }
     - name: MYSQL_PASSWORD
       valueFrom: { secretKeyRef: { name: blog-secrets, key: mysql-password } }
-  # ...redis, qiniu, ai keys similarly from secrets
-
-blog-admin:
-  replicaCount: 2
-  # ... similar
-
-nginx:
-  replicaCount: 2
-  # TLS via cert-manager + Let's Encrypt
+blog-admin: { replicaCount: 2 }
+nginx:      { replicaCount: 2 }   # TLS via cert-manager + Let's Encrypt
 ```
 
 ---
@@ -861,21 +771,12 @@ We welcome contributions! Please read [CONTRIBUTING.md](CONTRIBUTING.md) first.
 ### Quick Contribution Flow
 
 ```bash
-# 1. Fork & clone
 git clone https://github.com/your-username/blog.git
 cd blog
-
-# 2. Create feature branch
 git checkout -b feature/your-feature-name
-
-# 3. Make changes (follow coding standards below)
-# 4. Test locally
+# make changes
 mvn clean test -pl blog-api,blog-admin
-
-# 5. Commit with conventional message
 git commit -m "feat(diary): add emotion trend chart to monthly snapshot"
-
-# 6. Push & PR
 git push origin feature/your-feature-name
 # Open PR against main branch
 ```
@@ -885,7 +786,7 @@ git push origin feature/your-feature-name
 1. **Verify Before Trust** — After any fix, re-read the file to confirm actual state
 2. **No Placeholder Comments** — Never write `// ... existing code ...` in real files
 3. **Complete Replacement** — When replacing functions, ensure old code is fully removed
-4. **JS Modification Standard** — Provide complete code block + precise line numbers; check JS refs before deleting HTML elements
+4. **JS Modification Standard** — Provide complete code block + precise line numbers
 5. **Fonts** — All text: **Renogare + CelesteZH**; only `#gameDialogName` uses Press Start 2P
 6. **Asset Paths** — `celeste-sounds/madeline/...` includes `madeline/` layer
 7. **GIF/Pixel Art** — No canvas scanning for size; use fixed pixel values
@@ -932,9 +833,7 @@ git push origin feature/your-feature-name
 | Postcard generation fails | 1. Backend running?  2. Check logs for AI API errors |
 | Prometheus empty | 1. `management.prometheus.metrics.export.enabled=true`  2. `/actuator/prometheus` accessible? |
 
-### Detailed Troubleshooting
-
-See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for exhaustive guide.
+> See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for an exhaustive guide.
 
 ---
 
@@ -960,6 +859,14 @@ See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for exhaustive guide.
 
 ---
 
+## 👥 Contributors
+
+- Initial development team
+- AI handover document maintainers (2026-08-30)
+- **You!** — [Contribute your code](CONTRIBUTING.md)!
+
+---
+
 ## 📄 Related Documents
 
 | Document | Purpose |
@@ -972,37 +879,40 @@ See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for exhaustive guide.
 
 ---
 
-## 👥 Contributors
+## ⚠️ Production Readiness Note
 
-- Initial development team
-- AI handover document maintainers (2026-08-30)
-- **You!** — [Contribute your code](CONTRIBUTING.md)!
-
----
-
-> **⚠️ Production Readiness Note**: This is an educational/demonstration project. Before production deployment, complete:
+> This is an educational/demonstration project. Before production deployment, complete:
 > - Security assessment (penetration test, dependency scan)
 > - Data protection (encryption at rest/in transit, GDPR/PIPL compliance)
 > - Load testing (target: 1000 concurrent users, p99 < 500ms)
 > - Disaster recovery (backup/restore RTO < 1h, RPO < 5min)
 > - Observability stack deployment (Prometheus + Grafana + Loki + Tempo)
 
-> **Celeste AI Diary Companion Blog** — *Let every word have warmth, let every day have meaning.*
-
 ---
 
-## 📄 License
+## 📄 License & Acknowledgments
 
-MIT License — see [LICENSE](LICENSE) for details.
+**MIT License** — see [LICENSE](LICENSE) for details.
 
-## 🙏 Acknowledgments
+### 🙏 Acknowledgments
 
-- [Celeste](https://celestegame.com/) — Inspiring art, characters, and music
+- [Celeste](https://celestegame.com/) — Inspiring art, characters, and music by **Extremely OK Games (Maddy Makes Games)**
 - [SiliconFlow](https://siliconflow.cn/) — GLM-4 & bge-m3 model access
 - [MyBatis-Plus](https://baomidou.com/) — Elegant database operations
 - [Spring Boot](https://spring.io/projects/spring-boot) — Productivity framework
-- All contributors who shaped this project
-- ## Star History
+- All contributors who shaped this project 🍓
+
+---
+
+<div align="center">
+
+**Celeste AI Diary Companion Blog** — *Let every word have warmth, let every day have meaning.*
+
+🏔️ *Onward and upward.* 🏔️
+
+<br>
+
+### ⭐ Star History
 
 <a href="https://www.star-history.com/?repos=melinhades%2Fceleste-ai-diary-companion-blog&type=date&legend=top-left">
  <picture>
@@ -1011,3 +921,5 @@ MIT License — see [LICENSE](LICENSE) for details.
    <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=melinhades/celeste-ai-diary-companion-blog&type=date&legend=top-left" />
  </picture>
 </a>
+
+</div>
