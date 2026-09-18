@@ -73,7 +73,7 @@ qiniu:
 ai:
   base-url: ${AI_BASE_URL:https://api.siliconflow.cn/v1}
   api-key: ${AI_API_KEY:}
-  model: ${AI_MODEL:THUDM/GLM-4-9B-0414}
+  model: ${AI_MODEL:Qwen/Qwen2.5-7B-Instruct}
   embedding-model: ${AI_EMBEDDING_MODEL:BAAI/bge-m3}
 
 # Actuator & Prometheus 监控
