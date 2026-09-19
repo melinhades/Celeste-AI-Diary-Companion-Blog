@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="icon/OIP.webp" type="image/webp">
+    <title>Register - Celeste Blog</title>
+    <link rel="stylesheet" href="css/common.css">
+    <link rel="preload" href="celeste-font-en/Renogare-Regular.otf" as="font" type="font/otf" crossorigin>
+    <link rel="preload" href="fonts/NotoSansCJKsc-Medium.otf" as="font" type="font/otf" crossorigin>
+    <style>
+        body { display:flex; align-items:center; justify-content:center; min-height:100vh; background:#050514; padding:20px; }
+        body::before {
+            content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+            background-image:
+                radial-gradient(circle at 78% 16%, rgba(180,200,255,.16), transparent 32%),
+                radial-gradient(circle at 18% 82%, rgba(90,110,180,.10), transparent 40%);
+        }
+        .stars, .stars2 { position:fixed; inset:0; pointer-events:none; z-index:0; width:1px; height:1px; background:transparent; }
+        .stars {
+            box-shadow: 12vw 8vh 0 1px rgba(255,255,255,.8), 34vw 22vh 0 rgba(255,255,255,.5), 58vw 6vh 0 1px rgba(255,255,255,.7),
+                        82vw 18vh 0 rgba(255,255,255,.4), 46vw 12vh 0 rgba(255,255,255,.55), 90vw 40vh 0 1px rgba(255,255,255,.6),
+                        8vw 34vh 0 rgba(255,255,255,.45), 68vw 30vh 0 rgba(255,255,255,.5), 24vw 46vh 0 1px rgba(255,255,255,.65),
+                        94vw 8vh 0 rgba(255,255,255,.4), 52vw 40vh 0 rgba(255,255,255,.35), 16vw 16vh 0 rgba(255,255,255,.5);
+            animation:starTwinkle 4.5s ease-in-out infinite;
+        }
+        .stars2 {
+            box-shadow: 20vw 12vh 0 rgba(255,255,255,.5), 42vw 5vh 0 1px rgba(255,255,255,.7), 72vw 22vh 0 rgba(255,255,255,.45),
+                        6vw 26vh 0 rgba(255,255,255,.5), 60vw 34vh 0 rgba(255,255,255,.4), 86vw 12vh 0 1px rgba(255,255,255,.6),
+                        30vw 38vh 0 rgba(255,255,255,.35), 96vw 30vh 0 rgba(255,255,255,.45), 48vw 24vh 0 rgba(255,255,255,.5),
+                        14vw 42vh 0 rgba(255,255,255,.3), 64vw 10vh 0 rgba(255,255,255,.4), 38vw 48vh 0 rgba(255,255,255,.35);
+            animation:starTwinkle 6s ease-in-out 1.6s infinite;
+        }
+        @keyframes starTwinkle { 0%,100%{opacity:.25} 50%{opacity:.9} }
+        .register-box {
+            background:url('celeste-gui/poempage.webp') center/100% 100% no-repeat;
+            border:none; border-radius:0;
+            padding:44px 44px 36px;
+            width:440px; max-width:100%;
+            position:relative; z-index:1;
+            filter:drop-shadow(0 8px 32px rgba(0,0,0,.6));
+            opacity:0;
+            transform:translateX(-120%) rotate(-8deg);
+            transition:opacity .8s ease, transform 1s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .register-box.slide-in { opacity:1; transform:translateX(0) rotate(0deg); }
+        .register-box h2 {
+            text-align:center; font-size:20px; color:#3a2018;
+            font-family:'Renogare','CelesteZH',sans-serif; letter-spacing:2px; margin-bottom:6px;
+        }
+        .register-box .sub { text-align:center; color:#8a6f5c; font-size:13px; margin-bottom:20px; }
+        .register-madeline { display:block; width:64px; height:64px; border-radius:50%; margin:0 auto 12px; border:2px solid #c4a882; box-shadow:0 0 14px rgba(196,168,130,.5); transition:transform .3s; }
+        .register-box .form-group { margin-bottom:12px; position:relative; }
+        .register-box .form-group label { color:#5a3e36; font-size:13px; display:block; margin-bottom:4px; }
+        .register-box .form-control {
+            background:rgba(255,252,245,.75); border:1px solid #c4a882; color:#3a2018;
+            font-family:'Renogare','CelesteZH',sans-serif; padding-right:42px;
+        }
+        .register-box .form-control::placeholder { color:#b09a82; }
+        .register-box .form-control:focus { border-color:#5a3e36; box-shadow:0 0 10px rgba(196,168,130,.45); background:rgba(255,252,245,.95); }
+        .register-box .form-control.error { border-color:#c0392b; box-shadow:0 0 10px rgba(192,57,43,.3); }
+        .register-box .form-control.valid { border-color:#27ae60; }
+        /* 密码可见切换 */
+        .toggle-pw {
+            position:absolute; right:10px; top:28px; cursor:pointer;
+            width:24px; height:24px; display:flex; align-items:center; justify-content:center;
+            font-size:16px; user-select:none; border:none; background:transparent;
+        }
+        .toggle-pw:hover { opacity:.7; }
+        /* Caps Lock */
+        .caps-warning { display:none; font-size:11px; color:#e67e22; margin-top:3px; font-family:'Renogare','CelesteZH',sans-serif; }
+        .caps-warning.show { display:block; animation:fadeIn .3s; }
+        @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+        /* 密码强度计 */
+        .strength-meter {
+            display:flex; gap:4px; margin-top:6px; height:5px;
+        }
+        .strength-bar {
+            flex:1; height:100%; background:rgba(192,57,43,.15); border-radius:3px; transition:background .3s;
+        }
+        .strength-bar.active-weak { background:#e74c3c; }
+        .strength-bar.active-medium { background:#f39c12; }
+        .strength-bar.active-strong { background:#27ae60; }
+        .strength-label { font-size:11px; margin-top:3px; color:#8a6f5c; font-family:'Renogare','CelesteZH',sans-serif; }
+        /* 确认密码匹配提示 */
+        .match-hint { font-size:11px; margin-top:3px; font-family:'Renogare','CelesteZH',sans-serif; }
+        .match-hint.ok { color:#27ae60; }
+        .match-hint.no { color:#c0392b; }
+        .register-box .btn-primary {
+            width:100%; padding:11px 32px; font-size:14px; margin:12px auto 0; display:flex; align-items:center; justify-content:center; gap:8px;
+            border:2px solid #c4a882; background:rgba(255,248,240,.8); color:#5a3e36; font-weight:bold;
+            border-radius:4px; box-shadow:none;
+            font-family:'Renogare','CelesteZH',sans-serif; letter-spacing:2px;
+            cursor:pointer; transition:all .25s;
+        }
+        .register-box .btn-primary:hover:not(:disabled) { background:#c4a882; color:#fff; transform:translateY(-1px); box-shadow:0 4px 12px rgba(196,168,130,.4); }
+        .register-box .btn-primary:disabled { opacity:.6; cursor:not-allowed; }
+        .btn-spinner {
+            width:16px; height:16px; border:2px solid rgba(90,62,54,.3); border-top-color:#5a3e36;
+            border-radius:50%; animation:spin .7s linear infinite; display:none;
+        }
+        .btn-primary.loading .btn-spinner { display:inline-block; }
+        @keyframes spin { to{transform:rotate(360deg)} }
+        .register-footer { text-align:center; margin-top:14px; font-size:13px; color:#8a6f5c; }
+        .register-footer a { color:#5a3e36; font-weight:bold; border-bottom:1px solid #c4a882; }
+        .register-footer a:hover { text-shadow:none; color:#3a2018; }
+        .form-error {
+            color:#c0392b; font-size:12px; margin-top:6px; display:none;
+            padding:8px 12px; background:rgba(192,57,43,.08); border-radius:4px; border-left:3px solid #c0392b;
+            font-family:'Renogare','CelesteZH',sans-serif;
+        }
+        .form-error.show { display:block; animation:shake .4s; }
+        @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
+        .snow-strip {
+            position:fixed; left:0; right:0; bottom:0; height:80px;
+            background:url('celeste-areas/snow-front.webp') repeat-x bottom/220px auto;
+            animation:snowDrift 45s linear infinite; pointer-events:none; z-index:2; opacity:.5;
+        }
+        @keyframes snowDrift { from{background-position-x:0} to{background-position-x:-440px} }
+        #regLoadingOverlay {
+            position:fixed; inset:0; z-index:9999;
+            display:flex; flex-direction:column; align-items:center; justify-content:center;
+            opacity:0; pointer-events:none; transition:opacity .35s ease;
+        }
+        #regLoadingOverlay.show { opacity:1; pointer-events:auto; }
+        #regLoadingOverlay .loading-madeline {
+            width:120px; height:120px; position:relative; z-index:1;
+            background-size:100% 100%; background-repeat:no-repeat; background-position:center;
+            image-rendering:pixelated;
+            animation:loadingRun 0.72s steps(9) infinite;
+        }
+        @keyframes loadingRun {
+            0%   { background-image:url('celeste-gui/loading/00.png'); }
+            11%  { background-image:url('celeste-gui/loading/01.png'); }
+            22%  { background-image:url('celeste-gui/loading/02.png'); }
+            33%  { background-image:url('celeste-gui/loading/03.png'); }
+            44%  { background-image:url('celeste-gui/loading/04.png'); }
+            55%  { background-image:url('celeste-gui/loading/05.png'); }
+            66%  { background-image:url('celeste-gui/loading/06.png'); }
+            77%  { background-image:url('celeste-gui/loading/07.png'); }
+            88%  { background-image:url('celeste-gui/loading/08.png'); }
+        }
+        #regLoadingOverlay .loading-text {
+            margin-top:20px; color:#ffe36d; position:relative; z-index:1;
+            font-family:'Renogare','CelesteZH',sans-serif; font-size:18px; letter-spacing:3px;
+            text-shadow:0 0 12px rgba(255,227,109,.4);
+        }
+        #regLoadingOverlay .loading-dots::after { content:''; animation:dots 1.5s steps(4, end) infinite; }
+        @keyframes dots { 0%{content:''} 25%{content:'.'} 50%{content:'..'} 75%{content:'...'} }
+        @media (max-width: 480px) {
+            .register-box { padding:36px 22px 28px; }
+            .register-box h2 { font-size:18px; }
+        }
+    </style>
+</head>
+<body>
+    <audio id="bgmPlayer" loop autoplay>
+        <source src="bgm/postcard.mp3" type="audio/mpeg">
+    </audio>
+    <div class="stars"></div>
+    <div class="stars2"></div>
+    <canvas id="snowCanvas" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;"></canvas>
+    <div class="snow-strip"></div>
+    <div id="regLoadingOverlay">
+        <div class="loading-madeline"></div>
+        <div class="loading-text">LOADING<span class="loading-dots"></span></div>
+    </div>
+    <script>
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function() {
+            document.body.style.visibility = 'hidden';
+            void document.body.offsetHeight;
+            document.body.style.visibility = '';
+        });
+    }
+    </script>
+<div class="register-box">
+    <img class="register-madeline" src="celeste-portraits/madeline/peaceful00.png" alt="Madeline" id="madelineAvatar" loading="lazy" decoding="async">
+    <h2>NEW TRAVELER</h2>
+    <p class="sub">Start your climb up the mountain.</p>
+    <form id="regForm" autocomplete="on" novalidate>
+        <div class="form-group">
+            <label for="account">Account</label>
+            <input class="form-control" type="text" id="account" name="account"
+                   placeholder="3-20 letters, numbers, underscore" autocomplete="username"
+                   pattern="[a-zA-Z0-9_]{3,20}" maxlength="20" autofocus required>
+        </div>
+        <div class="form-group">
+            <label for="nickname">Nickname</label>
+            <input class="form-control" type="text" id="nickname" name="nickname"
+                   placeholder="1-20 chars (CN/EN/num/_)" autocomplete="nickname"
+                   maxlength="20" required>
+        </div>
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input class="form-control" type="password" id="password" name="password"
+                   placeholder="At least 6 characters" autocomplete="new-password"
+                   minlength="6" maxlength="64" required>
+            <button type="button" class="toggle-pw" id="togglePw1" tabindex="-1" aria-label="Toggle password">👁</button>
+            <div class="strength-meter" id="strengthMeter">
+                <div class="strength-bar" id="bar1"></div>
+                <div class="strength-bar" id="bar2"></div>
+                <div class="strength-bar" id="bar3"></div>
+            </div>
+            <div class="strength-label" id="strengthLabel"></div>
+        </div>
+        <div class="form-group">
+            <label for="password2">Confirm Password</label>
+            <input class="form-control" type="password" id="password2" name="password2"
+                   placeholder="Re-enter password" autocomplete="new-password"
+                   minlength="6" maxlength="64" required>
+            <button type="button" class="toggle-pw" id="togglePw2" tabindex="-1" aria-label="Toggle password">👁</button>
+            <div class="match-hint" id="matchHint"></div>
+        </div>
+        <div class="caps-warning" id="capsWarning">⚠ Caps Lock is ON</div>
+        <div class="form-error" id="errMsg"></div>
+        <button class="btn btn-primary" type="submit" id="regBtn">
+            <span class="btn-spinner"></span>
+            <span class="btn-text">Sign Up</span>
+        </button>
+    </form>
+    <div class="register-footer">Already have an account? <a href="login.html">Log in</a></div>
+</div>
+<script src="js/api.js"></script>
+<script src="js/snow-bgm.js"></script>
+<script>
+    if (localStorage.getItem('token')) location.href = 'index.html';
+
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        document.querySelector('.register-box').classList.add('slide-in');
+    }));
+
+    function playSfx(name) {
+        try { const a = new Audio('celeste-sounds/' + name); a.volume = 0.8; a.currentTime = 0; a.play().catch(() => {}); } catch (e) {}
+    }
+    (function () {
+        const src = 'celeste-sounds/ui_main_assistmode_whistle_page2.wav';
+        const tryPlay = () => { const a = new Audio(src); a.volume = 0.8; return a.play(); };
+        tryPlay().catch(() => {
+            const h = () => { tryPlay().catch(() => {}); document.removeEventListener('click', h); document.removeEventListener('keydown', h); };
+            document.addEventListener('click', h);
+            document.addEventListener('keydown', h);
+        });
+    })();
+
+    // ===== 元素引用 =====
+    const accountInput = document.getElementById('account');
+    const nicknameInput = document.getElementById('nickname');
+    const pwInput = document.getElementById('password');
+    const pw2Input = document.getElementById('password2');
+    const errEl = document.getElementById('errMsg');
+    const btn = document.getElementById('regBtn');
+    const madelineAvatar = document.getElementById('madelineAvatar');
+    const capsWarning = document.getElementById('capsWarning');
+    const matchHint = document.getElementById('matchHint');
+    const strengthLabel = document.getElementById('strengthLabel');
+    const bars = [document.getElementById('bar1'), document.getElementById('bar2'), document.getElementById('bar3')];
+
+    // ===== 密码可见切换 =====
+    function bindToggle(btnId, input) {
+        document.getElementById(btnId).addEventListener('click', () => {
+            const isPw = input.type === 'password';
+            input.type = isPw ? 'text' : 'password';
+            document.getElementById(btnId).textContent = isPw ? '🙈' : '👁';
+            input.focus();
+        });
+    }
+    bindToggle('togglePw1', pwInput);
+    bindToggle('togglePw2', pw2Input);
+
+    // ===== Caps Lock 检测 =====
+    [pwInput, pw2Input].forEach(inp => {
+        inp.addEventListener('keyup', (e) => {
+            if (e.getModifierState && e.getModifierState('CapsLock')) capsWarning.classList.add('show');
+            else capsWarning.classList.remove('show');
+        });
+        inp.addEventListener('blur', () => capsWarning.classList.remove('show'));
+    });
+
+    // ===== 账号格式实时校验 =====
+    const accountRegex = /^[a-zA-Z0-9_]{3,20}$/;
+    accountInput.addEventListener('input', () => {
+        accountInput.classList.remove('error', 'valid');
+        if (!accountInput.value) return;
+        if (accountRegex.test(accountInput.value)) accountInput.classList.add('valid');
+        else accountInput.classList.add('error');
+    });
+
+    // ===== 密码强度计算 =====
+    function calcStrength(pw) {
+        if (!pw) return 0;
+        let score = 0;
+        if (pw.length >= 6) score++;
+        if (pw.length >= 10) score++;
+        if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score++;
+        if (/\d/.test(pw)) score++;
+        if (/[^A-Za-z0-9]/.test(pw)) score++;
+        if (score <= 1) return 1;       // weak
+        if (score <= 3) return 2;       // medium
+        return 3;                        // strong
+    }
+    pwInput.addEventListener('input', () => {
+        pwInput.classList.remove('error', 'valid');
+        const s = calcStrength(pwInput.value);
+        bars.forEach(b => b.className = 'strength-bar');
+        if (s >= 1) bars[0].classList.add('active-weak');
+        if (s >= 2) bars[1].classList.add('active-medium');
+        if (s >= 3) bars[2].classList.add('active-strong');
+        const labels = ['', 'Weak', 'Medium', 'Strong'];
+        strengthLabel.textContent = pwInput.value ? labels[s] : '';
+        if (pwInput.value && pwInput.value.length >= 6) pwInput.classList.add('valid');
+        // 同步确认密码匹配状态
+        if (pw2Input.value) checkMatch();
+    });
+
+    // ===== 确认密码实时匹配 =====
+    function checkMatch() {
+        pw2Input.classList.remove('error', 'valid');
+        if (!pw2Input.value) { matchHint.textContent = ''; return; }
+        if (pw2Input.value === pwInput.value) {
+            pw2Input.classList.add('valid');
+            matchHint.textContent = '✓ Passwords match';
+            matchHint.className = 'match-hint ok';
+        } else {
+            pw2Input.classList.add('error');
+            matchHint.textContent = '✗ Passwords do not match';
+            matchHint.className = 'match-hint no';
+        }
+    }
+    pw2Input.addEventListener('input', checkMatch);
+
+    // ===== 错误提示 =====
+    function showErr(msg) {
+        errEl.textContent = msg;
+        errEl.classList.remove('show');
+        void errEl.offsetWidth;
+        errEl.classList.add('show');
+        madelineAvatar.src = 'celeste-portraits/madeline/sad00.png';
+        madelineAvatar.style.transform = 'scale(1.05)';
+        setTimeout(() => madelineAvatar.style.transform = '', 300);
+    }
+    function setLoading(loading) {
+        btn.disabled = loading;
+        btn.classList.toggle('loading', loading);
+        btn.querySelector('.btn-text').textContent = loading ? 'Signing up...' : 'Sign Up';
+    }
+
+    // ===== 表单提交 =====
+    document.getElementById('regForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        doRegister();
+    });
+
+    function doRegister() {
+        const account = accountInput.value.trim();
+        const nickname = nicknameInput.value.trim();
+        const password = pwInput.value;
+        const password2 = pw2Input.value;
+        errEl.classList.remove('show');
+
+        if (!account) { accountInput.classList.add('error'); accountInput.focus(); showErr('Please enter your account'); return; }
+        if (!accountRegex.test(account)) { accountInput.classList.add('error'); accountInput.focus(); showErr('Account must be 3-20 letters, numbers or underscore'); return; }
+        if (!nickname) { nicknameInput.classList.add('error'); nicknameInput.focus(); showErr('Please enter a nickname'); return; }
+        if (!password) { pwInput.classList.add('error'); pwInput.focus(); showErr('Please enter a password'); return; }
+        if (password.length < 6) { pwInput.classList.add('error'); pwInput.focus(); showErr('Password must be at least 6 characters'); return; }
+        if (password !== password2) { pw2Input.classList.add('error'); pw2Input.focus(); showErr('Passwords do not match'); return; }
+
+        setLoading(true);
+        madelineAvatar.src = 'celeste-portraits/madeline/determined00.png';
+
+        api('/register', 'POST', { account, password, nickname }).then(res => {
+            setLoading(false);
+            if (res.success) {
+                playSfx('ui_main_assistmode_whistle_page3.wav');
+                document.querySelector('.register-box').style.display = 'none';
+                document.getElementById('regLoadingOverlay').classList.add('show');
+                setTimeout(() => { location.href = 'login.html'; }, 1200);
+            } else {
+                showErr(res.msg || 'Registration failed, account may already exist');
+            }
+        });
+    }
+</script>
+</body>
+</html>

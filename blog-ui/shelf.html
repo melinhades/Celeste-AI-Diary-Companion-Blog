@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>回忆书架 · Madeline</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="icon/OIP.webp" type="image/webp">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+@font-face { font-family:'Renogare'; src:url('celeste-font-en/Renogare-Regular.otf') format('opentype'); font-display:swap; }
+@font-face { font-family:'CelesteZH'; src:url('fonts/NotoSansCJKsc-Medium.otf') format('opentype'); font-display:swap; }
+body { min-height:100vh; background:url('celeste-gui/shelf-screen.webp') center/cover no-repeat fixed; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; opacity:0; animation:pageFadeIn .8s ease forwards; }
+@keyframes pageFadeIn { from { opacity:0; } to { opacity:1; } }
+/* 可访问性：键盘聚焦高亮 */
+:focus-visible { outline:2px solid #ffe36d; outline-offset:2px; border-radius:4px; }
+.topbar { position:fixed; top:28px; left:32px; z-index:40; }
+.topbar a { display:inline-block; padding:24px 42px; background:rgba(22,34,60,.88); color:#ffe36d; border:2px solid #ffe36d; border-radius:6px; text-decoration:none; font-size:13px; box-shadow:0 0 10px rgba(255,230,109,.35); }
+.topbar a.nav-diary-btn { padding:0; background:none; border:none; box-shadow:none; cursor:pointer; transition:transform .2s, filter .2s; vertical-align:middle; }
+.topbar a.nav-diary-btn:hover { transform:scale(1.15); }
+.topbar a.nav-diary-btn img { height:56px; width:auto; display:block; filter:drop-shadow(0 0 10px rgba(255,235,59,.7)); }
+h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family:'Press Start 2P',monospace; font-size:15px; color:#ffe36d; text-shadow:0 2px 0 rgba(0,0,0,.6); letter-spacing:2px; z-index:20; }
+.wrap { max-width:1000px; margin:0 auto; padding:76px 20px 40px; }
+/* ===== 日记列表：memo 纸页完整展示 ===== */
+.cards {
+    display:flex; flex-direction:column; gap:0;
+    width:min(680px, 92vw);
+    margin:0 auto;
+    background:#e9dfcd url('celeste-journal/memo.png') center top / 100% auto no-repeat;
+    border-radius:4px; padding:84px 52px 44px;
+    filter:drop-shadow(0 12px 32px rgba(0,0,0,.4));
+    position:relative;
+    min-height:640px;
+    transition:opacity .4s ease;
+}
+/* 纸页边缘做旧：左右两侧细微暗角 */
+.cards::after {
+    content:''; position:absolute; inset:0; border-radius:4px; pointer-events:none; z-index:3;
+    box-shadow:inset 0 0 60px rgba(120,90,40,.08), inset 0 2px 0 rgba(255,255,255,.4);
+}
+/* 盖掉左上角 logo：纯色，和纸页底色一致 */
+.cards::before {
+    content:''; position:absolute; left:0; top:0;
+    width:26%; height:9%;
+    background:#e9dfcd;
+    z-index:1; pointer-events:none;
+}
+.shelf-row {
+    position:relative; display:flex; align-items:center; gap:14px;
+    background:transparent; border:none; border-bottom:1px dashed rgba(163,129,47,.18);
+    border-radius:6px; padding:16px 10px; cursor:pointer;
+    opacity:0; transition:opacity .5s ease, transform .5s cubic-bezier(.22,1,.36,1), background .2s ease, box-shadow .2s ease;
+    z-index:2;
+}
+.shelf-row:last-child { border-bottom:none; }
+.shelf-row:hover { background:rgba(163,129,47,.08); box-shadow:inset 0 0 0 1px rgba(163,129,47,.18); }
+.shelf-row:active { background:rgba(163,129,47,.14); transform:scale(.985); }
+.shelf-row.from-below { transform:translateY(56px); }
+.shelf-row.from-above { transform:translateY(-56px); }
+.shelf-row.in { opacity:1; transform:translateY(0); }
+.shelf-row.in:hover { transform:translateX(4px); }
+.shelf-row.in:active { transform:scale(.985); }
+.shelf-row .row-icon { width:28px; height:28px; image-rendering:pixelated; flex-shrink:0; opacity:.9; filter:drop-shadow(0 1px 2px rgba(0,0,0,.15)); transition:transform .2s ease; }
+.shelf-row:hover .row-icon { transform:scale(1.12) rotate(-4deg); }
+.shelf-row .row-main { flex:1; min-width:0; display:flex; flex-direction:column; gap:4px; }
+.shelf-row .row-title { font-family:'Renogare','CelesteZH',sans-serif; font-size:15px; color:#3d2f1a; font-weight:700; letter-spacing:.3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-shadow:0 1px 0 rgba(255,255,255,.5); }
+.shelf-row .row-snip { font-size:12px; color:rgba(58,46,42,.6); line-height:1.6; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.shelf-row .row-date { font-family:'Renogare','CelesteZH',sans-serif; font-size:12px; color:#9a8560; letter-spacing:.5px; flex-shrink:0; display:flex; align-items:center; gap:6px; transition:color .2s ease; }
+.shelf-row:hover .row-date { color:#6a5326; }
+.shelf-row .row-count { display:inline-block; padding:2px 8px; background:rgba(163,129,47,.18); color:#6a5326; border-radius:10px; font-size:11px; font-weight:700; }
+.shelf-row.snapshot { border-bottom-color:rgba(163,129,47,.35); }
+.shelf-row.snapshot .row-title { color:#8a5a2b; }
+.shelf-row.snapshot:hover { background:rgba(200,140,60,.1); }
+.detail.anim-up { animation:slideUpIn .45s cubic-bezier(.22,1,.36,1); }
+.detail.anim-down { animation:slideDownIn .45s cubic-bezier(.22,1,.36,1); }
+@keyframes slideUpIn { from { opacity:0; transform:translateY(46px); } to { opacity:1; transform:translateY(0); } }
+@keyframes slideDownIn { from { opacity:0; transform:translateY(-46px); } to { opacity:1; transform:translateY(0); } }
+.empty { text-align:center; color:rgba(255,255,255,.85); background:rgba(22,34,60,.75); border:1px solid rgba(255,230,109,.2); border-radius:10px; padding:60px 24px; font-size:14px; line-height:2.2; backdrop-filter:blur(4px); }
+.empty .em { display:block; font-size:28px; margin-bottom:14px; opacity:.9; }
+.detail { display:none; background:linear-gradient(160deg, rgba(22,34,60,.95) 0%, rgba(14,22,44,.95) 100%); border:2px solid rgba(255,230,109,.45); border-radius:10px; padding:26px 28px; box-shadow:0 20px 50px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.06); }
+.detail.show { display:block; }
+.detail-nav { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:16px; }
+.detail-nav button { padding:8px 20px; border:2px solid rgba(255,230,109,.6); border-radius:6px; background:rgba(22,34,60,.6); color:#ffe36d; font-size:14px; cursor:pointer; transition:background .15s, transform .1s, border-color .15s; font-family:inherit; }
+.detail-nav button:hover:not(:disabled) { background:rgba(255,230,109,.18); border-color:#ffe36d; }
+.detail-nav button:active:not(:disabled) { transform:scale(.95); }
+.detail-nav button:disabled { opacity:.25; cursor:not-allowed; }
+.detail-nav .pos { color:rgba(255,230,109,.7); font-size:12px; font-family:'Renogare',sans-serif; letter-spacing:1px; }
+.detail .back { background:none; border:none; color:rgba(255,230,109,.8); cursor:pointer; font-size:13px; margin-bottom:16px; transition:color .15s, transform .15s; padding:4px 0; }
+.detail .back:hover { color:#ffe36d; transform:translateX(-3px); }
+.detail .t { color:#ffe36d; font-size:22px; margin-bottom:8px; word-break:break-all; font-weight:700; line-height:1.4; text-shadow:0 1px 4px rgba(0,0,0,.4); }
+.detail .d { color:rgba(255,230,109,.55); font-size:12px; margin-bottom:18px; letter-spacing:.5px; }
+.detail .c { color:rgba(255,255,255,.92); font-size:15px; line-height:2.1; white-space:pre-wrap; word-break:break-word; padding:16px 18px; background:rgba(0,0,0,.18); border-radius:8px; border-left:3px solid rgba(255,230,109,.3); }
+.acts { display:flex; gap:10px; margin-top:24px; flex-wrap:wrap; }
+.acts button { flex:1; min-width:120px; padding:11px 0; border-radius:6px; cursor:pointer; font-size:14px; border:2px solid rgba(255,230,109,.5); background:rgba(22,34,60,.6); color:#ffe36d; font-family:inherit; transition:all .15s ease; }
+.acts button:hover:not(:disabled) { background:rgba(255,230,109,.18); border-color:#ffe36d; transform:translateY(-2px); box-shadow:0 4px 12px rgba(255,230,109,.15); }
+.acts button:active { transform:translateY(0); }
+.acts button.del { border-color:rgba(230,81,124,.6); color:#ff9ab5; }
+.acts button.del:hover { background:rgba(230,81,124,.18); border-color:#e6517c; box-shadow:0 4px 12px rgba(230,81,124,.2); }
+.toast { position:fixed; left:50%; bottom:40px; transform:translateX(-50%) translateY(20px); background:rgba(22,34,60,.96); color:#ffe36d; border:1px solid rgba(255,230,109,.5); padding:12px 22px; border-radius:8px; opacity:0; transition:all .3s cubic-bezier(.22,1,.36,1); z-index:99; font-size:13px; box-shadow:0 8px 24px rgba(0,0,0,.4), 0 0 0 1px rgba(255,230,109,.1); max-width:90vw; text-align:center; }
+.toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+
+/* ===== 明信片弹窗：每日明信片同款入场动画 ===== */
+#postcardExportModal { position:fixed; inset:0; z-index:1200; display:none; flex-direction:column; align-items:center; justify-content:center; gap:18px; background:rgba(5,5,20,.95); }
+#postcardExportModal.show { display:flex; }
+#postcardExportModal .pe-snow { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:0; }
+#postcardExportModal .pe-stage { display:flex; flex-direction:column; align-items:center; gap:18px; z-index:1; opacity:0; transform:translateX(-120%) rotate(-8deg); transition:opacity .8s ease, transform 1s cubic-bezier(0.34, 1.56, 0.64, 1); }
+#postcardExportModal .pe-stage.slide-in { opacity:1; transform:translateX(0) rotate(0deg); }
+#postcardExportModal canvas#postcardCanvas { max-width:92vw; max-height:74vh; border-radius:6px; box-shadow:0 16px 48px rgba(0,0,0,.7); background:#0f1729; filter:drop-shadow(0 8px 32px rgba(0,0,0,.6)); }
+#postcardExportModal .pe-actions { display:flex; gap:14px; opacity:0; transition:opacity .5s ease; }
+#postcardExportModal .pe-actions.show { opacity:1; }
+#postcardExportModal button { padding:9px 20px; border-radius:6px; cursor:pointer; font-size:13px; border:2px solid #ffe36d; background:rgba(22,34,60,.92); color:#ffe36d; font-family:inherit; }
+#postcardExportModal button:hover { background:rgba(255,230,109,.15); }
+
+/* ===== 篝火（从 diary 迁来） ===== */
+#strawberryBonfire{position:fixed;right:26px;bottom:24px;z-index:20;display:flex;flex-direction:column;align-items:flex-end;gap:8px;user-select:none;cursor:pointer;}
+.sb-scene{position:relative;display:flex;align-items:flex-end;gap:2px;}
+.sb-scene::before{content:'';position:absolute;left:50%;bottom:-8px;transform:translateX(-50%);width:220px;height:64px;background:radial-gradient(ellipse at center,rgba(255,150,50,.35) 0%,rgba(255,150,50,.12) 45%,transparent 70%);pointer-events:none;animation:sbGlow 1.6s ease-in-out infinite alternate;}
+@keyframes sbGlow{from{opacity:.7}to{opacity:1}}
+.sb-madeline{width:74px;height:auto;image-rendering:pixelated;filter:drop-shadow(0 3px 6px rgba(0,0,0,.5));}
+.sb-flag{width:30px;height:auto;image-rendering:pixelated;align-self:flex-end;margin:0 -2px 2px 0;filter:drop-shadow(0 0 4px rgba(125,207,255,.5));}
+.sb-flash{position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:80px;height:auto;image-rendering:pixelated;pointer-events:none;z-index:2;}
+.sb-fire{position:relative;display:flex;align-items:flex-end;justify-content:center;}
+.sb-fire img{display:block;height:auto;image-rendering:pixelated;filter:drop-shadow(0 0 14px rgba(255,150,50,.65));}
+.sb-label{font-family:'Renogare','CelesteZH',sans-serif;font-size:12px;color:rgba(255,230,109,.9);text-shadow:0 1px 2px rgba(0,0,0,.8);position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);white-space:nowrap;letter-spacing:1px;}
+/* ===== 商店收藏品展示 ===== */
+#berryTrophy{position:fixed;top:70px;right:16px;z-index:20;display:flex;gap:8px;padding:6px 10px;background:rgba(22,34,60,.85);border:1px dashed rgba(255,230,109,.4);border-radius:8px;}
+#berryTrophy img{width:26px;height:26px;image-rendering:pixelated;object-fit:contain;filter:drop-shadow(0 0 4px rgba(255,230,109,.5));}
+#berryTrophy.empty{display:none;}
+
+/* ===== 磁带选曲（cassette 收集品点歌） ===== */
+#cassetteBgm{position:fixed;left:22px;bottom:22px;z-index:25;user-select:none;}
+#cassetteBgmImg{width:56px;height:56px;image-rendering:pixelated;cursor:pointer;filter:drop-shadow(0 4px 10px rgba(0,0,0,.5));}
+#cassetteBgmPanel{position:absolute;left:0;bottom:66px;min-width:200px;padding:12px 12px 10px;background:rgba(22,34,60,.96);border:2px solid rgba(255,230,109,.45);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.6);opacity:0;transform:translateY(10px) scale(.95);transform-origin:bottom left;pointer-events:none;transition:opacity .2s ease,transform .24s cubic-bezier(.34,1.56,.64,1);z-index:26;}
+#cassetteBgmPanel.show{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;}
+.cb-title{font-family:'Press Start 2P',monospace;font-size:9px;color:#ffe36d;letter-spacing:1px;margin-bottom:10px;opacity:.8;}
+.cb-item{padding:7px 10px;margin:2px 0;border-radius:6px;cursor:pointer;font-family:'Renogare','CelesteZH',sans-serif;font-size:13px;color:rgba(255,255,255,.78);transition:background .15s,color .15s;}
+.cb-item:hover{background:rgba(255,230,109,.12);color:#ffe36d;}
+.cb-item.on{background:rgba(255,230,109,.2);color:#ffe36d;font-weight:600;}
+.cb-item.on::before{content:'\266A  ';}
+/* ===== 快照明信片行（列表里的一条） ===== */
+.shelf-row.snapshot { background:url('celeste-journal/memo.png') center/100% 100% no-repeat; border:none; }
+/* ===== 快照详情：翻开的 Journal 跨页 ===== */
+#snapJournalModal { position:fixed; inset:0; z-index:1200; display:none; align-items:center; justify-content:center; background:rgba(4,6,14,.82); backdrop-filter:blur(3px); }
+#snapJournalModal.show { display:flex; }
+.sj-book { position:relative; width:min(860px,94vw); }
+.sj-bg { display:block; width:100%; border-radius:6px; box-shadow:0 18px 50px rgba(0,0,0,.7); }
+.sj-page { position:absolute; top:16%; height:68%; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; color:#3d3226; }
+.sj-left { left:9%; width:36%; }
+.sj-right { left:55%; width:36%; }
+.sj-tag { font-family:'Renogare','CelesteZH',sans-serif; font-size:11px; color:#a3812f; letter-spacing:2px; margin-bottom:12px; }
+.sj-title { font-size:30px; font-weight:700; color:#43372a; margin-bottom:8px; }
+.sj-date { font-size:13px; color:#8a7a5f; letter-spacing:1px; margin-bottom:20px; border-bottom:1px solid rgba(138,122,95,.4); padding-bottom:10px; }
+.sj-stats div { font-size:16px; line-height:2.4; color:#4a3e2e; }
+.sj-stats b { color:#a3812f; font-size:20px; margin:0 4px; }
+.sj-qlabel { font-size:12px; color:#8a7a5f; letter-spacing:2px; margin-bottom:14px; }
+.sj-quote { font-size:17px; line-height:2.1; color:#43372a; }
+.sj-sign { position:absolute; bottom:0; right:0; font-size:13px; color:#a3812f; }
+.sj-close { position:absolute; top:4%; right:3%; border:1px solid rgba(90,74,47,.5); background:rgba(255,250,235,.85); color:#5a4a2f; border-radius:6px; padding:6px 14px; font-size:13px; cursor:pointer; font-family:inherit; }
+.sj-close:hover { background:rgba(255,230,109,.5); }
+
+/* ===== 镜子：中间摆放 · 图层叠加 · 点击破碎召唤 Badeline ===== */
+#shelfMirror {
+    position: relative;
+    margin: 0 auto 34px;
+    width: 0;
+    height: 0;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-drag: none;
+    filter: drop-shadow(0 10px 22px rgba(0,0,0,.5));
+}
+#shelfMirror .m-layer {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%,-50%);
+    image-rendering: pixelated;
+    pointer-events: none;
+}
+#shelfMirror .m-mask { animation: maskDrift 5s ease-in-out infinite; }
+@keyframes maskDrift {
+    0%,100% { transform: translate(-50%,-50%) translate(0,0); }
+    30% { transform: translate(-50%,-50%) translate(5px,-6px); }
+    65% { transform: translate(-50%,-50%) translate(-5px,4px); }
+}
+#shelfMirror.mirror-shake { animation: mirrorShake .28s linear 2; }
+@keyframes mirrorShake {
+    0%,100% { transform: translate(0,0); }
+    25% { transform: translate(-5px,3px); }
+    50% { transform: translate(5px,-3px); }
+    75% { transform: translate(-4px,-2px); }
+}
+#shelfMirror .badeline-wrap {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 6;
+}
+#shelfMirror.summoned .badeline-wrap { animation: badelineRise .9s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+@keyframes badelineRise {
+    from { opacity: 0; transform: translate(-50%,10%) scale(.3); }
+    to   { opacity: 1; transform: translate(-50%,-78%) scale(1); }
+}
+#shelfMirror.summoned.bye .badeline-wrap { animation: badelineBye .7s ease forwards; }
+@keyframes badelineBye {
+    from { opacity: 1; transform: translate(-50%,-78%) scale(1); }
+    to   { opacity: 0; transform: translate(-50%,-120%) scale(.7); }
+}
+#shelfMirror .badeline-inner { animation: badelineFloat 2.6s ease-in-out infinite; }
+@keyframes badelineFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+#shelfMirror .badeline-inner img {
+    image-rendering: pixelated;
+    filter: drop-shadow(0 0 14px rgba(125,80,200,.75));
+}
+</style>
+</head>
+<body>
+<h1>MEMORY SHELF</h1>
+<div class="topbar"><a href="diary.html" class="nav-diary-btn" title="回到日记本 · Back to Diary"><img src="celeste-gui/journal.png" alt="Diary" loading="lazy" decoding="async"></a></div>
+<canvas id="shelfSnow" style="position:fixed;inset:0;z-index:1;pointer-events:none;"></canvas>
+<div id="strawberryBonfire">
+    <div class="sb-scene">
+        <img class="sb-madeline" src="celeste-gui/madeline-sitdown.gif" alt="Madeline" loading="lazy" decoding="async">
+        <img id="sbFlag" class="sb-flag" alt="" style="display:none;" loading="lazy" decoding="async">
+        <div class="sb-fire" id="sbFire"><img id="sbFlameImg" alt="" loading="lazy" decoding="async"></div>
+    </div>
+</div>
+<div id="berryTrophy" class="empty"></div>
+
+<!-- 磁带选曲 -->
+<div id="cassetteBgm">
+    <img id="cassetteBgmImg" src="celeste-collectables/cassette/idle00.png" alt="cassette" title="换一首" loading="lazy" decoding="async">
+    <div id="cassetteBgmPanel">
+        <div class="cb-title">CASSETTE · 选一首</div>
+    </div>
+</div>
+
+<!-- BGM 播放器 -->
+<audio id="bgmPlayer" loop>
+    <source src="bgm/dearest-friends.mp3" type="audio/mpeg">
+</audio>
+
+<div class="wrap">
+    <!-- 镜子：图层由 JS 动态叠加，点击破碎召唤 Badeline -->
+    <div id="shelfMirror" title="敲一敲镜子？">
+        <div class="badeline-wrap"><div class="badeline-inner"><img id="badelineImg" src="celeste-player/badeline/idle00.png" alt="Badeline" loading="lazy" decoding="async"></div></div>
+    </div>
+    <div id="cards" class="cards"></div>
+    <div id="detail" class="detail">
+        <button class="back">← 返回列表</button>
+        <div class="detail-nav"><button class="prev-e" title="同日上一篇">←</button><span class="pos"></span><button class="next-e" title="同日下一篇">→</button></div>
+        <div class="t"></div><div class="d"></div><div class="c"></div>
+        <div class="acts"><button class="edit">回去编辑这篇</button><button class="export-postcard">🖼 导出明信片</button><button class="del">删掉它</button></div>
+    </div>
+</div>
+<script src="js/api.js"></script>
+<script>
+    // ===== 雪花动画（mountainSnow 原版贴图） =====
+    (function () {
+        const canvas = document.getElementById('shelfSnow');
+        const ctx = canvas.getContext('2d');
+        const flakeImg = new Image();
+        flakeImg.src = 'celeste-gui/mountain-snow.png';
+        let flakes = [];
+        function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+        function mk(randomY) {
+            return {
+                x: Math.random() * canvas.width,
+                y: randomY ? Math.random() * canvas.height : -20,
+                s: Math.random() * 10 + 5,
+                speed: Math.random() * 1 + 0.4,
+                wind: Math.random() * 0.4 - 0.2,
+                opacity: Math.random() * 0.55 + 0.3,
+                rot: Math.random() * Math.PI * 2,
+                rotSpeed: (Math.random() - 0.5) * 0.02,
+                swing: Math.random() * Math.PI * 2,
+                swingSpeed: Math.random() * 0.02 + 0.008
+            };
+        }
+        function init() { flakes = []; for (let i = 0; i < 50; i++) flakes.push(mk(true)); }
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (flakeImg.complete && flakeImg.naturalWidth > 0) {
+                for (const f of flakes) {
+                    f.y += f.speed; f.swing += f.swingSpeed; f.rot += f.rotSpeed;
+                    f.x += Math.sin(f.swing) * 0.5 + f.wind;
+                    if (f.y > canvas.height + 20) Object.assign(f, mk(false));
+                    if (f.x > canvas.width + 20) f.x = -20;
+                    if (f.x < -20) f.x = canvas.width + 20;
+                    ctx.save();
+                    ctx.globalAlpha = f.opacity;
+                    ctx.translate(f.x, f.y);
+                    ctx.rotate(f.rot);
+                    ctx.drawImage(flakeImg, -f.s / 2, -f.s / 2, f.s, f.s);
+                    ctx.restore();
+                }
+            }
+            requestAnimationFrame(draw);
+        }
+        window.addEventListener('resize', resize);
+        resize(); init(); draw();
+    })();
+
+    const bgmPlayer = document.getElementById('bgmPlayer');
+    // 记住上次选的磁带
+    const savedBgmFile = localStorage.getItem('shelfBgmFile');
+    if (savedBgmFile) bgmPlayer.src = 'bgm/' + savedBgmFile;
+    const savedTime = parseFloat(localStorage.getItem('bgmTimeShelf') || '0');
+    if (savedTime > 0) bgmPlayer.currentTime = savedTime;
+    bgmPlayer.volume = 0.3;
+    bgmPlayer.play().catch(() => {});
+    setInterval(() => { localStorage.setItem('bgmTimeShelf', bgmPlayer.currentTime); }, 2000);
+    function tryPlayBGM() { bgmPlayer.play().then(() => { document.removeEventListener('click', tryPlayBGM); document.removeEventListener('keydown', tryPlayBGM); }).catch(() => {}); }
+    document.addEventListener('click', tryPlayBGM);
+    document.addEventListener('keydown', tryPlayBGM);
+
+    // ===== 磁带选曲：7 首收集曲目，点了就播，选择会记住 =====
+    (function () {
+        const BGM_LIST = [
+            { f: 'dearest-friends.mp3', n: 'Dearest Friends' },
+            { f: 'checking-in.mp3', n: 'Checking In' },
+            { f: 'exhale.mp3', n: 'Exhale' },
+            { f: 'farewell.mp3', n: 'Farewell' },
+            { f: 'madeline-and-theo.mp3', n: 'Madeline & Theo' },
+            { f: 'postcard.mp3', n: 'Postcard' },
+            { f: 'womanbird.mp3', n: 'Womanbird' }
+        ];
+        const img = document.getElementById('cassetteBgmImg');
+        const panel = document.getElementById('cassetteBgmPanel');
+
+        // 磁带自己一直慢慢转（19 帧）
+        const frames = [];
+        for (let i = 0; i < 19; i++) frames.push('celeste-collectables/cassette/idle' + String(i).padStart(2, '0') + '.png');
+        frames.forEach(s => { const im = new Image(); im.src = s; });
+        let fi = 0;
+        setInterval(() => {
+            if (document.hidden) return;
+            fi = (fi + 1) % frames.length; img.src = frames[fi];
+        }, 110);
+
+        function renderList() {
+            panel.querySelectorAll('.cb-item').forEach(e => e.remove());
+            const cur = (bgmPlayer.src || '').split('/').pop();
+            BGM_LIST.forEach(t => {
+                const d = document.createElement('div');
+                d.className = 'cb-item' + (t.f === cur || (!cur && t.f === savedBgmFile) ? ' on' : '');
+                d.textContent = t.n;
+                d.addEventListener('click', () => {
+                    bgmPlayer.src = 'bgm/' + t.f;
+                    bgmPlayer.play().catch(() => {});
+                    localStorage.setItem('shelfBgmFile', t.f);
+                    localStorage.removeItem('bgmTimeShelf');
+                    renderList();
+                    pcPlay('ui_world_journal_page_cover_forward_01.wav');
+                });
+                panel.appendChild(d);
+            });
+        }
+        img.addEventListener('click', () => {
+            renderList();
+            panel.classList.toggle('show');
+        });
+        document.addEventListener('click', e => {
+            if (!panel.contains(e.target) && e.target !== img) panel.classList.remove('show');
+        });
+    })();
+
+function renderPostcardCanvas(canvas, title, dateStr, content, summary, strawCount) {
+    var ctx = canvas.getContext('2d');
+    var INK = '#8f4a3c';
+    var INK_SOFT = 'rgba(143,74,60,.78)';
+    return loadPostcardImg().then(function (img) {
+        var W = 1200, H = 800;
+        if (img) {
+            H = Math.round(W * img.naturalHeight / img.naturalWidth);
+            canvas.width = W; canvas.height = H;
+            ctx.drawImage(img, 0, 0, W, H);
+        } else {
+            canvas.width = W; canvas.height = H;
+            ctx.fillStyle = '#f2e2d5'; ctx.fillRect(0, 0, W, H);
+            ctx.strokeStyle = INK_SOFT; ctx.lineWidth = 3;
+            ctx.strokeRect(18, 18, W - 36, H - 36);
+        }
+
+        // ===== To: 两条横线上写标题和日期 =====
+        ctx.fillStyle = INK;
+        ctx.font = 'italic 30px "Renogare","CelesteZH","Microsoft YaHei",sans-serif';
+        ctx.fillText((title || '无题').substring(0, 26), W * 0.14, H * 0.130);
+        ctx.font = 'italic 19px "Renogare","CelesteZH","Microsoft YaHei",sans-serif';
+        ctx.fillStyle = INK_SOFT;
+        ctx.fillText(dateStr || '', W * 0.14, H * 0.200);
+
+        // ===== 中间大片书写区：内容总结（【】里的字红色高亮） =====
+        var RED_INK = '#c8433a';
+        var snip = (content || '').substring(0, 300);
+        var segs = [], mSeg, reSeg = /【([^】]*)】/g, lastI = 0;
+        while ((mSeg = reSeg.exec(snip)) !== null) {
+            if (mSeg.index > lastI) segs.push({ t: snip.slice(lastI, mSeg.index), r: false });
+            segs.push({ t: mSeg[1], r: true });
+            lastI = reSeg.lastIndex;
+        }
+        if (lastI < snip.length) segs.push({ t: snip.slice(lastI), r: false });
+        ctx.font = '21px "Renogare","CelesteZH","Microsoft YaHei",sans-serif';
+        var ly = H * 0.34, mh = H * 0.62, lx = W * 0.07, maxX = W * 0.56, x = lx;
+        for (var si = 0; si < segs.length; si++) {
+            var chars = segs[si].t.split('');
+            for (var ci = 0; ci < chars.length; ci++) {
+                var ch = chars[ci];
+                if (ch === '\n') { x = lx; ly += 36; continue; }
+                var cw = ctx.measureText(ch).width;
+                if (x + cw > maxX) { x = lx; ly += 36; }
+                if (ly > mh) break;
+                ctx.fillStyle = segs[si].r ? RED_INK : INK;
+                ctx.fillText(ch, x, ly);
+                x += cw;
+            }
+            if (ly > mh) break;
+        }
+        if (x > lx) ly += 36;
+
+        // ===== 金句（最打动的一句）=====
+        if (summary) {
+            var sy2 = Math.min(ly + 20, H * 0.74);
+            ctx.strokeStyle = 'rgba(143,74,60,.35)'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(W * 0.07, sy2 - 10); ctx.lineTo(W * 0.57, sy2 - 10); ctx.stroke();
+            ctx.fillStyle = INK;
+            ctx.font = 'italic 20px "Renogare","CelesteZH";'
+            ctx.fillText('\u201c' + summary.substring(0, 60) + '\u201d', W * 0.08, sy2 + 22);
+        }
+
+        // ===== 落款（右下角，避开素材左下角的 Postcard~）=====
+        ctx.fillStyle = INK_SOFT;
+        ctx.font = 'italic 17px "Renogare","CelesteZH";'
+        ctx.textAlign = 'right';
+        ctx.fillText('\u00d7' + (strawCount || 0) + '  \u2014 Madeline', W * 0.92, H * 0.9);
+        ctx.textAlign = 'left';
+    });
+}
+var PC_IMG = null;
+function loadPostcardImg() {
+    return new Promise(function (res) {
+        if (PC_IMG) return res(PC_IMG);
+        var im = new Image();
+        im.onload = function () { PC_IMG = im; res(im); };
+        im.onerror = function () { res(null); };
+        im.src = 'celeste-gui/postcard.webp';
+    });
+}
+var PC_SOUNDS = {};
+function pcPlay(name) {
+    try {
+        if (!PC_SOUNDS[name]) PC_SOUNDS[name] = new Audio('celeste-sounds/' + name);
+        var a = PC_SOUNDS[name];
+        a.currentTime = 0;
+        a.volume = 0.9;
+        a.play().catch(function(){});
+    } catch (e) { }
+}
+function exportPostcard(data) {
+    var modal = document.getElementById('postcardExportModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'postcardExportModal';
+        modal.innerHTML = '<canvas class="pe-snow" id="peSnow"></canvas>' +
+            '<div class="pe-stage"><canvas id="postcardCanvas"></canvas>' +
+            '<div class="pe-actions"><button id="peDownload">\u2b07 下载明信片</button><button class="pe-close" id="peClose">Keep \u2665</button></div></div>';
+        document.body.appendChild(modal);
+        var closePe = function() {
+            pcPlay('ui_main_postcard_variants_out.wav');
+            stopPeSnow();
+            modal.style.transition = 'opacity .6s ease';
+            modal.style.opacity = '0';
+            setTimeout(function () {
+                modal.classList.remove('show');
+                modal.style.opacity = '';
+                modal.style.transition = '';
+                modal.querySelector('.pe-stage').classList.remove('slide-in');
+                modal.querySelector('.pe-actions').classList.remove('show');
+            }, 600);
+        };
+        document.getElementById('peClose').addEventListener('click', closePe);
+        modal.addEventListener('click', function(e) { if (e.target === modal) closePe(); });
+    }
+    var canvas = document.getElementById('postcardCanvas');
+    renderPostcardCanvas(canvas, data.title, data.date, data.content, data.summary, parseInt(localStorage.getItem('diarySaveCount') || '0')).then(function () {
+        modal.classList.add('show');
+        startPeSnow();
+        setTimeout(function () { modal.querySelector('.pe-stage').classList.add('slide-in'); }, 400);
+        setTimeout(function () { modal.querySelector('.pe-actions').classList.add('show'); }, 1600);
+    });
+    document.getElementById('peDownload').onclick = function() {
+        var url = canvas.toDataURL('image/png');
+        var a = document.createElement('a');
+        a.download = 'mountain-diary-' + (data.date || '').replace(/\D/g, '').slice(0, 8) + '.png';
+        a.href = url;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    };
+    pcPlay('ui_main_postcard_variants_in.wav');
+}
+
+// ===== 弹窗内飘雪（与每日明信片同款，精简版） =====
+var peSnowRaf = null, peFlakes = [];
+function startPeSnow() {
+    var cv = document.getElementById('peSnow');
+    if (!cv || peSnowRaf) return;
+    var c = cv.getContext('2d');
+    cv.width = window.innerWidth; cv.height = window.innerHeight;
+    peFlakes = [];
+    for (var i = 0; i < 60; i++) {
+        peFlakes.push({
+            x: Math.random() * cv.width, y: Math.random() * cv.height,
+            r: Math.random() * 2.5 + 1, sp: Math.random() * 1.2 + 0.4,
+            w: Math.random() * 0.4 - 0.2, o: Math.random() * 0.5 + 0.2,
+            sw: Math.random() * Math.PI * 2, sws: Math.random() * 0.02 + 0.01
+        });
+    }
+    function loop() {
+        c.clearRect(0, 0, cv.width, cv.height);
+        for (var j = 0; j < peFlakes.length; j++) {
+            var f = peFlakes[j];
+            f.y += f.sp; f.sw += f.sws;
+            f.x += Math.sin(f.sw) * 0.5 + f.w;
+            if (f.y > cv.height + 10) { f.y = -10; f.x = Math.random() * cv.width; }
+            if (f.x > cv.width + 10) f.x = -10;
+            if (f.x < -10) f.x = cv.width + 10;
+            c.beginPath();
+            c.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+            c.fillStyle = 'rgba(255,255,255,' + f.o + ')';
+            c.fill();
+        }
+        peSnowRaf = requestAnimationFrame(loop);
+    }
+    loop();
+}
+function stopPeSnow() {
+    if (peSnowRaf) { cancelAnimationFrame(peSnowRaf); peSnowRaf = null; }
+}
+
+(async function () {
+    if (!localStorage.getItem('token')) { alert('请先登录'); location.href = 'login.html'; return; }
+    const cards = document.getElementById('cards');
+    const detail = document.getElementById('detail');
+    let data = [], cur = null;
+    function fmt(v) {
+        if (!v) return '';
+        const d = new Date(typeof v === 'number' || /^\d+$/.test(String(v)) ? Number(v) : v);
+        if (isNaN(d.getTime())) return String(v);
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+    const MONTHS_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    function fmtEn(v) {
+        if (!v) return '';
+        const d = new Date(typeof v === 'number' || /^\d+$/.test(String(v)) ? Number(v) : v);
+        if (isNaN(d.getTime())) return String(v);
+        return MONTHS_EN[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+    }
+    // ===== 日记翻页音效：forward = 抽出/向右，back = 向左（官方素材，变体随机） =====
+    const PAGE_SFX = {
+        forward: ['ui_world_journal_page_cover_forward_01.wav', 'ui_world_journal_page_cover_forward_02.wav', 'ui_world_journal_page_cover_forward_03.wav'],
+        back: ['ui_world_journal_page_main_back_01.wav', 'ui_world_journal_page_main_back_02.wav', 'ui_world_journal_page_main_back_03.wav']
+    };
+    const PAGE_AUDIO = {};
+    function playPageSfx(dir) {
+        try {
+            const list = PAGE_SFX[dir];
+            const name = list[Math.floor(Math.random() * list.length)];
+            if (!PAGE_AUDIO[name]) PAGE_AUDIO[name] = new Audio('celeste-sounds/' + name);
+            const a = PAGE_AUDIO[name];
+            a.currentTime = 0;
+            a.volume = 0.20;
+            a.play().catch(() => {});
+        } catch (e) { /* 无声降级 */ }
+    }
+    // ===== 滚动进场：往下滑 → 新行从下方上滑入；往上翻 → 上方行从上方下滑入 =====
+    const shelfIO = new IntersectionObserver(list => {
+        list.forEach(en => {
+            const el = en.target;
+            if (en.isIntersecting) {
+                el.classList.add(en.boundingClientRect.top > 0 ? 'from-below' : 'from-above');
+                requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('in')));
+            } else {
+                el.classList.remove('in', 'from-below', 'from-above');
+            }
+        });
+    }, { threshold: 0.08 });
+    function observeShelfRows() {
+        cards.querySelectorAll('.shelf-row:not(.observed)').forEach(el => {
+            el.classList.add('observed');
+            shelfIO.observe(el);
+        });
+    }
+    function replayAnim(el, cls) {
+        el.classList.remove('anim-up', 'anim-down');
+        void el.offsetWidth;
+        el.classList.add(cls);
+    }
+    let groups = [], curGroup = null, curIdx = 0;
+    function buildGroups() {
+        const map = new Map();
+        for (const d of data) {
+            const key = fmt(d.updateDate || d.createDate);
+            if (!map.has(key)) map.set(key, []);
+            map.get(key).push(d);
+        }
+        groups = [...map.values()].map(es => ({ date: es[0].updateDate || es[0].createDate, entries: es }));
+    }
+    function showList() { detail.classList.remove('show'); cards.style.display = ''; }
+    function renderEntry() {
+        cur = curGroup.entries[curIdx];
+        detail.querySelector('.t').textContent = cur.title || '无题';
+        detail.querySelector('.d').textContent = fmtEn(cur.updateDate || cur.createDate);
+        detail.querySelector('.c').textContent = cur.content || '';
+        detail.querySelector('.pos').textContent = (curIdx + 1) + ' / ' + curGroup.entries.length;
+        detail.querySelector('.prev-e').disabled = curIdx === 0;
+        detail.querySelector('.next-e').disabled = curIdx === curGroup.entries.length - 1;
+    }
+    function showDetail(i) {
+        curGroup = groups[i]; if (!curGroup) return;
+        curIdx = 0;
+        cards.style.display = 'none';
+        renderEntry();
+        detail.classList.add('show');
+        replayAnim(detail, 'anim-up');
+    }
+    detail.querySelector('.prev-e').addEventListener('click', () => { if (curIdx > 0) { playPageSfx('back'); curIdx--; renderEntry(); replayAnim(detail, 'anim-down'); } });
+    detail.querySelector('.next-e').addEventListener('click', () => { if (curGroup && curIdx < curGroup.entries.length - 1) { playPageSfx('forward'); curIdx++; renderEntry(); replayAnim(detail, 'anim-up'); } });
+    document.addEventListener('keydown', e => {
+        if (!detail.classList.contains('show')) return;
+        if (e.key === 'ArrowLeft') detail.querySelector('.prev-e').click();
+        if (e.key === 'ArrowRight') detail.querySelector('.next-e').click();
+    });
+    async function load() {
+        cards.innerHTML = '<div class="empty"><span class="em">📖</span>正在搬书……</div>';
+        const res = await api('/diary/list', 'GET');
+        if (res.success && Array.isArray(res.data)) {
+            data = res.data;
+            if (!data.length) { cards.innerHTML = '<div class="empty"><span class="em">🗻</span>书架还空着。<br>写下第一篇，它就有了位置。</div>'; return; }
+            buildGroups();
+            cards.innerHTML = groups.map((g, i) => {
+                const first = g.entries[0];
+                const title = (first.title && first.title.trim()) ? first.title.trim()
+                    : (g.entries.length > 1 ? g.entries.length + ' 篇日记' : '无题');
+                const snip = String(first.content || '').replace(/\s+/g, ' ').trim().slice(0, 48);
+                const cnt = g.entries.length > 1 ? '<span class="row-count">×' + g.entries.length + '</span>' : '';
+                return '<div class="shelf-row" data-i="' + i + '">' +
+                    '<img class="row-icon" src="namespace/cassette.png" alt="" loading="lazy" decoding="async">' +
+                    '<div class="row-main"><div class="row-title">' + escHtml(title) + '</div>' +
+                    (snip ? '<div class="row-snip">' + escHtml(snip) + '</div>' : '') + '</div>' +
+                    '<div class="row-date">' + fmtEn(g.date) + cnt + '</div>' +
+                    '</div>';
+            }).join('');
+        } else {
+            cards.innerHTML = '<div class="empty"><span class="em">🌫️</span>书架暂时打不开（' + escHtml(res.msg || '未知错误') + '）</div>';
+        }
+        observeShelfRows();
+    }
+    cards.addEventListener('click', ev => {
+        const c = ev.target.closest('.shelf-row');
+        if (!c || c.classList.contains('snapshot')) return;
+        // 点开往期日记：磁带预览音效（每周/每月快照明信片走各自的 variants 音效，不在此列）
+        pcPlay('cassette_preview_intro.wav'); showDetail(+c.dataset.i);
+    });
+
+    detail.querySelector('.back').addEventListener('click', showList);
+
+    detail.querySelector('.export-postcard').addEventListener('click', () => {
+        if (!cur) return;
+        exportPostcard({ title: cur.title, date: fmt(cur.updateDate || cur.createDate), content: cur.content, summary: '' });
+    });
+
+    detail.querySelector('.edit').addEventListener('click', () => {
+        if (cur) location.href = 'diary.html?edit=' + encodeURIComponent(cur.id);
+    });
+    detail.querySelector('.del').addEventListener('click', async () => {
+        if (!cur) return;
+        if (!confirm('确定要删掉这篇日记吗？删了就找不回来了。')) return;
+        const res = await api('/diary?diaryId=' + encodeURIComponent(cur.id), 'DELETE');
+        if (res.success) { showToast('这一页合上了'); showList(); load(); }
+        else showToast(res.msg || '删除失败');
+    });
+    await load();
+
+    // ================================================================
+    // ===== 快照：一段时间后，Madeline 把这段日子做成一张明信片 =====
+    // 书架上悬停自己翻书，点开是明信片（variants 音效）
+    // ================================================================
+    (function () {
+        const EMOTION_DICT = {
+            '开心': ['开心', '高兴', '快乐', '哈哈', '太棒', '喜欢', '幸福', '笑', '兴奋', '顺利'],
+            '悲伤': ['难过', '伤心', '哭', '失落', '遗憾', '心痛', '委屈', '崩溃'],
+            '孤独': ['孤独', '一个人', '寂寞', '没人', '想念', '空荡'],
+            '不安': ['焦虑', '紧张', '担心', '害怕', '不安', '慌', '压力', '失眠'],
+            '愤怒': ['生气', '愤怒', '烦躁', '讨厌', '气死', '火大'],
+            '满足': ['满足', '踏实', '安心', '平静', '值得', '感恩', '治愈'],
+            '希望': ['期待', '希望', '明天', '以后', '加油', '计划', '梦想'],
+            '惊讶': ['没想到', '居然', '竟然', '惊', '突然', '万万']
+        };
+        function countEmotion(texts) {
+            const scores = {};
+            for (const t of texts) {
+                for (const emo in EMOTION_DICT) {
+                    for (const kw of EMOTION_DICT[emo]) {
+                        const m = t.split(kw).length - 1;
+                        if (m > 0) scores[emo] = (scores[emo] || 0) + m;
+                    }
+                }
+            }
+            let best = null, max = 0;
+            for (const emo in scores) { if (scores[emo] > max) { max = scores[emo]; best = emo; } }
+            return best || '平静';
+        }
+        function extractQuote(entries) {
+            const sents = [];
+            for (const e of entries) {
+                const parts = String(e.content || '').split(/(?<=[。！？!?])|[\n]/);
+                for (const p of parts) {
+                    const s = p.trim();
+                    if (s.length >= 6 && s.length <= 46) sents.push(s);
+                }
+            }
+            if (!sents.length) return '这段日子字还不多，但每一页都算数。';
+            let best = sents[0], bestScore = -1;
+            for (const s of sents) {
+                let score = 0;
+                for (const emo in EMOTION_DICT) {
+                    if (EMOTION_DICT[emo].some(kw => s.indexOf(kw) !== -1)) score += 2;
+                }
+                score += Math.min(s.length, 30) / 15;
+                score += Math.random();
+                if (score > bestScore) { bestScore = score; best = s; }
+            }
+            return best;
+        }
+        function getSnaps() {
+            try {
+                const arr = JSON.parse(localStorage.getItem('diarySnapshots') || '[]');
+                return arr.map(s => {
+                    if (s.type === 'week') s.label = 'Weekly Recap';
+                    else if (s.type === 'month') s.label = 'Monthly Recap';
+                    return s;
+                });
+            } catch (e) { return []; }
+        }
+        function setSnaps(s) { localStorage.setItem('diarySnapshots', JSON.stringify(s)); }
+
+        // ===== 聚合每篇日记落库的情绪数据（保存时后端 AI 已分析好） =====
+        function aggregateStoredEmotions(list) {
+            const emoSum = {};
+            const intensities = [];
+            const events = [];
+            const concerns = [];
+            let analyzed = 0;
+            for (const d of list) {
+                if (!d.emotionDetail) continue;
+                let det;
+                try { det = JSON.parse(d.emotionDetail); } catch (e) { continue; }
+                analyzed++;
+                (det.emotions || []).forEach(e => {
+                    emoSum[e.name] = (emoSum[e.name] || 0) + (e.percent || 0);
+                });
+                if (det.intensity) intensities.push(det.intensity);
+                (det.events || []).forEach(ev => { if (events.indexOf(ev) === -1) events.push(ev); });
+                if (det.concern && concerns.indexOf(det.concern) === -1) concerns.push(det.concern);
+            }
+            if (!analyzed) return null;
+            const emotions = Object.entries(emoSum)
+                .map(([name, sum]) => ({ name: name, percent: Math.round(sum / analyzed) }))
+                .sort((a, b) => b.percent - a.percent)
+                .slice(0, 4);
+            return {
+                topEmotion: emotions[0] ? emotions[0].name : null,
+                emotions: emotions,
+                intensity: intensities.length ? Math.round(intensities.reduce((a, b) => a + b, 0) / intensities.length) : null,
+                keySentence: '',
+                events: events.slice(0, 5),
+                concerns: concerns.slice(0, 3)
+            };
+        }
+
+        function emotionSummaryText(agg) {
+            if (!agg || !agg.emotions || !agg.emotions.length) return '';
+            let t = '主要情绪：' + agg.emotions.map(e => e.name + ' ' + e.percent + '%').join('、');
+            if (agg.intensity) t += '；平均强度 ' + agg.intensity + '/5';
+            if (agg.events && agg.events.length) t += '；期间的事：' + agg.events.join('、');
+            if (agg.concerns && agg.concerns.length) t += '；挂心的事：' + agg.concerns.join('、');
+            return t;
+        }
+
+        // ===== 检查是否到了生成快照的时候 =====
+        async function maybeGenerate() {
+            const now = Date.now();
+            const snaps = getSnaps();
+            const inRange = (days) => data.filter(d => {
+                const t = new Date(d.updateDate || d.createDate).getTime();
+                return !isNaN(t) && now - t <= days * 86400000;
+            });
+            const hasType = (type, fromT) => snaps.some(s => s.type === type && s.createdAt >= fromT);
+            const created = [];
+
+            const week = inRange(7);
+            if (week.length >= 3 && !hasType('week', now - 7 * 86400000)) {
+                created.push(await buildSnap('week', week, 'Weekly Recap'));
+            }
+            const month = inRange(30);
+            if (month.length >= 8 && !hasType('month', now - 30 * 86400000)) {
+                created.push(await buildSnap('month', month, 'Monthly Recap'));
+            }
+            if (created.length) {
+                setSnaps(created.concat(snaps));
+                renderSnapCards();
+                pcPlay('ui_main_postcard_variants_in.wav');
+                showToast(created.length > 1 ? '两张新快照明信片收进书架了' : '一张新的快照明信片收进书架了');
+            }
+            async function buildSnap(type, list, label) {
+                const times = list.map(d => new Date(d.updateDate || d.createDate).getTime()).sort((a, b) => a - b);
+                const joined = list.map(d => d.content || '').join('\n');
+                let reflect = '';
+                let emotionData = aggregateStoredEmotions(list);
+                if (!emotionData) {
+                    try {
+                        const res = await api('/diary/emotion-analyze', 'POST', { content: joined.slice(0, 1500) });
+                        if (res.success && res.data) emotionData = res.data;
+                    } catch (e) {}
+                }
+                try {
+                    const res = await api('/diary/snap-reflect', 'POST', { content: joined.slice(0, 1200), emotion: emotionSummaryText(emotionData) });
+                    if (res.success && res.data && res.data.message) reflect = res.data.message;
+                } catch (e) {}
+                return {
+                    id: type + '-' + now,
+                    type: type,
+                    label: label,
+                    from: fmt(times[0]),
+                    to: fmt(times[times.length - 1]),
+                    count: list.length,
+                    topEmotion: emotionData ? emotionData.topEmotion : countEmotion(list.map(d => d.content || '')),
+                    emotions: emotionData ? (emotionData.emotions || []) : [],
+                    intensity: emotionData ? emotionData.intensity : null,
+                    keySentence: emotionData ? (emotionData.keySentence || '') : '',
+                    events: emotionData ? (emotionData.events || []) : [],
+                    concerns: emotionData ? (emotionData.concerns || []) : [],
+                    quote: extractQuote(list),
+                    reflect: reflect,
+                    createdAt: now
+                };
+            }
+        }
+
+        // ===== 书架上的快照卡 =====
+        function snapCardHtml(s) {
+            return '<div class="shelf-row snapshot" data-snap="' + s.id + '">' +
+                '<img class="row-icon" src="namespace/remix.png" alt="" loading="lazy" decoding="async">' +
+                '<div class="row-main"><div class="row-title">' + escHtml(s.label) + '</div>' +
+                '<div class="row-snip">共 ' + s.count + ' 篇 · ' + fmt(s.from) + ' ~ ' + fmt(s.to) + '</div></div>' +
+                '<div class="row-date">' + fmt(s.createdAt) + '</div>' +
+                '</div>';
+        }
+        function renderSnapCards() {
+            cards.querySelectorAll('.shelf-row.snapshot').forEach(el => el.remove());
+            const snaps = getSnaps();
+            if (!snaps.length) return;
+            cards.insertAdjacentHTML('afterbegin', snaps.map(snapCardHtml).join(''));
+            observeShelfRows();
+        }
+
+
+        // ===== 点击：做成明信片，内容总结写在上面（variants 音效） =====
+        function openSnapPostcard(s) {
+            const body = s.reflect || ('这段日子，你写下了 ' + s.count + ' 篇日记。');
+            let emotionLine = '';
+            if (s.emotions && s.emotions.length) {
+                emotionLine = '\n\n这段日子的情绪：' + s.emotions.map(e => e.name + ' ' + e.percent + '%').join(' · ');
+                if (s.intensity) emotionLine += '（强烈程度 ' + s.intensity + '/5）';
+            } else if (s.topEmotion) {
+                emotionLine = '\n\n你最近常常感到【' + s.topEmotion + '】。';
+            }
+            if (s.events && s.events.length) emotionLine += '\n这些日子：' + s.events.slice(0, 4).join('、');
+            if (s.concerns && s.concerns.length) emotionLine += '\n你心里挂念着：' + s.concerns.join('、');
+            if (s.keySentence) emotionLine += '\n「' + s.keySentence + '」';
+            exportPostcard({
+                title: s.label + ' · 共 ' + s.count + ' 篇',
+                date: fmt(s.createdAt),
+                content: body + emotionLine,
+                summary: s.quote
+            });
+        }
+        cards.addEventListener('click', ev => {
+            const c = ev.target.closest('.shelf-row.snapshot');
+            if (!c) return;
+            const s = getSnaps().find(x => x.id === c.dataset.snap);
+            if (s) openSnapPostcard(s);
+        });
+
+        // ===== 入场：先渲染已有快照，再检查要不要生成新的 =====
+        renderSnapCards();
+        setTimeout(maybeGenerate, 800);
+    })();
+})();
+
+    // ===== 篝火渲染（原版 campfire 逐帧动画） =====
+    (function () {
+        const TROPHIES = {
+            goldberry: 'celeste-collectables/goldberry/idle00.png',
+            cassette: 'celeste-collectables/cassette/idle00.png',
+            heartgem: 'celeste-collectables/heartgem/0/spin00.png',
+            moonberry: 'celeste-collectables/moonberry/normal00.png'
+        };
+        let owned = [];
+        try { owned = JSON.parse(localStorage.getItem('berryOwned') || '[]'); } catch (e) {}
+        const trophy = document.getElementById('berryTrophy');
+        owned.forEach(id => {
+            if (!TROPHIES[id]) return;
+            const im = document.createElement('img');
+            im.src = TROPHIES[id]; im.title = id; im.dataset.id = id;
+            trophy.appendChild(im);
+        });
+        if (trophy.children.length) trophy.classList.remove('empty');
+        function mkTrophyFrames(prefix, n) { const a = []; for (let i = 0; i < n; i++) a.push(prefix + String(i).padStart(2, '0') + '.png'); return a; }
+        function heartTier() {
+            const c = parseInt(localStorage.getItem('diarySaveCount') || '0');
+            return c >= 100 ? 3 : c >= 60 ? 2 : c >= 30 ? 1 : 0;
+        }
+        const TROPHY_FRAMES = {
+            goldberry: mkTrophyFrames('celeste-collectables/goldberry/idle', 12),
+            moonberry: mkTrophyFrames('celeste-collectables/moonberry/normal', 52),
+            cassette: mkTrophyFrames('celeste-collectables/cassette/idle', 19)
+        };
+        const STRAW_FRAMES = mkTrophyFrames('celeste-collectables/strawberry/normal', 62);
+        STRAW_FRAMES.forEach(s => { const im = new Image(); im.src = s; });
+        let tfi = 0;
+        const trophyImgs = trophy.querySelectorAll('img');
+        const sbStrawImg = document.getElementById('sbStrawImg');
+        setInterval(() => {
+            if (document.hidden) return;
+            trophyImgs.forEach(im => {
+                if (im.dataset.id === 'heartgem') {
+                    const tier = heartTier();
+                    if (tier >= 3) {
+                        im.src = 'celeste-collectables/heartgem/3/FakeHeart' + String(tfi % 33).padStart(4, '0') + '.png';
+                    } else {
+                        im.src = 'celeste-collectables/heartgem/' + tier + '/spin' + String(tfi % 11).padStart(2, '0') + '.png';
+                    }
+                    return;
+                }
+                const f = TROPHY_FRAMES[im.dataset.id];
+                if (f) im.src = f[tfi % f.length];
+            });
+            if (sbStrawImg) sbStrawImg.src = STRAW_FRAMES[tfi % STRAW_FRAMES.length];
+            tfi++;
+        }, 90);
+
+        const FIRE_FRAMES = [];
+        for (let i = 0; i < 16; i++) FIRE_FRAMES.push('celeste-gui/campfire/fire' + String(i).padStart(2, '0') + '.png');
+        const SMOKE_FRAMES = [];
+        for (let i = 0; i < 8; i++) SMOKE_FRAMES.push('celeste-gui/campfire/smoking' + String(i).padStart(2, '0') + '.png');
+        FIRE_FRAMES.concat(SMOKE_FRAMES).forEach(src => { const im = new Image(); im.src = src; });
+
+        const flameImg = document.getElementById('sbFlameImg');
+        let curFrames = null, fi = 0;
+        setInterval(() => {
+            if (document.hidden || !curFrames || !curFrames.length) return;
+            flameImg.src = curFrames[fi % curFrames.length];
+            fi++;
+        }, 70);
+
+        function updateBonfire() {
+            const fire = document.getElementById('sbFire');
+            const s = parseInt(localStorage.getItem('diaryStreak') || '0');
+            fire.querySelectorAll('.sb-label').forEach(e => e.remove());
+            if (s >= 1) {
+                curFrames = FIRE_FRAMES; fi = 0;
+                flameImg.style.width = (s >= 30 ? 120 : s >= 7 ? 104 : s >= 3 ? 90 : 76) + 'px';
+            } else {
+                curFrames = SMOKE_FRAMES; fi = 0;
+                flameImg.style.width = '64px';
+            }
+            const lb = document.createElement('div');
+            lb.className = 'sb-label';
+            lb.textContent = 'Day ' + s;
+            fire.appendChild(lb);
+            const flag = document.getElementById('sbFlag');
+            if (s >= 30) { flag.src = 'celeste-gui/checkpoint/flag30.png'; flag.title = 'Day ' + s; flag.style.display = ''; }
+            else if (s >= 7) { flag.src = 'celeste-gui/checkpoint/flag7.png'; flag.title = 'Day ' + s; flag.style.display = ''; }
+            else if (s >= 3) { flag.src = 'celeste-gui/checkpoint/flag3.png'; flag.title = 'Day ' + s; flag.style.display = ''; }
+            else { flag.style.display = 'none'; }
+        }
+        updateBonfire();
+        document.getElementById('strawberryBonfire').addEventListener('click', () => {
+            const s = parseInt(localStorage.getItem('diaryStreak') || '0');
+            const line = s >= 30 ? '篝火已经燃成传说了！\u2605'
+                : s >= 7 ? '火光正旺，继续攀登！'
+                : s >= 3 ? '篝火稳定燃烧着。'
+                : s >= 1 ? '小火苗也在努力发光。'
+                : '火堆冷了……写一篇日记把它点燃吧。';
+            showToast(line);
+        });
+    })();
+
+    // ===== 镜子：图层叠加 + 点击破碎召唤 Badeline =====
+    (function () {
+        var M_DIR = 'celeste-journal/mirror/';
+        var M_SCALE = 5;
+        var mirror = document.getElementById('shelfMirror');
+        if (!mirror) return;
+        var badelineWrap = mirror.querySelector('.badeline-wrap');
+
+        function addLayer(src, zIndex, cls) {
+            var im = new Image();
+            im.className = 'm-layer' + (cls ? ' ' + cls : '');
+            im.style.zIndex = zIndex;
+            im.src = M_DIR + src;
+            im.addEventListener('load', function () {
+                im.style.width = '100%';
+                im.style.height = '100%';
+                im.style.objectFit = 'fill';
+            });
+            mirror.insertBefore(im, badelineWrap);
+            return im;
+        }
+
+        // 叠加顺序：玻璃底 → 影子 → 玻璃高光 → 破碎帧 → 镜框
+        addLayer('glassbg.png', 1);
+        var maskImgs = [];
+        for (var mi = 0; mi < 6; mi++) {
+            var mk = addLayer('mirrormask' + String(mi).padStart(2, '0') + '.png', 2, 'm-mask');
+            if (mi > 0) mk.style.display = 'none';
+            maskImgs.push(mk);
+        }
+        addLayer('glassfg.png', 3);
+        var breakImgs = [];
+        for (var bi = 0; bi < 10; bi++) {
+            var bk = addLayer('glassbreak' + String(bi).padStart(2, '0') + '.png', 4);
+            bk.style.display = 'none';
+            breakImgs.push(bk);
+        }
+        var frameImg = addLayer('frame.png', 5);
+        frameImg.addEventListener('load', function () {
+            mirror.style.width = frameImg.naturalWidth * M_SCALE + 'px';
+            mirror.style.height = frameImg.naturalHeight * M_SCALE + 'px';
+        });
+
+        function showFrame(list, idx) {
+            list.forEach(function (im, i) { im.style.display = i === idx ? 'block' : 'none'; });
+        }
+
+        // 镜内影子慢慢变幻
+        var maskFi = 0;
+        setInterval(function () {
+            if (busy || document.hidden) return;
+            maskFi = (maskFi + 1) % maskImgs.length;
+            showFrame(maskImgs, maskFi);
+        }, 700);
+
+        // Badeline 出场帧（9 帧 idle）
+        var badelineImg = document.getElementById('badelineImg');
+        var B_FRAMES = [];
+        for (var fi2 = 0; fi2 < 9; fi2++) B_FRAMES.push('celeste-player/badeline/idle' + String(fi2).padStart(2, '0') + '.png');
+        B_FRAMES.forEach(function (s) { var im = new Image(); im.src = s; });
+        var bFi = 0;
+        setInterval(function () {
+            if (document.hidden || !badelineImg.offsetParent) return;
+            bFi = (bFi + 1) % B_FRAMES.length;
+            badelineImg.src = B_FRAMES[bFi];
+        }, 110);
+        badelineImg.addEventListener('load', function () {
+            badelineImg.style.width = badelineImg.naturalWidth * 6 + 'px';
+            badelineImg.style.height = badelineImg.naturalHeight * 6 + 'px';
+        });
+
+        // 玻璃碎裂声（WebAudio 合成，点击即手势，无需音频文件）
+        function crackSound() {
+            try {
+                var ctx = window.__mirrorAC || (window.__mirrorAC = new (window.AudioContext || window.webkitAudioContext)());
+                var dur = 0.35;
+                var buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);
+                var d = buf.getChannelData(0);
+                for (var i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2.2);
+                var src = ctx.createBufferSource();
+                src.buffer = buf;
+                var hp = ctx.createBiquadFilter();
+                hp.type = 'highpass';
+                hp.frequency.value = 1800;
+                var g = ctx.createGain();
+                g.gain.value = 0.5;
+                src.connect(hp); hp.connect(g); g.connect(ctx.destination);
+                src.start();
+            } catch (e) { /* 无声降级 */ }
+        }
+
+        var busy = false;
+        var LINES = [
+            '……是你在敲镜子吗？',
+            '我出来透透气，你继续写你的。',
+            '别怕。我只是你没说出口的那一部分。',
+            '镜子碎了也没关系，我帮你看着你自己。'
+        ];
+
+        mirror.addEventListener('click', function () {
+            if (busy) return;
+            busy = true;
+            crackSound();
+            mirror.classList.add('mirror-shake');
+            setTimeout(function () { mirror.classList.remove('mirror-shake'); }, 600);
+            var bf = 0;
+            showFrame(breakImgs, 0);
+            var bTimer = setInterval(function () {
+                bf++;
+                if (bf >= breakImgs.length) {
+                    clearInterval(bTimer);
+                    summon();
+                    return;
+                }
+                showFrame(breakImgs, bf);
+            }, 95);
+        });
+
+        function summon() {
+            // 影子离开镜面
+            maskImgs.forEach(function (im) { im.style.display = 'none'; });
+            mirror.classList.add('summoned');
+            pcPlay('wow_so_secret.wav');
+            showToast(LINES[Math.floor(Math.random() * LINES.length)]);
+            setTimeout(function () {
+                mirror.classList.add('bye');
+                setTimeout(function () {
+                    mirror.classList.remove('summoned');
+                    mirror.classList.remove('bye');
+                    showFrame(breakImgs, -1);
+                    showFrame(maskImgs, 0);
+                    maskFi = 0;
+                    busy = false;
+                }, 750);
+            }, 6000);
+        }
+    })();
+</script>
+</body>
+</html>

@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="icon/OIP.webp" type="image/webp">
+    <title>Madeline - 写日记</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Patrick+Hand&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/diary.css">
+    <style>
+        /* ===== 羽毛随笔弹框：poempage 纸页 + 登录页同款滑入动画 ===== */
+        #featherNoteBox {
+            background:url('celeste-gui/poempage.webp') center/100% 100% no-repeat;
+            border:none;
+            border-radius:0;
+            filter:drop-shadow(0 8px 32px rgba(0,0,0,.6));
+            opacity:0;
+            transform:translateX(calc(-100vw - 100%)) rotate(-8deg);
+            transition:opacity .8s ease, transform 1s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        #featherNoteBox.slide-in { opacity:1; transform:translateX(0) rotate(0deg); }
+        #featherSave:hover { background:#c4a882 !important; color:#fff !important; }
+    </style>
+
+</head>
+<body>
+    <!-- 情绪场景背景 -->
+    <div id="emotion-bg"></div>
+    <div id="bg-snow-back"></div>
+    <div id="bg-snow-front"></div>
+    <button id="homePosterBtn" title="回到主页 · My Mountain" onclick="location.href='index.html'">
+        <img src="celeste-gui/mymountain_icon.png" alt="My Mountain" loading="lazy" decoding="async">
+    </button>
+    <button id="journalBackBtn" onclick="location.href='index.html'"><span class="x">✕</span>返回</button>
+    <!-- 金羽毛游戏入口（右上角） -->
+    <img id="pixelMadeline" src="celeste-gui/bounceline.gif" alt="Madeline" title="点我聊天" loading="lazy" decoding="async">
+    <div id="gameDialog">
+        <div id="gameDialogPortrait"><img id="gameDialogPortraitImg" src="celeste-portraits/madeline/normal00.png" alt="Madeline" loading="lazy" decoding="async"></div>
+        <div id="gameDialogBody">
+            <div id="gameDialogName">Madeline</div>
+            <div id="gameDialogText"></div>
+        </div>
+    </div>
+    <button id="featherGameBtn" title="金羽毛" style="position:fixed; top:14px; right:16px; z-index:900; width:64px; height:64px; padding:0; background:transparent; border:none; cursor:pointer; transition:transform .3s ease, filter .3s ease; filter:drop-shadow(0 4px 12px rgba(255,170,60,.6));">
+        <img src="celeste-gui/loop.gif" alt="金羽毛" style="width:100%; height:100%; object-fit:contain; display:block;" loading="lazy" decoding="async">
+    </button>
+    <!-- 羽毛随笔弹框 -->
+    <div id="featherNoteBox" style="display:none; position:fixed; top:90px; right:16px; z-index:901; width:260px; padding:18px 16px;">
+        <div style="color:#5a3e36; font-size:13px; margin-bottom:8px; font-family:'Renogare','CelesteZH',sans-serif;">🪶 写一根羽毛</div>
+        <input id="featherInput" type="text" maxlength="100" placeholder="一句话，轻轻放下..." style="width:100%; padding:8px 10px; border:1px solid #c4a882; border-radius:6px; background:rgba(255,252,245,.75); color:#3a2018; font-size:13px; outline:none; font-family:inherit;">
+        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
+            <button id="featherCancel" style="padding:4px 12px; border:1px solid #c4a882; border-radius:4px; background:transparent; color:#8a6f5c; cursor:pointer; font-size:12px;">取消</button>
+            <button id="featherSave" style="padding:4px 12px; border:2px solid #c4a882; border-radius:4px; background:rgba(255,248,240,.8); color:#5a3e36; cursor:pointer; font-size:12px; font-weight:bold;">放下</button>
+        </div>
+        <div id="featherToast" style="display:none; color:#5a3e36; font-size:12px; text-align:center; margin-top:8px;">羽毛已飘走～</div>
+    </div>
+    <!-- BGM 播放器（隐藏，自动播放） -->
+    <audio id="bgmPlayer" loop autoplay>
+        <source src="bgm/exhale.mp3" type="audio/mpeg">
+    </audio>
+
+    <!-- 每日明信片开场动画 -->
+    <div id="postcard-overlay">
+        <canvas id="snowCanvas"></canvas>
+        <div id="postcard-container">
+            <img id="postcard-bg" src="celeste-gui/postcard.webp" alt="Postcard" loading="lazy" decoding="async">
+            <div id="postcard-to"><span class="name" id="postcardName"></span></div>
+            <div id="postcard-message"></div>
+            <button id="postcard-close">Keep ♥</button>
+        </div>
+    </div>
+
+    <!-- Madeline 浮动按钮 + 聊天 -->
+    <div id="madeline-wrapper">
+        <div id="madeline-float-button">
+            <div class="avatar-wrap">
+                <img id="floatAvatar" src="celeste-portraits/madeline/normal00.png" alt="Madeline" loading="lazy" decoding="async">
+            </div>
+        </div>
+        <div class="quick-input-container" id="quickInputBox">
+            <input type="text" id="quickInput" placeholder="想对 Madeline 说...">
+        </div>
+        <div id="madeline-chat-dialog">
+            <div class="chat-header">
+                <div id="chat-madeline-avatar-wrap">
+                    <img id="chatAvatar" src="celeste-portraits/madeline/normal00.png" alt="Madeline" loading="lazy" decoding="async">
+                </div>
+                <span class="chat-title">Madeline</span>
+                <button class="close-btn" id="closeChatBtn">✕</button>
+            </div>
+            <div class="chat-messages" id="chatMessages"></div>
+            <div class="chat-input">
+                <input type="text" id="chatInput" placeholder="跟 Madeline 说点什么...">
+                <button id="chatSendBtn">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 日记编辑区 -->
+    <div class="editor-wrapper">
+        <img src="celeste-gui/journal.png" alt="Journal" style="display:block; margin:0 auto 6px auto; height:72px; filter:drop-shadow(0 0 6px rgba(255,235,59,0.4));" loading="lazy" decoding="async">
+        <div id="journalStage">
+            <div id="journalBook"></div>
+            <div class="book-dots" id="bookDots"></div>
+        </div>
+    </div>
+
+    <div id="madeline-peeking">
+        <span>Madeline 正在看...</span>
+        <div class="peeking-dots"><span></span><span></span><span></span></div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/feather-game.js"></script>
+    <script src="js/feather-trigger.js"></script>
+    <script src="js/madeline-core.js"></script>
+    <script src="js/diary.js"></script>
+    <script>
+    (function() {
+        var btn = document.getElementById('featherGameBtn');
+        var box = document.getElementById('featherNoteBox');
+        var input = document.getElementById('featherInput');
+        var toast = document.getElementById('featherToast');
+
+        function isBadMood() {
+            var emo = (typeof currentEmotion !== 'undefined') ? currentEmotion : (localStorage.getItem('lastEmotion') || '默认');
+            return ['悲伤', '孤独', '不开心', '不安', '愤怒', '怨恨'].indexOf(emo) !== -1;
+        }
+        btn.addEventListener('click', function() {
+            var emo = (typeof currentEmotion !== 'undefined') ? currentEmotion : (localStorage.getItem('lastEmotion') || '默认');
+            if (isBadMood()) {
+                // 情绪不好：Madeline 先说一句羽毛建议，再淡入金羽毛游戏（过渡自然）
+                window._featherBadMood = true;
+                if (window.FeatherGame) {
+                    if (window.FeatherGame.suggestThenOpen) window.FeatherGame.suggestThenOpen(emo);
+                    else window.FeatherGame.open(emo);
+                }
+            } else {
+                // 情绪好：先随笔，右下角羽毛按钮点击才游戏
+                if (box.style.display === 'none' || !box.style.display) {
+                    box.style.display = 'block';
+                    box.classList.remove('slide-in');
+                    void box.offsetWidth;
+                    box.classList.add('slide-in');
+                    input.value = '';
+                    toast.style.display = 'none';
+                    input.focus();
+                } else {
+                    box.style.display = 'none';
+                    box.classList.remove('slide-in');
+                }
+            }
+        });
+
+        document.getElementById('featherCancel').addEventListener('click', function() {
+            box.style.display = 'none';
+            box.classList.remove('slide-in');
+        });
+
+        document.getElementById('featherSave').addEventListener('click', saveFeather);
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') saveFeather();
+        });
+
+        function saveFeather() {
+            var val = input.value.trim();
+            if (!val) return;
+            var saveBtn = document.getElementById('featherSave');
+            if (saveBtn) saveBtn.disabled = true;
+            api('/feather', 'POST', { content: val }).then(function(res) {
+                if (saveBtn) saveBtn.disabled = false;
+                if (res && res.success) {
+                    toast.textContent = '羽毛已飘走～';
+                    toast.style.color = '#5a3e36';
+                    toast.style.display = 'block';
+                    input.value = '';
+                    setTimeout(function() {
+                        box.style.display = 'none';
+                        box.classList.remove('slide-in');
+                        toast.style.display = 'none';
+                    }, 1200);
+                    // 情绪好时：随笔写完 → 开游戏（Madeline 在游戏内陪伴）
+                    if (!isBadMood()) {
+                        setTimeout(function() {
+                            if (window.FeatherGame) window.FeatherGame.open();
+                        }, 800);
+                    }
+                } else {
+                    toast.textContent = (res && res.msg) ? res.msg : '没存上，再试一次吧';
+                    toast.style.color = '#c0392b';
+                    toast.style.display = 'block';
+                }
+            }).catch(function() {
+                if (saveBtn) saveBtn.disabled = false;
+                toast.textContent = '网络不太顺，再试一次吧';
+                toast.style.color = '#c0392b';
+                toast.style.display = 'block';
+            });
+        }
+    })();
+    </script>
+</body>
+</html>

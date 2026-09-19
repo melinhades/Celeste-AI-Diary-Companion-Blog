@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="icon/OIP.webp" type="image/webp">
+    <title>Archives - Celeste Blog</title>
+    <link rel="stylesheet" href="css/common.css">
+    <style>
+    /* ===== index 同款背景 + 雪带 ===== */
+    body::after {
+        content:'';
+        position:fixed; left:0; right:0; top:0; bottom:-12%; /* 底边下移：素材图底部自带白色条带，cover 缩放后会露出在视口底部 */
+        background:url('celeste-areas/ForsakenCity01.webp') center/cover no-repeat;
+        opacity:0.3;
+        pointer-events:none;
+        z-index:0;
+    }
+    .snow-strip {
+        position:fixed; left:0; right:0; bottom:0;
+        height:80px;
+        background:url('celeste-areas/snow-front.webp') repeat-x bottom/220px auto;
+        animation:snowDrift 45s linear infinite;
+        pointer-events:none;
+        z-index:2;
+        opacity:.5;
+    }
+    @keyframes snowDrift { from{background-position-x:0} to{background-position-x:-440px} }
+
+    .nav-diary-btn {
+        display:inline-block;
+        cursor:pointer;
+        transition:transform .2s, filter .2s;
+        vertical-align:middle;
+    }
+    .nav-diary-btn:hover {
+        transform:scale(1.15);
+    }
+    .nav-diary-btn img {
+        height:36px;
+        width:auto;
+        display:block;
+        filter:drop-shadow(0 0 10px rgba(255,235,59,0.7));
+    }
+    .archives-layout { padding: 24px 20px; position: relative; z-index: 3; }
+        .archives-title { font-size: 22px; font-weight: 700; color: #e8e8f0; margin-bottom: 24px; }
+        .year-group { margin-bottom: 32px; }
+        .year-label { font-size: 20px; font-weight: 700; color: #a78bfa; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; text-shadow: 0 0 10px rgba(138, 43, 226, 0.5); }
+        .year-cover { height: 56px; width: auto; border-radius: 6px; opacity: .85; margin-bottom: 10px; display: block; border: 1px solid rgba(138, 43, 226, .3); }
+        .archive-item {
+            display: flex; align-items: center; gap: 16px;
+            padding: 12px 20px; background: rgba(30, 27, 75, 0.6); border-radius: 8px;
+            margin-bottom: 8px; cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            transition: all 0.3s; border-left: 3px solid transparent;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(138, 43, 226, 0.2);
+        }
+        .archive-item:hover { border-left-color: #a78bfa; transform: translateX(8px); box-shadow: 0 4px 20px rgba(138, 43, 226, 0.4); }
+        .archive-date { font-size: 13px; color: #8b8ba0; width: 80px; flex-shrink: 0; }
+        .archive-title { font-size: 15px; color: #e8e8f0; flex: 1; transition: all 0.3s; }
+        .archive-item:hover .archive-title { color: #a78bfa; text-shadow: 0 0 10px rgba(138, 43, 226, 0.5); }
+        .archive-count { font-size: 12px; color: #a78bfa; background: rgba(138, 43, 226, 0.2); padding: 2px 8px; border-radius: 10px; border: 1px solid rgba(138, 43, 226, 0.3); }
+        .year-group { opacity: 0; transform: translateY(24px); transition: opacity 0.6s ease, transform 0.6s ease; }
+        .year-group.in-view { opacity: 1; transform: translateY(0); }
+        /* 底部透明化：消除白色带 */
+        .footer { background:transparent; border:none; backdrop-filter:none; }
+    </style>
+</head>
+<body>
+    <!-- BGM 播放器 -->
+    <audio id="bgmPlayer" loop>
+        <source src="bgm/postcard.mp3" type="audio/mpeg">
+    </audio>
+
+    <!-- 雪花粒子系统（与 index 同款） -->
+    <canvas id="snowCanvas" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;"></canvas>
+    <div class="snow-strip"></div>
+
+<header class="header">
+    <div class="container header-inner">
+        <a href="index.html" class="logo"><img src="celeste-gui/logo.webp" alt="Celeste" loading="lazy" decoding="async"></a>
+        <nav class="nav">
+            <a href="index.html" class="nav-link">Home</a>
+            <a href="archives.html" class="nav-link active">Archives</a>
+            <a href="diary.html" class="nav-link nav-diary-btn" title="Diary with Madeline">
+                <img src="celeste-gui/journal.png" alt="Diary" loading="lazy" decoding="async">
+            </a>
+        </nav>
+        <div class="header-right" id="headerRight"></div>
+    </div>
+</header>
+
+<div class="container archives-layout">
+    <div class="archives-title"> Archives</div>
+    <div id="archiveContent"><div class="loading">Loading...</div></div>
+</div>
+
+<footer class="footer">
+    <div class="container">© 2026 Celeste Blog System · Explore the Knowledge Ocean</div>
+</footer>
+
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script>
+    // ===== 雪花粒子系统（与 index 同款） =====
+    const snowCanvas = document.getElementById('snowCanvas');
+    const snowCtx = snowCanvas.getContext('2d');
+    let snowflakes = [];
+    let snowAnimFrame = null;
+
+    function resizeSnowCanvas() {
+        snowCanvas.width = window.innerWidth;
+        snowCanvas.height = window.innerHeight;
+    }
+
+    function createSnowflake() {
+        return {
+            x: Math.random() * snowCanvas.width,
+            y: -10,
+            r: Math.random() * 3 + 1,
+            speed: Math.random() * 1.5 + 0.5,
+            wind: Math.random() * 0.5 - 0.25,
+            opacity: Math.random() * 0.6 + 0.2,
+            swing: Math.random() * Math.PI * 2,
+            swingSpeed: Math.random() * 0.02 + 0.01
+        };
+    }
+
+    function initSnowflakes() {
+        snowflakes = [];
+        for (let i = 0; i < 80; i++) {
+            const f = createSnowflake();
+            f.y = Math.random() * snowCanvas.height;
+            snowflakes.push(f);
+        }
+    }
+
+    function drawSnowflakes() {
+        snowCtx.clearRect(0, 0, snowCanvas.width, snowCanvas.height);
+        for (const f of snowflakes) {
+            f.y += f.speed;
+            f.swing += f.swingSpeed;
+            f.x += Math.sin(f.swing) * 0.5 + f.wind;
+            if (f.y > snowCanvas.height + 10) { f.y = -10; f.x = Math.random() * snowCanvas.width; }
+            if (f.x > snowCanvas.width + 10) f.x = -10;
+            if (f.x < -10) f.x = snowCanvas.width + 10;
+            snowCtx.beginPath();
+            snowCtx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+            snowCtx.fillStyle = `rgba(255,255,255,${f.opacity})`;
+            snowCtx.fill();
+        }
+        snowAnimFrame = requestAnimationFrame(drawSnowflakes);
+    }
+
+    function startSnow() { resizeSnowCanvas(); initSnowflakes(); drawSnowflakes(); }
+    window.addEventListener('resize', resizeSnowCanvas);
+    startSnow();
+
+    // BGM
+    const bgmPlayer = document.getElementById('bgmPlayer');
+    const savedTime = parseFloat(localStorage.getItem('bgmTime') || '0');
+    if (savedTime > 0) bgmPlayer.currentTime = savedTime;
+    bgmPlayer.volume = 0.25;
+    bgmPlayer.play().catch(() => {});
+    setInterval(() => { localStorage.setItem('bgmTime', bgmPlayer.currentTime); }, 2000);
+    function tryPlayBGM() { bgmPlayer.play().then(() => { document.removeEventListener('click', tryPlayBGM); document.removeEventListener('keydown', tryPlayBGM); }).catch(() => {}); }
+    document.addEventListener('click', tryPlayBGM);
+    document.addEventListener('keydown', tryPlayBGM);
+
+    initHeader();
+
+    api('/articles/listArchives', 'POST').then(res => {
+        if (!res.success || !res.data || res.data.length === 0) {
+            document.getElementById('archiveContent').innerHTML = '<div class="empty">No archives</div>';
+            return;
+        }
+
+        // 按年份分组
+        const groups = {};
+        res.data.forEach(item => {
+            const year = item.year || (item.createDate ? new Date(item.createDate).getFullYear() : '未知');
+            if (!groups[year]) groups[year] = [];
+            groups[year].push(item);
+        });
+
+        const years = Object.keys(groups).sort((a, b) => b - a);
+        const totalPosts = res.data.reduce((s, it) => s + (parseInt(it.count) || 0), 0);
+        document.querySelector('.archives-title').innerHTML = ' Archives <span class="archive-count">' + totalPosts + ' posts total</span>';
+
+        // 我的文章数（数据隔离：只算当前用户写的）
+        if (localStorage.getItem('token')) {
+            api('/articles/myCount', 'GET').then(r => {
+                if (r.success && r.data != null) {
+                    const mine = document.createElement('span');
+                    mine.className = 'archive-count';
+                    mine.style.marginLeft = '8px';
+                    mine.textContent = '你写了 ' + r.data + ' 篇';
+                    document.querySelector('.archives-title').appendChild(mine);
+                }
+            }).catch(() => {});
+        }
+
+        const CH_COVERS = [1,2,3,4,5,6,7,9];
+        let html = '';
+        years.forEach((year, yi) => {
+            const items = groups[year];
+            html += `<div class="year-group">
+                <img class="year-cover" src="celeste-gui/chapter-covers/${CH_COVERS[yi % CH_COVERS.length]}.png" alt="" loading="lazy" decoding="async">
+                <div class="year-label">${year} <span class="archive-count">${items.length} posts</span></div>`;
+            items.forEach(item => {
+                const month = item.month ? String(item.month).padStart(2, '0') : '';
+                html += `<div class="archive-item" onclick="location.href='article.html?id=${item.id}'">
+                    <span class="archive-date">${month ? year + '-' + month : formatDate(item.createDate)}</span>
+                    <span class="archive-title">${escHtml(item.title)}</span>
+                </div>`;
+            });
+            html += '</div>';
+        });
+        document.getElementById('archiveContent').innerHTML = html;
+
+        // 时间轴渐入动画
+        const io = new IntersectionObserver(entries => {
+            entries.forEach(en => {
+                if (en.isIntersecting) { en.target.classList.add('in-view'); io.unobserve(en.target); }
+            });
+        }, { threshold: 0.12 });
+        document.querySelectorAll('.year-group').forEach((g, i) => {
+            g.style.transitionDelay = (i * 0.08) + 's';
+            io.observe(g);
+        });
+    });
+</script>
+<script>
+// ================= 像素 Madeline 行为树 + 点击彩蛋 =================
+(function () {
+    const SRC = {
+        move: 'celeste-gui/madeline-move.gif',
+        fun: 'celeste-gui/madeline-fun.gif',
+        sit: 'celeste-gui/madeline-sitdown.gif',
+    };
+    const style = document.createElement('style');
+    style.textContent =
+        '#arcMadeline{position:fixed;left:0;bottom:14px;z-index:300;width:56px !important;height:56px !important;image-rendering:pixelated;cursor:pointer;user-select:none;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5));}' +
+        '#arcMadeline[src*="madeline-sitdown.gif"] { width: 100px !important; height: auto !important; }' +
+        '#arcBubble{position:fixed;z-index:301;background:rgba(22,34,60,.95);border:2px solid #ffe36d;border-radius:8px;color:#ffe36d;font-size:12px;padding:6px 12px;pointer-events:none;opacity:0;transition:opacity .3s;white-space:nowrap;}' +
+        '#arcBubble.show{opacity:1;}';
+    document.head.appendChild(style);
+
+    const pm = new Image();
+    pm.id = 'arcMadeline';
+    pm.src = SRC.move;
+    document.body.appendChild(pm);
+
+    const bubble = document.createElement('div');
+    bubble.id = 'arcBubble';
+    document.body.appendChild(bubble);
+
+    const eggAudio = new Audio('celeste-sounds/wow_so_secret.wav');
+
+    const st = { x: window.innerWidth * 0.2, dir: 1, mode: 'walk', modeUntil: 0, hopT: 0 };
+    let bubbleTimer = null;
+    function showBubble(text) {
+        bubble.textContent = text;
+        bubble.style.left = Math.min(window.innerWidth - 190, Math.max(8, st.x - 40)) + 'px';
+        bubble.style.bottom = '88px';
+        bubble.classList.add('show');
+        if (bubbleTimer) clearTimeout(bubbleTimer);
+        bubbleTimer = setTimeout(() => bubble.classList.remove('show'), 2600);
+    }
+
+    const eggLines = ['Wow～被你发现了♪', '嘿嘿，这首歌只放给你听～', '这是秘密关卡的奖励哦！'];
+    const HOLI_LINES = {
+        '1-1': '新年快乐！今年的山一起爬～',
+        '2-14': '情人节快乐，今天你是我的 Valentine！',
+        '4-1': '愚人节～其实这首歌是 Badeline 唱的！',
+        '5-1': '劳动节快乐，今天歇着吧！',
+        '6-1': '儿童节快乐！今天谁都是小孩～',
+        '10-1': '国庆快乐～长假来爬山！',
+        '10-24': '1024！程序员节快乐～',
+        '10-31': '万圣夜……别回头……',
+        '11-11': '双十一，别剁手，多读书～',
+        '12-25': '圣诞快乐～雪山就是圣诞树！',
+        '1-25': '今天是 Celeste 的生日！登山周年快乐～'
+    };
+    pm.addEventListener('click', () => {
+        if (st.mode === 'egg') return;
+        st.mode = 'egg';
+        st.modeUntil = performance.now() + 1800;
+        st.hopT = 0;
+        pm.src = SRC.fun;
+        const now = new Date();
+        const hLine = HOLI_LINES[(now.getMonth() + 1) + '-' + now.getDate()];
+        showBubble(hLine || eggLines[Math.floor(Math.random() * eggLines.length)]);
+        eggAudio.currentTime = 0;
+        eggAudio.play().catch(() => {});
+    });
+
+    function pickNext(now) {
+        const r = Math.random();
+        if (r < 0.38) {
+            st.mode = 'walk';
+            st.modeUntil = now + 2000 + Math.random() * 3000;
+            if (Math.random() < 0.3) st.dir *= -1;
+            pm.src = SRC.move;
+        } else if (r < 0.55) {
+            st.mode = 'idle';
+            st.modeUntil = now + 800 + Math.random() * 1400;
+            pm.src = SRC.move;
+        } else if (r < 0.75) {
+            st.mode = 'sit';
+            st.modeUntil = now + 2200 + Math.random() * 2200;
+            pm.src = SRC.sit;
+        } else {
+            // 站立张望（用 fun 素材）
+            st.mode = 'lookaround';
+            st.modeUntil = now + 1800 + Math.random() * 1800;
+            pm.src = SRC.fun;
+        }
+    }
+
+    let last = performance.now();
+    function loop(now) {
+        const dt = Math.min(50, now - last) / 1000;
+        last = now;
+        if (st.mode === 'egg') {
+            st.hopT += dt;
+            const hop = Math.abs(Math.sin(st.hopT * 9)) * 14;
+            pm.style.transform = 'translate(' + st.x + 'px,' + (-hop) + 'px)' + (st.dir < 0 ? ' scaleX(-1)' : '');
+            if (now >= st.modeUntil) { st.mode = 'walk'; st.modeUntil = now + 2000; pm.src = SRC.move; }
+        } else {
+            if (now >= st.modeUntil) pickNext(now);
+            if (st.mode === 'walk') {
+                st.x += st.dir * 70 * dt;
+                if (st.x <= 8) { st.x = 8; st.dir = 1; }
+                if (st.x >= window.innerWidth - 72) { st.x = window.innerWidth - 72; st.dir = -1; }
+                if (pm.src.indexOf('madeline-move') === -1) pm.src = SRC.move;
+            }
+            pm.style.transform = 'translate(' + st.x + 'px,0px)' + (st.dir < 0 && st.mode === 'walk' ? ' scaleX(-1)' : '');
+        }
+        requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

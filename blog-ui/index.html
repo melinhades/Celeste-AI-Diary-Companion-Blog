@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="icon/OIP.webp" type="image/webp">
+    <title>Celeste Blog</title>
+    <link rel="stylesheet" href="css/common.css">
+    <link rel="stylesheet" href="css/index.css">
+    <link rel="stylesheet" href="css/theme.css">
+    <style>
+        * {
+            margin:0;
+            padding:0;
+            box-sizing:border-box;
+        }
+        audio {
+            display:none;
+        }
+        body {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        main {
+            flex: 1;
+        }
+    body::after {
+        content:'';
+        position:fixed; left:0; right:0; top:0; bottom:-12%; /* 底边下移：素材图底部自带白色条带，cover 缩放后会露出在视口底部，向下延伸将其移出屏幕 */
+        background:url('celeste-areas/ForsakenCity01.webp') center/cover no-repeat;
+        opacity:0.3;
+        pointer-events:none;
+        z-index:0;
+    }
+    .snow-strip {
+        position:fixed; left:0; right:0; bottom:0;
+        height:80px;
+        background:url('celeste-areas/snow-front.webp') repeat-x bottom/220px auto;
+        animation:snowDrift 45s linear infinite;
+        pointer-events:none;
+        z-index:2;
+        opacity:.5; /* 与 archives 一致：降低雪地前景层不透明度，消除底部白色条带 */
+    }
+    @keyframes snowDrift { from{background-position-x:0} to{background-position-x:-440px} }
+    .nav-diary-btn {
+        display:inline-block;
+        cursor:pointer;
+        transition:transform .2s, filter .2s;
+        vertical-align:middle;
+    }
+    .nav-diary-btn:hover {
+        transform:scale(1.15);
+    }
+    .nav-diary-btn img {
+        height:36px;
+        width:auto;
+        display:block;
+        filter:drop-shadow(0 0 10px rgba(255,235,59,0.7));
+    }
+    .meta-icon { height:14px; width:auto; vertical-align:-2px; margin-right:4px; opacity:.9; filter:drop-shadow(0 0 3px rgba(255,235,59,.35)); }
+    .meta-author-img { width:18px; height:18px; border-radius:50%; vertical-align:-4px; margin-right:5px; border:1px solid rgba(255,235,59,.6); }
+    .hot-rank { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .hot-rank img { width:22px; height:22px; object-fit:contain; filter:drop-shadow(0 0 4px rgba(255,235,59,.5)); }
+    .tag-link.tag-on { background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); color:#fff; box-shadow:0 0 10px rgba(138,43,226,.5); }
+    .article-card { animation: cardIn .5s ease both; }
+    @keyframes cardIn { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:none; } }
+    .search-bar { display:flex; gap:10px; margin-bottom:16px; position:relative; z-index:1; }
+    .search-bar .form-control { flex:1; }
+    .card-thumbs { display:flex; gap:10px; margin:12px 0 6px; flex-wrap:wrap; }
+    .card-thumbs img { max-width:200px; max-height:140px; height:auto; border-radius:8px; border:1px solid rgba(255,235,59,.35); }
+    /* 底部透明化：消除白色带 */
+    footer {
+        background:transparent;
+        border:none;
+        backdrop-filter:none;
+        margin: 0;
+        padding: 4px 0;
+    }
+    </style>
+</head>
+<body>
+    <!-- BGM 播放器 -->
+    <audio id="bgmPlayer" loop autoplay>
+        <source src="bgm/postcard.mp3" type="audio/mpeg">
+    </audio>
+    <!-- 雪花粒子系统 -->
+    <canvas id="snowCanvas" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;"></canvas>
+    <div class="snow-strip"></div>
+<main>
+<!-- 顶部导航 -->
+<header class="header">
+    <div class="container header-inner">
+        <a href="index.html" class="logo"><img loading="lazy" src="celeste-gui/logo.webp" alt="Celeste" loading="lazy" decoding="async"></a>
+        <nav class="nav">
+            <a href="index.html" class="nav-link active">Home</a>
+            <a href="archives.html" class="nav-link">Archives</a>
+            <a href="diary.html" class="nav-link nav-diary-btn" title="Diary with Madeline">
+                <img loading="lazy" src="celeste-gui/journal.png" alt="Diary" decoding="async">
+            </a>
+            <a href="shop.html" class="nav-link nav-diary-btn" title="Celeste Resort · Oshiro">
+                <img loading="lazy" src="Atlases/Gui/hover/resort.png" alt="Hotel" decoding="async">
+            </a>
+        </nav>
+        <div class="header-right" id="headerRight">
+            <a href="login.html" class="btn btn-outline">Login</a>
+            <a href="register.html" class="btn btn-primary">Register</a>
+        </div>
+    </div>
+</header>
+
+<div class="container main-layout">
+    <!-- 左侧文章列表 -->
+    <main class="content">
+        <!-- 分类筛选 -->
+        <div class="filter-bar" id="categoryBar">
+            <span class="filter-item active" data-id="" onclick="filterAll()">All</span>
+        </div>
+
+        <!-- 关键词搜索 -->
+        <div class="search-bar">
+            <input class="form-control" type="text" id="searchInput" placeholder="搜索文章标题，回车搜索..." onkeyup="if(event.key==='Enter')doSearch()">
+            <button class="btn btn-outline btn-sm" onclick="doSearch()">🔍 搜索</button>
+        </div>
+
+        <div id="articleList"><div class="loading">Loading...</div></div>
+
+        <div class="pagination" id="pagination"></div>
+    </main>
+
+    <!-- 右侧边栏 -->
+    <aside class="sidebar">
+        <!-- 热门文章 -->
+        <div class="widget">
+            <div class="widget-title"> Popular</div>
+            <div id="hotList"><div class="loading">Loading...</div></div>
+        </div>
+        <!-- 热门标签 -->
+        <div class="widget">
+            <div class="widget-title">🏷️ Tags</div>
+            <div class="tag-cloud" id="tagCloud"><div class="loading">Loading...</div></div>
+        </div>
+    </aside>
+</div>
+
+<footer class="footer">
+    <div class="container">© 2026 Celeste Blog · Explore the stars</div>
+</footer>
+    </main>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/snow-bgm.js"></script>
+<script>
+    // ===== 检测登录成功回跳：播登录成功音效 =====
+    if (sessionStorage.getItem('justLoggedIn') === '1') {
+        sessionStorage.removeItem('justLoggedIn');
+        const yes = new Audio('sounds/ui_main_assistmode_whistle_page4.wav');
+        yes.volume = 0.8;
+        yes.play().catch(() => {
+            const h = () => { yes.play().catch(() => {}); document.removeEventListener('click', h); document.removeEventListener('keydown', h); };
+            document.addEventListener('click', h);
+            document.addEventListener('keydown', h);
+        });
+    }
+
+    const PAGE_SIZE = 10;
+    let currentPage = 1;
+    let currentCategory = '';
+    let currentTag = '';
+    let currentKeyword = '';
+
+    // 初始化
+    initHeader();
+    loadCategories();
+
+    // ===== URL 参数直达筛选（文章页标签跳转 ?tag= / 搜索直达 ?kw=） =====
+    const _urlParams = new URLSearchParams(location.search);
+    if (_urlParams.get('tag')) currentTag = _urlParams.get('tag');
+    if (_urlParams.get('kw')) {
+        currentKeyword = _urlParams.get('kw');
+        document.getElementById('searchInput').value = currentKeyword;
+    }
+    if (currentTag || currentKeyword) {
+        setTimeout(() => {
+            document.querySelectorAll('.tag-link').forEach(t => {
+                if (t.textContent.trim() && currentTag && t.getAttribute('onclick')?.includes(`'${currentTag}'`)) t.classList.add('tag-on');
+            });
+            document.querySelectorAll('.filter-item').forEach(el => el.classList.remove('active'));
+            const allBtn = document.querySelector('.filter-item[data-id=""]');
+            if (allBtn) allBtn.classList.add('active');
+        }, 1500);
+    }
+
+    loadArticles(1);
+    loadHotArticles();
+    loadHotTags();
+
+    function loadCategories() {
+        api('/categorys', 'GET').then(res => {
+            if (!res.success) return;
+            const bar = document.getElementById('categoryBar');
+            res.data.forEach(c => {
+                const span = document.createElement('span');
+                span.className = 'filter-item';
+                span.dataset.id = c.id;
+                span.textContent = c.categoryName || c.name;
+                span.onclick = () => {
+                    document.querySelectorAll('.filter-item').forEach(el => el.classList.remove('active'));
+                    span.classList.add('active');
+                    currentCategory = c.id;
+                    currentTag = '';
+                    currentKeyword = '';
+                    document.getElementById('searchInput').value = '';
+                    document.querySelectorAll('.tag-link').forEach(t => t.classList.remove('tag-on'));
+                    loadArticles(1);
+                };
+                bar.appendChild(span);
+            });
+        });
+    }
+
+    function loadArticles(page) {
+        currentPage = page;
+        document.getElementById('articleList').innerHTML = '<div class="loading">加载中...</div>';
+        const body = { page: page, pageSize: PAGE_SIZE };
+        if (currentCategory) body.categoryId = currentCategory;
+        if (currentTag) body.tagId = currentTag;
+        if (currentKeyword) body.keyword = currentKeyword;
+        api('/articles', 'POST', body).then(res => {
+            if (!res.success) { document.getElementById('articleList').innerHTML = '<div class="empty">加载失败</div>'; return; }
+            renderArticles(res.data.records || res.data);
+            loadLikeCounts(res.data.records || res.data);
+            renderPagination(res.data.total || 0, page);
+        });
+    }
+
+    function renderArticles(list) {
+        if (!list || list.length === 0) {
+            document.getElementById('articleList').innerHTML = '<div class="empty">暂无文章</div>';
+            return;
+        }
+        const html = list.map((a, i) => `
+            <article class="article-card" style="animation-delay:${i * 0.06}s" onclick="location.href='article.html?id=${a.id}'">
+                <div class="article-meta">
+                    <span class="meta-author"><img loading="lazy" class="meta-author-img" src="${(a.author?.nickname || a.author?.username) ? 'celeste-portraits/madeline/normal00.png' : 'celeste-icons/beat.png'}" alt="" decoding="async">${escHtml(a.author?.nickname || a.author?.username || '匿名')}</span>
+                    <span class="meta-date"><img loading="lazy" class="meta-icon" src="celeste-icons/cs_variantmode.png" alt="" decoding="async">${formatDate(a.createDate)}</span>
+                    <span class="meta-views"><img loading="lazy" class="meta-icon" src="celeste-icons/time.png" alt="" decoding="async">${a.viewCounts || 0}</span>
+                    <span class="meta-views"><img class="meta-icon" src="celeste-icons/heartgem1.png" alt="" loading="lazy" decoding="async"><span class="like-num" data-id="${a.id}">0</span></span>
+                    ${a.category ? `<span class="meta-category">${escHtml(a.category.categoryName || a.category.name)}</span>` : ''}
+                </div>
+                <h2 class="article-title">${escHtml(a.title)}</h2>
+                ${(a.images || []).length ? `<div class="card-thumbs">${a.images.slice(0, 3).map(u => `<img loading="lazy" src="${escHtml(u)}" alt="" decoding="async">`).join('')}</div>` : ''}
+                <p class="article-summary">${escHtml(a.summary || '')}</p>
+                <div class="article-tags">
+                    ${(a.tags || []).map(t => `<span class="tag">${escHtml(t.tagName || t.name)}</span>`).join('')}
+                </div>
+            </article>
+        `).join('');
+        document.getElementById('articleList').innerHTML = html;
+    }
+
+    function loadLikeCounts(list) {
+        const ids = (list || []).map(a => a.id).filter(Boolean).join(',');
+        if (!ids) return;
+        api('/likes/counts?ids=' + encodeURIComponent(ids), 'GET').then(res => {
+            if (!res.success || !res.data) return;
+            Object.keys(res.data).forEach(id => {
+                document.querySelectorAll(`.like-num[data-id="${id}"]`).forEach(el => el.textContent = res.data[id]);
+            });
+        }).catch(() => {});
+    }
+
+    function loadHotArticles() {
+        api('/articles/hot', 'POST').then(res => {
+            if (!res.success) return;
+            const RANK_ICONS = [
+                'celeste-collectables/goldberry.png',
+                'celeste-collectables/strawberry.png',
+                'celeste-icons/heartgem1.png',
+                'celeste-icons/heartgem0.png',
+                'celeste-icons/fullclear.png'
+            ];
+            const html = (res.data || []).map((a, i) => `
+                <div class="hot-item" onclick="location.href='article.html?id=${a.id}'">
+                    <span class="hot-rank rank-${i+1}">${RANK_ICONS[i] ? `<img loading="lazy" src="${RANK_ICONS[i]}" alt="${i+1}" decoding="async">` : (i+1)}</span>
+                    <span class="hot-title">${escHtml(a.title)}</span>
+                </div>
+            `).join('');
+            document.getElementById('hotList').innerHTML = html || '<div class="empty">暂无数据</div>';
+        });
+    }
+
+    function loadHotTags() {
+        api('/tags/hot', 'GET').then(res => {
+            if (!res.success) return;
+            const html = (res.data || []).map(t =>
+                `<span class="tag tag-link" onclick="filterByTag('${t.id}', this)">${escHtml(t.tagName || t.name)}</span>`
+            ).join('');
+            document.getElementById('tagCloud').innerHTML = html || '<div class="empty">暂无标签</div>';
+        });
+    }
+
+    function filterByTag(tagId, el) {
+        currentTag = tagId;
+        currentCategory = '';
+        currentKeyword = '';
+        document.getElementById('searchInput').value = '';
+        document.querySelectorAll('.filter-item').forEach(el => el.classList.remove('active'));
+        document.querySelector('.filter-item[data-id=""]').classList.add('active');
+        document.querySelectorAll('.tag-link').forEach(t => t.classList.remove('tag-on'));
+        if (el) el.classList.add('tag-on');
+        loadArticles(1);
+    }
+
+    function filterAll() {
+        currentTag = '';
+        currentCategory = '';
+        currentKeyword = '';
+        document.getElementById('searchInput').value = '';
+        document.querySelectorAll('.filter-item').forEach(el => el.classList.remove('active'));
+        document.querySelector('.filter-item[data-id=""]').classList.add('active');
+        document.querySelectorAll('.tag-link').forEach(t => t.classList.remove('tag-on'));
+        loadArticles(1);
+    }
+
+    function doSearch() {
+        currentKeyword = document.getElementById('searchInput').value.trim();
+        currentTag = '';
+        currentCategory = '';
+        document.querySelectorAll('.filter-item').forEach(el => el.classList.remove('active'));
+        document.querySelector('.filter-item[data-id=""]').classList.add('active');
+        document.querySelectorAll('.tag-link').forEach(t => t.classList.remove('tag-on'));
+        loadArticles(1);
+    }
+
+    function renderPagination(total, page) {
+        const totalPages = Math.ceil(total / PAGE_SIZE) || 1;
+        const el = document.getElementById('pagination');
+        if (totalPages <= 1) { el.innerHTML = ''; return; }
+        let html = '';
+        if (page > 1) html += `<button class="page-btn" onclick="loadArticles(${page-1})">‹ 上一页</button>`;
+        html += `<span class="page-info">第 ${page} / ${totalPages} 页</span>`;
+        if (page < totalPages) html += `<button class="page-btn" onclick="loadArticles(${page+1})">下一页 ›</button>`;
+        el.innerHTML = html;
+    }
+
+    // ===== 雪花粒子系统增强：支持分类切换雪花图片 =====
+    let snowImage = null; // 添加到雪花系统变量中
+
+    // 保存原始函数引用（如果你原来的函数名正好是这些）
+    const _createSnowflake = typeof createSnowflake === 'function' ? createSnowflake : null;
+    const _drawSnowflakes  = typeof drawSnowflakes  === 'function' ? drawSnowflakes  : null;
+    const _initSnowflakes  = typeof initSnowflakes  === 'function' ? initSnowflakes  : null;
+    const _startSnow       = typeof startSnow       === 'function' ? startSnow       : null;
+
+    // 重新定义创建雪flake（如果原来存在则在其基础上加 img 属性）
+    createSnowflake = function() {
+        const flake = _createSnowflake ? _createSnowflake() : {
+            x: Math.random()*snowCanvas.width, y:-10,
+            r: Math.random()*3+1,
+            speed: Math.random()*1.5+0.5,
+            wind: Math.random()*0.5-0.25,
+            opacity: Math.random()*0.6+0.2,
+            swing: Math.random()*Math.PI*2,
+            swingSpeed: Math.random()*0.02+0.01
+        };
+        flake.img = snowImage;
+        return flake;
+    };
+
+    // 重新定义绘制雪flake
+    drawSnowflakes = function() {
+        snowCtx.clearRect(0,0,snowCanvas.width,snowCanvas.height);
+        for(const f of snowflakes){
+            f.y += f.speed;
+            f.swing += f.swingSpeed;
+            f.x += Math.sin(f.swing)*0.5 + f.wind;
+            if(f.y > snowCanvas.height+10){ f.y=-10; f.x=Math.random()*snowCanvas.width; }
+            if(f.x > snowCanvas.width+10) f.x=-10;
+            if(f.x < -10) f.x = snowCanvas.width+10;
+            if(f.img){
+                snowCtx.drawImage(f.img, f.x-f.r, f.y-f.r, f.r*2, f.r*2);
+            }else{
+                snowCtx.beginPath();
+                snowCtx.arc(f.x,f.y,f.r,0,Math.PI*2);
+                snowCtx.fillStyle = `rgba(255,255,255,${f.opacity})`;
+                snowCtx.fill();
+            }
+        }
+        snowAnimFrame = requestAnimationFrame(drawSnowflakes);
+    };
+
+    // 重新定义初始化（保持原来的行为）
+    initSnowflakes = function() {
+        snowflakes = [];
+        for(let i=0;i<80;i++){
+            const f = createSnowflake();
+            f.y = Math.random()*snowCanvas.height;
+            snowflakes.push(f);
+        }
+    };
+
+    // 重新定义启动函数
+    startSnow = function(){
+        resizeSnowCanvas();
+        initSnowflakes();
+        drawSnowflakes();
+    };
+    window.addEventListener('resize', resizeSnowCanvas);
+    if (window.location.pathname.endsWith('/index.html') || window.location.pathname === '/' || window.location.pathname === '') {
+        startSnow();   // 确保页面打开时就开始
+    }
+
+    // 设置分类对应的雪flake图片
+    function setSnowImageForCategory(categoryId) {
+        // ==== 在这里填写你准备好的雪flake图片映射 ====
+        // key 为你后端返回的 category.id（或你在 filter-item[data-id] 中存的值）
+        // value 为相对路径（相对于 index.html）
+        const imageMap = {
+            // 示例（请根据你实际的图片名称修改）：
+            // "forsaken-city": "celeste-areas/ForsakenCity_snowleaf.png",
+            // "celestial-resort": "celeste-areas/CelestialResort_snowstar.png",
+            // 如果没有映射或想使用默认圆点雪flake，则返回 null
+        };
+        const imgSrc = imageMap[categoryId] || null;
+
+        if (imgSrc) {
+            const img = new Image();
+            img.src = imgSrc;
+            img.onload = () => {
+                snowImage = img;
+                // 立即更新一次雪flake显示
+                drawSnowflakes();
+            };
+            img.onerror = () => {
+                console.warn('雪flake图片加载失败:', imgSrc);
+                snowImage = null;
+            };
+        } else {
+            snowImage = null; // 恢复为默认圆点雪flake
+        }
+    };
+
+    // 在分类点击处理中添加雪flake切换（增强现有的点击事件）
+    document.querySelectorAll('.filter-item[data-id]').forEach(item => {
+        const originalOnclick = item.onclick;
+        item.onclick = function() {
+            if (typeof originalOnclick === 'function') {
+                originalOnclick.call(this);
+            }
+            setSnowImageForCategory(this.dataset.id); // 新增：切换雪flake
+        };
+    });
+
+    // 修改 filterAll 以恢复默认雪flake（点击 “All” 时）
+    const originalFilterAll = filterAll;
+    filterAll = function() {
+        if (typeof originalFilterAll === 'function') originalFilterAll();
+        setSnowImageForCategory(null);
+    };
+
+    // 修改 filterByTag 以恢复默认雪flake（切换标签时）
+    const originalFilterByTag = filterByTag;
+    filterByTag = function(tagId, el) {
+        if (typeof originalFilterByTag === 'function') originalFilterByTag(tagId, el);
+        setSnowImageForCategory(null); // 标签切换时使用默认圆点雪flake
+    };
+</script>
+</body>
+</html>

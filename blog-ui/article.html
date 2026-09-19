@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="icon/OIP.webp" type="image/webp">
+    <title>Article - Celeste Blog</title>
+    <link rel="stylesheet" href="css/common.css">
+    <link rel="stylesheet" href="css/theme.css">
+    <style>
+    body::after {
+        content:'';
+        position:fixed; inset:0;
+        background:url('celeste-areas/bg_calm.webp') center bottom/cover no-repeat;
+        opacity:0.15;
+        pointer-events:none;
+        z-index:0;
+    }
+    .nav-diary-btn {
+        display:inline-block;
+        cursor:pointer;
+        transition:transform .2s, filter .2s;
+        vertical-align:middle;
+    }
+    .nav-diary-btn:hover {
+        transform:scale(1.15);
+    }
+    .nav-diary-btn img {
+        height:36px;
+        width:auto;
+        display:block;
+        filter:drop-shadow(0 0 10px rgba(255,235,59,0.7));
+    }
+    .main-layout { display: flex; gap: 24px; padding: 24px 20px; align-items: flex-start; }
+        .content { flex: 1; min-width: 0; }
+        .sidebar { width: 280px; flex-shrink: 0; display: flex; flex-direction: column; gap: 20px; }
+
+        /* 文章头部 */
+        .article-header { background: rgba(30, 27, 75, 0.6); backdrop-filter: blur(10px); border: 1px solid rgba(138,43,226,0.2); border-radius: 10px; padding: 32px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        .article-header h1 { font-size: 26px; font-weight: 700; color: #e8e8f0; line-height: 1.4; margin-bottom: 16px; text-shadow: 0 0 20px rgba(138,43,226,0.3); }
+        .article-meta { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: #8b8ba0; margin-bottom: 14px; }
+        .article-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+
+        /* 文章正文 */
+        .article-body { background: rgba(30, 27, 75, 0.6); backdrop-filter: blur(10px); border: 1px solid rgba(138,43,226,0.2); border-radius: 10px; padding: 32px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); line-height: 1.9; font-size: 15px; color: #c9c9dd; }
+        .article-body h1,.article-body h2,.article-body h3 { margin: 24px 0 12px; color: #e8e8f0; }
+        .article-body a { color: #a78bfa; }
+        .article-body p { margin-bottom: 14px; }
+        .article-body pre { background: rgba(15, 12, 41, 0.8); border: 1px solid rgba(138,43,226,0.25); border-radius: 8px; padding: 16px; overflow-x: auto; margin: 16px 0; font-size: 13px; color: #d8d8ea; }
+        .article-body code { background: rgba(138,43,226,0.18); color: #c4b5fd; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+        .article-body pre code { background: none; padding: 0; color: inherit; }
+        .article-body blockquote { border-left: 4px solid #a78bfa; padding: 8px 16px; background: rgba(138,43,226,0.08); margin: 16px 0; color: #a8a8c0; border-radius: 0 6px 6px 0; }
+        .article-body img { max-width: 100%; border-radius: 8px; }
+        .article-body ul,.article-body ol { padding-left: 24px; margin-bottom: 14px; }
+        .article-body li { margin-bottom: 6px; }
+
+        /* 评论区 */
+        .comments-section { background: rgba(30, 27, 75, 0.6); backdrop-filter: blur(10px); border: 1px solid rgba(138,43,226,0.2); border-radius: 10px; padding: 28px 32px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        .comments-title { font-size: 17px; font-weight: 600; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid rgba(138,43,226,0.25); color: #e8e8f0; }
+        .comment-form { margin-bottom: 28px; }
+        .comment-form textarea { width: 100%; padding: 12px 14px; border: 1px solid rgba(138,43,226,0.3); border-radius: 8px; font-size: 14px; outline: none; resize: vertical; min-height: 90px; font-family: inherit; transition: all 0.3s; background: rgba(15, 12, 41, 0.5); color: #e8e8f0; }
+        .comment-form textarea:focus { border-color: #a78bfa; box-shadow: 0 0 15px rgba(138,43,226,0.3); }
+        .comment-form-footer { display: flex; justify-content: flex-end; margin-top: 10px; }
+        .comment-item { padding: 16px 0; border-bottom: 1px solid rgba(138,43,226,0.12); }
+        .comment-item:last-child { border-bottom: none; }
+        .comment-author { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+        .comment-avatar { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex-shrink: 0; box-shadow: 0 0 12px rgba(138,43,226,0.4); }
+        .comment-name { font-size: 14px; font-weight: 500; color: #e8e8f0; }
+        .comment-date { font-size: 12px; color: #8b8ba0; }
+        .comment-content { font-size: 14px; color: #c9c9dd; line-height: 1.7; padding-left: 44px; }
+        .comment-reply-btn { margin: 6px 0 0 44px; padding: 2px 12px; border: 1px solid rgba(138,43,226,0.3); border-radius: 12px; background: transparent; color: #8b8ba0; font-size: 12px; cursor: pointer; transition: all 0.2s; }
+        .comment-reply-btn:hover { color: #a78bfa; border-color: #a78bfa; background: rgba(138,43,226,0.1); }
+        .comment-children { margin: 12px 0 4px 44px; padding: 4px 0 4px 14px; border-left: 2px solid rgba(138,43,226,0.2); }
+        .comment-children .comment-item { padding: 10px 0; border-bottom: 1px dashed rgba(138,43,226,0.1); }
+        .comment-children .comment-item:last-child { border-bottom: none; }
+        .comment-to { color: #a78bfa; font-size: 13px; margin-right: 4px; }
+        #replyBanner { display: none; align-items: center; gap: 10px; margin-bottom: 10px; padding: 6px 12px; background: rgba(138,43,226,0.12); border: 1px solid rgba(138,43,226,0.3); border-radius: 6px; color: #c9c9dd; font-size: 13px; }
+        #replyBanner b { color: #a78bfa; }
+        #replyBanner button { margin-left: auto; border: none; background: transparent; color: #8b8ba0; font-size: 14px; cursor: pointer; }
+        #replyBanner button:hover { color: #fff; }
+        .hot-title { font-size: 13px; color: #c9c9dd; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .comment-avatar img { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; border-radius: 50%; }
+
+    /* 阅读进度条 */
+    #readProgress { position: fixed; top: 0; left: 0; height: 3px; width: 0; z-index: 999; background: linear-gradient(90deg, #667eea, #a78bfa, #ffe36d); box-shadow: 0 0 10px rgba(167,139,250,0.8); transition: width 0.1s linear; }
+    /* 羽毛回顶 */
+    #backToTop { position: fixed; right: 28px; bottom: 36px; width: 46px; height: 46px; z-index: 99; cursor: pointer; opacity: 0; pointer-events: none; transition: opacity 0.4s, transform 0.2s; }
+    #backToTop.show { opacity: 1; pointer-events: auto; }
+    #backToTop:hover { transform: translateY(-4px); }
+    #backToTop img { width: 100%; height: 100%; image-rendering: pixelated; filter: drop-shadow(0 0 8px rgba(167,139,250,0.7)); }
+
+    #articleLoadingOverlay {
+        position: fixed; inset: 0; z-index: 9999;
+        background-color: #050514;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+    }
+    /* 登录页同款夜空：月光晕 */
+    #articleLoadingOverlay::before {
+        content: ''; position: absolute; inset: 0; pointer-events: none;
+        background-image:
+            radial-gradient(circle at 78% 16%, rgba(180,200,255,.16), transparent 32%),
+            radial-gradient(circle at 18% 82%, rgba(90,110,180,.10), transparent 40%);
+    }
+    /* 登录页同款闪烁星星 */
+    #articleLoadingOverlay .ld-stars, #articleLoadingOverlay .ld-stars2 {
+        position: absolute; inset: 0; pointer-events: none; width: 1px; height: 1px; background: transparent;
+    }
+    #articleLoadingOverlay .ld-stars {
+        box-shadow: 12vw 8vh 0 1px rgba(255,255,255,.8), 34vw 22vh 0 rgba(255,255,255,.5), 58vw 6vh 0 1px rgba(255,255,255,.7),
+                    82vw 18vh 0 rgba(255,255,255,.4), 46vw 12vh 0 rgba(255,255,255,.55), 90vw 40vh 0 1px rgba(255,255,255,.6),
+                    8vw 34vh 0 rgba(255,255,255,.45), 68vw 30vh 0 rgba(255,255,255,.5), 24vw 46vh 0 1px rgba(255,255,255,.65),
+                    94vw 8vh 0 rgba(255,255,255,.4), 52vw 40vh 0 rgba(255,255,255,.35), 16vw 16vh 0 rgba(255,255,255,.5);
+        animation: starTwinkle 4.5s ease-in-out infinite;
+    }
+    #articleLoadingOverlay .ld-stars2 {
+        box-shadow: 20vw 12vh 0 rgba(255,255,255,.5), 42vw 5vh 0 1px rgba(255,255,255,.7), 72vw 22vh 0 rgba(255,255,255,.45),
+                    6vw 26vh 0 rgba(255,255,255,.5), 60vw 34vh 0 rgba(255,255,255,.4), 86vw 12vh 0 1px rgba(255,255,255,.6),
+                    30vw 38vh 0 rgba(255,255,255,.35), 96vw 30vh 0 rgba(255,255,255,.45), 48vw 24vh 0 rgba(255,255,255,.5),
+                    14vw 42vh 0 rgba(255,255,255,.3), 64vw 10vh 0 rgba(255,255,255,.4), 38vw 48vh 0 rgba(255,255,255,.35);
+        animation: starTwinkle 6s ease-in-out 1.6s infinite;
+    }
+    /* 加载层内雪花画布 + 底部雪带（登录页同款） */
+    #articleLoadingOverlay #ldSnowCanvas {
+        position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;
+    }
+    #articleLoadingOverlay .ld-snow-strip {
+        position: absolute; left: 0; right: 0; bottom: 0; height: 80px;
+        background: url('celeste-areas/snow-front.webp') repeat-x bottom/220px auto;
+        animation: snowDrift 45s linear infinite;
+        opacity: .5; pointer-events: none;
+    }
+    @keyframes snowDrift { from{background-position-x:0} to{background-position-x:-440px} }
+    #articleLoadingOverlay .loading-madeline {
+        width: 120px; height: 120px;
+        background-size: 100% 100%; background-repeat: no-repeat; background-position: center;
+        image-rendering: pixelated;
+        animation: loadingRun 0.72s steps(9) infinite;
+        position: relative; z-index: 1;
+    }
+    @keyframes loadingRun {
+        0%   { background-image: url('celeste-gui/loading/00.png'); }
+        11%  { background-image: url('celeste-gui/loading/01.png'); }
+        22%  { background-image: url('celeste-gui/loading/02.png'); }
+        33%  { background-image: url('celeste-gui/loading/03.png'); }
+        44%  { background-image: url('celeste-gui/loading/04.png'); }
+        55%  { background-image: url('celeste-gui/loading/05.png'); }
+        66%  { background-image: url('celeste-gui/loading/06.png'); }
+        77%  { background-image: url('celeste-gui/loading/07.png'); }
+        88%  { background-image: url('celeste-gui/loading/08.png'); }
+    }
+    #articleLoadingOverlay .loading-text {
+        margin-top: 20px; color: #ffe36d;
+        font-family: 'Renogare', 'CelesteZH', sans-serif; font-size: 18px;
+        letter-spacing: 3px;
+        text-shadow: 0 0 12px rgba(255,227,109,0.4);
+        position: relative; z-index: 1;
+    }
+    #articleLoadingOverlay .loading-dots::after {
+        content: ''; animation: dots 1.5s steps(4, end) infinite;
+    }
+    @keyframes dots {
+        0%   { content: ''; }
+        25%  { content: '.'; }
+        50%  { content: '..'; }
+        75%  { content: '...'; }
+    }
+    @keyframes starTwinkle { 0%,100%{opacity:.25} 50%{opacity:.9} }
+
+    /* 心之宝石点赞 */
+    #likeBar { display: none; justify-content: center; margin: 0 0 20px; }
+    #editArticleBtn { display: none; padding: 8px 22px; background: rgba(30,27,75,.6); border: 1px solid rgba(138,43,226,.3); border-radius: 20px; color: #c9c9dd; font-size: 13px; cursor: pointer; transition: all .25s; backdrop-filter: blur(8px); }
+    #editArticleBtn:hover { color: #a78bfa; border-color: #a78bfa; }
+    .like-btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 24px; background: rgba(30,27,75,.6); border: 1px solid rgba(138,43,226,.3); border-radius: 24px; color: #c9c9dd; font-size: 14px; cursor: pointer; transition: all .25s; backdrop-filter: blur(8px); }
+    .like-btn:hover { transform: translateY(-2px); border-color: #a78bfa; box-shadow: 0 0 14px rgba(167,139,250,.35); }
+    .like-btn img { width: 26px; height: 26px; image-rendering: pixelated; }
+    .like-btn.liked { color: #ffe36d; border-color: rgba(255,227,109,.6); box-shadow: 0 0 18px rgba(255,227,109,.3); }
+    .like-btn.pop img { animation: gemPop .5s ease; }
+    @keyframes gemPop { 0% { transform: scale(1); } 40% { transform: scale(1.7) rotate(-10deg); } 100% { transform: scale(1); } }
+    </style>
+</head>
+<body>
+    <!-- BGM 播放器 -->
+    <audio id="bgmPlayer" loop autoplay>
+        <source src="bgm/postcard.mp3" type="audio/mpeg">
+    </audio>
+
+    <!-- 加载动画 -->
+    <div id="articleLoadingOverlay">
+        <div class="ld-stars"></div>
+        <div class="ld-stars2"></div>
+        <canvas id="ldSnowCanvas"></canvas>
+        <div class="ld-snow-strip"></div>
+        <div class="loading-madeline"></div>
+        <div class="loading-text">LOADING<span class="loading-dots"></span></div>
+    </div>
+
+    <!-- 雪花粒子系统 -->
+    <canvas id="snowCanvas" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;"></canvas>
+
+    <!-- 阅读进度条 + 回顶羽毛 -->
+    <div id="readProgress"></div>
+    <div id="backToTop" title="Back to top"><img loading="lazy" src="celeste-feather/feather0.png" alt="" decoding="async"></div>
+
+<header class="header">
+    <div class="container header-inner">
+        <a href="index.html" class="logo"><img loading="lazy" src="celeste-gui/logo.webp" alt="Celeste" decoding="async"></a>
+        <nav class="nav">
+            <a href="index.html" class="nav-link">Home</a>
+            <a href="archives.html" class="nav-link">Archives</a>
+            <a href="diary.html" class="nav-link nav-diary-btn" title="Diary with Madeline">
+                <img loading="lazy" src="celeste-gui/journal.png" alt="Diary" decoding="async">
+            </a>
+        </nav>
+        <div class="header-right" id="headerRight"></div>
+    </div>
+</header>
+
+<div class="container main-layout">
+    <main class="content">
+        <div id="articleHeader"><div class="loading">Loading...</div></div>
+        <div id="articleBody"></div>
+        <div id="likeBar">
+            <button id="likeBtn" class="like-btn" title="为这篇文章点亮心之宝石">
+                <img id="likeGem" src="celeste-icons/heartgem0.png" alt="" loading="lazy" decoding="async">
+                <span id="likeCount">0</span>
+            </button>
+        </div>
+        <div id="likersLine" style="text-align:center;font-size:12px;color:rgba(255,255,255,.55);margin:-6px 0 14px;"></div>
+        <div style="text-align:center;margin-bottom:14px"><button id="editArticleBtn" onclick="location.href='write.html?edit=' + articleId">✏ Edit This Article</button></div>
+        <div class="comments-section" id="commentsSection" style="display:none">
+            <div class="comments-title">💬 Comments</div>
+            <div class="comment-form" id="commentForm">
+                <div id="replyBanner">回复 <b id="replyToName"></b><button onclick="clearReply()" title="取消回复">✕ 取消回复</button></div>
+                <textarea id="commentContent" placeholder="Write a comment..."></textarea>
+                <div class="comment-form-footer">
+                    <button class="btn btn-primary btn-sm" onclick="submitComment()">Post Comment</button>
+                </div>
+            </div>
+            <div id="commentList"><div class="loading">Loading...</div></div>
+        </div>
+    </main>
+
+    <aside class="sidebar">
+        <div class="widget" id="tocWidget" style="display:none">
+            <div class="widget-title"> Contents</div>
+            <div id="tocList"></div>
+        </div>
+        <div class="widget" id="relatedWidget" style="display:none">
+            <div class="widget-title">🧗 Related Routes</div>
+            <div id="relatedList"></div>
+        </div>
+        <div class="widget">
+            <div class="widget-title">🔥 Popular</div>
+            <div id="hotList"><div class="loading">Loading...</div></div>
+        </div>
+    </aside>
+</div>
+
+<footer class="footer">
+    <div class="container">© 2026 Celeste Blog · Explore the stars</div>
+</footer>
+
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script>
+    // ===== 加载层内雪花（snow-bgm 同款，登录页风格） =====
+    (function () {
+        const c = document.getElementById('ldSnowCanvas');
+        if (!c) return;
+        const ctx = c.getContext('2d');
+        function resize() { c.width = window.innerWidth; c.height = window.innerHeight; }
+        resize();
+        window.addEventListener('resize', resize);
+        const flakes = [];
+        for (let i = 0; i < 80; i++) {
+            flakes.push({
+                x: Math.random() * c.width, y: Math.random() * c.height,
+                r: Math.random() * 3 + 1, speed: Math.random() * 1.5 + 0.5,
+                wind: Math.random() * 0.5 - 0.25, opacity: Math.random() * 0.6 + 0.2,
+                swing: Math.random() * Math.PI * 2, swingSpeed: Math.random() * 0.02 + 0.01
+            });
+        }
+        (function loop() {
+            if (!document.getElementById('ldSnowCanvas')) return;
+            ctx.clearRect(0, 0, c.width, c.height);
+            for (const f of flakes) {
+                f.y += f.speed; f.swing += f.swingSpeed;
+                f.x += Math.sin(f.swing) * 0.5 + f.wind;
+                if (f.y > c.height + 10) { f.y = -10; f.x = Math.random() * c.width; }
+                if (f.x > c.width + 10) f.x = -10;
+                if (f.x < -10) f.x = c.width + 10;
+                ctx.beginPath();
+                ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255,255,255,' + f.opacity + ')';
+                ctx.fill();
+            }
+            requestAnimationFrame(loop);
+        })();
+    })();
+
+    // ===== 雪花粒子系统 =====
+    const snowCanvas = document.getElementById('snowCanvas');
+    const snowCtx = snowCanvas.getContext('2d');
+    let snowflakes = [];
+    let snowAnimFrame = null;
+
+    function resizeSnowCanvas() {
+        snowCanvas.width = window.innerWidth;
+        snowCanvas.height = window.innerHeight;
+    }
+
+    function createSnowflake() {
+        return {
+            x: Math.random() * snowCanvas.width,
+            y: -10,
+            r: Math.random() * 3 + 1,
+            speed: Math.random() * 1.5 + 0.5,
+            wind: Math.random() * 0.5 - 0.25,
+            opacity: Math.random() * 0.6 + 0.2,
+            swing: Math.random() * Math.PI * 2,
+            swingSpeed: Math.random() * 0.02 + 0.01
+        };
+    }
+
+    function initSnowflakes() {
+        snowflakes = [];
+        for (let i = 0; i < 80; i++) {
+            const f = createSnowflake();
+            f.y = Math.random() * snowCanvas.height;
+            snowflakes.push(f);
+        }
+    }
+
+    function drawSnowflakes() {
+        snowCtx.clearRect(0, 0, snowCanvas.width, snowCanvas.height);
+        for (const f of snowflakes) {
+            f.y += f.speed;
+            f.swing += f.swingSpeed;
+            f.x += Math.sin(f.swing) * 0.5 + f.wind;
+            if (f.y > snowCanvas.height + 10) { f.y = -10; f.x = Math.random() * snowCanvas.width; }
+            if (f.x > snowCanvas.width + 10) f.x = -10;
+            if (f.x < -10) f.x = snowCanvas.width + 10;
+            snowCtx.beginPath();
+            snowCtx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+            snowCtx.fillStyle = `rgba(255,255,255,${f.opacity})`;
+            snowCtx.fill();
+        }
+        snowAnimFrame = requestAnimationFrame(drawSnowflakes);
+    }
+
+    function startSnow() { resizeSnowCanvas(); initSnowflakes(); drawSnowflakes(); }
+    window.addEventListener('resize', resizeSnowCanvas);
+    if (window.location.pathname.endsWith('/index.html') || window.location.pathname === '/' || window.location.pathname === '') {
+        startSnow();
+    }
+
+    // BGM
+    const bgmPlayer = document.getElementById('bgmPlayer');
+    const savedTime = parseFloat(localStorage.getItem('bgmTime') || '0');
+    if (savedTime > 0) bgmPlayer.currentTime = savedTime;
+    bgmPlayer.volume = 0.25;
+    bgmPlayer.play().catch(() => {});
+    setInterval(() => { localStorage.setItem('bgmTime', bgmPlayer.currentTime); }, 2000);
+    function tryPlayBGM() { bgmPlayer.play().then(() => { document.removeEventListener('click', tryPlayBGM); document.removeEventListener('keydown', tryPlayBGM); }).catch(() => {}); }
+    document.addEventListener('click', tryPlayBGM);
+    document.addEventListener('keydown', tryPlayBGM);
+
+    // 阅读进度条 + 回顶
+    const readProgress = document.getElementById('readProgress');
+    const backToTop = document.getElementById('backToTop');
+    window.addEventListener('scroll', () => {
+        const h = document.documentElement;
+        const max = h.scrollHeight - h.clientHeight;
+        readProgress.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+        backToTop.classList.toggle('show', h.scrollTop > 400);
+    });
+    backToTop.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    const articleId = new URLSearchParams(location.search).get('id');
+    if (!articleId) location.href = 'index.html';
+
+    initHeader();
+    loadArticle();
+    loadHotArticles();
+
+    function loadArticle() {
+        api(`/articles/article/view/${articleId}`, 'POST').then(res => {
+            const overlay = document.getElementById('articleLoadingOverlay');
+            if (overlay) { overlay.remove(); }
+            if (!res.success) {
+                document.getElementById('articleHeader').innerHTML = '<div class="empty">Article not found</div>';
+                return;
+            }
+            const a = res.data;
+            document.title = `${a.title} - Celeste Blog`;
+
+            const plain = (a.body?.contentHtml || a.body?.content || '').replace(/<[^>]+>/g, '');
+            const readMin = Math.max(1, Math.ceil(plain.length / 400));
+
+            // 头部
+            document.getElementById('articleHeader').innerHTML = `
+                <div class="article-header">
+                    <h1>${escHtml(a.title)}</h1>
+                    <div class="article-meta">
+                        <span>✍️ ${escHtml(a.author?.nickname || a.author?.username || 'Anonymous')}</span>
+                        <span>📅 ${formatDate(a.createDate)}</span>
+                        <span>👁 ${a.viewCounts || 0} Reads</span>
+                        <span>⏳ ~${readMin} min read</span>
+                        ${a.category ? `<span>📁 ${escHtml(a.category.categoryName || a.category.name)}</span>` : ''}
+                    </div>
+                    <div class="article-tags">
+                        ${(a.tags || []).map(t => `<span class="tag" style="cursor:pointer" onclick="location.href='index.html?tag=${t.id}'" title="查看该标签下的文章">${escHtml(t.tagName || t.name)}</span>`).join('')}
+                    </div>
+                </div>`;
+
+            // 正文
+            const body = a.body?.content || a.body?.contentHtml || '';
+            document.getElementById('articleBody').innerHTML = `<div class="article-body">${body}</div>`;
+
+            // 生成目录
+            buildToc();
+
+            // 评论区
+            document.getElementById('commentsSection').style.display = 'block';
+            if (!localStorage.getItem('token')) {
+                document.getElementById('commentForm').innerHTML = '<p style="color:#aaa;font-size:14px;margin-bottom:16px"><a href="login.html" style="color:#a78bfa">Login</a> to comment</p>';
+            }
+            loadComments();
+
+            // 编辑入口：仅作者本人可见
+            const myNick = localStorage.getItem('nickname');
+            const authorName = a.author?.nickname || a.author?.username;
+            if (myNick && authorName && myNick === authorName) {
+                document.getElementById('editArticleBtn').style.display = 'inline-block';
+            }
+
+            loadLikeState();
+        });
+    }
+
+    function buildToc() {
+        const headings = document.querySelectorAll('.article-body h1,.article-body h2,.article-body h3');
+        if (headings.length < 2) return;
+        const toc = document.getElementById('tocList');
+        headings.forEach((h, i) => {
+            h.id = `heading-${i}`;
+            const indent = h.tagName === 'H1' ? 0 : h.tagName === 'H2' ? 10 : 20;
+            const item = document.createElement('a');
+            item.className = 'toc-item';
+            item.style.paddingLeft = `${10 + indent}px`;
+            item.textContent = h.textContent;
+            item.onclick = () => h.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            toc.appendChild(item);
+        });
+        document.getElementById('tocWidget').style.display = 'block';
+    }
+
+    const MAD_PORTRAITS = ['normal00.png', 'peaceful00.png', 'determined00.png', 'distracted00.png'];
+    let avIdx = 0;
+
+    // ===== 二级评论回复 =====
+    let replyTarget = null;
+    function setReply(parentId, toUserId, name) {
+        if (!requireLogin()) return;
+        replyTarget = { parent: parentId, toUserId: toUserId };
+        document.getElementById('replyToName').textContent = '@' + name;
+        document.getElementById('replyBanner').style.display = 'flex';
+        document.getElementById('commentForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        document.getElementById('commentContent').focus();
+    }
+    function clearReply() {
+        replyTarget = null;
+        document.getElementById('replyBanner').style.display = 'none';
+    }
+    document.getElementById('commentList').addEventListener('click', e => {
+        const btn = e.target.closest('.comment-reply-btn');
+        if (!btn) return;
+        setReply(btn.dataset.parent, btn.dataset.uid, btn.dataset.name);
+    });
+
+    function commentHtml(c, topId, isChild) {
+        const name = c.author?.nickname || c.author?.username || 'Anonymous';
+        const authorId = c.author?.id || '';
+        const replyParent = isChild ? topId : c.id;
+        const to = (!isChild || !c.toUser) ? '' : `<span class="comment-to">回复 @${escHtml(c.toUser.nickname || c.toUser.username || '')}：</span>`;
+        const children = (c.childrens && c.childrens.length)
+            ? `<div class="comment-children">${c.childrens.map(ch => commentHtml(ch, c.id, true)).join('')}</div>` : '';
+        return `
+            <div class="comment-item">
+                <div class="comment-author">
+                    <div class="comment-avatar"><img loading="lazy" src="celeste-portraits/madeline/${MAD_PORTRAITS[(avIdx++) % MAD_PORTRAITS.length]}" alt="" decoding="async"></div>
+                    <div>
+                        <div class="comment-name">${escHtml(name)}</div>
+                        <div class="comment-date">${formatDate(c.createDate)}</div>
+                    </div>
+                </div>
+                <div class="comment-content">${to}${escHtml(c.content)}</div>
+                <button class="comment-reply-btn" data-parent="${replyParent}" data-uid="${authorId}" data-name="${escHtml(name)}">Reply</button>
+                ${children}
+            </div>`;
+    }
+
+    function loadComments() {
+        api(`/comments/article/${articleId}`, 'GET').then(res => {
+            if (!res.success) { document.getElementById('commentList').innerHTML = '<div class="empty">No comments yet</div>'; return; }
+            const list = res.data || [];
+            if (list.length === 0) { document.getElementById('commentList').innerHTML = '<div class="empty">Be the first to comment!</div>'; return; }
+            avIdx = 0;
+            document.getElementById('commentList').innerHTML = list.map(c => commentHtml(c, c.id, false)).join('');
+        });
+    }
+
+    function submitComment() {
+        if (!requireLogin()) return;
+        const content = document.getElementById('commentContent').value.trim();
+        if (!content) { showToast('Please enter a comment', 'error'); return; }
+        const payload = { articleId, content };
+        if (replyTarget) { payload.parent = replyTarget.parent; payload.toUserId = replyTarget.toUserId; }
+        api('/comments/create/change', 'POST', payload).then(res => {
+            if (res.success) {
+                document.getElementById('commentContent').value = '';
+                clearReply();
+                showToast('Comment posted', 'success');
+                loadComments();
+            } else {
+                showToast(res.msg || 'Failed to post comment', 'error');
+            }
+        });
+    }
+
+    // ===== 心之宝石点赞 =====
+    function loadLikeState() {
+        api(`/likes/info/${articleId}`, 'GET').then(res => {
+            if (!res.success) return;
+            applyLikeUI(res.data.likeCount || 0, !!res.data.liked);
+            document.getElementById('likeBar').style.display = 'flex';
+        }).catch(() => {});
+        loadLikers();
+    }
+
+    function loadLikers() {
+        api(`/likes/users/${articleId}`, 'GET').then(res => {
+            const names = res.success ? (res.data || []) : [];
+            document.getElementById('likersLine').textContent = names.length
+                ? '✨ ' + names.map(escHtml).join('、') + ' 点亮了这篇文章'
+                : '';
+        }).catch(() => {});
+    }
+
+    function applyLikeUI(count, liked) {
+        document.getElementById('likeCount').textContent = count;
+        document.getElementById('likeGem').src = liked ? 'celeste-icons/heartgem1.png' : 'celeste-icons/heartgem0.png';
+        document.getElementById('likeBtn').classList.toggle('liked', liked);
+    }
+
+    document.getElementById('likeBtn').onclick = () => {
+        if (!requireLogin()) return;
+        api('/likes/toggle', 'POST', { articleId }).then(res => {
+            if (!res.success) { showToast(res.msg || '操作失败', 'error'); return; }
+            applyLikeUI(res.data.likeCount || 0, !!res.data.liked);
+            loadLikers();
+            const btn = document.getElementById('likeBtn');
+            btn.classList.remove('pop'); void btn.offsetWidth; btn.classList.add('pop');
+            showToast(res.data.liked ? '心之宝石点亮了这篇文章 ✨' : '已取消点亮', 'success');
+        });
+    };
+
+    function loadRelated(categoryId) {
+        api('/articles', 'POST', { page: 1, pageSize: 8, categoryId: String(categoryId) }).then(res => {
+            const records = (res && res.success && res.data && (res.data.records || res.data)) || [];
+            const rel = records.filter(x => String(x.id) !== String(articleId)).slice(0, 4);
+            if (!rel.length) return;
+            document.getElementById('relatedList').innerHTML = rel.map(x => `
+                <div class="hot-item" onclick="location.href='article.html?id=${x.id}'">
+                    <span class="hot-title">${escHtml(x.title)}</span>
+                </div>`).join('');
+            document.getElementById('relatedWidget').style.display = 'block';
+        }).catch(() => {});
+    }
+
+    function loadHotArticles() {
+        api('/articles/hot', 'POST').then(res => {
+            if (!res.success) return;
+            const RANK_ICONS = [
+                'celeste-collectables/goldberry.png',
+                'celeste-collectables/strawberry.png',
+                'celeste-icons/heartgem1.png',
+                'celeste-icons/heartgem0.png',
+                'celeste-icons/fullclear.png'
+            ];
+            document.getElementById('hotList').innerHTML = (res.data || []).map((a, i) => `
+                <div class="hot-item" onclick="location.href='article.html?id=${a.id}'">
+                    <span class="hot-rank rank-${i+1}">${RANK_ICONS[i] ? `<img loading="lazy" src="${RANK_ICONS[i]}" alt="${i+1}" decoding="async">` : (i+1)}</span>
+                    <span class="hot-title">${escHtml(a.title)}</span>
+                </div>
+            `).join('') || '<div class="empty">No data</div>';
+        });
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="icon/OIP.webp" type="image/webp">
+    <title>Write - Celeste Blog</title>
+    <link rel="stylesheet" href="css/common.css">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+    /* 暗色配色方案：输入法合成/插入区、选区、滚动条都走暗色，防止插入历史文本时露白底 */
+    :root { color-scheme: dark; }
+    .nav-diary-btn {
+        display:inline-block;
+        cursor:pointer;
+        transition:transform .2s, filter .2s;
+        vertical-align:middle;
+    }
+    .nav-diary-btn:hover {
+        transform:scale(1.15);
+    }
+    .nav-diary-btn img {
+        height:36px;
+        width:auto;
+        display:block;
+        filter:drop-shadow(0 0 10px rgba(255,235,59,0.7));
+    }
+    .write-layout { padding: 20px; max-width: 900px; margin: 0 auto; position: relative; z-index: 1; }
+    .write-title-input {
+        width: 100%; font-size: 26px; font-weight: 700; border: none; outline: none;
+        padding: 16px 0; border-bottom: 2px solid rgba(138, 43, 226, 0.3); margin-bottom: 16px;
+        background: transparent; font-family: inherit; color: #e8e8f0;
+    }
+    .write-title-input::placeholder { color: #6b6b80; }
+    .write-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; align-items: center; }
+    .toolbar-btn {
+        padding: 6px 12px; border: 1px solid rgba(138, 43, 226, 0.3);
+        background: rgba(30, 27, 75, 0.6); backdrop-filter: blur(10px);
+        border-radius: 6px; cursor: pointer; font-size: 13px; color: #b8b8d0;
+        transition: all 0.3s;
+    }
+    .toolbar-btn:hover { border-color: #a78bfa; color: #a78bfa; background: rgba(138, 43, 226, 0.2); box-shadow: 0 0 10px rgba(138, 43, 226, 0.3); }
+    .toolbar-btn img { height: 15px; width: auto; vertical-align: -2px; margin-right: 4px; image-rendering: pixelated; }
+    .write-body {
+        width: 100%; min-height: 420px; padding: 16px;
+        border: 1px solid rgba(138, 43, 226, 0.3);
+        border-radius: 10px; font-size: 15px; outline: none; resize: vertical;
+        font-family: 'Renogare', 'CelesteZH', 'Microsoft YaHei', sans-serif; line-height: 1.8; color: #e8e8f0;
+        background: rgba(30, 27, 75, 0.4); transition: all 0.3s;
+    }
+    .write-body:focus { border-color: #a78bfa; background: rgba(30, 27, 75, 0.6); box-shadow: 0 0 15px rgba(138, 43, 226, 0.3); }
+    .write-meta { display: flex; gap: 16px; margin: 16px 0; flex-wrap: wrap; }
+    .write-meta select, .write-meta input {
+        padding: 9px 14px; border: 1px solid rgba(138, 43, 226, 0.3); border-radius: 8px;
+        font-size: 14px; outline: none; background: rgba(30, 27, 75, 0.4);
+        color: #e8e8f0; font-family: inherit;
+        transition: all 0.3s;
+    }
+    .write-meta select:focus, .write-meta input:focus { border-color: #a78bfa; background: rgba(30, 27, 75, 0.6); box-shadow: 0 0 15px rgba(138, 43, 226, 0.3); }
+    .write-meta select { min-width: 140px; }
+    .write-meta input { flex: 1; min-width: 200px; }
+    .write-footer { display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(138, 43, 226, 0.2); }
+    .char-count { font-size: 12px; color: #8b8ba0; text-align: right; margin-top: 6px; }
+    body { background: url('celeste-areas/Summit-ch7-complete.png') center center / cover no-repeat fixed; background-color: #0b0c22; }
+
+    /* ===== 历史记录框（与 diary 页完全一致，card.png 素材） ===== */
+    #madeline-chat-dialog {
+        position: fixed; bottom: 12px; right: 12px;
+        width: 420px;
+        height: 500px;
+        background: url('celeste-gui/card.webp') top / 100% 123% no-repeat;
+        border: none;
+        border-radius: 0;
+        display: flex; flex-direction: column;
+        opacity: 0; pointer-events: none;
+        transform: perspective(1200px) rotateY(32deg) rotateX(8deg) scale(0.85);
+        transform-origin: 100% 100%;
+        transition: opacity .3s ease, transform .45s cubic-bezier(0.34,1.3,0.64,1);
+        z-index: 1000;
+        box-shadow: 0 10px 30px rgba(0,0,0,.35);
+        overflow: hidden;
+    }
+    #madeline-chat-dialog.show {
+        opacity: 1; pointer-events: all;
+        transform: perspective(1200px) rotateY(0) rotateX(0) scale(1);
+    }
+    .chat-header {
+        padding: 14px 16px 8px 42px;
+        display: flex; align-items: center; gap: 10px;
+        border-bottom: none;
+        background: url('celeste-gui/card-top.webp') center / 100% 100% no-repeat;
+        flex-shrink: 0;
+    }
+    #chat-madeline-avatar-wrap {
+        width: 32px; height: 32px; border-radius: 50%; overflow: hidden;
+        border: 2px solid #2b2018; flex-shrink: 0; display: block;
+    }
+    #chat-madeline-avatar-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .chat-header .chat-title {
+        font-family: 'Press Start 2P', monospace;
+        font-size: 12px;
+        color: #2b2018;
+        flex: 1;
+    }
+    .chat-header .close-btn {
+        width: 24px; height: 24px;
+        border: none; border-radius: 50%;
+        background: transparent;
+        color: rgba(43,32,24,.55);
+        font-size: 16px;
+        cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+        transition: color .2s;
+    }
+    .chat-header .close-btn:hover { color: #2b2018; }
+    .chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 14px 16px 10px 42px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-height: 0;
+    }
+    .chat-messages::-webkit-scrollbar { width: 4px; }
+    .chat-messages::-webkit-scrollbar-thumb { background: rgba(58,46,42,.4); border-radius: 2px; }
+    .msg-row {
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+        max-width: 90%;
+        transform-origin: top center;
+        animation: wpPageIn .4s ease-out;
+    }
+    @keyframes wpPageIn {
+        from { transform: perspective(800px) rotateX(-38deg) translateY(-8px); opacity: 0; }
+        to { transform: none; opacity: 1; }
+    }
+    .msg-row.madeline-row { align-self: flex-start; }
+    .msg-row.user-row { align-self: flex-end; }
+    .msg-avatar-wrap {
+        width: 28px; height: 28px; border-radius: 50%; overflow: hidden;
+        border: 1px solid #FFEB3B; flex-shrink: 0; display: block;
+    }
+    .msg-avatar-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .msg-bubble {
+        padding: 8px 12px;
+        border-radius: 12px;
+        font-family: 'Renogare', 'CelesteZH', 'Microsoft YaHei', sans-serif;
+        font-size: 13px;
+        line-height: 1.6;
+        word-break: break-word;
+        max-width: 260px;
+    }
+    .msg-row.madeline-row .msg-bubble {
+        background: transparent;
+        border: none;
+        padding: 4px 6px;
+        color: #3a2e2a;
+        box-shadow: none;
+        max-width: 300px;
+    }
+    .msg-row.user-row .msg-bubble {
+        background: rgba(74,144,226,.14);
+        color: #2b3a52;
+        border: 1px solid rgba(74,144,226,.4);
+    }
+
+    /* ===== 输入区 ===== */
+    .chat-input {
+        margin-top: auto;
+        display: flex; gap: 8px;
+        padding: 8px 10px 5px 10px;
+        border-bottom: 1px dashed rgba(58,46,42,.35);
+        background: transparent;
+        flex-shrink: 0;
+    }
+    .chat-input input {
+        flex: 1;
+        padding: 8px 10px;
+        border-radius: 6px;
+        background: rgba(125,207,255,.18);
+        color: #2b3a52;
+        border: 1px solid rgba(125,207,255,.5);
+        font-family: 'Renogare', 'CelesteZH', 'Microsoft YaHei', sans-serif;
+        font-size: 13px;
+        outline: none;
+        transition: all .2s;
+    }
+    .chat-input input:focus { border-color: #7DCFFF; background: rgba(125,207,255,.3); box-shadow: 0 0 8px rgba(125,207,255,.35); }
+    .chat-input input::placeholder { color: rgba(43,58,82,.45); }
+    .chat-input button {
+        padding: 8px 14px;
+        border: none; border-radius: 6px;
+        background: #FFEB3B; color: #111;
+        font-family: 'Renogare', sans-serif;
+        font-size: 14px;
+        letter-spacing: 1px;
+        cursor: pointer;
+        box-shadow: inset 0 -2px #111111;
+        transition: background .2s;
+        flex-shrink: 0;
+    }
+    .chat-input button:hover:not(:disabled) { background: #ffeb85; }
+    .chat-input button:disabled { background: #555; color: #999; cursor: not-allowed; }
+
+
+    /* ===== 游戏对话框 ===== */
+    #wpGameDialog {
+        position: fixed;
+        left: 50%;
+        bottom: 26px;
+        transform: translateX(-50%) translateY(24px);
+        width: min(94vw, 900px);
+        min-height: 128px;
+        z-index: 950;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 20px 30px;
+        background: url('celeste-portraits/textbox/madeline.webp') center / 100% 100% no-repeat;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .25s ease, transform .25s ease;
+    }
+    #wpGameDialog.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+    #wpGameDialog.portrait-right { flex-direction: row-reverse; }
+    #wpGameDialogPortrait {
+        width: 84px; height: 84px;
+        flex-shrink: 0;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    #wpGameDialogPortrait img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    #wpGameDialogBody { flex: 1; min-width: 0; }
+    #wpGameDialogName {
+        font-family: 'Press Start 2P', monospace;
+        color: #FFEB3B;
+        font-size: 13px;
+        margin-bottom: 5px;
+    }
+    #wpGameDialogText {
+        font-family: 'Renogare', 'CelesteZH', 'Microsoft YaHei', sans-serif;
+        color: #fff;
+        font-size: 14px;
+        line-height: 1.7;
+        word-break: break-word;
+    }
+    </style>
+</head>
+<body>
+    <!-- BGM 播放器 -->
+    <audio id="bgmPlayer" loop>
+        <source src="bgm/womanbird.mp3" type="audio/mpeg">
+    </audio>
+
+<header class="header">
+    <div class="container header-inner">
+        <a href="index.html" class="logo"><img src="celeste-gui/logo.webp" alt="Celeste" loading="lazy" decoding="async"></a>
+        <nav class="nav">
+            <a href="index.html" class="nav-link">Home</a>
+            <a href="archives.html" class="nav-link">Archives</a>
+            <a href="diary.html" class="nav-link nav-diary-btn" title="Diary with Madeline">
+                <img src="celeste-gui/journal.png" alt="Diary" loading="lazy" decoding="async">
+            </a>
+        </nav>
+        <div class="header-right" id="headerRight"></div>
+    </div>
+</header>
+
+<div class="container write-layout">
+    <input class="write-title-input" type="text" id="articleTitle" placeholder="Article title...">
+
+    <div class="write-meta">
+        <select id="categorySelect">
+            <option value="">Select category</option>
+        </select>
+        <input type="text" id="tagsInput" placeholder="Tags, comma separated: Java,Spring">
+        <input type="text" id="summaryInput" placeholder="Summary (optional)">
+    </div>
+
+    <div class="write-toolbar">
+        <button class="toolbar-btn" onclick="insertMd('**','**')"><b>B</b></button>
+        <button class="toolbar-btn" onclick="insertMd('*','*')"><i>I</i></button>
+        <button class="toolbar-btn" onclick="insertMd('## ','')">H2</button>
+        <button class="toolbar-btn" onclick="insertMd('### ','')">H3</button>
+        <button class="toolbar-btn" onclick="insertMd('`','`')">Code</button>
+        <button class="toolbar-btn" onclick="insertMd('\n\n','\n```\n')">Code Block</button> <button class="toolbar-btn" onclick="insertMd('> ','')">Quote</button> <button class="toolbar-btn" onclick="insertMd('[link](',')')">Link</button> <button class="toolbar-btn" onclick="insertMd('- ','')">List</button>
+        <button class="toolbar-btn" onclick="document.getElementById('imageInput').click()"><img src="celeste-collectables/goldberry.png" alt="" loading="lazy" decoding="async">Image</button>
+        <input type="file" id="imageInput" accept="image/*" style="display:none" onchange="uploadImage(this)">
+        <button class="toolbar-btn" id="openMadelineBtn"><img src="celeste-collectables/strawberry.png" alt="" loading="lazy" decoding="async">Madeline</button>
+        <button class="toolbar-btn" id="toolbarPolishBtn" style="border-color:rgba(255,227,109,.5);color:#ffe36d;"><img src="celeste-icons/beat.png" alt="" loading="lazy" decoding="async">润色</button>
+        <button class="toolbar-btn" id="toolbarGenBtn" style="border-color:rgba(120,220,255,.5);color:#78dcff;"><img src="celeste-collectables/cassette.png" alt="" loading="lazy" decoding="async">生成文章</button>
+    </div>
+    <textarea class="write-body" id="articleBody" placeholder="Start writing... Markdown supported" oninput="updateCount()"></textarea>
+    <script>
+    // 微软拼音插入历史文本后，强制重绘让 Renogare 立即生效
+    (function() {
+        var ab = document.getElementById('articleBody');
+        if (ab) {
+            ab.addEventListener('compositionend', function() {
+                this.style.fontFamily = '';
+                void this.offsetHeight;
+                this.style.fontFamily = "'Renogare','CelesteZH','Microsoft YaHei',sans-serif";
+            });
+        }
+    })();
+    </script>
+    <div class="char-count" id="charCount">0 chars</div>
+    <div id="imgPreviewBar" style="display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 10px;"></div>
+
+    <div class="write-footer">
+        <button class="btn btn-outline" onclick="history.back()">Cancel</button>
+        <button class="btn btn-primary" onclick="publishArticle()" id="publishBtn">Publish</button>
+    </div>
+</div>
+
+<img id="wpPixelMadeline" src="celeste-gui/bounceline.gif" alt="Madeline" title="单击摸摸她 · 双击打开聊天记录" loading="lazy" decoding="async">
+<canvas id="snowCanvas" style="position:fixed;inset:0;z-index:0;pointer-events:none;"></canvas>
+<div id="wpGameDialog">
+    <div id="wpGameDialogPortrait"><img id="wpGameDialogPortraitImg" src="celeste-portraits/madeline/normal00.png" alt="Madeline" loading="lazy" decoding="async"></div>
+    <div id="wpGameDialogBody">
+        <div id="wpGameDialogName">Madeline</div>
+        <div id="wpGameDialogText"></div>
+    </div>
+</div>
+
+<div id="madeline-chat-dialog">
+    <div class="chat-header">
+        <div id="chat-madeline-avatar-wrap">
+            <img id="chatAvatar" src="celeste-portraits/madeline/normal00.png" alt="Madeline" loading="lazy" decoding="async">
+        </div>
+        <span class="chat-title">Madeline</span>
+        <button class="close-btn" id="closeChatBtn">✕</button>
+    </div>
+    <div class="chat-messages" id="chatMessages"></div>
+    <div class="chat-input">
+        <input type="text" id="chatInput" placeholder="跟 Madeline 说点什么...">
+        <button id="chatSendBtn">Send</button>
+    </div>
+</div>
+
+<footer class="footer"> <div class="container">© 2024 Celeste Blog · Explore the stars</div> </footer>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/madeline-core.js"></script>
+<script src="js/write-madeline.js"></script>
+<script>
+// ================= AI 生成文章：跑步指针 + 采纳/拒绝 + Fall 回退 =================
+(function () {
+    const style = document.createElement('style');
+    style.textContent =
+        '#genRunner{position:fixed;z-index:2100;width:52px;height:52px;image-rendering:pixelated;pointer-events:none;display:none;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5));transform:translate(-50%,-96%);}' +
+        '#genWaitOverlay{position:fixed;right:28px;bottom:28px;z-index:2099;display:none;flex-direction:column;align-items:center;gap:6px;pointer-events:none;}' +
+                '#genWaitOverlay.show{display:flex;}' +
+        '.gen-wait-anim{width:84px;height:84px;background-size:contain;background-repeat:no-repeat;background-position:center;filter:drop-shadow(0 2px 8px rgba(0,0,0,.5));}' +
+        '.gen-wait-text{color:#ffe36d;font-size:14px;text-align:center;text-shadow:0 1px 4px rgba(0,0,0,.8);}' +
+        '#genFallLayer{position:fixed;inset:0;z-index:2050;display:none;pointer-events:none;}' +
+        '#genFallLayer.show{display:block;}' +
+        '#genFallSprite{position:absolute;width:64px;height:64px;image-rendering:pixelated;animation:genFallMove 1.6s ease-in forwards;}' +
+        '@keyframes genFallMove{0%{transform:translateY(0) rotate(0deg);opacity:1;}100%{transform:translateY(68vh) rotate(-60deg);opacity:.15;}}' +
+        '#genDecision{position:fixed;inset:0;background:rgba(5,5,20,.9);z-index:2100;display:none;align-items:center;justify-content:center;}' +
+        '#genDecision.show{display:flex;}' +
+        '.gd-box{background:rgba(22,34,60,.96);border:2px solid #ffe36d;border-radius:10px;padding:28px 36px;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.6);}' +
+        '.gd-box h3{color:#ffe36d;font-size:16px;margin-bottom:8px;}' +
+        '.gd-box p{color:#aab8d0;font-size:13px;margin-bottom:20px;}' +
+        '.gd-actions{display:flex;gap:14px;justify-content:center;}' +
+        '.gd-actions button{padding:10px 26px;border-radius:6px;cursor:pointer;font-size:13px;border:2px solid #ffe36d;background:rgba(22,34,60,.9);color:#ffe36d;transition:background .2s;}' +
+        '.gd-actions button:hover{background:rgba(255,227,109,.2);}' +
+        '.gd-actions .gd-reject{border-color:#888;color:#aaa;}';
+    document.head.appendChild(style);
+
+    const runner = new Image();
+    runner.id = 'genRunner';
+    document.body.appendChild(runner);
+
+    const fallLayer = document.createElement('div');
+    fallLayer.id = 'genFallLayer';
+    fallLayer.innerHTML = '<img id="genFallSprite" alt="" loading="lazy" decoding="async">';
+    document.body.appendChild(fallLayer);
+
+    const decision = document.createElement('div');
+    decision.id = 'genDecision';
+    decision.innerHTML =
+        '<div class="gd-box">' +
+        '<h3>Madeline 跑完了！</h3>' +
+        '<p>草稿已写进正文，看一眼再决定～</p>' +
+        '<div class="gd-actions">' +
+        '<button id="gdAccept">✅ 采纳草稿</button>' +
+        '<button id="gdReject" class="gd-reject">❌ 拒绝并回退</button>' +
+        '</div></div>';
+    document.body.appendChild(decision);
+
+    const waitOverlay = document.createElement('div');
+    waitOverlay.id = 'genWaitOverlay';
+    waitOverlay.innerHTML = '<div class="gen-wait-anim"></div><div class="gen-wait-text">Loading<span class="loading-dots"></span></div>';
+    document.body.appendChild(waitOverlay);
+
+    const RUN_FRAMES = [];
+    for (let i = 0; i < 9; i++) RUN_FRAMES.push('celeste-player/marker/runBackpack' + String(i).padStart(5, '0') + '.png');
+    const FALL_FRAMES = ['celeste-player/marker/Fall0000.png', 'celeste-player/marker/Fall0001.png'];
+    RUN_FRAMES.concat(FALL_FRAMES).forEach(s => { const im = new Image(); im.src = s; });
+
+    const WAIT_FRAMES = [];
+    for (let i = 0; i < 10; i++) WAIT_FRAMES.push('celeste-gui/loading/' + String(i).padStart(2, '0') + '.png');
+    WAIT_FRAMES.forEach(s => { const im = new Image(); im.src = s; });
+    let waitTimer = null;
+    function waitShow() {
+        waitOverlay.classList.add('show');
+        const el = waitOverlay.querySelector('.gen-wait-anim');
+        let i = 0;
+        el.style.backgroundImage = 'url("' + WAIT_FRAMES[0] + '")';
+        if (waitTimer) clearInterval(waitTimer);
+        waitTimer = setInterval(() => { i = (i + 1) % WAIT_FRAMES.length; el.style.backgroundImage = 'url("' + WAIT_FRAMES[i] + '")'; }, 90);
+    }
+    function waitHide() {
+        if (waitTimer) { clearInterval(waitTimer); waitTimer = null; }
+        waitOverlay.classList.remove('show');
+    }
+
+    // mirror 镜像法：算 textarea 光标处的像素坐标
+    const mirror = document.createElement('div');
+    mirror.style.cssText = 'position:absolute;visibility:hidden;left:-9999px;top:0;white-space:pre-wrap;word-wrap:break-word;';
+    document.body.appendChild(mirror);
+    function caretXY(el) {
+        const cs = window.getComputedStyle(el);
+        ['fontFamily', 'fontSize', 'lineHeight', 'letterSpacing', 'padding', 'border', 'boxSizing'].forEach(p => { mirror.style[p] = cs[p]; });
+        mirror.style.width = el.clientWidth + 'px';
+        mirror.textContent = el.value;
+        const marker = document.createElement('span');
+        marker.textContent = '\u200b';
+        mirror.appendChild(marker);
+        const r = el.getBoundingClientRect();
+        return {
+            x: r.left + marker.offsetLeft - el.scrollLeft,
+            y: r.top + marker.offsetTop - el.scrollTop
+        };
+    }
+
+    let runTimer = null, fallTimer = null;
+    function startRun() {
+        runner.style.display = 'block';
+        let i = 0;
+        runner.src = RUN_FRAMES[0];
+        if (runTimer) clearInterval(runTimer);
+        runTimer = setInterval(() => { i = (i + 1) % RUN_FRAMES.length; runner.src = RUN_FRAMES[i]; }, 90);
+    }
+    function stopRun() {
+        if (runTimer) { clearInterval(runTimer); runTimer = null; }
+        runner.style.display = 'none';
+    }
+    function moveRunner(el) {
+        const p = caretXY(el);
+        runner.style.left = p.x + 'px';
+        runner.style.top = (p.y + 4) + 'px';
+    }
+    function playFall(x, y) {
+        const sprite = document.getElementById('genFallSprite');
+        sprite.style.left = Math.max(10, Math.min(window.innerWidth - 80, x - 32)) + 'px';
+        sprite.style.top = Math.max(10, y - 32) + 'px';
+        sprite.style.animation = 'none';
+        void sprite.offsetWidth;
+        sprite.style.animation = '';
+        fallLayer.classList.add('show');
+        let i = 0;
+        sprite.src = FALL_FRAMES[0];
+        if (fallTimer) clearInterval(fallTimer);
+        fallTimer = setInterval(() => { i = (i + 1) % FALL_FRAMES.length; sprite.src = FALL_FRAMES[i]; }, 200);
+        setTimeout(() => {
+            fallLayer.classList.remove('show');
+            if (fallTimer) { clearInterval(fallTimer); fallTimer = null; }
+        }, 1700);
+    }
+
+    let genBefore = '';
+    async function doGenerate() {
+        const titleEl = document.getElementById('articleTitle');
+        const title = titleEl.value.trim();
+        const summary = (document.getElementById('summaryInput').value || '').trim();
+        if (!title && !summary) { if (typeof showToast === 'function') showToast('先写个标题或摘要，告诉我你想写什么', 'error'); return; }
+
+        const btn = document.getElementById('toolbarGenBtn');
+        if (btn) btn.disabled = true;
+        const bodyEl = document.getElementById('articleBody');
+        genBefore = bodyEl.value;
+
+        const topic = title || summary;
+        const extra = (title && summary) ? '。要点：' + summary : '';
+        const prompt = '请以博客作者的身份写一篇 Markdown 文章。主题：' + topic + extra + '。要求：直接输出完整 Markdown 正文，第一行用 # 给出文章标题，不要任何解释、前缀或后缀，400-800字。';
+
+        let ok = false, text = '';
+        waitShow();
+        try {
+            const res = await api('/chat/generate-article', 'POST', { content: prompt });
+            if (res.success && res.data && res.data.content) { ok = true; text = res.data.content; }
+        } catch (e) { }
+        if (btn) btn.disabled = false;
+        waitHide();
+
+        const refused = ok && /抱歉|无法|我不能|对不起|sorry|cannot|can't/i.test(text.slice(0, 60));
+        if (!ok || refused) {
+            playFall(window.innerWidth / 2, window.innerHeight * 0.25);
+            if (typeof showToast === 'function') showToast(refused ? 'Madeline 拒绝了这次生成…' : '生成被拒绝，等下再试试', 'error');
+            return;
+        }
+
+        const lines = text.split('\n');
+        if (!title && lines[0] && lines[0].startsWith('#')) {
+            titleEl.value = lines[0].replace(/^#+\s*/, '');
+            text = lines.slice(1).join('\n').replace(/^\s*\n/, '');
+        }
+
+        if (bodyEl.value && !bodyEl.value.endsWith('\n')) bodyEl.value += '\n\n';
+        startRun();
+        moveRunner(bodyEl);
+        const chars = [...text];
+        let ci = 0;
+        while (ci < chars.length) {
+            bodyEl.value += chars.slice(ci, ci + 3).join('');
+            ci += 3;
+            bodyEl.scrollTop = bodyEl.scrollHeight;
+            moveRunner(bodyEl);
+            if (typeof updateCount === 'function') updateCount();
+            await new Promise(r => setTimeout(r, 42));
+        }
+        stopRun();
+        decision.classList.add('show');
+    }
+
+    document.getElementById('gdAccept').addEventListener('click', () => {
+        decision.classList.remove('show');
+        if (typeof showToast === 'function') showToast('草稿已采纳！', 'success');
+    });
+    document.getElementById('gdReject').addEventListener('click', () => {
+        decision.classList.remove('show');
+        const bodyEl = document.getElementById('articleBody');
+        const p = caretXY(bodyEl);
+        bodyEl.value = genBefore;
+        if (typeof updateCount === 'function') updateCount();
+        playFall(p.x, p.y);
+        if (typeof showToast === 'function') showToast('已回退，Madeline 摔了一跤…', 'info');
+    });
+
+    const genBtn = document.getElementById('toolbarGenBtn');
+    if (genBtn) genBtn.addEventListener('click', doGenerate);
+})();
+</script>
+<script>
+    // BGM
+    const bgmPlayer = document.getElementById('bgmPlayer');
+    const savedTime = parseFloat(localStorage.getItem('bgmTime') || '0');
+    if (savedTime > 0) bgmPlayer.currentTime = savedTime;
+    bgmPlayer.volume = 0.25;
+    bgmPlayer.play().catch(() => {});
+    setInterval(() => { localStorage.setItem('bgmTime', bgmPlayer.currentTime); }, 2000);
+    function tryPlayBGM() { bgmPlayer.play().then(() => { document.removeEventListener('click', tryPlayBGM); document.removeEventListener('keydown', tryPlayBGM); }).catch(() => {}); }
+    document.addEventListener('click', tryPlayBGM);
+    document.addEventListener('keydown', tryPlayBGM);
+
+    document.getElementById('openMadelineBtn').addEventListener('click', function() {
+        if (typeof togglePanel === 'function') togglePanel();
+    });
+    document.getElementById('toolbarPolishBtn').addEventListener('click', function() {
+        if (typeof doPolish === 'function') doPolish();
+    });
+
+    if (!localStorage.getItem('token')) {
+        showToast('Please login first', 'error');
+        setTimeout(() => location.href = 'login.html', 800);
+    }
+    initHeader();
+    loadCategories();
+
+    function loadCategories() {
+        api('/categorys', 'GET').then(res => {
+            if (!res.success) return;
+            const sel = document.getElementById('categorySelect');
+            (res.data || []).forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = c.categoryName || c.name;
+                sel.appendChild(opt);
+            });
+        });
+    }
+
+    function insertMd(before, after) {
+        const ta = document.getElementById('articleBody');
+        const start = ta.selectionStart, end = ta.selectionEnd;
+        const selected = ta.value.substring(start, end);
+        const replacement = before + selected + after;
+        ta.value = ta.value.substring(0, start) + replacement + ta.value.substring(end);
+        ta.focus();
+        ta.selectionStart = start + before.length;
+        ta.selectionEnd = start + before.length + selected.length;
+        updateCount();
+    }
+
+    function updateCount() {
+        const len = document.getElementById('articleBody').value.length;
+        document.getElementById('charCount').textContent = `${len} chars`;
+        refreshImgPreview();
+    }
+
+    function refreshImgPreview() {
+        const bar = document.getElementById('imgPreviewBar');
+        if (!bar) return;
+        const txt = document.getElementById('articleBody').value;
+        const srcs = [];
+        const re = /<img[^ loading="lazy" decoding="async">]+src="([^"]+)"/g;
+        let m;
+        while ((m = re.exec(txt)) !== null) srcs.push(m[1]);
+        bar.innerHTML = srcs.map(s =>
+            '<img src="' + s + '" style="max-height:84px;max-width:140px;object-fit:contain;border-radius:6px;border:1px solid rgba(138,43,226,.35);background:rgba(30,27,75,.4);" loading="lazy" decoding="async">'
+        ).join('');
+    }
+
+    // edit mode: write.html?edit=articleId
+    const EDIT_ID = new URLSearchParams(location.search).get('edit');
+    if (EDIT_ID) {
+        api('/articles/article/view/' + EDIT_ID, 'POST').then(res => {
+            if (!res.success || !res.data) { showToast('文章不存在', 'error'); return; }
+            const a = res.data;
+            document.getElementById('articleTitle').value = a.title || '';
+            document.getElementById('articleBody').value = (a.body && a.body.content) || '';
+            document.getElementById('summaryInput').value = a.summary || '';
+            document.getElementById('tagsInput').value = (a.tags || []).map(t => t.tagName || t.name).join(',');
+            if (a.category && a.category.id) {
+                (function waitCat(id) {
+                    const sel = document.getElementById('categorySelect');
+                    if ([...sel.options].some(o => o.value === id)) { sel.value = id; }
+                    else { setTimeout(() => waitCat(id), 300); }
+                })(a.category.id);
+            }
+            document.getElementById('publishBtn').textContent = 'Save Changes';
+            updateCount();
+        });
+    }
+
+    function uploadImage(input) {
+        const file = input.files[0];
+        if (!file) return;
+        const fd = new FormData();
+        fd.append('image', file);
+        showToast('Uploading...', 'info');
+        fetch(BASE_URL + '/upload', {
+            method: 'POST',
+            headers: { 'Authorization': localStorage.getItem('token') || '' },
+            body: fd
+        }).then(r => r.json()).then(res => {
+            if (res.success && res.data) {
+                insertMd('<img src="' + BASE_URL + res.data + '" style="max-width:100%;border-radius:8px;margin:12px 0;" loading="lazy" decoding="async">\n', '');
+                showToast('Image added', 'success');
+            } else {
+                showToast(res.msg || 'Upload failed', 'error');
+            }
+        }).catch(() => showToast('Upload failed', 'error'))
+            .finally(() => { input.value = ''; });
+    }
+    function publishArticle() {
+        const title = document.getElementById('articleTitle').value.trim();
+        const body = document.getElementById('articleBody').value.trim();
+        const categoryId = document.getElementById('categorySelect').value;
+        const summary = document.getElementById('summaryInput').value.trim();
+        const tagsRaw = document.getElementById('tagsInput').value.trim();
+
+        if (!title) {
+            showToast('Please enter a title', 'error');
+            return;
+        }
+        if (!body) {
+            showToast('Please enter content', 'error');
+            return;
+        }
+
+        const tags = tagsRaw ? tagsRaw.split(',').map(t => ({ tagName: t.trim() })).filter(t => t.tagName) : [];
+        const payload = { title, summary, body: { content: body }, tags, };
+        if (categoryId) payload.category = { id: categoryId };
+        if (EDIT_ID) payload.id = EDIT_ID;
+
+        const btn = document.getElementById('publishBtn');
+        btn.disabled = true;
+        btn.textContent = EDIT_ID ? 'Save Changes' : 'Publishing...';
+
+        api(EDIT_ID ? '/articles/update' : '/articles/publish', 'POST', payload).then(res => {
+            btn.disabled = false;
+            btn.textContent = EDIT_ID ? 'Save Changes' : 'Publish';
+            if (res.success) {
+                showToast('Published!', 'success');
+                setTimeout(() => location.href = res.data?.id ? `article.html?id=${res.data.id}` : 'index.html', 1000);
+            } else {
+                showToast(res.msg || 'Publish failed', 'error');
+            }
+        });
+    }
+
+</script>
+</body> </html>

@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>我的空间 · Celeste Blog</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="icon/OIP.webp" type="image/webp">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<link rel="preload" href="celeste-font-en/Renogare-Regular.otf" as="font" type="font/otf" crossorigin>
+<link rel="preload" href="fonts/NotoSansCJKsc-Medium.otf" as="font" type="font/otf" crossorigin>
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+@font-face { font-family:'Renogare'; src:url('celeste-font-en/Renogare-Regular.otf') format('opentype'); font-display:swap; }
+@font-face { font-family:'CelesteZH'; src:url('fonts/NotoSansCJKsc-Medium.otf') format('opentype'); font-display:swap; }
+body { min-height:100vh; background:url('celeste-gui/me-bg.webp') center/cover no-repeat fixed; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; }
+.topbar { position:fixed; top:14px; left:16px; z-index:20; }
+.topbar a { display:inline-block; padding:8px 14px; background:rgba(22,34,60,.88); color:#ffe36d; border:2px solid #ffe36d; border-radius:6px; text-decoration:none; font-size:13px; }
+h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family:'Press Start 2P',monospace; font-size:15px; color:#ffe36d; text-shadow:0 2px 0 rgba(0,0,0,.6); letter-spacing:2px; z-index:20; }
+.wrap { max-width:680px; margin:0 auto; padding:190px 20px 40px; }
+.empty { color:rgba(255,255,255,.45); text-align:center; padding:20px; }
+
+/* ===== Celeste 存档卡 + 票根：同尺寸，票根在卡片下方，两侧圆弧露出 ===== */
+.meCombo { position:relative; max-width:560px; margin:0 auto 24px; cursor:pointer; user-select:none; }
+.meCombo .meCard { position:relative; z-index:2; transition:transform .4s cubic-bezier(.2,.85,.3,1.15); }
+.meCombo .meCard img.cardBase, .meCombo .meCard img.cardShine { display:block; width:100%; height:auto; }
+.meCombo .meCard img.cardShine { position:absolute; left:0; top:0; opacity:0; pointer-events:none; }
+.cePortraitWrap { position:absolute; left:4%; top:50%; transform:translateY(-50%); width:33%; aspect-ratio:1/1; z-index:1; }
+.ceAvatar { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:70%; height:70%; object-fit:cover; image-rendering:pixelated; }
+.cePortrait { position:absolute; left:0; top:0; width:100%; height:100%; image-rendering:pixelated; pointer-events:none; }
+.ceStamps { position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; z-index:2; }
+.ceStamps img { position:absolute; left:0; top:0; width:100%; height:100%; }
+.ceTicketInfo { position:absolute; left:10%; top:25%; width:80%; z-index:3; text-align:center; }
+.ceTicketName { font-family:'Renogare','CelesteZH',sans-serif; font-size:26px; color:#35312a; margin-bottom:6px; letter-spacing:1px; }
+.ceTicketBerry { display:flex; align-items:center; justify-content:center; gap:6px; }
+.ceTicketBerry img { width:24px; height:24px; image-rendering:pixelated; }
+.ceCassetteWrap { position:relative; display:inline-block; width:24px; height:24px; }
+.ceCassetteWrap img { width:24px; height:24px; image-rendering:pixelated; }
+.ceCassetteOutline { position:absolute; left:0; top:0; }
+.ceTicketBerry span { font-family:'renogare',monospace; font-size:22px; color:#35312a; }
+.meCombo:hover .meCard, .meCombo.open .meCard { transform:translateX(-50%); }
+.meCombo .meTicket { position:absolute; left:50%; top:0; transform:translateX(-50%); width:110%; z-index:1; transition:transform .4s cubic-bezier(.2,.85,.3,1.15); }
+.meCombo .meTicket img.ticketBase, .meCombo .meTicket img.ticketShine { display:block; width:100%; height:auto; }
+.meCombo .meTicket img.ticketShine { position:absolute; left:0; top:0; opacity:0; pointer-events:none; }
+.meCombo:hover .meTicket, .meCombo.open .meTicket { transform:translateX(-50%) translateX(50%); }
+.cePoemPage { position:relative; max-width:520px; margin:0 auto 24px; text-align:center; cursor:pointer; }
+.cePoemPage img { display:block; width:100%; height:auto; }
+.cePoemPage span { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-size:15px; color:#35312a; max-width:75%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cePoemPage input { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-size:15px; color:#35312a; background:transparent; border:none; border-bottom:1px dashed rgba(53,49,42,.4); text-align:center; width:75%; outline:none; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; }
+
+</style>
+</head>
+<body>
+<audio id="meBgm" loop autoplay>
+    <source src="bgm/madeline-and-theo.mp3" type="audio/mpeg">
+</audio>
+<h1>MY SPACE</h1>
+<div class="topbar"><a href="index.html">← 回首页</a></div>
+
+<div class="wrap">
+
+    <!-- Celeste 存档卡 + 收集品票根 -->
+    <div class="meCombo" id="meCombo">
+        <div class="meCard" id="meCard">
+            <img class="cardBase" src="namespace/card.png" alt="" loading="lazy" decoding="async">
+            <div class="cePortraitWrap">
+                <img class="ceAvatar" id="ceAvatar" src="celeste-gui/user-avatar.webp" alt="" loading="lazy" decoding="async">
+                <img class="cePortrait" id="cePortrait" src="" alt="" loading="lazy" decoding="async">
+            </div>
+            <div class="ceStamps" id="cardStamps"></div>
+            <img class="cardShine" id="cardShine" src="" alt="" loading="lazy" decoding="async">
+        </div>
+        <div class="meTicket" id="meTicket">
+            <img class="ticketBase" src="namespace/ticket.png" alt="" loading="lazy" decoding="async">
+            <div class="ceTicketInfo">
+                <div class="ceTicketName" id="ticketName">--</div>
+                <div class="ceTicketBerry">
+                    <img src="celeste-collectables/strawberry.png" alt="" loading="lazy" decoding="async">
+                    <span id="ticketBerryCount">× 0</span>
+                    <span class="ceCassetteWrap" style="margin-left:10px;">
+                        <img src="namespace/cassette_outline.png" alt="" loading="lazy" decoding="async">
+                        <img src="namespace/cassette.png" class="ceCassetteOutline" alt="" loading="lazy" decoding="async">
+                    </span>
+                    <span id="ticketDiaryCount" style="margin-left:4px;">× 0</span>
+                    <img src="celeste-feather/feather0.png" alt="" style="width:24px; height:24px; image-rendering:pixelated; margin-left:10px;" loading="lazy" decoding="async">
+                    <span id="ticketFeatherCount" style="margin-left:4px;">× 0</span>
+                </div>
+            </div>
+            <img class="ticketShine" id="ticketShine" src="" alt="" loading="lazy" decoding="async">
+        </div>
+    </div>
+
+    <div class="cePoemPage" id="cePoemPage">
+        <img src="namespace/poempage.png" alt="" loading="lazy" decoding="async">
+        <span id="ticketSig">点击编辑个性签名</span>
+    </div>
+
+</div>
+
+<script src="js/api.js"></script>
+<script>
+    // 字体就绪后强制刷新，让 input 立即切到 Renogare（不需要点击）
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function() {
+            document.body.style.visibility = 'hidden';
+            void document.body.offsetHeight;
+            document.body.style.visibility = '';
+        });
+    }
+
+    const meBgm = document.getElementById('meBgm');
+    const meBgmTime = parseFloat(localStorage.getItem('bgmTimeMe') || '0');
+    if (meBgmTime > 0) meBgm.currentTime = meBgmTime;
+    meBgm.volume = 0.25;
+    meBgm.play().catch(() => {});
+    setInterval(() => { localStorage.setItem('bgmTimeMe', meBgm.currentTime); }, 2000);
+    function tryPlayMeBgm() { meBgm.play().then(() => { document.removeEventListener('click', tryPlayMeBgm); document.removeEventListener('keydown', tryPlayMeBgm); }).catch(() => {}); }
+    document.addEventListener('click', tryPlayMeBgm);
+    document.addEventListener('keydown', tryPlayMeBgm);
+
+    const diaries = parseInt(localStorage.getItem('diarySaveCount') || '0');
+
+    const tier = diaries >= 100 ? 3 : diaries >= 60 ? 2 : diaries >= 30 ? 1 : 0;
+
+    // 头像：日记<10 普通，≥10 金色
+    const portraitSrc = diaries >= 10
+        ? 'namespace/portraitOverlayGold.png'
+        : 'namespace/portraitOverlay.png';
+    document.getElementById('cePortrait').src = portraitSrc;
+    document.getElementById('cePortrait').onerror = function() { this.style.display = 'none'; };
+
+    // 用户头像
+    api('/users/currentUser', 'GET').then(res => {
+        if (res.success && res.data && res.data.avatar) {
+            const avatarUrl = res.data.avatar.startsWith('http')
+                ? res.data.avatar
+                : BASE_URL + res.data.avatar;
+            const img = new Image();
+            img.onload = function() {
+                document.getElementById('ceAvatar').src = avatarUrl;
+            };
+            img.onerror = function() {
+                console.log('头像加载失败，使用默认头像');
+            };
+            img.src = avatarUrl;
+        }
+        if (res.success && res.data) {
+            document.getElementById('ticketName').textContent = res.data.nickname || res.data.account || '未命名';
+        }
+    });
+
+    // 个性签名：点击编辑，localStorage 存储
+    const sigEl = document.getElementById('ticketSig');
+    const savedSig = localStorage.getItem('meSignature');
+    if (savedSig) sigEl.textContent = savedSig;
+    document.getElementById('cePoemPage').addEventListener('click', function() {
+        const current = sigEl.textContent === '点击编辑个性签名' ? '' : sigEl.textContent;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = current;
+        input.placeholder = '输入个性签名...';
+        input.maxLength = 30;
+        sigEl.replaceWith(input);
+        input.focus();
+        input.select();
+        function save() {
+            const val = input.value.trim();
+            const span = document.createElement('span');
+            span.id = 'ticketSig';
+            span.textContent = val || '点击编辑个性签名';
+            input.replaceWith(span);
+            if (val) localStorage.setItem('meSignature', val);
+        }
+        input.addEventListener('blur', save);
+        input.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); save(); } });
+    });
+
+    document.getElementById('ticketBerryCount').textContent = '× ' + berryBalance();
+    document.getElementById('ticketDiaryCount').textContent = '× ' + diaries;
+
+    // 羽毛数：后端实时拉取
+    api('/feather/count', 'GET').then(res => {
+        console.log('羽毛返回', res);
+        if (res.success && res.data != null) {
+            // 重点：从对象里面取出数字属性，比如 .count
+            document.getElementById('ticketFeatherCount').textContent = '× ' + res.data.count;
+        }
+    });
+    // 图案铺满卡片
+    const CARD_STAMPS = ['farewell', 'flag', 'goldberry', 'goldheart', 'heart', 'cassettes'];
+    (function renderCardStamps() {
+        const box = document.getElementById('cardStamps');
+        const n = Math.min(diaries, CARD_STAMPS.length);
+        for (let i = 0; i < n; i++) {
+            const im = document.createElement('img');
+            im.src = 'celeste-journal/' + CARD_STAMPS[i] + '.png';
+            im.alt = CARD_STAMPS[i];
+            box.appendChild(im);
+        }
+    })();
+
+    // 周期性 shine 特效（日记≥10 时触发）
+    if (diaries >= 10) {
+        function createShine(elId, prefix) {
+            const el = document.getElementById(elId);
+            const frames = [];
+            for (let i = 0; i <= 5; i++) frames.push('namespace/' + prefix + '00' + i + '.png');
+            frames.forEach(s => { const im = new Image(); im.src = s; });
+            let timer = null;
+            return function () {
+                let i = 0;
+                el.src = frames[0];
+                el.style.opacity = '1';
+                clearInterval(timer);
+                timer = setInterval(() => {
+                    i++;
+                    if (i >= frames.length) {
+                        clearInterval(timer);
+                        timer = null;
+                        el.style.opacity = '0';
+                        return;
+                    }
+                    el.src = frames[i];
+                }, 90);
+            };
+        }
+        const playCardShine = createShine('cardShine', 'cardShine');
+        const playTicketShine = createShine('ticketShine', 'ticketShine');
+        function playShineLoop() {
+            playCardShine();
+            setTimeout(playTicketShine, 92);
+            setTimeout(playShineLoop, 2800);
+        }
+        playShineLoop();
+    }
+
+</script>
+</body>
+</html>

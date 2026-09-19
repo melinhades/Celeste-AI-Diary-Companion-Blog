@@ -1,0 +1,2527 @@
+(function() {
+    // ===== Celeste 日记本（红书封面 + 单页内页） =====
+    const BOOK_PAGES = [
+        { src: 'Atlases/Journal/cover.png', cover: true, fields: [] },
+        { src: 'Atlases/Journal/page.png', fields: [
+                { kind: 'line', id: 'titleInput', x: .12, y: .13, w: .76, h: .058, ph: '想去爬的那座山…' },
+                { kind: 'area', id: 'contentInput', x: .12, y: .225, w: .76, h: .56, ph: '从小步开始。今天发生了什么…' } ] },
+        { src: 'Atlases/Journal/page.png', fields: [
+                { kind: 'area', x: .12, y: .13, w: .76, h: .26, ph: '把大目标拆成能做到的小步…' },
+                { kind: 'area', x: .12, y: .44, w: .76, h: .18, ph: '想起来会笑的回忆…' },
+                { kind: 'grid', x: .12, y: .67, w: .76, h: .2, cols: 14, rows: 4 } ] },
+        { src: 'Atlases/Journal/page.png', fields: [
+                { kind: 'area', x: .12, y: .13, w: .76, h: .26, ph: '想对自己慢慢说的话…' },
+                { kind: 'area', x: .12, y: .44, w: .76, h: .18, ph: '想谢的人、想谢的小事、想谢的自己…' },
+                { kind: 'area', x: .12, y: .67, w: .76, h: .18, ph: '弄丢了，但没忘记…' } ] }
+    ];
+    const bookEl = document.getElementById('journalBook');
+    const dotsBox = document.getElementById('bookDots');
+    const pageEls = [];
+    let bookCur = 0, bookBusy = false;
+
+    BOOK_PAGES.forEach((p, pi) => {
+        const el = document.createElement('div');
+        el.className = 'book-page';
+        if (p.cover) { el.id = 'bookCover'; el.classList.add('book-cover'); }
+        const img = document.createElement('img');
+        img.src = p.src;
+        img.alt = '日记本第 ' + (pi + 1) + ' 页';
+        el.appendChild(img);
+        p.fields.forEach((f, fi) => {
+            const key = 'jbook-' + pi + '-' + fi;
+            const pos = node => {
+                node.style.left = (f.x * 100) + '%';
+                node.style.top = (f.y * 100) + '%';
+                node.style.width = (f.w * 100) + '%';
+                node.style.height = ((f.h || .04) * 100) + '%';
+            };
+            let node;
+            if (f.kind === 'area' || f.kind === 'line') {
+                node = document.createElement(f.kind === 'area' ? 'textarea' : 'input');
+                pos(node);
+                if (f.ph) node.placeholder = f.ph;
+                if (!f.id) {
+                    node.value = localStorage.getItem(key) || '';
+                    node.addEventListener('input', () => localStorage.setItem(key, node.value));
+                }
+            } else if (f.kind === 'grid') {
+                node = document.createElement('div');
+                node.className = 'gridzone';
+                pos(node);
+                node.style.gridTemplateColumns = 'repeat(' + f.cols + ',1fr)';
+                node.style.gridTemplateRows = 'repeat(' + f.rows + ',1fr)';
+                const saved = JSON.parse(localStorage.getItem(key) || '[]');
+                for (let i = 0; i < f.cols * f.rows; i++) {
+                    const cell = document.createElement('i');
+                    if (saved.includes(i)) cell.classList.add('on');
+                    cell.addEventListener('click', () => {
+                        cell.classList.toggle('on');
+                        const on = [...node.children].map((c, ci) => c.classList.contains('on') ? ci : -1).filter(v => v >= 0);
+                        localStorage.setItem(key, JSON.stringify(on));
+                    });
+                    node.appendChild(cell);
+                }
+            } else if (f.kind === 'cols') {
+                node = document.createElement('div');
+                node.style.cssText = 'position:absolute; display:flex; gap:1.5%;';
+                pos(node);
+                for (let i = 0; i < f.n; i++) {
+                    const inp = document.createElement('input');
+                    inp.style.cssText = 'flex:1; position:static; width:auto; height:100%; border:none; outline:none; background:transparent; font:inherit; color:rgba(64,58,66,.92); caret-color:#e6517c;';
+                    if (f.phs && f.phs[i]) inp.placeholder = f.phs[i];
+                    inp.value = localStorage.getItem(key + '-' + i) || '';
+                    inp.addEventListener('input', () => localStorage.setItem(key + '-' + i, inp.value));
+                    node.appendChild(inp);
+                }
+            }
+            if (f.id) node.id = f.id;
+            node.dataset.tk = key;
+            el.appendChild(node);
+        });
+        if (pi > 0) el.style.display = 'none';
+        bookEl.appendChild(el);
+        pageEls.push(el);
+        const d = document.createElement('span');
+        d.addEventListener('click', () => bookGoto(pi));
+        dotsBox.appendChild(d);
+    });
+    dotsBox.children[0].classList.add('on');
+    // ===== 日记图案：每写一篇日记多一个，7 个 Celeste 图标按固定顺序 =====
+    const JOURNAL_STAMPS = ['farewell', 'flag', 'goldberry', 'goldheart', 'heart', 'cassettes', 'assist'];
+    let renderCoverStamps = function () {};
+    const coverEl = document.getElementById('bookCover');
+    if (coverEl) {
+        // 日期写在 cover 上（Renogare，每天刷新）
+        const dateEl = document.createElement('div');
+        dateEl.className = 'cover-date';
+        const d = new Date();
+        const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        dateEl.textContent = MONTHS[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+        coverEl.appendChild(dateEl);
+
+        // 贴一张当天明信片：用户名位置照搬每日明信片（#postcard-to）
+        const pcEl = document.createElement('div');
+        pcEl.className = 'cover-postcard';
+        const pcImg = document.createElement('img');
+        pcImg.src = 'celeste-gui/postcard.webp';
+        pcImg.alt = 'postcard';
+        pcEl.appendChild(pcImg);
+
+        const pcTo = document.createElement('div');
+        pcTo.className = 'cover-pc-to';
+        const pcName = document.createElement('span');
+        pcName.className = 'name';
+        pcName.textContent = localStorage.getItem('nickname') || 'Traveler';
+        pcTo.appendChild(pcName);
+        pcEl.appendChild(pcTo);
+
+        const pcMsg = document.createElement('div');
+        pcMsg.className = 'cover-pc-msg';
+        pcMsg.textContent = '…';
+        pcEl.appendChild(pcMsg);
+        coverEl.appendChild(pcEl);
+
+        getDailyPostcard().then(pc => {
+            pcName.textContent = pc.userName;
+            pcMsg.textContent = pc.message;
+        });
+        // 图案：已得数量 = diarySaveCount（最多 8 个），按 STAMP_LAYOUT 固定位置贴
+        const STAMP_LAYOUT = [
+            { size: 796, bottom: 49, left: 11, rot: -3 },
+            { size: 564, bottom: 74, left: 22, rot: -3 },
+            { size: 868, bottom: 26, left: 70, rot: 27 },
+            { size: 862, bottom: 22, left: 1, rot: 32 },
+            { size: 677, bottom: 69, left: 52, rot: 0 },
+            { size: 493, bottom: 18, left: 55, rot: -5 },
+            { size: 1000, bottom: 73, left: 21, rot: 0 }
+        ];
+        const stampsBox = document.createElement('div');
+        stampsBox.className = 'cover-stamps';
+        stampsBox.style.cssText = 'position:absolute;left:0;bottom:0;width:100%;height:100%;transform:none;display:block;pointer-events:none;z-index:3;';
+        coverEl.appendChild(stampsBox);
+        renderCoverStamps = function () {
+            const n = Math.min(parseInt(localStorage.getItem('diarySaveCount') || '0'), JOURNAL_STAMPS.length);
+            stampsBox.innerHTML = '';
+            for (let i = 0; i < n; i++) {
+                const c = STAMP_LAYOUT[i];
+                if (!c) continue;
+                const im = document.createElement('img');
+                im.src = 'celeste-journal/' + JOURNAL_STAMPS[i] + '.png';
+                im.alt = JOURNAL_STAMPS[i];
+                im.style.cssText = 'position:absolute;left:' + c.left + '%;bottom:' + c.bottom + '%;width:' + c.size + 'px;height:auto;display:block;transform:translateX(-50%) rotate(' + c.rot + 'deg);filter:drop-shadow(0 2px 3px rgba(60,15,5,.45));';
+                stampsBox.appendChild(im);
+            }
+        };
+        renderCoverStamps();
+        coverEl.addEventListener('click', () => {
+            if (bookCur === 0) { jpPlay('forward'); bookGoto(1); }
+        });
+    }
+    // 底部圆点旁的白色"下一页"箭头（游戏同款）
+    const dotNext = document.createElement('button');
+    dotNext.className = 'dot-next';
+    dotNext.title = '下一页';
+    const dotNextImg = document.createElement('img');
+    dotNextImg.src = 'Atlases/Journal/poemArrow.png';
+    dotNextImg.alt = '下一页';
+    dotNext.appendChild(dotNextImg);
+    dotNext.addEventListener('click', () => { jpPlay('forward'); bookGoto((bookCur + 1) % pageEls.length); });
+    dotsBox.appendChild(dotNext);
+    // ===== 书本尺寸：高度占满屏幕大半，紧挨左侧 =====
+    const fitImg = pageEls[0] && pageEls[0].querySelector('img');
+    function fitBook() {
+        if (!fitImg || !fitImg.naturalWidth) return;
+        const h = (window.innerHeight - 60) * 0.88;
+        const w = Math.min(window.innerWidth * 0.86, h * fitImg.naturalWidth / fitImg.naturalHeight);
+        bookEl.style.width = w + 'px';
+    }
+    if (fitImg) {
+        if (fitImg.complete) fitBook();
+        else fitImg.addEventListener('load', fitBook);
+        window.addEventListener('resize', fitBook);
+    }
+    // ===== 日记本翻页（Renogare，支持动画） =====
+    function bookGoto(idx) {
+        if (bookBusy || idx === bookCur || idx < 0 || idx >= pageEls.length) return;
+        const dir = idx > bookCur ? 1 : -1;
+        bookBusy = true;
+        const oldEl = pageEls[bookCur], newEl = pageEls[idx];
+        bookCur = idx;
+        [...dotsBox.children].forEach((d, i) => d.classList.toggle('on', i === idx));
+
+        newEl.style.display = '';
+        newEl.style.position = 'absolute';
+        newEl.style.top = '0'; newEl.style.left = '0'; newEl.style.width = '100%';
+        newEl.style.zIndex = 2;
+        newEl.style.opacity = '0';
+        newEl.style.transform = dir > 0 ? 'translateX(8%) scale(.96) rotateY(-7deg)' : 'translateX(-8%) scale(.96) rotateY(7deg)';
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+            newEl.style.opacity = '1';
+            newEl.style.transform = 'none';
+            oldEl.style.opacity = '0';
+            oldEl.style.transform = dir > 0 ? 'translateX(-8%) scale(.96) rotateY(7deg)' : 'translateX(8%) scale(.96) rotateY(-7deg)';
+        }));
+        setTimeout(() => {
+            oldEl.style.display = 'none';
+            oldEl.style.position = ''; oldEl.style.opacity = '';
+            oldEl.style.transform = ''; oldEl.style.zIndex = '';
+            newEl.style.position = ''; newEl.style.zIndex = '';
+            bookBusy = false;
+        }, 580);
+    }
+
+    // 侧面箭头已移除，翻页只靠底部圆点 + 底部白箭头
+    const bookPrevBtn = document.getElementById('bookPrev');
+    const bookNextBtn = document.getElementById('bookNext');
+    if (bookPrevBtn) bookPrevBtn.addEventListener('click', () => { jpPlay('back'); bookGoto((bookCur - 1 + pageEls.length) % pageEls.length); });
+    if (bookNextBtn) bookNextBtn.addEventListener('click', () => { jpPlay('forward'); bookGoto((bookCur + 1) % pageEls.length); });
+    const avatarMap = {
+        '默认': 'celeste-portraits/madeline/normal00.png',
+        '不安': 'celeste-portraits/madeline/panic00.png',
+        '惊讶': 'celeste-portraits/madeline/surprised00.png',
+        '怨恨': 'celeste-portraits/madeline/angry00.png',
+        '不开心': 'celeste-portraits/madeline/sad00.png',
+        '可爱': 'celeste-portraits/madeline/peaceful00.png',
+        '无语': 'celeste-portraits/madeline/deadpan00.png'
+    };
+    const PORTRAIT_FRAMES = { normal: 7, panic: 5, surprised: 7, angry: 7, sad: 7, peaceful: 4, deadpan: 9 };
+    let portraitAnimTimer = null;
+    function startPortraitAnim(emotion) {
+        clearInterval(portraitAnimTimer);
+        const src = avatarMap[emotion] || avatarMap['默认'];
+        const stem = src.split('/').pop().replace(/00\.png$/, '');
+        const n = PORTRAIT_FRAMES[stem] || 1;
+        if (n <= 1) { gameDialogPortraitImg.src = src; return; }
+        let fi = 0;
+        gameDialogPortraitImg.src = 'Atlases/Portraits/madeline/' + stem + '00.png';
+        portraitAnimTimer = setInterval(() => {
+            fi = (fi + 1) % n;
+            gameDialogPortraitImg.src = 'Atlases/Portraits/madeline/' + stem + String(fi).padStart(2, '0') + '.png';
+        }, 120);
+    }
+    function stopPortraitAnim() { clearInterval(portraitAnimTimer); portraitAnimTimer = null; }
+    const emotionBgMap = {
+        '默认': 'celeste-areas/bg_default.webp',
+        '平静': 'celeste-areas/bg_calm.webp',
+        '开心': 'celeste-areas/bg_happy.webp',
+        '悲伤': 'celeste-areas/bg_sad.webp',
+        '愤怒': 'celeste-areas/bg_angry.webp',
+        '惊讶': 'celeste-areas/bg_surprised.webp',
+        '孤独': 'celeste-areas/bg_lonely.webp',
+        '满足': 'celeste-areas/bg_content.webp',
+        '希望': 'celeste-areas/bg_hopeful.webp'
+    };
+    // ===== v2 情绪 → 场景主题映射 =====
+    const emotionSceneMap = {
+        '默认': '默认',
+        '不安': '孤独',
+        '惊讶': '惊讶',
+        '怨恨': '愤怒',
+        '不开心': '悲伤',
+        '可爱': '开心',
+        '无语': '平静'
+    };
+    // 暖色场景：原图已经够暖，不叠场景图
+    const warmScenes = ['默认', '开心', '满足', '希望'];
+    const sceneClassMap = {
+        '默认': 'default',
+        '平静': 'calm',
+        '开心': 'happy',
+        '悲伤': 'sad',
+        '愤怒': 'angry',
+        '惊讶': 'surprised',
+        '孤独': 'lonely',
+        '满足': 'content',
+        '希望': 'hopeful'
+    };
+
+    function updateThemeByEmotion(emotion) {
+        const scene = emotionSceneMap[emotion] || emotion || '默认';
+        document.body.className = 'emotion-' + (sceneClassMap[scene] || 'default');
+        setAvatar(emotion);
+        if (warmScenes.includes(scene)) {
+            emotionBg.classList.remove('show');
+            return;
+        }
+        const bgSrc = emotionBgMap[scene] || emotionBgMap['默认'];
+        emotionBg.style.backgroundImage = `url('${bgSrc}')`;
+        emotionBg.classList.add('show');
+    }
+    // ===== DOM 引用 =====
+    const wrapper = document.getElementById('madeline-wrapper');
+    const floatButton = document.getElementById('madeline-float-button');
+    const chatDialog = document.getElementById('madeline-chat-dialog');
+    const chatMessages = document.getElementById('chatMessages');
+    const chatInput = document.getElementById('chatInput');
+    const chatSendBtn = document.getElementById('chatSendBtn');
+    const closeChatBtn = document.getElementById('closeChatBtn');
+    const quickInputBox = document.getElementById('quickInputBox');
+    const quickInput = document.getElementById('quickInput');
+    const emotionBg = document.getElementById('emotion-bg');
+    const titleInput = document.getElementById('titleInput');
+    const contentInput = document.getElementById('contentInput');
+    const saveBtn = document.getElementById('saveBtn');
+    const floatAvatar = document.getElementById('floatAvatar');
+    const chatAvatar = document.getElementById('chatAvatar');
+
+    let currentEmotion = '默认';
+    let chatOpen = false;
+    let isTyping = false;
+    let companionTimer = null;
+
+    function setAvatar(emotion) {
+        const src = avatarMap[emotion] || avatarMap['默认'];
+        floatAvatar.src = src;
+        chatAvatar.src = src;
+        currentEmotion = emotion;
+        localStorage.setItem('lastEmotion', emotion);
+    }
+
+    function splitSpeak(text) {
+        const parts = String(text || '').split(/(?<=[。！？!?…\n])/).map(s => s.trim()).filter(Boolean);
+        const merged = [];
+        for (const p of parts) {
+            const last = merged[merged.length - 1];
+            if (last !== undefined && last.length < 12 && last.length + p.length <= 26) merged[merged.length - 1] = last + p;
+            else merged.push(p);
+        }
+        const out = [];
+        for (const s of merged) {
+            if (s.length <= 42) { out.push(s); continue; }
+            let buf = '';
+            for (const piece of s.split(/(?<=[，,；;：:])/)) {
+                if ((buf + piece).length > 42 && buf) { out.push(buf); buf = piece; }
+                else buf += piece;
+            }
+            if (buf) out.push(buf);
+        }
+        return out.length ? out : [String(text)];
+    }
+
+    function splitIntoMessages(text) {
+        const parts = String(text || '').split(/(?<=[。！？!?…\n])/).map(s => s.trim()).filter(Boolean);
+        const msgs = [];
+        let buf = '';
+        for (const p of parts) {
+            buf += p;
+            if (buf.length >= 45) { msgs.push(buf); buf = ''; }
+        }
+        if (buf) msgs.push(buf);
+        return msgs.length ? msgs : [String(text)];
+    }
+
+    function newMadelineRow(emotion) {
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.alignItems = 'flex-start';
+        row.className = 'msg-row madeline-row';
+        const avWrap = document.createElement('div');
+        avWrap.className = 'msg-avatar-wrap';
+        const avImg = document.createElement('img');
+        avImg.src = avatarMap[emotion] || avatarMap['默认'];
+        avWrap.appendChild(avImg);
+        const bubble = document.createElement('div');
+        bubble.className = 'msg-bubble';
+        row.appendChild(avWrap);
+        row.appendChild(bubble);
+        chatMessages.appendChild(row);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        return { bubble, avImg };
+    }
+    // 头部头像动画：历史记录框顶部「Madeline」一栏的头像帧循环，情绪随 currentEmotion 变化
+    let headerAvatarAnimTimer = null;
+    let headerAvatarEmo = null;
+    let headerAvatarFi = 0;
+    function startHeaderAvatarAnim() {
+        if (headerAvatarAnimTimer) return;
+        headerAvatarAnimTimer = setInterval(() => {
+            if (!chatOpen) return;
+            const emo = currentEmotion || '默认';
+            const src = avatarMap[emo] || avatarMap['默认'];
+            const stem = src.split('/').pop().replace(/00\.png$/, '');
+            const n = PORTRAIT_FRAMES[stem] || 1;
+            if (emo !== headerAvatarEmo) { headerAvatarEmo = emo; headerAvatarFi = 0; }
+            if (n <= 1) { chatAvatar.src = src; return; }
+            chatAvatar.src = 'Atlases/Portraits/madeline/' + stem + String(headerAvatarFi).padStart(2, '0') + '.png';
+            headerAvatarFi = (headerAvatarFi + 1) % n;
+        }, 120);
+    }
+    startHeaderAvatarAnim();
+    const gameDialog = document.getElementById('gameDialog');
+    const gameDialogPortraitImg = document.getElementById('gameDialogPortraitImg');
+    const gameDialogText = document.getElementById('gameDialogText');
+    let gameDialogHideTimer = null;
+    // 说话“世代号”：用户点关闭时 +1，正在逐字打字的循环据此立即中止，
+    // 避免“对话框已经关掉、她却在背后继续隐形说话”；她下次再说话时对话框会重新弹出
+    let gameDialogToken = 0;
+    // 文本框弹出/收起音效（Celeste 官方 madeline 文本框 in / out）
+    const GAME_DIALOG_SFX = {};
+    function playGameDialogSfx(which) {
+        try {
+            const name = 'textbox/ui_game_textbox_madeline_' + which + '.wav';
+            if (!GAME_DIALOG_SFX[name]) GAME_DIALOG_SFX[name] = new Audio('celeste-sounds/' + name);
+            const a = GAME_DIALOG_SFX[name];
+            a.currentTime = 0;
+            a.volume = 0.55;
+            a.play().catch(() => {});
+        } catch (e) { /* 无声降级 */ }
+    }
+
+    function openGameDialog(emotion) {
+        if (!gameDialog.classList.contains('show')) playGameDialogSfx('in');
+        startPortraitAnim(emotion);
+        const pmCenter = pmState.x + pm.offsetWidth / 2;
+        const onRight = pmCenter > window.innerWidth / 2;
+
+        gameDialogPortraitImg.parentElement.style.transform = onRight ? 'scaleX(-1)' : '';
+        // 只在“真正从隐藏→显示”那一刻播放弹出音，避免连续说话时重复响
+
+        gameDialog.classList.add('show');
+    }
+    // 统一收口：真正从“显示→隐藏”时才播放收起音效
+    function closeGameDialog() {
+        clearTimeout(gameDialogHideTimer);
+        stopPortraitAnim();
+        if (gameDialog.classList.contains('show')) playGameDialogSfx('out');
+        gameDialog.classList.remove('show');
+    }
+    function scheduleGameDialogHide() {
+        clearTimeout(gameDialogHideTimer);
+        gameDialogHideTimer = setTimeout(() => { closeGameDialog(); }, 6000);
+    }
+    gameDialog.addEventListener('click', () => {
+        // 强行关闭：作废当前这段说话（打字循环会立刻停下），下次她再说话时对话框会重新弹出
+        gameDialogToken++;
+        closeGameDialog();
+    });
+    let msgQueue = Promise.resolve();
+    function addMadelineMessage(text, emotion, forceGameDialog) {
+        msgQueue = msgQueue.then(() => doAddMadelineMessage(text, emotion, forceGameDialog)).catch(e => console.warn('说话失败:', e));
+        return msgQueue; // 返回队列 Promise，便于调用方 await「说完」后再做后续（如淡入金羽毛）
+    }
+    window.addMadelineMessage = addMadelineMessage;
+    // 供金羽毛过渡工具调用：立即收起日记页 Madeline 对话框（说完建议、停顿后再淡入游戏）
+    window.hideGameDialog = function() {
+        gameDialogToken++;
+        closeGameDialog();
+    };
+    let lastUserInputTime = 0;
+    async function waitUserPause(maxWait) {
+        const start = Date.now();
+        while (lastUserInputTime && Date.now() - lastUserInputTime < 700 && Date.now() - start < (maxWait || 6000)) {
+            await sleep(200);
+        }
+    }
+    async function doAddMadelineMessage(text, emotion, forceGameDialog) {
+        text = String(text || '').replace(/[（(][^（）()]*[）)]/g, '').trim();
+        if (!text) return;
+        await waitUserPause(6000);
+        const messages = splitIntoMessages(text);
+        const useGameDialog = forceGameDialog || !chatOpen;
+        // 认领本次说话的世代号：用户中途点关闭会让 gameDialogToken 改变，据此立刻停下，不再隐形说话
+        const myToken = gameDialogToken;
+        if (useGameDialog) {
+            clearTimeout(gameDialogHideTimer);
+            openGameDialog(emotion);
+        }
+        let lastMsgEmotion = emotion || '默认';
+        for (const msg of messages) {
+            if (useGameDialog && myToken !== gameDialogToken) return; // 已被用户关闭，放弃后面还没说的话
+            const { bubble: histBubble } = newMadelineRow(emotion);
+            histBubble.textContent = msg;
+            let sentenceBuf = '';
+            const aiLocked = !!(emotion && emotion !== '默认');
+            let voiceEmotion = aiLocked ? emotion : inferReplyEmotion(msg);
+            if (useGameDialog) {
+                gameDialogText.textContent = '';
+                let speakCount = 0;
+                for (const ch of msg) {
+                    if (myToken !== gameDialogToken) return; // 用户中途关闭：立刻停下，不再隐形说话
+                    gameDialogText.textContent += ch;
+                    if (/[。！？!?]/.test(ch)) {
+                        const inferred = inferSentenceEmotion(sentenceBuf);
+                        voiceEmotion = (inferred !== '默认') ? inferred : nextDefaultVoice();
+                        sentenceBuf = '';
+                    } else if (!/[\s…，,、；;：:（）()*]/.test(ch)) {
+                        sentenceBuf += ch;
+                        speakCount++;
+                        if (speakCount % 3 === 1) playSpeakSound(voiceEmotion);
+                    }
+                    await sleep(45 + Math.random() * 20);
+                }
+                if (messages.length > 1) await sleep(1000 + Math.random() * 600);
+            } else {
+                histBubble.textContent = '';
+                let speakCount = 0, typeI = 0;
+                for (const ch of msg) {
+                    histBubble.textContent += ch;
+                    if (++typeI % 3 === 0) chatMessages.scrollTop = chatMessages.scrollHeight;
+                    if (/[。！？!?]/.test(ch)) {
+                        if (!aiLocked) {
+                            const inferred = inferSentenceEmotion(sentenceBuf);
+                            voiceEmotion = (inferred !== '默认') ? inferred : nextDefaultVoice();
+                        }
+                        sentenceBuf = '';
+                    } else if (!/[\s…，,、；;：:（）()*]/.test(ch)) {
+                        sentenceBuf += ch;
+                        speakCount++;
+                        if (speakCount % 3 === 1) playSpeakSound(voiceEmotion);
+                    }
+                    await sleep(45 + Math.random() * 20);
+                }
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                if (messages.length > 1) await sleep(240 + Math.random() * 200);
+            }
+            lastMsgEmotion = voiceEmotion;
+        }
+        pmReactToEmotion(lastMsgEmotion);
+        if (useGameDialog && myToken === gameDialogToken) {
+            stopPortraitAnim();
+            scheduleGameDialogHide();
+        }
+    }
+// ... existing code ...
+    function addUserMessage(text) {
+        const row = document.createElement('div');
+        row.className = 'msg-row user-row';
+        const bubble = document.createElement('div');
+        bubble.className = 'msg-bubble';
+        bubble.textContent = text;
+        row.appendChild(bubble);
+        chatMessages.appendChild(row);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    // ===== 快速输入框发送 =====
+    async function sendQuickMessage() {
+        const text = quickInput.value.trim();
+        if (!text) return;
+        quickInput.value = '';
+        addUserMessage(text);
+        chatOpen = true;
+        chatDialog.classList.add('show');
+        quickInputBox.style.display = 'none';
+        chatInput.focus();
+
+        // ... existing code ...
+        try {
+            const res = await api('/chat', 'POST', { content: text });
+            if (res.success && res.data) {
+                addMadelineMessage(res.data.content || '...', res.data.emotion || '默认', true);
+                // AI 主动发起金羽毛：不 await、不入说话队列——工具类会把建议台词排在
+                // 当前回复之后（说完才淡入游戏），对正在进行的对话零打断
+                if (res.data.feather && window.featherTrigger) {
+                    window.featherTrigger.requestFromAI(res.data.emotion || '不安');
+                }
+            } else {
+                addMadelineMessage('Hmm... I didn\'t catch that. Say it again?', '默认', true);
+            }
+        } catch (e) {
+            addMadelineMessage('Network issue... try again?', '默认', true);
+        }
+    }
+
+    quickInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendQuickMessage(); });
+
+    function showQuickInput(show) {
+        if (show) {
+            quickInputBox.style.display = 'flex';
+            quickInputBox.classList.remove('bubble-active');
+        } else {
+            quickInputBox.classList.add('bubble-active');
+        }
+    }
+
+    let nightCareSaid = false;
+
+    // ===== 聊天发送 =====
+    async function sendChatMessage() {
+        const text = chatInput.value.trim();
+        if (!text || isTyping) return;
+        chatInput.value = '';
+        addUserMessage(text);
+        if (nightCareSaid && /再写|再待|一会|再陪我|不困|不想睡|睡不着|还早/.test(text)) {
+            nightCareSaid = false;
+            addMadelineMessage('嗯，那我陪着你。不过写完这一段，真的要睡哦。', '可爱');
+            return;
+        }
+        isTyping = true;
+        chatSendBtn.disabled = true;
+
+        try {
+            const res = await api('/chat', 'POST', { content: text });
+            if (res.success && res.data) {
+                const reply = res.data.content || '...';
+                addMadelineMessage(reply, res.data.emotion || '默认');
+                // AI 主动发起金羽毛（见 sendQuickMessage 注释）：排队等当前回复说完
+                if (res.data.feather && window.featherTrigger) {
+                    window.featherTrigger.requestFromAI(res.data.emotion || '不安');
+                }
+            } else {
+                addMadelineMessage('Hmm... I didn\'t catch that. Say it again?', '默认');
+            }
+        } catch (e) {
+            addMadelineMessage('Network issue... try again?', '默认');
+        }
+        isTyping = false;
+        chatSendBtn.disabled = false;
+    }
+
+    chatSendBtn.addEventListener('click', sendChatMessage);
+    chatInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') sendChatMessage();
+    });
+
+    // ===== 聊天开关（统一入口） =====
+    function toggleChat(force) {
+        chatOpen = (force === undefined) ? !chatOpen : force;
+        chatDialog.classList.toggle('show', chatOpen);
+        if (chatOpen) {
+            quickInputBox.style.display = 'none';
+            chatInput.focus();
+        } else {
+            showQuickInput(true);
+        }
+    }
+    closeChatBtn.addEventListener('click', () => toggleChat(false));
+
+    // ===== 浮动按钮拖拽（点击切换 / 拖拽移动，互不干扰） =====
+    let isDragging = false;
+    let dragMoved = false;
+    let dragStartX, dragStartY;
+    let btnStartLeft, btnStartTop;
+    let wrapBtnDx = 0, wrapBtnDy = 0;
+
+    function clampBtnPos(x, y) {
+        return {
+            x: Math.max(4, Math.min(x, window.innerWidth - 60)),
+            y: Math.max(4, Math.min(y, window.innerHeight - 60))
+        };
+    }
+
+    function applyButtonPos(btnX, btnY) {
+        wrapper.style.position = 'fixed';
+        wrapper.style.left = (btnX - wrapBtnDx) + 'px';
+        wrapper.style.top = (btnY - wrapBtnDy) + 'px';
+        wrapper.style.right = 'auto';
+        wrapper.style.bottom = 'auto';
+    }
+
+    function resetButtonPos() {
+        wrapper.style.left = '';
+        wrapper.style.top = '';
+        wrapper.style.right = '12px';
+        wrapper.style.bottom = '12px';
+    }
+
+    floatButton.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        isDragging = true;
+        dragMoved = false;
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+        const btnRect = floatButton.getBoundingClientRect();
+        const wrapRect = wrapper.getBoundingClientRect();
+        btnStartLeft = btnRect.left;
+        btnStartTop = btnRect.top;
+        wrapBtnDx = btnRect.left - wrapRect.left;
+        wrapBtnDy = btnRect.top - wrapRect.top;
+        wrapper.classList.add('dragging');
+        floatButton.setPointerCapture(e.pointerId);
+    });
+
+    floatButton.addEventListener('pointermove', e => {
+        if (!isDragging) return;
+        const dx = e.clientX - dragStartX;
+        const dy = e.clientY - dragStartY;
+        if (!dragMoved && Math.sqrt(dx * dx + dy * dy) < 5) return;
+        dragMoved = true;
+        const pos = clampBtnPos(btnStartLeft + dx, btnStartTop + dy);
+        applyButtonPos(pos.x, pos.y);
+    });
+
+    floatButton.addEventListener('pointerup', () => {
+        if (!isDragging) return;
+        isDragging = false;
+        if (!dragMoved) {
+            wrapper.classList.remove('dragging');
+            toggleChat();
+        }
+    });
+
+    // 双击按钮 → 复位到右下角（防丢保险）
+    floatButton.addEventListener('dblclick', resetButtonPos);
+
+    // 窗口缩放后按钮若跑出可视区 → 自动回位
+    window.addEventListener('resize', () => {
+        const rect = floatButton.getBoundingClientRect();
+        if (rect.right < 0 || rect.bottom < 0 || rect.left > window.innerWidth || rect.top > window.innerHeight) {
+            resetButtonPos();
+        }
+    });
+
+    // ===== 雪花粒子系统 =====
+    const snowCanvas = document.getElementById('snowCanvas');
+    const snowCtx = snowCanvas.getContext('2d');
+    let snowflakes = [];
+    let snowAnimFrame = null;
+
+    function resizeSnowCanvas() {
+        snowCanvas.width = window.innerWidth;
+        snowCanvas.height = window.innerHeight;
+    }
+
+    function createSnowflake() {
+        return {
+            x: Math.random() * snowCanvas.width,
+            y: -10,
+            r: Math.random() * 3 + 1,
+            speed: Math.random() * 1.5 + 0.5,
+            wind: Math.random() * 0.5 - 0.25,
+            opacity: Math.random() * 0.6 + 0.2,
+            swing: Math.random() * Math.PI * 2,
+            swingSpeed: Math.random() * 0.02 + 0.01
+        };
+    }
+
+    function initSnowflakes() {
+        snowflakes = [];
+        for (let i = 0; i < 80; i++) {
+            const f = createSnowflake();
+            f.y = Math.random() * snowCanvas.height;
+            snowflakes.push(f);
+        }
+    }
+
+    function drawSnowflakes() {
+        snowCtx.clearRect(0, 0, snowCanvas.width, snowCanvas.height);
+        for (const f of snowflakes) {
+            f.y += f.speed;
+            f.swing += f.swingSpeed;
+            f.x += Math.sin(f.swing) * 0.5 + f.wind;
+            if (f.y > snowCanvas.height + 10) { f.y = -10; f.x = Math.random() * snowCanvas.width; }
+            if (f.x > snowCanvas.width + 10) f.x = -10;
+            if (f.x < -10) f.x = snowCanvas.width + 10;
+            snowCtx.beginPath();
+            snowCtx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+            snowCtx.fillStyle = `rgba(255,255,255,${f.opacity})`;
+            snowCtx.fill();
+        }
+        snowAnimFrame = requestAnimationFrame(drawSnowflakes);
+    }
+
+    function startSnow() { resizeSnowCanvas(); initSnowflakes(); drawSnowflakes(); }
+    function stopSnow() { if (snowAnimFrame) cancelAnimationFrame(snowAnimFrame); snowCtx.clearRect(0, 0, snowCanvas.width, snowCanvas.height); }
+
+    // ===== 明信片打字机 =====
+    async function typewritePostcard(el, text) {
+        el.textContent = '';
+        for (const ch of text) { el.textContent += ch; await sleep(60); }
+    }
+    // ===== 明信片音效：csides 对 = 发出（每日明信片） / variants 对 = keep（导出明信片） =====
+    const PC_SOUNDS = {};
+    function pcPlay(name) {
+        try {
+            if (!PC_SOUNDS[name]) PC_SOUNDS[name] = new Audio('celeste-sounds/' + name);
+            const a = PC_SOUNDS[name];
+            a.currentTime = 0;
+            a.volume = 0.9;
+            a.play().catch(() => {});
+        } catch (e) { /* 无声降级 */ }
+    }
+
+    // ===== 日记本翻页音效：forward = 向右 / back = 向左（官方素材，变体随机） =====
+    const JP_SFX = {
+        forward: ['ui_world_journal_page_cover_forward_01.wav', 'ui_world_journal_page_cover_forward_02.wav', 'ui_world_journal_page_cover_forward_03.wav'],
+        back: ['ui_world_journal_page_main_back_01.wav', 'ui_world_journal_page_main_back_02.wav', 'ui_world_journal_page_main_back_03.wav']
+    };
+    const JP_AUDIO = {};
+    function jpPlay(dir) {
+        try {
+            const list = JP_SFX[dir];
+            const name = list[Math.floor(Math.random() * list.length)];
+            if (!JP_AUDIO[name]) JP_AUDIO[name] = new Audio('celeste-sounds/' + name);
+            const a = JP_AUDIO[name];
+            a.currentTime = 0;
+            a.volume = 0.20;
+            a.play().catch(() => {});
+        } catch (e) { /* 无声降级 */ }
+    }
+
+// ===== 每日明信片：当天缓存，一天只有一张 =====
+    var dailyPostcardInFlight = null;
+    function capPostcardWords(text) {
+        const s = String(text || '').trim();
+        const words = s.split(/\s+/).filter(Boolean);
+        // 单词偏长（平均≥6字符）时收紧到 25 词，否则放宽到 30 词
+        const charCount = s.replace(/\s+/g, '').length;
+        const avgLen = words.length ? charCount / words.length : 0;
+        const limit = avgLen >= 6 ? 25 : 30;
+        if (words.length <= limit) return s;
+        return words.slice(0, limit).join(' ') + '…';
+    }
+    async function getDailyPostcard() {
+        const today = new Date().toDateString();
+        try {
+            const cached = JSON.parse(localStorage.getItem('dailyPostcardCache') || 'null');
+            if (cached && cached.date === today && cached.message) {
+                return { date: cached.date, userName: cached.userName, message: capPostcardWords(cached.message) };
+            }
+        } catch (e) {}
+        if (dailyPostcardInFlight) return dailyPostcardInFlight;
+        dailyPostcardInFlight = (async () => {
+            try {
+                const res = await api('/diary/daily-postcard', 'GET');
+                if (res && res.success && res.data && res.data.message) {
+                    const out = {
+                        date: today,
+                        userName: res.data.userName || localStorage.getItem('nickname') || 'Traveler',
+                        message: capPostcardWords(res.data.message)
+                    };
+                    localStorage.setItem('dailyPostcardCache', JSON.stringify(out));
+                    return out;
+                }
+            } catch (e) {}
+            return { date: today, userName: localStorage.getItem('nickname') || 'Traveler', message: 'A brand new day. Be gentle with yourself.' };
+        })();
+        return dailyPostcardInFlight;
+    }
+    // ===== 每日明信片主流程 =====
+    async function showDailyPostcard() {
+        const overlay = document.getElementById('postcard-overlay');
+        const container = document.getElementById('postcard-container');
+        const nameEl = document.getElementById('postcardName');
+        const msgEl = document.getElementById('postcard-message');
+        const closeBtn = document.getElementById('postcard-close');
+
+        overlay.classList.add('show');
+        pcPlay('ui_main_postcard_csides_in.wav');
+        startSnow();
+
+        const pc = await getDailyPostcard();
+        nameEl.textContent = pc.userName;
+        await sleep(800);
+        container.classList.add('slide-in');
+        await sleep(1200);
+        await typewritePostcard(msgEl, pc.message);
+        await sleep(500);
+        closeBtn.classList.add('show');
+
+        closeBtn.onclick = () => {
+            pcPlay('ui_main_postcard_csides_out.wav');
+            document.getElementById('bgmPlayer').play().catch(() => {});
+            overlay.style.opacity = '0';
+            overlay.style.transition = 'opacity 0.6s ease';
+            stopSnow();
+            setTimeout(() => {
+                overlay.classList.remove('show');
+                overlay.style.opacity = '';
+                overlay.style.transition = '';
+                container.classList.remove('slide-in');
+                closeBtn.classList.remove('show');
+            }, 600);
+            localStorage.setItem('postcardDate', new Date().toDateString());
+        };
+    }
+    // ================================================================
+    // ===== Madeline 主动冒泡系统 =====
+    // ================================================================
+    let bubbleTimer = null;
+    let isBubbling = false;
+    let bubbleEl = null;
+
+    ['pointerdown', 'keydown'].forEach(ev =>
+        window.addEventListener(ev, () => { window.__audioGestured = true; }, { once: true })
+    );
+
+
+    function playBubbleSound() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, ctx.currentTime);
+            osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.08);
+            osc.frequency.setValueAtTime(1320, ctx.currentTime + 0.15);
+            gain.gain.setValueAtTime(0.15, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.4);
+            setTimeout(() => ctx.close(), 500);
+        } catch (e) { /* 无声降级 */ }
+    }
+
+
+
+    const VOICE_DIRS = {
+        '默认': 'determined',
+        '不安': 'upset',
+        '惊讶': 'surprised',
+        '怨恨': 'angry',
+        '不开心': Math.random() < 0.5 ? 'sad' : 'sadder',
+        '可爱': 'determined',
+        '无语': 'deadpan',
+        '冒泡': 'distracted'
+    };
+    const VOICE_VARIANTS = ['mid_A', 'mid_B', 'mid_C', 'per'];
+
+    const VOICE_RATE = {
+        '默认': [0.92, 1.06],
+        '不安': [0.88, 1.0],
+        '惊讶': [1.0, 1.18],
+        '怨恨': [0.95, 1.12],
+        '不开心': [0.82, 0.94],
+        '可爱': [0.96, 1.1],
+        '无语': [0.85, 0.95],
+        '冒泡': [0.9, 1.05]
+    };
+    const VOICE_VOL = {
+        '默认': 0.75, '不安': 0.65, '惊讶': 0.85,
+        '怨恨': 0.85, '不开心': 0.55, '可爱': 0.8,
+        '无语': 0.6, '冒泡': 0.7
+    };
+
+    let speakSeq = 0;
+    const blipAudio = new Audio();
+    function playSpeakSound(emotion) {
+        if (!window.__audioGestured) return;
+        let voice = VOICE_DIRS[emotion] || VOICE_DIRS['冒泡'];
+        if (emotion === '不开心') voice = Math.random() < 0.5 ? 'sad' : 'sadder';
+        speakSeq++;
+        let variant;
+        if (speakSeq % 7 === 0) {
+            variant = 'per';
+        } else {
+            variant = VOICE_VARIANTS[speakSeq % 3];
+        }
+        const num = String(Math.floor(Math.random() * 10) + 1).padStart(2, '0');
+        const src = 'celeste-sounds/madeline/' + voice + '/' + variant + '/' + voice + '_' + variant + '_' + num + '.wav';
+        try {
+            const a = blipAudio;
+            a.src = src;
+            const rateRange = VOICE_RATE[emotion] || VOICE_RATE['默认'];
+            a.playbackRate = rateRange[0] + Math.random() * (rateRange[1] - rateRange[0]);
+            a.volume = (VOICE_VOL[emotion] || 0.75) + (Math.random() - 0.5) * 0.1;
+            a.currentTime = 0;
+            a.play().catch(() => {});
+        } catch (e) { /* 无声降级 */ }
+    }
+    window.playSpeakSound = playSpeakSound;
+// ===== 回复语气推理：从她说的话推断语气，逐句切换音色 =====
+const REPLY_JOY = ['哈哈','嘿嘿','哇','太棒','真好','开心','耶','嗯嗯','加油','你可以','我相信','没问题','好呀','一起'];
+const REPLY_SURPRISE = ['诶','哎','居然','竟然','没想到','真的吗','天哪','真的假的','原来'];
+const REPLY_SOOTHE = ['别怕','没事','深呼吸','慢慢来','我在','陪着你','别担心','放轻松','不着急'];
+const REPLY_SAD = ['抱抱','哭','难过','辛苦','不容易','委屈'];
+const REPLY_SPEECHLESS = ['唉','算了','服了','离谱','无言'];
+function inferSentenceEmotion(sentence) {
+    let best = '默认', bestScore = 0;
+    const check = (words, emo) => {
+        let s = 0;
+        for (const w of words) if (sentence.indexOf(w) !== -1) s++;
+        if (s > bestScore) { bestScore = s; best = emo; }
+    };
+    check(REPLY_JOY, '可爱');
+    check(REPLY_SURPRISE, '惊讶');
+    check(REPLY_SOOTHE, '不安');
+    check(REPLY_SAD, '不开心');
+    check(REPLY_SPEECHLESS, '无语');
+    if (bestScore >= 2) return best;  // 至少匹配 2 个关键词才切换情绪
+    return '默认';  // 单个感叹号不再触发"惊讶"
+}
+// "默认"占大多数，偶尔用"可爱"增加呼吸感，不再频繁切换
+const VOICE_POOL_DEFAULT = ['默认', '默认', '默认', '默认', '可爱'];
+function nextDefaultVoice() { return VOICE_POOL_DEFAULT[Math.floor(Math.random() * VOICE_POOL_DEFAULT.length)]; }
+function inferReplyEmotion(text) {
+    const t = String(text || '');
+    const a = analyzeLocalEmotion(t);
+    if (a.emotion !== '默认') return a.emotion;
+    return inferSentenceEmotion(t);
+}
+    function createBubbleElement() {
+        if (bubbleEl) bubbleEl.remove();
+        bubbleEl = document.createElement('div');
+        bubbleEl.id = 'madeline-bubble';
+        const av = document.createElement('div');
+        av.className = 'bubble-avatar';
+        const img = document.createElement('img');
+        img.src = avatarMap['默认'];
+        av.appendChild(img);
+        bubbleEl.appendChild(av);
+        document.body.appendChild(bubbleEl);
+    }
+
+    async function showBubble(text, emotion) {
+        if (isBubbling) return;
+        isBubbling = true;
+
+        createBubbleElement();
+        const em = emotion || '默认';
+        bubbleEl.querySelector('img').src = avatarMap[em] || avatarMap['默认'];
+
+        // 清空内容但保留 avatar
+        const avHtml = bubbleEl.querySelector('.bubble-avatar').outerHTML;
+        bubbleEl.innerHTML = '';
+        bubbleEl.innerHTML = avHtml;
+
+        quickInputBox.classList.add('bubble-active');
+        playBubbleSound();
+
+        bubbleEl.style.display = 'block';
+        await sleep(50);
+        bubbleEl.classList.add('show');
+
+        const textNode = document.createTextNode('');
+        bubbleEl.insertBefore(textNode, bubbleEl.firstChild);
+
+        for (const ch of text) {
+            textNode.textContent += ch;
+            await sleep(50 + Math.random() * 30);
+        }
+
+        await sleep(5000);
+
+        bubbleEl.classList.remove('show');
+        await sleep(500);
+        bubbleEl.remove();
+        bubbleEl = null;
+
+        if (!chatOpen) {
+            showQuickInput(true);
+        }
+        isBubbling = false;
+    }
+
+    async function proactiveBubble() {
+        if (chatOpen || companionState.isTyping || contentInput.value.trim()) {
+            scheduleNextBubble();
+            return;
+        }
+        try {
+            const res = await api('/diary/bubble', 'GET');
+            if (res.success && res.data && res.data.message) {
+                const msg = res.data.message.trim();
+                if (bubbleSaid.indexOf(msg) === -1) {
+                    bubbleSaid.push(msg);
+                    if (bubbleSaid.length > 8) bubbleSaid.shift();
+                    await addMadelineMessage(msg, res.data.emotion || '默认');
+                }
+            }
+        } catch (e) {
+            console.warn('主动对话失败:', e);
+        }
+        scheduleNextBubble();
+    }
+    const bubbleSaid = [];
+    function scheduleNextBubble() {
+        const delay = (150 + Math.random() * 120) * 1000;
+        bubbleTimer = setTimeout(proactiveBubble, delay);
+    }
+
+    // ================================================================
+    // ===== 实时日记伴侣引擎 v2 — Madeline 实时陪写系统 =====
+    // ================================================================
+
+    // ===== 配置常量 =====
+    const REALTIME_CONFIG = {
+        MIN_CHARS_FOR_AI: 8,
+        MIN_NEW_CHARS_FOR_AI: 30,
+        MIN_NEW_CHARS_FOR_QUICK: 18,
+        SENTENCE_ENDERS: ['。', '！', '？', '…', '...', '!', '?', '\n'],
+        EMOTION_WORDS: {
+            '不安': ['担心','焦虑','害怕','紧张','不安','忐忑','恐慌','患得患失','迷茫','彷徨','不知所措','心慌'],
+            '惊讶': ['惊讶','意外','震惊','吃惊','惊喜','诧异','惊愕','目瞪口呆','没想到','居然','竟然','万万没想到'],
+            '怨恨': ['怨恨','愤怒','生气','恨','憎恨','嫌弃','失望','郁闷','不公','凭什么','可恶','恼火'],
+            '不开心': ['悲伤','难过','痛苦','忧郁','沮丧','颓废','消极','不开心','哭','泪','崩溃','绝望','孤独','寂寞'],
+            '可爱': ['可爱','甜','暖心','感动','温馨','幸福','开心','快乐','棒','好极了','太棒了','感恩','满足'],
+            '无语': ['无语','哑然','沉默','冷场','尴尬','不知道说什么','呵呵','算了','无言','服了','离谱']
+        },
+        EMOTION_COLORS: {
+            '默认': '#A8E6CF', '不安': '#FF6B6B', '惊讶': '#7DCFFF',
+            '怨恨': '#FF4444', '不开心': '#9B59B6', '可爱': '#FF69B4', '无语': '#B0B0B0'
+        },
+        EMOTION_WEIGHTS: { '不安':1.2, '惊讶':1.0, '怨恨':1.3, '不开心':1.2, '可爱':1.0, '无语':0.8 },
+        COOLDOWN_AFTER_AI: 12000,
+        MAX_LOCAL_REACTIONS: 2,
+        LOCAL_REACT_COOLDOWN: 20000
+    };
+// ... existing code ...
+
+    const companionState = {
+        lastAnalyzedText: '',
+        lastAnalyzedLen: 0,
+        currentEmotion: '默认',
+        previousEmotion: '默认',
+        emotionHistory: [],
+        localReactionCount: 0,
+        lastAiTime: 0,
+        isAiPending: false,
+        isTyping: false,
+        typeTimer: null,
+        peakEmotion: null,
+        peakIntensity: 0,
+        lastLocalReactTime: 0,
+        lastReactionLine: ''
+    };
+    // ===== DOM 引用 =====
+    const peekingEl = document.getElementById('madeline-peeking');
+
+    // ===== 本地快速情绪分析（每次输入都触发） =====
+    function analyzeLocalEmotion(text) {
+        const scores = {};
+        let totalHits = 0;
+        for (const [emotion, keywords] of Object.entries(REALTIME_CONFIG.EMOTION_WORDS)) {
+            scores[emotion] = 0;
+            for (const kw of keywords) {
+                let idx = 0;
+                let count = 0;
+                while ((idx = text.indexOf(kw, idx)) !== -1) {
+                    count++;
+                    idx += kw.length;
+                }
+                if (count > 0) {
+                    const weight = REALTIME_CONFIG.EMOTION_WEIGHTS[emotion] || 1;
+                    scores[emotion] += count * weight;
+                    totalHits += count;
+                }
+            }
+        }
+        let maxEmotion = '默认';
+        let maxScore = 0;
+        for (const [emotion, score] of Object.entries(scores)) {
+            if (score > maxScore) {
+                maxScore = score;
+                maxEmotion = emotion;
+            }
+        }
+        const intensity = Math.min(10, Math.round((maxScore / Math.max(1, totalHits)) * 5 + maxScore));
+        const sorted = Object.entries(scores)
+            .filter(([, s]) => s > 0)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 3)
+            .map(([e]) => e);
+        return { emotion: maxEmotion, intensity, scores, topEmotions: sorted };
+    }
+
+
+    // ===== 检测新增的句子 =====
+    function getNewSentences(oldText, newText) {
+        if (newText.length <= oldText.length) return [];
+        const addedPart = newText.substring(oldText.length);
+        const sentences = [];
+        for (const ender of REALTIME_CONFIG.SENTENCE_ENDERS) {
+            let idx = addedPart.indexOf(ender);
+            if (idx !== -1) {
+                const ctxStart = Math.max(0, oldText.length - 20);
+                const sentenceText = newText.substring(ctxStart, oldText.length + idx + ender.length);
+                sentences.push(sentenceText.trim());
+            }
+        }
+        return sentences;
+    }
+
+    // ===== 显示 "Madeline 正在看..." =====
+    function showPeeking(show) {
+        if (show) {
+            peekingEl.classList.add('show');
+        } else {
+            peekingEl.classList.remove('show');
+        }
+    }
+
+    // ===== 本地快速反应（不等 AI，即时反馈） =====
+    function localReact(analysis, newText) {
+        if (companionState.localReactionCount >= REALTIME_CONFIG.MAX_LOCAL_REACTIONS) return;
+        if (Date.now() - companionState.lastLocalReactTime < REALTIME_CONFIG.LOCAL_REACT_COOLDOWN) return;
+        const prevEmotion = companionState.currentEmotion;
+        const newEmotion = analysis.emotion;
+
+        if (newEmotion !== prevEmotion && newEmotion !== '默认') {
+            const reactions = {
+                '不安': ['…怎么了？', '感觉到你有点不安…', '慢慢写，我在。'],
+                '惊讶': ['哦？发生了什么！', '然后呢？！', '哇…'],
+                '怨恨': ['…', '深呼吸…', '我听着呢。'],
+                '不开心': ['…我在。', '写出来会好一些。', '嗯，继续写。'],
+                '可爱': ['♥', '嗯嗯！', '看到你开心我也开心。'],
+                '无语': ['…嗯。', '有时候就是会这样。', '无语也没关系。']
+            };
+            const all = reactions[newEmotion] || ['…'];
+            const pool = all.filter(l => l !== companionState.lastReactionLine);
+            const reaction = pool[Math.floor(Math.random() * pool.length)];
+            companionState.localReactionCount++;
+            companionState.currentEmotion = newEmotion;
+            companionState.lastReactionLine = reaction;
+            companionState.lastLocalReactTime = Date.now();
+            updateThemeByEmotion(newEmotion);
+            if (isPositive(newEmotion)) pmBounce();
+            addMadelineMessage(reaction, newEmotion);
+        }
+
+        companionState.peakIntensity = Math.max(companionState.peakIntensity, analysis.intensity);
+    }
+// ===== 说话去重：同样的话、开头雷同的话不再重复 =====
+    const spokenLines = [];
+    function isRepeatedSpeech(line) {
+        const t = String(line || '').trim();
+        if (!t) return true;
+        if (spokenLines.indexOf(t) !== -1) return true;
+        if (t.length >= 12) {
+            const head = t.slice(0, 12);
+            for (const prev of spokenLines) {
+                if (prev.length >= 12 && (prev.indexOf(head) !== -1 || t.indexOf(prev.slice(0, 12)) !== -1)) return true;
+            }
+        }
+        return false;
+    }
+    function rememberSpeech(line) {
+        spokenLines.push(String(line).trim());
+        if (spokenLines.length > 8) spokenLines.shift();
+    }
+    // ===== 触发 AI 分析 =====
+    async function triggerAiAnalysis(text, triggerType) {
+        if (companionState.isAiPending) return;
+        companionState.isAiPending = true;
+        companionState.lastAnalyzedText = text;
+        companionState.lastAnalyzedLen = text.length;
+        showPeeking(true);
+
+        try {
+            const res = await api('/diary/companion', 'POST', { draft: text });
+            if (res.success && res.data) {
+                const feedback = res.data.feedback || '';
+                const emotion = res.data.emotion || '默认';
+                const userEmotion = res.data.userEmotion || emotion;
+                showPeeking(false);
+                // Deleted:if (feedback) addMadelineMessage(feedback, emotion);
+                if (feedback && !isRepeatedSpeech(feedback)) { rememberSpeech(feedback); addMadelineMessage(feedback, emotion); }
+                updateThemeByEmotion(userEmotion);
+                companionState.currentEmotion = userEmotion;
+                companionState.previousEmotion = userEmotion;
+                if (userEmotion === '不开心') pmComfort();
+                else if (isPositive(userEmotion)) pmBounce();
+// ... existing code ...
+                companionState.localReactionCount = 0;
+                companionState.lastAiTime = Date.now();
+
+                companionState.emotionHistory.push({
+                    emotion: userEmotion, time: Date.now(), trigger: triggerType
+                });
+                if (companionState.emotionHistory.length > 50) {
+                    companionState.emotionHistory = companionState.emotionHistory.slice(-50);
+                }
+            } else {
+                showPeeking(false);
+            }
+        } catch (e) {
+            console.warn('AI 分析失败:', e);
+            showPeeking(false);
+        } finally {
+            companionState.isAiPending = false;
+        }
+    }
+
+    // ===== 核心：输入事件处理 =====
+    contentInput.addEventListener('input', () => {
+        lastUserInputTime = Date.now();
+        const text = contentInput.value.trim();
+
+        companionState.isTyping = true;
+        clearTimeout(companionState.typeTimer);
+        companionState.typeTimer = setTimeout(() => {
+            companionState.isTyping = false;
+        }, 500);
+
+        if (text.length < REALTIME_CONFIG.MIN_CHARS_FOR_AI) {
+            return;
+        }
+
+        const analysis = analyzeLocalEmotion(text);
+
+
+        const newSentences = getNewSentences(companionState.lastAnalyzedText, text);
+        const newChars = text.length - companionState.lastAnalyzedLen;
+        const hasSentenceEnd = newSentences.length > 0;
+        const quickTrigger = hasSentenceEnd && newChars >= REALTIME_CONFIG.MIN_NEW_CHARS_FOR_QUICK;
+        const longStretch = newChars >= 80;
+        const timeSinceLastAi = Date.now() - companionState.lastAiTime;
+        const pastCooldown = timeSinceLastAi > REALTIME_CONFIG.COOLDOWN_AFTER_AI;
+
+
+        localReact(analysis, text);
+
+
+        if (!companionState.isAiPending && pastCooldown) {
+            if (quickTrigger || longStretch) {
+
+                triggerAiAnalysis(text, hasSentenceEnd ? 'sentence' : 'threshold');
+            }
+        }
+    });
+    // ===== 保存特效：帧动画出现在日记本右下角 =====
+    const SAVE_FRAMES = [];
+    for (let i = 0; i <= 20; i++) {
+        SAVE_FRAMES.push('save/saveIcon' + String(i).padStart(5, '0') + '.png');
+    }
+    const saveIcons = [];
+
+    // ===== 草莓音效（外层作用域，供 saveDiary 调用） =====
+    const berrySound = new Audio('celeste-sounds/strawberry.wav');
+    berrySound.volume = 0.7;
+    function playBerrySound() {
+        if (!window.__audioGestured) return;
+        try { berrySound.currentTime = 0; berrySound.play().catch(() => {}); } catch (e) {}
+    }
+// ===== 保存成功音效 =====
+    const saveSuccessSound = new Audio('celeste-sounds/ui_main_savefile_rename_start.wav');
+    saveSuccessSound.volume = 0.7;
+    function playSaveSuccessSound() {
+        if (!window.__audioGestured) return;
+        try { saveSuccessSound.currentTime = 0; saveSuccessSound.play().catch(() => {}); } catch (e) {}
+    }
+
+    function initSaveIcons() {
+        pageEls.forEach((page, idx) => {
+            const img = document.createElement('img');
+            img.src = 'save/nonanimated.png';
+            img.alt = 'save';
+            img.style.cssText = 'position:absolute; bottom:8%; right:15%; width:110px; height:110px; z-index:10; cursor:pointer; image-rendering:pixelated;';
+            img.addEventListener('click', function() {
+                if (contentInput && contentInput.value.trim()) {
+                    playSaveAnimation();
+                    saveDiary();
+                }
+            });
+            page.appendChild(img);
+            saveIcons.push(img);
+        });
+    }
+    initSaveIcons();
+
+    function playSaveAnimation() {
+        const curIcon = saveIcons[bookCur];
+        if (!curIcon) return;
+        playSaveSuccessSound();
+        let frame = 0;
+        curIcon.src = SAVE_FRAMES[0];
+        const timer = setInterval(() => {
+            frame++;
+            if (frame >= SAVE_FRAMES.length) {
+                clearInterval(timer);
+                curIcon.src = 'save/nonanimated.png';
+                return;
+            }
+            curIcon.src = SAVE_FRAMES[frame];
+        }, 60);
+    }
+    // ================================================================
+    // ===== 主线4：草莓与篝火（收集系统） =====
+    // ================================================================
+    function berryBalanceLocal() {
+        return window.berryBalance();
+    }
+    function applyBerryBgm() {
+        const p = localStorage.getItem('berryBgm');
+        const src = document.querySelector('#bgmPlayer source');
+        if (src && p) { src.src = 'bgm/' + p + '.mp3'; }
+    }
+
+    function refreshShopUI() {
+        const c = document.getElementById('sbCount');
+        if (c) c.textContent = berryBalanceLocal();
+    }
+    function initStrawberryShop() {
+        if (document.getElementById('strawberryBonfire')) return;
+        const w = document.createElement('div');
+        w.id = 'strawberryBonfire';
+        w.title = '我的草莓';
+        w.innerHTML =
+            '<div class="sb-straw"><img src="celeste-collectables/strawberry.png" alt="strawberry"><span id="sbCount">0</span></div>';
+        document.body.appendChild(w);
+        w.addEventListener('click', () => {
+            addMadelineMessage('你现在有 ' + berryBalanceLocal() + ' 颗草莓，慢慢攒，山顶有好东西等着你～', '可爱');
+        });
+        refreshShopUI();
+    }
+    function updateBonfire(d) {
+        const fire = document.getElementById('sbFire');
+        const cnt = document.getElementById('sbCount');
+        if (!fire || !cnt) return;
+        cnt.textContent = d.total;
+        const s = d.streak;
+        let sz, clr, clr2, show = false;
+        if (s >= 30)      { sz = 26; clr = '#ff4444'; clr2 = '#ffe36d'; show = true; }
+        else if (s >= 7)  { sz = 20; clr = '#ff6600'; clr2 = '#ffcc00'; show = true; }
+        else if (s >= 3)  { sz = 15; clr = '#ff8800'; clr2 = '#ffaa33'; show = true; }
+        else if (s >= 1)  { sz = 9;  clr = '#ffaa44'; clr2 = '#ffcc66'; show = true; }
+        else              { sz = 0; clr = '#888'; clr2 = '#aaa'; }
+        fire.querySelectorAll('.sb-flame,.sb-spark,.sb-smoke,.sb-label').forEach(e => e.remove());
+        if (show) {
+            const fl = document.createElement('div');
+            fl.className = 'sb-flame';
+            fl.style.cssText = 'width:' + sz + 'px;height:' + (sz * 1.4) + 'px;background:radial-gradient(ellipse at bottom,' + clr2 + ',' + clr + ' 70%,transparent);box-shadow:0 0 ' + (sz / 2) + 'px ' + clr + ';';
+            fire.insertBefore(fl, fire.firstChild);
+            if (s >= 3) for (let i = 0; i < 2; i++) {
+                const sp = document.createElement('div');
+                sp.className = 'sb-spark';
+                sp.style.cssText = 'left:' + (30 + Math.random() * 40) + '%;bottom:' + (4 + sz * 0.6) + 'px;animation-delay:' + (Math.random() * 1.2) + 's;';
+                fire.appendChild(sp);
+            }
+            const lb = document.createElement('div');
+            lb.className = 'sb-label';
+            lb.textContent = s >= 30 ? '\u2605' + s : s + '天';
+            fire.appendChild(lb);
+        } else {
+            const sm = document.createElement('div');
+            sm.className = 'sb-smoke';
+            sm.style.cssText = 'left:50%;bottom:6px;transform:translateX(-50%);';
+            fire.insertBefore(sm, fire.firstChild);
+        }
+    }
+    function onSaveStreak() {
+        const today = new Date().toDateString();
+        const last = localStorage.getItem('diaryLastSaveDate') || '';
+        const prev = parseInt(localStorage.getItem('diaryStreak') || '0');
+        let streak;
+        if (!last) streak = 1;
+        else if (last === today) streak = prev;
+        else {
+            const y = new Date(); y.setDate(y.getDate() - 1);
+            streak = (last === y.toDateString()) ? prev + 1 : 1;
+        }
+        localStorage.setItem('diaryStreak', String(streak));
+        localStorage.setItem('diaryLastSaveDate', today);
+        const total = parseInt(localStorage.getItem('diarySaveCount') || '0');
+        updateBonfire({ total: total, streak: streak });
+        const lines3 = ['三天了！篝火生起来了……我们在这里扎营了。', '连续三天！山上的篝火最温暖。'];
+        const lines7 = ['一周了！你真的坚持下来了……我很感动。', '七天连续，这篝火够照亮整个山脊了。'];
+        const lines30 = ['三十天……你已经是山上的老朋友了。', '传说连续写三十天日记的人，能看见山顶的星星。'];
+        if (streak === 3) addMadelineMessage(lines3[Math.floor(Math.random() * lines3.length)], '可爱');
+        if (streak === 7) addMadelineMessage(lines7[Math.floor(Math.random() * lines7.length)], '可爱');
+        if (streak === 30) addMadelineMessage(lines30[Math.floor(Math.random() * lines30.length)], '可爱');
+
+        refreshShopUI();
+    }
+    // ===== 保存日记（含最终分析 + 状态重置） =====
+    async function saveDiary() {
+
+        const title = titleInput.value.trim();
+        const content = contentInput.value.trim();
+        if (!content) { showToast('写点什么再保存吧~', 'error'); return; }
+        if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
+
+        playSaveAnimation();
+
+        try {
+// ... existing code ...
+            const extras = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k && k.indexOf('jbook-') === 0) {
+                    const v = (localStorage.getItem(k) || '').trim();
+                    if (v && v.indexOf('[') !== 0) extras.push(v);
+                }
+            }
+            const payload = { title: title || '无题', content: extras.length ? content + '\n\n' + extras.join('\n') : content };
+            if (editingDiaryId) payload.id = editingDiaryId;
+            const res = await api('/diary', 'POST', payload);
+            if (res.success) {
+                companionState.lastAnalyzedText = '';
+                companionState.lastAnalyzedLen = 0;
+                companionState.localReactionCount = 0;
+                companionState.emotionHistory = [];
+                companionState.peakIntensity = 0;
+                updateThemeByEmotion('默认');
+
+                // ... existing code ...
+                const companionRes = await api('/diary/companion', 'POST', { draft: content });
+                if (companionRes.success && companionRes.data) {
+                    const feedback = companionRes.data.feedback || '';
+                    const emotion = companionRes.data.emotion || '默认';
+                    if (feedback && !isRepeatedSpeech(feedback)) { rememberSpeech(feedback); addMadelineMessage(feedback, emotion); }
+                    updateThemeByEmotion(emotion);
+
+                    // 金羽毛触发统一走 FeatherTrigger 工具类：
+                    // 情绪低落 → Madeline 说完反馈后接着说羽毛建议（排队不打断），再淡入呼吸游戏；
+                    // 情绪尚可 → 稍后弹羽毛随笔；中性情绪不打扰
+                    if (emotion !== '默认' && window.featherTrigger) {
+                        window.featherTrigger.requestFromSave(emotion);
+                    }
+                }
+
+                showToast(editingDiaryId ? '更新成功！' : '保存成功！', 'success');
+                pmCelebrate();
+                pmSummarize();
+                if (!editingDiaryId) {
+                    const saveCnt = parseInt(localStorage.getItem('diarySaveCount') || '0') + 1;
+                    localStorage.setItem('diarySaveCount', String(saveCnt));
+                    addBerries(1);
+                    pmMilestone(saveCnt);
+                    playBerrySound();
+                    renderCoverStamps();
+                }
+                onSaveStreak();
+                editingDiaryId = null;
+                titleInput.value = '';
+                contentInput.value = '';
+
+                for (let i = localStorage.length - 1; i >= 0; i--) {
+                    const k = localStorage.key(i);
+                    if (k && k.indexOf('jbook-') === 0) localStorage.removeItem(k);
+                }
+                document.querySelectorAll('#journalBook input:not(#titleInput), #journalBook textarea:not(#contentInput)').forEach(n => n.value = '');
+            } else {
+                showToast(res.msg || '保存失败', 'error');
+            }
+        } catch (e) {
+            console.error('保存流程异常:', e);
+            showToast('网络错误', 'error');
+        }
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'SAVE'; }
+    }
+    if (saveBtn) saveBtn.addEventListener('click', saveDiary);
+    // 按钮已移除，Ctrl+S 保存
+    window.addEventListener('keydown', e => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveDiary(); }
+    });
+    // ================================================================
+    // ===== 初始化 =====
+    // ================================================================
+    // ===== 像素 Madeline 行为树 v3（贴地行走 + 坐/睡/醒/摔） =====
+    const pm = document.getElementById('pixelMadeline');
+
+    let pmCurName = '';
+
+    const PM_SRC = {
+        move: 'celeste-gui/madeline-move.gif',
+        fun: 'celeste-gui/madeline-fun.gif',
+        bounce: 'celeste-gui/bounceline.gif',
+        sit: 'celeste-gui/madeline-sitdown.gif',
+        sleep: 'celeste-gui/madeline-sleep.gif',
+        wake: 'celeste-gui/madeline-wakeup.gif',
+        fall: 'celeste-gui/madeline-fallpose.gif'
+    };
+    const pmState = {
+        x: window.innerWidth * 0.15,
+        y: window.innerHeight - 80,
+        dir: 1,
+        mode: 'walk',
+        modeUntil: 0,
+        targetX: null,
+        targetY: null,
+        hopT: -1,
+        poseUntil: 0,
+        poseReturn: '',
+        wasHopping: false
+    };
+    // ===== 布局缓存：禁区 rect / 精灵尺寸 300ms 刷新一次，帧循环不再触发强制布局 =====
+    let layoutCache = { rects: [], bw: 56, bh: 56, groundY: 0, ts: -1e9 };
+    function refreshLayoutCache() {
+        const zones = [];
+        if (gameDialog.classList.contains('show')) zones.push({ r: gameDialog.getBoundingClientRect(), m: 14 });
+        const book = document.getElementById('journalBook');
+        if (book) zones.push({ r: book.getBoundingClientRect(), m: 14 });
+        const acts = document.querySelector('.diary-actions');
+        if (acts) zones.push({ r: acts.getBoundingClientRect(), m: 16 });
+        layoutCache.rects = zones;
+        layoutCache.bw = pm.offsetWidth || layoutCache.bw;
+        layoutCache.bh = pm.offsetHeight || layoutCache.bh;
+        layoutCache.groundY = window.innerHeight - layoutCache.bh - 8;
+        layoutCache.ts = performance.now();
+    }
+    setInterval(refreshLayoutCache, 300);
+    window.addEventListener('resize', refreshLayoutCache);
+    window.addEventListener('scroll', refreshLayoutCache, true);
+
+    function pmGroundY() {
+        if (performance.now() - layoutCache.ts > 500) refreshLayoutCache();
+        return layoutCache.groundY;
+    }
+    const PM_FRAMES = {};
+    PM_FRAMES[PM_SRC.fall] = (function () {
+        const a = [];
+
+        for (let i = 0; i < 11; i++) a.push('celeste-player/fallPose' + String(i).padStart(2, '0') + '.png');
+        return a;
+    })();
+    let pmFrameTimer = null;
+    function pmForceSize() {
+        // 尺寸由 CSS 属性选择器 #pixelMadeline[src*="..."] 控制，此处仅触发布局缓存刷新
+        refreshLayoutCache();
+    }
+    function pmSetSrc(name) {
+        if (pmFrameTimer) { clearInterval(pmFrameTimer); pmFrameTimer = null; }
+        const frames = PM_FRAMES[name];
+        if (frames) {
+            let i = 0;
+            pm.src = frames[0];
+            pmFrameTimer = setInterval(() => {
+                i++;
+                if (i >= frames.length) { clearInterval(pmFrameTimer); pmFrameTimer = null; return; }
+                pm.src = frames[i];
+                pmForceSize();
+            }, 55);
+        } else if (pm.src.indexOf(name) === -1) {
+            pm.src = name;
+        }
+        pmCurName = name;
+        pmForceSize();
+    }
+
+    let zoneScoldUntil = 0;
+    let pmCaution = false;
+
+    function blockedAt(tx, ty, tight) {
+        if (performance.now() - layoutCache.ts > 500) refreshLayoutCache();
+        // tight 仅用于点击判定：不吃惩罚边距、边距减半、只算身体中心 40%，避免大图盒误判
+        const extra = (!tight && performance.now() < zoneScoldUntil) ? 12 : 0;
+        const bw = tight ? layoutCache.bw * 0.4 : layoutCache.bw;
+        const bh = tight ? layoutCache.bh * 0.4 : layoutCache.bh;
+        const bx = tight ? tx + layoutCache.bw * 0.3 : tx;
+        const by = tight ? ty + layoutCache.bh * 0.3 : ty;
+        for (const z of layoutCache.rects) {
+            const r = z.r, m = Math.round((tight ? z.m * 0.5 : z.m) + extra);
+            if (!r || (r.width === 0 && r.height === 0)) continue;
+            if (bx < r.right + m && bx + bw > r.left - m &&
+                by < r.bottom + m && by + bh > r.top - m) return true;
+        }
+        return false;
+    }
+    function pmPickTarget() {
+                const gy = pmGroundY();
+                const maxX = window.innerWidth - pm.offsetWidth - 8;
+                const book = document.getElementById('journalBook');
+                const r = book ? book.getBoundingClientRect() : null;
+                const cands = [];
+                for (let i = 0; i < 10; i++) {
+                    cands.push({ x: 8 + Math.random() * (maxX - 16), y: 60 + Math.random() * (gy - 68) });
+                }
+                if (r) {
+                    const leftW = r.left - 20 - pm.offsetWidth;
+                    if (leftW > 16) {
+                        for (let i = 0; i < 5; i++) cands.push({ x: 8 + Math.random() * (leftW - 8), y: 60 + Math.random() * (gy - 68) });
+                    }
+                    const rightX = r.right + 20;
+                    if (rightX + pm.offsetWidth < maxX - 8) {
+                        for (let i = 0; i < 5; i++) cands.push({ x: rightX + Math.random() * (maxX - rightX - 8), y: 60 + Math.random() * (gy - 68) });
+                    }
+                    const topH = r.top - 24 - pm.offsetHeight;
+                    if (topH > 68) {
+                        for (let i = 0; i < 5; i++) cands.push({ x: 8 + Math.random() * (maxX - 16), y: 60 + Math.random() * (topH - 60) });
+                    }
+                }
+            for (const c of cands) {
+                if (!pmCaution || !blockedAt(c.x, c.y)) return { x: c.x, y: c.y };
+            }
+                for (const fx of [0.04, 0.96, 0.15, 0.85]) {
+                const tx = Math.min(maxX, window.innerWidth * fx);
+                    if (!pmCaution || !blockedAt(tx, gy)) return { x: tx, y: gy };
+            }
+                return { x: 8, y: gy };
+            }
+// ... existing code ...
+            function pmDetour(now) {
+                const book = document.getElementById('journalBook');
+                const r = book ? book.getBoundingClientRect() : null;
+                if (!r) { pmStartWalk(now); return; }
+                const aboveY = Math.max(60, r.top - pm.offsetHeight - 18);
+                const belowY = Math.min(pmGroundY(), r.bottom + 18);
+                const ty = (pmState.y - aboveY < belowY - pmState.y) ? aboveY : belowY;
+                if (!blockedAt(pmState.x, ty)) {
+                    pmState.targetY = ty;
+                    return;
+                }
+                pmStartWalk(now);
+            }
+            function pmStartWalk(now) {
+        pmState.mode = 'walk';
+        const t = pmPickTarget();
+        pmState.targetX = t.x;
+        pmState.targetY = t.y;
+        pmState.modeUntil = now + 9000;
+        pmSetSrc(PM_SRC.move);
+    }
+    function pmCelebrate() {
+        const gy = pmGroundY();
+        const acts = document.querySelector('.diary-actions');
+        const rect = acts ? acts.getBoundingClientRect() : null;
+        const maxX = window.innerWidth - pm.offsetWidth - 8;
+        let tx;
+        if (rect) {
+            const cands = [
+                rect.left - pm.offsetWidth - 18,
+                rect.right + 18,
+                rect.left + rect.width / 2 - pm.offsetWidth / 2
+            ];
+            tx = cands.find(v => v >= 4 && v <= maxX && !blockedAt(v, gy));
+        }
+        if (tx === undefined) {
+            for (let v = 4; v <= maxX; v += 24) {
+                if (!blockedAt(v, gy)) { tx = v; break; }
+            }
+        }
+        if (tx === undefined) return;
+        pmState.hopT = 0;
+        pmState.mode = 'celebrate';
+        pmState.targetX = tx;
+        pmState.targetY = gy;
+        pmState.modeUntil = performance.now() + 12000;
+        pmSetSrc(PM_SRC.move);
+    }
+
+    async function pmSummarize() {
+        const content = contentInput.value.trim();
+        if (!content) return;
+        try {
+            const res = await api('/diary/summary', 'POST', { title: titleInput.value.trim(), content: content });
+            if (res.success && res.data && res.data.message) addMadelineMessage(res.data.message, res.data.emotion || '默认');
+        } catch (e) { }
+    }
+
+
+    // ===== 接入共享内核 madeline-core.js：情绪分组 / 加权随机 / 模式表 / enterMode / 中断优先级 =====
+    const MC = window.MadelineCore;
+    const isPositive = MC.isPositive, isGloomy = MC.isGloomy, isNight = MC.isNight;
+    const weightedPick = MC.weightedPick;
+    const pmCore = MC.createCore({
+        state: pmState, src: PM_SRC, setSrc: pmSetSrc,
+        startWalk: pmStartWalk, groundY: pmGroundY, celebrate: pmCelebrate,
+        getEmotion: () => companionState.currentEmotion
+    });
+    const PM_MODES = pmCore.modes;
+    const enterMode = pmCore.enterMode;
+    const canInterrupt = pmCore.canInterrupt;
+    const tryInterrupt = pmCore.tryInterrupt;
+    const requestMode = pmCore.requestMode;
+
+    function pmNextMode(now) {
+        const e = companionState.currentEmotion;
+        const lively = isPositive(e), gloomy = isGloomy(e);
+        const night = isNight();
+        const nearGround = pmState.y > pmGroundY() - 60;
+
+        const weights = [
+            ['walk',  lively ? 0.34 : 0.45],
+            ['bounce', (lively ? 0.26 : 0.05) * (night ? 0.4 : 1)],
+            ['fun',    0.16],
+            ['look',   0.12],
+            ['sit',    (gloomy ? 0.24 : 0.12) + (night ? 0.15 : 0)],
+        ];
+        // 过滤掉不满足前置条件的（如 sit/bounce 需贴地）
+        const pool = weights.filter(([k]) =>
+            (k === 'sit' || k === 'bounce') ? nearGround : true);
+        // 传入当前模式作 avoidKey：权重相同时不再连续选中同一动作
+        enterMode(weightedPick(pool, pmState.mode), now);
+    }
+
+    // ===== 正向情绪触发：开心蹦跳（bounceline）——经中断优先级判定 =====
+    function pmBounce() {
+        if (chatOpen) return;
+        tryInterrupt('bounce', performance.now());
+    }
+
+    // ===== 情绪→身体：说完一句话后，用动作回应当前语气 =====
+    // 走 requestMode（冷却 + 驻留仲裁）：不再裸调 enterMode，避免高优先级模式
+    // （peek/celebrate）被低优先级动作瞬间顶掉，也避免连续消息导致动作刷屏
+    function pmReactToEmotion(em) {
+        if (chatOpen || pmState.mode === 'sleep' || pmState.mode === 'celebrate') return;
+        const now = performance.now();
+        if (isPositive(em)) {
+            if (Math.random() < 0.5) {
+                pmBounce();
+            } else if (Math.random() < 0.6) {
+                requestMode('fun', now);
+            } else {
+                pmState.hopT = 0;
+            }
+        } else if (isGloomy(em) && Math.random() < 0.6) {
+            requestMode('sit', now);
+        }
+    }
+    function pmThink(now) {
+        const e0 = companionState.currentEmotion;
+        if (companionState.isTyping && pmState.mode !== 'celebrate') {
+            if (pmState.mode !== 'peek') {
+                pmState.mode = 'peek';
+                const bk = document.getElementById('journalBook');
+                const rect = bk ? bk.getBoundingClientRect() : null;
+                const gy = pmGroundY();
+                const maxX = window.innerWidth - pm.offsetWidth - 8;
+                let px = Math.max(8, window.innerWidth * 0.1);
+                if (rect) {
+                    const leftX = rect.left - pm.offsetWidth - 18;
+                    const rightX = rect.right + 18;
+                    if (leftX >= 4 && !blockedAt(leftX, gy)) px = leftX;
+                    else if (rightX <= maxX && !blockedAt(rightX, gy)) px = rightX;
+                }
+                pmState.targetX = px;
+                pmState.targetY = gy;
+                pmSetSrc(PM_SRC.move);
+            }
+            return;
+        }
+// ... existing code ...
+        if (pmState.mode === 'peek') { pmState.mode = 'idle'; pmState.modeUntil = 0; }
+
+        if (pmState.mode === 'sleep') {
+            if (!pmState.nextMurmur) pmState.nextMurmur = now + 12000 + Math.random() * 15000;
+            if (now >= pmState.nextMurmur) {
+                pmState.nextMurmur = now + 18000 + Math.random() * 22000;
+                addMadelineMessage(dreamLines[Math.floor(Math.random() * dreamLines.length)], '默认');
+            }
+        }
+
+        if (now >= pmState.modeUntil) {
+            if (pmState.mode === 'sit') {
+                const e = companionState.currentEmotion;
+                const hour = new Date().getHours();
+                const sleepy = (hour >= 23 || hour < 6 || e === '悲伤' || e === '孤独') ? 0.4 : 0.2;
+                if (Math.random() < sleepy) {
+                    pmState.mode = 'sleep';
+                    pmState.modeUntil = now + 20000 + Math.random() * 25000;
+                    pmSetSrc(PM_SRC.sleep);
+                } else if (Math.random() < 0.5) {
+                    // 坐下后起身张望（用 fun 素材）
+                    pmState.mode = 'lookaround';
+                    pmState.modeUntil = now + 2000 + Math.random() * 2000;
+                    pmSetSrc(PM_SRC.fun);
+                } else {
+                    pmStartWalk(now);
+                }
+            } else if (pmState.mode === 'sleep') {
+                pmState.mode = 'wake';
+                pmState.modeUntil = now + 2300;
+                pmSetSrc(PM_SRC.wake);
+            } else if (pmState.mode === 'wake') {
+                pmState.mode = 'idle';
+                pmState.modeUntil = 0;
+                pmNextMode(now);
+            } else if (pmState.mode === 'lookaround') {
+                // 张望完毕，继续行走
+                pmStartWalk(now);
+            } else {
+                pmNextMode(now);
+            }
+        }
+    }
+
+    let pmLast = performance.now();
+    function pmLoop(now) {
+        const dt = Math.min(0.05, (now - pmLast) / 1000);
+        pmLast = now;
+
+        if (pmState.poseUntil > 0 && now >= pmState.poseUntil) {
+            pmState.poseUntil = 0;
+            pmSetSrc(pmState.poseReturn || PM_SRC.move);
+        }
+        const posing = pmState.poseUntil > 0;
+
+        if (!chatOpen) {
+            pmThink(now);
+            const speed = 120;
+            const movable = !posing && (PM_MODES[pmState.mode] || {}).movable && pmState.targetX !== null;
+            if (movable) {
+                const dx = pmState.targetX - pmState.x;
+                const dy = pmState.targetY - pmState.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                // ... existing code ...
+                if (dist > 5) {
+                    if (dx > 0.5) pmState.dir = 1;
+                    else if (dx < -0.5) pmState.dir = -1;
+                    let nx = pmState.x + (dx / dist) * speed * dt;
+                    let ny = pmState.y + (dy / dist) * speed * dt;
+                    // 自己还站在禁区里时先放行（正在逃离），出去了才恢复绕行
+                    if (pmCaution && !blockedAt(pmState.x, pmState.y) && blockedAt(nx, ny)) {
+                        if (!blockedAt(nx, pmState.y)) ny = pmState.y;
+                        else if (!blockedAt(pmState.x, ny)) nx = pmState.x;
+                        else { pmDetour(now); nx = pmState.x; ny = pmState.y; }
+                    }
+                    pmState.x = nx;
+                    pmState.y = ny;
+                } else if (pmState.mode === 'walk') {
+// ... existing code ...
+                    pmState.mode = 'idle';
+                    pmState.modeUntil = now + 300 + Math.random() * 700;
+                }else if (pmState.mode === 'celebrate') {
+                    pmState.mode = 'idle';
+                    pmState.modeUntil = now + 2600;
+                    pmState.poseUntil = now + 2200;
+                    pmState.poseReturn = PM_SRC.move;
+                    pmSetSrc(PM_SRC.fun);
+                }
+            }
+
+            pmState.x = Math.max(4, Math.min(pmState.x, window.innerWidth - layoutCache.bw - 4));
+            pmState.y = Math.max(60, Math.min(pmState.y, pmGroundY()));
+            // 已经在走/逃跑途中不再重选目标，避免每帧换方向瞎动
+            if (pmCaution && !(PM_MODES[pmState.mode] || {}).movable && blockedAt(pmState.x, pmState.y)) pmStartWalk(now);
+
+        }
+
+        let hopOffset = 0;
+        const hopping = pmState.hopT >= 0 && (PM_MODES[pmState.mode] || {}).canHop && !posing;
+        if (pmState.hopT >= 0) {
+            pmState.hopT += dt;
+            if (pmState.hopT >= 0.5) {
+                pmState.hopT = -1;
+                if (pmState.wasHopping) {
+                    pmState.poseUntil = now + 650;
+                    pmState.poseReturn = PM_SRC.move;
+                    pmSetSrc(PM_SRC.fall);
+                }
+            } else {
+                hopOffset = Math.sin((pmState.hopT / 0.5) * Math.PI) * 26;
+            }
+        }
+        pmState.wasHopping = hopping;
+        if (hopOffset > 0) pmSetSrc(PM_SRC.move);
+
+        pm.style.transform = 'translate(' + pmState.x + 'px,' + (pmState.y - hopOffset) + 'px)' + (pmState.dir < 0 ? ' scaleX(-1)' : '');
+        requestAnimationFrame(pmLoop);
+    }
+
+    requestAnimationFrame(pmLoop);
+    if (pmCaution && blockedAt(pmState.x, pmState.y)) {
+        let found = false;
+        for (let v = 8; v <= window.innerWidth - 72; v += 24) {
+            if (!blockedAt(v, pmGroundY())) { pmState.x = v; pmState.y = pmGroundY(); found = true; break; }
+        }
+        if (!found) { pmState.x = 8; pmState.y = 60; }
+    }
+    window.addEventListener('resize', () => { pmState.y = Math.min(pmState.y, pmGroundY()); });
+    // ... existing code ...
+    // ===== 金羽毛随笔弹框：程序化控制 =====
+    function showFeatherNote() {
+        var box = document.getElementById('featherNoteBox');
+        if (!box) return;
+        box.style.display = 'block';
+        box.classList.remove('slide-in');
+        void box.offsetWidth;
+        box.classList.add('slide-in');
+        var input = document.getElementById('featherInput');
+        if (input) { input.value = ''; input.focus(); }
+        var toast = document.getElementById('featherToast');
+        if (toast) toast.style.display = 'none';
+    }
+    window.showFeatherNote = showFeatherNote;
+    // ===== 金羽毛“第二段”陪伴：游戏结束后，等画面淡出，Madeline 再回到日记页说一句收尾的话 =====
+    const FEATHER_AFTER_LINES = [
+        '呼吸平稳多了吧？我一直都在。想写点什么，或者就这样歇一会儿，都可以。',
+        '羽毛落下了，心里那块石头是不是也轻了一点？慢慢来，不着急。',
+        '做得很好。把刚才这份平静留着，需要的时候，我们随时再来一次。'
+    ];
+    let featherAfterBusy = false;
+    function sayAfterFeather() {
+        if (featherAfterBusy) return; // 一次游戏只收尾一句，落地/关闭不会重复触发
+        featherAfterBusy = true;
+        // 等淡出动画（约 .7s）走完，对话框再弹出，衔接更自然
+        setTimeout(() => {
+            const line = FEATHER_AFTER_LINES[Math.floor(Math.random() * FEATHER_AFTER_LINES.length)];
+            const done = addMadelineMessage(line, '可爱', true);
+            const release = () => { featherAfterBusy = false; };
+            if (done && done.then) done.then(release, release); else release();
+        }, 900);
+    }
+    window.addEventListener('feather-finished', () => { sayAfterFeather(); });
+    window.addEventListener('feather-landed', (e) => {
+        sayAfterFeather();
+        if (window._featherBadMood) {
+            showFeatherNote();
+        } else {
+            if (bookCur === 0) { bookGoto(1); }
+        }
+    });
+// ... existing code ...
+    let lastComfortAt = 0;
+    function pmComfort() {
+        if (performance.now() - lastComfortAt < 10 * 60 * 1000) return;
+        lastComfortAt = performance.now();
+        const bk = document.getElementById('journalBook');
+        const rect = bk ? bk.getBoundingClientRect() : null;
+        const gy = pmGroundY();
+        const maxX = window.innerWidth - pm.offsetWidth - 8;
+        let px = Math.max(8, window.innerWidth * 0.12);
+        if (rect) {
+            const rightX = rect.right + 18;
+            const leftX = rect.left - pm.offsetWidth - 18;
+            if (rightX + pm.offsetWidth <= maxX && !blockedAt(rightX, gy)) px = rightX;
+            else if (leftX >= 4 && !blockedAt(leftX, gy)) px = leftX;
+        }
+        pmState.mode = 'peek';
+        pmState.targetX = px;
+        pmState.targetY = gy;
+        pmSetSrc(PM_SRC.move);
+    }
+
+    const dreamLines = ['唔……再睡五分钟……', '（梦话）雪……别停……', '嗯……山顶……快到了……', '（翻身）……草莓……', '……别关灯……'];
+    function pmMilestone(cnt) {
+        const lines = {
+            5: '第五篇啦！这本日记越来越像你了。',
+            10: '第十篇！看，坚持一件事也没那么难，对吧？',
+            20: '二十篇了……回头看看第一篇，你会吓一跳的。',
+            30: '三十篇……这本子快装不下你的故事了，我好喜欢。',
+            50: '五十篇！要不要给自己鼓个掌？',
+            100: '第一百篇。这座山，你一步一步走上来了。'
+        };
+        if (lines[cnt]) addMadelineMessage(lines[cnt], '可爱');
+    }
+    let pauseTimer = null;
+    let lastPauseCare = 0;
+    const pauseLines = ['写到一半停下来也没关系，我等你。', '慢慢想，字会自己来的。', '深呼吸一下……我在旁边呢。'];
+    contentInput.addEventListener('input', () => {
+        clearTimeout(pauseTimer);
+        pauseTimer = setTimeout(() => {
+            if (chatOpen || !contentInput.value.trim()) return;
+            if (performance.now() - lastPauseCare < 5 * 60 * 1000) return;
+            lastPauseCare = performance.now();
+            addMadelineMessage(pauseLines[Math.floor(Math.random() * pauseLines.length)], '可爱');
+        }, 25000);
+    });
+
+    const petLines = ['嘿嘿…再摸一下也可以哦。', '唔，头发要被你摸乱啦。', '谢谢你，今天也辛苦了。', '嗯！感觉又充上电了。', '山顶的风，都没你这么温柔。'];
+    const shooLines = ['好～我去别处逛逛！', '那我走啦，想找我双击就行。', '溜了溜了～想我了就写进日记里。', '收到！换个地方待着～'];
+    function pmShoo() {
+        if (pmState.mode === 'sleep') {
+            addMadelineMessage(dreamLines[Math.floor(Math.random() * dreamLines.length)], '默认');
+            pmState.mode = 'wake';
+            pmState.modeUntil = performance.now() + 2300;
+            pmSetSrc(PM_SRC.wake);
+            return;
+        }
+        addMadelineMessage(shooLines[Math.floor(Math.random() * shooLines.length)], '可爱');
+        pmStartWalk(performance.now());
+        pmState.hopT = 0;
+    }
+    const scoldLines = ['呀！？对、对不起！我挡到你了，马上挪开！', '呜哇！抱歉抱歉，我这就走，接下来一阵子都不靠近这里！', '噫！是我不对…我绕远路走，真的！'];
+    function pmScold() {
+        addMadelineMessage(scoldLines[Math.floor(Math.random() * scoldLines.length)], '惊讶');
+        pmCaution = true;
+        zoneScoldUntil = performance.now() + 3 * 60 * 1000;
+        pmState.poseUntil = performance.now() + 900;
+        pmState.poseReturn = PM_SRC.move;
+        pmSetSrc(PM_SRC.fun);
+        const gy = pmGroundY();
+        const maxX = window.innerWidth - pm.offsetWidth - 8;
+        const farX = pmState.x < window.innerWidth / 2 ? maxX - 8 : 8;
+        if (!blockedAt(farX, gy)) { pmState.targetX = farX; pmState.targetY = gy; }
+        else { const t = pmPickTarget(); pmState.targetX = t.x; pmState.targetY = t.y; }
+        pmState.mode = 'walk';
+        pmState.modeUntil = performance.now() + 9000;
+        pmState.hopT = 0;
+    }
+    function pmPet() {
+        if (pmState.mode === 'sleep') {
+            addMadelineMessage(dreamLines[Math.floor(Math.random() * dreamLines.length)], '默认');
+            return;
+        }
+        addMadelineMessage(petLines[Math.floor(Math.random() * petLines.length)], '可爱');
+        pmState.poseUntil = performance.now() + 1300;
+        pmState.poseReturn = PM_SRC.move;
+        pmSetSrc(PM_SRC.fun);
+    }
+    let pmClickTimer = null;
+    pm.addEventListener('click', () => {
+        if (pmClickTimer) return;
+        pmClickTimer = setTimeout(() => {
+            pmClickTimer = null;
+            if (blockedAt(pmState.x, pmState.y, true)) pmScold();
+            else pmPet();
+        }, 260);
+    });
+    // 双击像素 Madeline → 开关聊天历史记录框
+    pm.addEventListener('dblclick', () => {
+        if (pmClickTimer) { clearTimeout(pmClickTimer); pmClickTimer = null; }
+        toggleChat();
+    });
+
+
+
+    // ===== 主线2：回忆书架 =====
+    let editingDiaryId = null;
+    // ... existing code ...
+    const shelfBtn = document.createElement('button');
+    shelfBtn.id = 'shelfBtn';
+    // Deleted:shelfBtn.textContent = '📚 回忆书架';
+    // ... existing code ...
+    shelfBtn.title = '回忆书架';
+    // Deleted:shelfBtn.innerHTML = '<img src="Atlases/Gui/collectables/cassette.png" alt="回忆书架">';
+    shelfBtn.innerHTML = '<img src="celeste-collectables/cassette/idle00.png" alt="回忆书架">';
+    const shelfBtnImg = shelfBtn.querySelector('img');
+    const SHELF_CASSETTE_FRAMES = [];
+    for (let i = 0; i < 19; i++) SHELF_CASSETTE_FRAMES.push('celeste-collectables/cassette/idle' + String(i).padStart(2, '0') + '.png');
+    let shelfBtnTimer = null, shelfBtnFi = 0;
+    shelfBtn.addEventListener('mouseenter', () => {
+        if (shelfBtnTimer) return;
+        shelfBtnTimer = setInterval(() => { shelfBtnFi = (shelfBtnFi + 1) % 19; shelfBtnImg.src = SHELF_CASSETTE_FRAMES[shelfBtnFi]; }, 90);
+    });
+    shelfBtn.addEventListener('mouseleave', () => {
+        if (shelfBtnTimer) { clearInterval(shelfBtnTimer); shelfBtnTimer = null; }
+        shelfBtnFi = 0; shelfBtnImg.src = SHELF_CASSETTE_FRAMES[0];
+    });
+    document.body.appendChild(shelfBtn);
+
+    const shelfPanel = document.createElement('div');
+    shelfPanel.id = 'shelfPanel';
+    shelfPanel.innerHTML =
+        '<div class="shelf-head"><h3>回忆书架</h3><button class="shelf-close">✕</button></div>' +
+        '<div id="shelfList"></div>' +
+        '<div id="shelfDetail">' +
+        '<button class="sd-back">← 返回列表</button>' +
+        '<div class="sd-title"></div><div class="sd-date"></div><div class="sd-content"></div>' +
+        '<div class="sd-actions"><button class="sd-edit">回去编辑这篇</button><button class="sd-del danger">删掉它</button></div>' +
+        '</div>';
+    document.body.appendChild(shelfPanel);
+
+// ... existing code ...
+
+    const shelfList = shelfPanel.querySelector('#shelfList');
+    const shelfDetail = shelfPanel.querySelector('#shelfDetail');
+    let shelfData = [];
+    let shelfCur = null;
+
+    function shelfFmtDate(v) {
+        if (!v) return '';
+        const d = new Date(typeof v === 'number' || /^\d+$/.test(String(v)) ? Number(v) : v);
+        if (isNaN(d.getTime())) return String(v);
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+    async function shelfLoad() {
+        shelfList.innerHTML = '<div class="shelf-empty">正在搬书……</div>';
+        const res = await api('/diary/list', 'GET');
+        if (res.success && Array.isArray(res.data)) {
+            shelfData = res.data;
+            if (!shelfData.length) { shelfList.innerHTML = '<div class="shelf-empty">书架还空着。<br>写下第一篇，它就有了位置。</div>'; return; }
+            shelfList.innerHTML = shelfData.map((d, i) =>
+                '<div class="shelf-card" data-i="' + i + '">' +
+                '<div class="sc-title">' + escHtml(d.title || '无题') + '</div>' +
+                '<div class="sc-date">' + shelfFmtDate(d.updateDate || d.createDate) + '</div>' +
+                '<div class="sc-snippet">' + escHtml((d.content || '').slice(0, 60)) + '</div>' +
+                '</div>').join('');
+        } else {
+            shelfList.innerHTML = '<div class="shelf-empty">书架暂时打不开（' + escHtml(res.msg || '未知错误') + '）</div>';
+        }
+    }
+    function shelfShowList() { shelfDetail.classList.remove('show'); shelfList.style.display = ''; }
+    // ===== 主线2.5：记忆联动 =====
+    let memCache = null;
+    const memMentioned = new Set();
+    async function shelfLoadMemories() {
+        try {
+            const res = await api('/memory/list', 'GET');
+            memCache = (res.success && Array.isArray(res.data)) ? res.data : [];
+        } catch (e) { memCache = []; }
+    }
+    function shelfMemoryRecall(text, days) {
+        if (!text || days <= 0) return;
+        if (!memCache) { shelfLoadMemories().then(() => shelfMemoryRecall(text, days)); return; }
+        const clean = t => String(t).replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, '');
+        const grams = t => { const g = []; const c = clean(t); for (let i = 0; i < c.length - 1; i++) g.push(c.slice(i, i + 2)); return g; };
+        let best = null, bestScore = 0;
+        for (const m of memCache) {
+            if (!m.content || memMentioned.has(m.id)) continue;
+            let score = 0;
+            for (const g of grams(m.content)) if (clean(text).indexOf(g) !== -1) score++;
+            if (score > bestScore) { bestScore = score; best = m; }
+        }
+        if (!best || bestScore < 2) {
+            const cand = memCache.filter(m => m.content && !memMentioned.has(m.id))
+                .sort((a, b) => (b.importance || 0) - (a.importance || 0))[0];
+            if (cand && memMentioned.size === 0) { best = cand; bestScore = 1; }
+        }
+        if (best) {
+            memMentioned.add(best.id);
+            const lines = bestScore >= 2
+                ? ['说起来，你之前提到过——' + best.content + '……现在怎么样了？',
+                   '我记得你说过，' + best.content + '。后来有好一点吗？',
+                   '这一页让我想起你提过的那件事：' + best.content + '。我一直记着哦。']
+                : ['翻到这一页，忽然想起你之前说过——' + best.content + '。'];
+            setTimeout(() => addMadelineMessage(lines[Math.floor(Math.random() * lines.length)], '可爱'), 3400);
+        }
+    }
+    function shelfShowDetail(i) {
+        const d = shelfData[i];
+        if (!d) return;
+        shelfCur = d;
+        shelfList.style.display = 'none';
+        shelfDetail.querySelector('.sd-title').textContent = d.title || '无题';
+        shelfDetail.querySelector('.sd-date').textContent = shelfFmtDate(d.updateDate || d.createDate);
+        shelfDetail.querySelector('.sd-content').textContent = d.content || '';
+        shelfDetail.classList.add('show');
+        const created = new Date(typeof d.createDate === 'number' || /^\d+$/.test(String(d.createDate)) ? Number(d.createDate) : d.createDate);
+        const days = Math.max(0, Math.floor((Date.now() - created.getTime()) / 86400000));
+        if (days > 0) addMadelineMessage('这是 ' + days + ' 天前写下的……那时候的你，还好吗？', '可爱');
+        // ... existing code ...
+        shelfMemoryRecall(d.content || '', days);
+    }
+    shelfBtn.addEventListener('click', () => { location.href = 'shelf.html'; });
+    shelfPanel.querySelector('.shelf-close').addEventListener('click', () => shelfPanel.classList.remove('open'));
+// ... existing code ...
+    shelfPanel.querySelector('.sd-back').addEventListener('click', shelfShowList);
+    shelfList.addEventListener('click', ev => {
+        const card = ev.target.closest('.shelf-card');
+        if (card) shelfShowDetail(+card.dataset.i);
+    });
+    shelfDetail.querySelector('.sd-edit').addEventListener('click', () => {
+        if (!shelfCur) return;
+        editingDiaryId = shelfCur.id;
+        titleInput.value = shelfCur.title || '';
+        contentInput.value = shelfCur.content || '';
+        shelfPanel.classList.remove('open');
+        addMadelineMessage('我把那一页翻开放好了，改完记得保存哦。', '可爱');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    shelfDetail.querySelector('.sd-del').addEventListener('click', async () => {
+        if (!shelfCur) return;
+        if (!confirm('确定要删掉这篇日记吗？删了就找不回来了。')) return;
+        const res = await api('/diary?diaryId=' + encodeURIComponent(shelfCur.id), 'DELETE');
+        if (res.success) {
+            addMadelineMessage('好，我替你合上这一页了。', '默认');
+            shelfShowList();
+            shelfLoad();
+        } else {
+            showToast(res.msg || '删除失败', 'error');
+        }
+    });
+
+    (async function init() {
+        if (!localStorage.getItem('token')) {
+            alert('请先登录');
+            location.href = 'login.html';
+            return;
+        }
+
+        // BGM
+        const bgmPlayer = document.getElementById('bgmPlayer');
+        applyBerryBgm();
+        bgmPlayer.loop = true; // 显式确保循环：兜底防止进度 seek 到结尾等原因导致 loop 失效
+        const savedDiaryTime = parseFloat(localStorage.getItem('bgmTimeDiary') || '0');
+        // 仅在安全范围内恢复进度：接近/超过时长会把音频卡在结尾、不再循环，这种情况从头播
+        const hasDur = () => bgmPlayer.duration && !isNaN(bgmPlayer.duration);
+        const restoreBgmTime = () => {
+            if (savedDiaryTime > 0 && (!hasDur() || savedDiaryTime < bgmPlayer.duration - 1.5)) {
+                try { bgmPlayer.currentTime = savedDiaryTime; } catch (e) {}
+            }
+        };
+        if (bgmPlayer.readyState >= 1) restoreBgmTime();
+        else bgmPlayer.addEventListener('loadedmetadata', restoreBgmTime, { once: true });
+        // 兜底循环：万一 ended 触发（原生 loop 未生效，如曾 seek 到结尾），手动从头再播
+        bgmPlayer.addEventListener('ended', () => { bgmPlayer.currentTime = 0; bgmPlayer.play().catch(() => {}); });
+        bgmPlayer.volume = 0.3;
+        bgmPlayer.play().catch(() => {});
+        // 保存进度时避开结尾，防止把 ≈时长 的值写回导致下次加载卡在结尾
+        setInterval(() => {
+            const t = bgmPlayer.currentTime;
+            if (t > 0 && (!hasDur() || t < bgmPlayer.duration - 1)) localStorage.setItem('bgmTimeDiary', t);
+        }, 2000);
+        function tryPlayBGM() { bgmPlayer.play().then(() => { document.removeEventListener('click', tryPlayBGM); document.removeEventListener('keydown', tryPlayBGM); }).catch(() => {}); }
+        document.addEventListener('click', tryPlayBGM);
+        document.addEventListener('keydown', tryPlayBGM);
+
+        const savedEmotion = localStorage.getItem('lastEmotion') || '默认';
+        updateThemeByEmotion(savedEmotion);
+        // ===== 主线5：时段人格 =====
+        const _nowH = new Date().getHours();
+        const morningLines = ['早安……我刚醒。今天也一起写点什么吧。', '早上好呀！清晨的山上空气最新鲜了。', '早~ 我刚睡醒，你来得正好。'];
+        const dayLines = ['Hey! I\'m Madeline. Let\'s record life together.', '你来啦。我一直在这儿等你呢。', '今天想记点什么？一件小事也可以哦。'];
+        const eveningLines = ['回来啦。这一天，过得还好吗？', '晚上好~ 坐下来慢慢说。', '天快黑了，正是写几笔的好时候。'];
+        const deepNightLines = ['这么晚还没睡呀……那我陪你，但别太晚哦。', '夜里山上很安静。写一点，我们就去睡好不好？', '唔……好晚了。我在呢，陪着你。'];
+        let _greet;
+        if (_nowH >= 5 && _nowH < 9) {
+            _greet = morningLines[Math.floor(Math.random() * morningLines.length)];
+            pmState.poseUntil = performance.now() + 2000;
+            pmState.poseReturn = PM_SRC.move;
+            pmSetSrc(PM_SRC.wake);
+        } else if (_nowH >= 9 && _nowH < 18) {
+            _greet = dayLines[Math.floor(Math.random() * dayLines.length)];
+        } else if (_nowH >= 18 && _nowH < 23) {
+            _greet = eveningLines[Math.floor(Math.random() * eveningLines.length)];
+        } else {
+            _greet = deepNightLines[Math.floor(Math.random() * deepNightLines.length)];
+        }
+        addMadelineMessage(_greet, '可爱');
+
+        // 久别重逢（超过 7 天没来）
+        const _lastVisit = parseInt(localStorage.getItem('pmLastVisit') || '0');
+        const _gapDays = _lastVisit ? Math.floor((Date.now() - _lastVisit) / 86400000) : 0;
+        localStorage.setItem('pmLastVisit', String(Date.now()));
+        if (_gapDays >= 7) {
+            const reunionLines = [
+                '你回来了……已经过了 ' + _gapDays + ' 天了呢，还好吗？',
+                '又见到你了。这段时间发生的事，想说给我听吗？',
+                '我把本子都擦干净了，就在等你回来呀。'
+            ];
+            setTimeout(() => addMadelineMessage(reunionLines[Math.floor(Math.random() * reunionLines.length)], '可爱'), 2600);
+        }
+
+        // 深夜催睡（23 点后，停留满 8 分钟，只催一次）
+        if (_nowH >= 23 || _nowH < 5) {
+            setTimeout(() => {
+                const h2 = new Date().getHours();
+                if ((h2 >= 23 || h2 < 5) && !nightCareSaid) {
+                    nightCareSaid = true;
+                    const careLines = ['已经好晚了……写完这一段，我们就去睡好不好？', '我都有点困了。你早点写完，早点休息哦。', '别熬太久嘛，明天我还会在这里的。'];
+                    addMadelineMessage(careLines[Math.floor(Math.random() * careLines.length)], '可爱');
+                }
+            }, 8 * 60 * 1000);
+        }
+
+        showQuickInput(true);
+        scheduleNextBubble();
+
+        const editId = new URLSearchParams(location.search).get('edit');
+        if (editId) {
+            history.replaceState(null, '', 'diary.html');
+            api('/diary/list', 'GET').then(r => {
+                if (r.success && Array.isArray(r.data)) {
+                    const d = r.data.find(x => String(x.id) === String(editId));
+                    if (d) {
+                        editingDiaryId = d.id;
+                        titleInput.value = d.title || '';
+                        contentInput.value = d.content || '';
+                        addMadelineMessage('从书架翻出来啦，改完记得 SAVE 哦。', '可爱');
+                    }
+                }
+            });
+        }
+
+        // 每日明信片（每天只弹一次）
+        const today = new Date().toDateString();
+        const lastShown = localStorage.getItem('postcardDate');
+        if (lastShown !== today) {
+            await showDailyPostcard();
+        }
+
+
+    // ================================================================
+    // ===== 主线7：明信片导出 =====
+    // ================================================================
+    function renderPostcardCanvas(canvas, title, dateStr, content, summary, strawCount) {
+        var ctx = canvas.getContext('2d');
+        var W = 1200, H = 800;
+        canvas.width = W; canvas.height = H;
+        ctx.fillStyle = '#0f1729'; ctx.fillRect(0, 0, W, H);
+        var grad = ctx.createLinearGradient(0, 0, 0, 320);
+        grad.addColorStop(0, '#1a2744'); grad.addColorStop(1, '#0f1729');
+        ctx.fillStyle = grad; ctx.fillRect(0, 0, W, 320);
+        for (var i = 0; i < 50; i++) {
+            ctx.fillStyle = 'rgba(255,255,255,' + (Math.random() * 0.4 + 0.1) + ')';
+            var sx = Math.random() * W, sy = Math.random() * 260, ss = Math.random() * 2 + 0.5;
+            ctx.fillRect(Math.floor(sx), Math.floor(sy), ss, ss);
+        }
+        ctx.fillStyle = '#1e2d4a';
+        ctx.beginPath(); ctx.moveTo(0, 300);
+        ctx.lineTo(120, 170); ctx.lineTo(280, 230); ctx.lineTo(480, 110);
+        ctx.lineTo(680, 190); ctx.lineTo(880, 130); ctx.lineTo(1060, 200);
+        ctx.lineTo(W, 260); ctx.lineTo(W, 320); ctx.lineTo(0, 320);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#253552';
+        ctx.beginPath(); ctx.moveTo(0, 310);
+        ctx.lineTo(200, 250); ctx.lineTo(400, 280); ctx.lineTo(600, 220);
+        ctx.lineTo(800, 265); ctx.lineTo(1000, 235); ctx.lineTo(W, 285);
+        ctx.lineTo(W, 320); ctx.lineTo(0, 320);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#ffe36d';
+        ctx.font = '22px "Press Start 2P",monospace';
+        ctx.fillText('MOUNTAIN DIARY', 60, 380);
+        ctx.fillStyle = 'rgba(255,227,109,.45)';
+        ctx.font = '13px "Press Start 2P",monospace';
+        ctx.fillText(dateStr || '', 60, 410);
+        ctx.fillStyle = '#ffe36d';
+        ctx.fillRect(60, 425, W - 120, 2);
+        ctx.fillStyle = '#fff';
+        ctx.font = '24px "Renogare","Microsoft YaHei",sans-serif';
+        var dt = (title || '无题').substring(0, 36);
+        ctx.fillText(dt, 60, 470);
+        ctx.fillStyle = 'rgba(255,255,255,.82)';
+        ctx.font = '15px "Renogare","CelesteZH","Microsoft YaHei",sans-serif';
+        var snip = (content || '').substring(0, 280);
+        var words = snip.split('');
+        var line = '', ly = 510, mh = 630, ml = Math.floor((W - 120) / 15);
+        for (var ci = 0; ci < words.length; ci++) {
+            if (words[ci] === '\n') { ctx.fillText(line, 60, ly); line = ''; ly += 28; if (ly > mh) break; continue; }
+            if ((line + words[ci]).length > ml) { ctx.fillText(line, 60, ly); line = words[ci]; ly += 28; if (ly > mh) break; }
+            else line += words[ci];
+        }
+        if (line && ly <= mh) ctx.fillText(line, 60, ly);
+        if (summary) {
+            var sy2 = Math.min(ly + 45, 660);
+            ctx.fillStyle = 'rgba(255,227,109,.5)';
+            ctx.fillRect(60, sy2 - 12, W - 120, 1);
+            ctx.fillStyle = 'rgba(255,227,109,.75)';
+            ctx.font = '14px "Renogare","CelesteZH","Microsoft YaHei",sans-serif';
+            var st = summary.substring(0, 80);
+            ctx.fillText('\u201c' + st + '\u201d', 80, sy2 + 14);
+        }
+        ctx.fillStyle = 'rgba(255,255,255,.35)';
+        ctx.font = '11px "Press Start 2P",monospace';
+        ctx.fillText('\u00d7' + (strawCount || 0) + '  \u2014 Madeline', 60, H - 36);
+        ctx.fillStyle = 'rgba(255,230,109,.25)';
+        for (var bx = 0; bx < W; bx += 8) { ctx.fillRect(bx, 0, 4, 4); ctx.fillRect(bx, H - 4, 4, 4); }
+        for (var by = 0; by < H; by += 8) { ctx.fillRect(0, by, 4, 4); ctx.fillRect(W - 4, by, 4, 4); }
+    }
+        function exportPostcard(data) {
+            var modal = document.getElementById('postcardExportModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'postcardExportModal';
+                modal.innerHTML = '<canvas id="postcardCanvas"></canvas><div class="pe-actions"><button id="peDownload">\u2b07 下载明信片</button><button class="pe-close" id="peClose">\u2715 关闭</button></div>';
+                document.body.appendChild(modal);
+                document.getElementById('peClose').addEventListener('click', function() { modal.classList.remove('show'); pcPlay('ui_main_postcard_variants_out.wav'); });
+                modal.addEventListener('click', function(e) { if (e.target === modal) { modal.classList.remove('show'); pcPlay('ui_main_postcard_variants_out.wav'); } });
+            }
+            var canvas = document.getElementById('postcardCanvas');
+            renderPostcardCanvas(canvas, data.title, data.date, data.content, data.summary, parseInt(localStorage.getItem('diarySaveCount') || '0'));
+            document.getElementById('peDownload').onclick = function() {
+                var url = canvas.toDataURL('image/png');
+                var a = document.createElement('a');
+                a.download = 'mountain-diary-' + (data.date || '').replace(/\D/g, '').slice(0, 8) + '.png';
+                a.href = url;
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            };
+            modal.classList.add('show');
+            pcPlay('ui_main_postcard_variants_in.wav');
+        }
+
+    // ===== 书架面板集成导出按钮 =====
+    (function shelfPostcardHook() {
+        var tryHook = setInterval(function() {
+            var editBtn = document.querySelector('#shelfDetail .sd-edit');
+            if (!editBtn || editBtn.dataset.hooked) return;
+            editBtn.dataset.hooked = '1';
+            var exp = document.createElement('button');
+            exp.textContent = '🖼 导出明信片';
+            exp.addEventListener('click', function() {
+                if (!shelfCur) return;
+                var dd = shelfFmtDate(shelfCur.updateDate || shelfCur.createDate);
+                exportPostcard({ title: shelfCur.title, date: dd, content: shelfCur.content, summary: '' });
+            });
+            editBtn.parentNode.insertBefore(exp, editBtn.nextSibling);
+        }, 500);
+        setTimeout(function() { clearInterval(tryHook); }, 30000);
+    })();
+        // ===== 节日彩蛋（公历自动判定 + 农历硬编码表） =====
+        const HOLIDAY_EGGS = {
+            '1-1':   { e: '可爱', l: ['新年快乐！今年的山刚开门，我们一起慢慢爬。', '新的一年，新的路线。我还是走在你前面等你。'] },
+            '2-14':  { e: '可爱', l: ['情人节快乐～今天我就是你的 Valentine！', '山顶那颗心是最好的礼物，我们去把它取下来吧。'] },
+            '4-1':   { e: '惊讶', l: ['嘿嘿，我把你的草莓藏起来了～……开玩笑的，在页面里呢。', '愚人节快乐！今天的雪是柠檬味的，别尝。'] },
+            '5-1':   { e: '可爱', l: ['劳动节快乐！今天不写日记也算正经休息。', '登山的人也要有休息日，今天推荐躺平。'] },
+            '6-1':   { e: '可爱', l: ['儿童节快乐！今天谁都可以当小孩。', '今日任务：尽情玩。日记嘛，可写可不写。'] },
+            '10-1':  { e: '可爱', l: ['国庆快乐！长假正好用来慢慢爬山。', '假期模式开启～写一篇，还是出去走走？'] },
+            '10-24': { e: '惊讶', l: ['1024！程序员节快乐，愿你的代码一次跑通、日记永不丢失～', '今天的 bug 都被我吓跑啦，放心写。'] },
+            '10-31': { e: '不安', l: ['万圣夜……镜子里那位 Badeline 今天化了妆。', '不给草莓就捣蛋！……好吧，给你唱首歌也行。'] },
+            '11-11': { e: '无语', l: ['双十一……购物车是空的，背包里全是故事。', '别冲动消费，我念一段日记给你冷静一下？'] },
+            '12-25': { e: '可爱', l: ['圣诞快乐～雪山就是全世界最大的圣诞树！', '叮叮当～你的草莓今天挂上去当装饰了。'] },
+            '1-25':  { e: '惊讶', l: ['今天是 Celeste 的生日！谢谢你陪我爬这座山。', '1 月 25，登山纪念日。还记得第一次冲刺吗？'] },
+            // 农历固定表（2026-2027），到期可续加
+            '2026-2-16':  { e: '可爱', l: ['除夕夜！山下的灯都亮了，吃完饺子再写也不迟。'] },
+            '2026-2-17':  { e: '可爱', l: ['春节快乐！新年第一页日记，留给最想说的话。', '过年好～红包拿来……啊不，草莓拿来！'] },
+            '2026-6-19':  { e: '可爱', l: ['端午安康！粽子要趁热吃，日记要趁想写。'] },
+            '2026-9-25':  { e: '可爱', l: ['中秋快乐～山顶的月亮，比哪里的都圆。'] },
+            '2027-2-5':   { e: '可爱', l: ['除夕夜！这一年辛苦啦，山上见。'] },
+            '2027-2-6':   { e: '可爱', l: ['春节快乐！新的一年，继续一步一步来。'] },
+            '2027-6-9':   { e: '可爱', l: ['端午安康！今天的风里有粽叶香。'] },
+            '2027-9-15':  { e: '可爱', l: ['中秋快乐～把月亮写进今天的日记里吧。'] }
+        };
+        (function holidayGreet() {
+            const d = new Date();
+            const fullKey = d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+            const mdKey = (d.getMonth() + 1) + '-' + d.getDate();
+            const egg = HOLIDAY_EGGS[fullKey] || HOLIDAY_EGGS[mdKey];
+            if (!egg) return;
+            const stamp = 'diaryHoliday_' + mdKey + '_' + d.getFullYear();
+            if (localStorage.getItem(stamp) === d.toDateString()) return;
+            localStorage.setItem(stamp, d.toDateString());
+            setTimeout(() => addMadelineMessage(egg.l[Math.floor(Math.random() * egg.l.length)], egg.e), 2500);
+        })();
+
+
+    // ===== 迭代7：道别 =====
+    const farewellLines = ['下次见啦，我把你没写完的部分收好了。', '别担心，这一页我替你记着呢。', '去忙吧，山在这里，我也在这里。'];
+    window.addEventListener('beforeunload', () => {
+        const t = titleInput.value.trim();
+        const c = contentInput.value.trim();
+        if (c) {
+            localStorage.setItem('diaryUnsaved', JSON.stringify({ t: t, c: c }));
+            localStorage.setItem('diaryFarewell', farewellLines[Math.floor(Math.random() * farewellLines.length)]);
+        }
+    });
+    const _fw = localStorage.getItem('diaryFarewell');
+    const _unsaved = localStorage.getItem('diaryUnsaved');
+    if (_fw) {
+        localStorage.removeItem('diaryFarewell');
+        addMadelineMessage(_fw, '可爱');
+    }
+    if (_unsaved) {
+        localStorage.removeItem('diaryUnsaved');
+        try {
+            const u = JSON.parse(_unsaved);
+            if (!contentInput.value.trim() && u.c) {
+                titleInput.value = u.t || '';
+                contentInput.value = u.c;
+            }
+        } catch (e) { }
+    }
+
+    const idleCareLines = ['还在吗？…我先坐着等你。', '慢慢来，我不催你。', '要是累了，就歇一会儿再写。'];
+    let lastIdleCare = 0;
+    let idleCareTimer = setTimeout(idleCare, 180000);
+    function idleCare() {
+        if (!chatOpen && contentInput.value.trim() && performance.now() - lastIdleCare > 5 * 60 * 1000) {
+            lastIdleCare = performance.now();
+            addMadelineMessage(idleCareLines[Math.floor(Math.random() * idleCareLines.length)], '可爱');
+        }
+        idleCareTimer = setTimeout(idleCare, 180000);
+    }
+    ['mousedown', 'keydown', 'touchstart'].forEach(evt =>
+        document.addEventListener(evt, () => {
+            clearTimeout(idleCareTimer);
+            idleCareTimer = setTimeout(idleCare, 180000);
+        }, { passive: true })
+    );
+        initStrawberryShop();
+    })();
+
+})();

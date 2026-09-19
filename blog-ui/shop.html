@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Celeste Resort · Oshiro</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="icon/OIP.webp" type="image/webp">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+@font-face { font-family:'Renogare'; src:url('celeste-font-en/Renogare-Regular.otf') format('opentype'); font-display:swap; }
+@font-face { font-family:'CelesteZH'; src:url('fonts/NotoSansCJKsc-Medium.otf') format('opentype'); font-display:swap; }
+body { min-height:100vh; background:url('celeste-gui/shop-screen.webp') center/cover no-repeat fixed; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; overflow-x:hidden; }
+.topbar { position:fixed; top:14px; left:16px; z-index:20; }
+.topbar a { display:inline-block; padding:8px 14px; background:rgba(22,34,60,.88); color:#ffe36d; border:2px solid #ffe36d; border-radius:6px; text-decoration:none; font-size:13px; box-shadow:0 0 10px rgba(255,230,109,.35); }
+h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family:'Press Start 2P',monospace; font-size:14px; color:#ffe36d; text-shadow:0 2px 0 rgba(0,0,0,.6); letter-spacing:2px; z-index:20; }
+.wrap { max-width:760px; margin:0 auto; padding:86px 20px 160px; }
+.oshiro-wrap { text-align:center; margin-bottom:16px; }
+.oshiro-wrap img { width:92px; height:92px; object-fit:cover; border-radius:8px; border:2px solid rgba(255,230,109,.5); box-shadow:0 0 16px rgba(255,230,109,.3); }
+.balance { display:flex; align-items:center; gap:10px; justify-content:center; margin-bottom:26px; }
+.balance img { width:34px; height:34px; image-rendering:pixelated; filter:drop-shadow(0 0 6px rgba(255,107,138,.6)); }
+.balance .num { font-family:'Press Start 2P',monospace; font-size:20px; color:#ff6b8a; text-shadow:0 2px 0 rgba(0,0,0,.6); }
+.balance .tip { color:rgba(255,255,255,.55); font-size:12px; }
+.items { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:16px; }
+.item { background:rgba(22,34,60,.88); border:2px solid rgba(255,230,109,.4); border-radius:8px; padding:16px; display:flex; align-items:center; gap:14px; transition:transform .15s, border-color .15s; }
+.item:hover { transform:translateY(-3px); border-color:#ffe36d; }
+.item img { width:44px; height:44px; image-rendering:pixelated; object-fit:contain; flex-shrink:0; }
+.item .info { flex:1; min-width:0; }
+.item .name { color:#fff; font-size:15px; margin-bottom:4px; }
+.item .desc { color:rgba(255,255,255,.55); font-size:12px; line-height:1.6; }
+.item .buy { padding:8px 14px; border:2px solid #ffe36d; border-radius:6px; background:rgba(22,34,60,.9); color:#ffe36d; cursor:pointer; font-size:13px; white-space:nowrap; flex-shrink:0; transition:background .2s; }
+.item .buy:hover:not(:disabled) { background:rgba(255,227,109,.25); }
+.item .buy:disabled { opacity:.45; cursor:not-allowed; }
+.item.owned { border-color:rgba(255,230,109,.75); }
+.item.owned .buy { border-color:#7dcf7d; color:#a5e8a5; }
+.oshiro-say { margin-top:26px; text-align:center; color:rgba(255,227,109,.85); font-size:13px; min-height:22px; }
+#shopMemo { position:fixed; inset:0; z-index:999; background:rgba(4,4,16,.96); display:flex; align-items:center; justify-content:center; flex-direction:column; cursor:pointer; opacity:0; transition:opacity .6s ease; }
+#shopMemo.show { opacity:1; }
+#shopMemo img { max-width:min(92vw,560px); max-height:72vh; border-radius:6px; box-shadow:0 10px 50px rgba(0,0,0,.7); transform:scale(.94); transition:transform .8s cubic-bezier(.2,.8,.3,1); }
+#shopMemo.show img { transform:scale(1); }
+#shopMemo .memo-tip { position:absolute; bottom:26px; left:50%; transform:translateX(-50%); color:rgba(255,230,109,.6); font-size:12px; letter-spacing:2px; }
+
+/* ===== Oshiro 对话框（遮罩 fill 铺满） ===== */
+#gameDialog {
+    position: fixed;
+    left: 50%;
+    bottom: 66px;
+    transform: translateX(-50%) translateY(24px);
+    width: min(94vw, 900px);
+    min-height: 128px;
+    z-index: 950;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 20px 30px;
+    background: url('Atlases/Portraits/textbox/oshiro.png') center / 100% 100% no-repeat;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s ease, transform .25s ease;
+}
+#gameDialog.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+#gameDialogOverlay { position:absolute; left:0; top:0; width:100%; height:100%; object-fit:fill; pointer-events:none; z-index:1; }
+#gameDialogPortrait { width:92px; height:92px; flex-shrink:0; border-radius:6px; overflow:hidden; z-index:2; }
+#gameDialogPortrait img { width:100%; height:100%; object-fit:cover; display:block; }
+#gameDialogBody { flex:1; min-width:0; z-index:2; }
+#gameDialogName { font-family:'Press Start 2P',monospace; color:#ffe36d; font-size:13px; margin-bottom:5px; }
+#gameDialogText { font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; color:#fff; font-size:14px; line-height:1.7; word-break:break-word; }
+
+/* ===== 像素 Oshiro ===== */
+#pixelOshiro {
+    position: fixed;
+    top: 60px;
+    left: 40px;
+    width: 320px;
+    height: 320px;
+    object-fit: contain;
+    object-position: center bottom;
+    image-rendering: pixelated;
+    z-index: 945;
+    cursor: pointer;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,.5));
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+/* ===== Oshiro 聊天历史框（双击打开） ===== */
+#oshiroChatDialog {
+    position: fixed;
+    right: 12px;
+    bottom: 12px;
+    width: 380px;
+    max-width: 92vw;
+    height: 480px;
+    z-index: 955;
+    background: url('celeste-gui/card_golden.webp') top / 100% 123% no-repeat;
+    border: none;
+    border-radius: 0;
+    display: none;
+    flex-direction: column;
+    box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    overflow: hidden;
+}
+#oshiroChatDialog.show { display: flex; }
+#oshiroChatDialog .chat-header {
+    display:flex; align-items:center; gap:10px;
+    padding:14px 16px 8px 42px;
+    border-bottom:none;
+    background:url('celeste-gui/cardtop_golden.webp') center / 100% 100% no-repeat;
+    flex-shrink:0;
+}
+#oshiroChatDialog .chat-header img { width:36px; height:36px; object-fit:cover; border-radius:6px; }
+#oshiroChatDialog .chat-title { flex:1; color:#2b2018; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; font-size:18px; letter-spacing:1px; }
+#oshiroChatDialog .close-btn { background:none; border:none; color:rgba(43,32,24,.55); font-size:16px; cursor:pointer; }
+#oshiroChatDialog .close-btn:hover { color:#2b2018; }
+#oshiroChatMessages { flex:1; overflow-y:auto; padding:14px 16px 10px 42px; display:flex; flex-direction:column; gap:10px; min-height:0; }
+.och-msg { max-width:85%; padding:8px 12px; border-radius:10px; font-size:13px; line-height:1.6; word-break:break-word; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; }
+.och-msg.user { align-self:flex-end; background:rgba(74,144,226,.14); color:#2b3a52; border:1px solid rgba(74,144,226,.4); }
+.och-msg.assistant { align-self:flex-start; background:transparent; border:none; padding:4px 6px; color:#3a2e2a; }
+#oshiroChatDialog .chat-input { display:flex; gap:8px; padding:8px 12px 6px 12px; border-top:1px dashed rgba(58,46,42,.35); flex-shrink:0; }
+#oshiroChatDialog .chat-input input { flex:1; padding:8px 10px; border:1px solid rgba(125,207,255,.5); border-radius:6px; background:rgba(125,207,255,.18); color:#2b3a52; font-size:13px; outline:none; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; }
+#oshiroChatDialog .chat-input input:focus { border-color:#7DCFFF; background:rgba(125,207,255,.3); }
+#oshiroChatDialog .chat-input input::placeholder { color:rgba(43,58,82,.45); }
+#oshiroChatDialog .chat-input button { padding:8px 14px; border:none; border-radius:6px; background:#FFEB3B; color:#111; cursor:pointer; font-size:14px; letter-spacing:1px; font-family:'Renogare','CelesteZH',sans-serif; box-shadow:inset 0 -2px #111111; }
+#oshiroChatDialog .chat-input button:hover { background:#ffeb85; }
+
+/* ===== 煤球精灵（dustCreature 图层叠加） ===== */
+#dustSprite {
+    position: fixed;
+    left: 140px;
+    top: 320px;
+    z-index: 935;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-drag: none;
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,.45));
+}
+#dustSprite .dust-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transform-origin: 50% 100%;
+    transition: transform .15s ease;
+    animation: dustIdle 2.4s ease-in-out infinite;
+}
+#dustSprite.moving .dust-inner { animation: dustHop .45s ease-in-out infinite; }
+#dustSprite.squish .dust-inner { animation: none; transform: scale(1.3, .55); }
+#dustSprite img {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    image-rendering: pixelated;
+    pointer-events: none;
+}
+@keyframes dustIdle { 0%,100% { transform: scale(1,1); } 50% { transform: scale(1.05,.95); } }
+@keyframes dustHop { 0%,100% { transform: translateY(0) scale(1,1); } 50% { transform: translateY(-7px) scale(.95,1.06); } }
+
+</style>
+</head>
+<body>
+<h1>CELESTE RESORT</h1>
+<div id="shopMemo">
+    <img src="Atlases/Memo/memo.png" alt="memo" loading="lazy" decoding="async">
+    <div class="memo-tip">点击继续</div>
+</div>
+<div class="topbar"><a href="diary.html">← 返回大堂</a></div>
+
+<audio id="bgmPlayer"></audio>
+
+<img id="pixelOshiro" src="celeste-gui/oshiro-appear.gif" alt="Oshiro" title="Oshiro" loading="lazy" decoding="async">
+
+<!-- 煤球精灵：图层由 JS 动态叠加 -->
+<div id="dustSprite"><div class="dust-inner"></div></div>
+
+<div id="gameDialog">
+    <img id="gameDialogOverlay" src="Atlases/Portraits/textbox/oshiro_overlay.png" alt="" loading="lazy" decoding="async">
+    <div id="gameDialogPortrait"><img id="gameDialogPortraitImg" src="Atlases/Portraits/oshiro/normal00.png" alt="Oshiro" loading="lazy" decoding="async"></div>
+    <div id="gameDialogBody">
+        <div id="gameDialogName">Oshiro</div>
+        <div id="gameDialogText"></div>
+    </div>
+</div>
+
+<!-- Oshiro 聊天历史框 -->
+<div id="oshiroChatDialog">
+    <div class="chat-header">
+        <img id="ochAvatar" src="Atlases/Portraits/oshiro/normal00.png" alt="Oshiro" loading="lazy" decoding="async">
+        <span class="chat-title">Oshiro</span>
+        <button class="close-btn" id="ochCloseBtn">✕</button>
+    </div>
+    <div id="oshiroChatMessages"></div>
+    <div class="chat-input">
+        <input type="text" id="ochInput" placeholder="跟 Oshiro 说点什么...">
+        <button id="ochSendBtn">Send</button>
+    </div>
+</div>
+
+<div class="wrap">
+    <div class="oshiro-wrap"><img id="oshiroPortrait" src="Atlases/Portraits/oshiro/normal00.png" alt="Oshiro" loading="lazy" decoding="async"></div>
+    <div class="balance">
+        <img src="celeste-collectables/strawberry.png" alt="strawberry" loading="lazy" decoding="async">
+        <span class="num" id="balNum">0</span>
+        <span class="tip">每写一篇日记收一颗草莓</span>
+    </div>
+    <div class="items" id="items"></div>
+    <div class="oshiro-say" id="mSay"></div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+    // ===== 音频手势解锁（修复音效不生效） =====
+    ['pointerdown', 'keydown'].forEach(function(ev) {
+        window.addEventListener(ev, function() { window.__audioGestured = true; }, { once: true });
+    });
+
+    // ===== BGM 1212 循环 =====
+    var bgmList = ['bgm/checking-in.mp3', 'bgm/farewell.mp3'];
+    var bgmIndex = parseInt(localStorage.getItem('shopBgmIndex') || '0');
+    if (bgmIndex >= bgmList.length) bgmIndex = 0;
+    var bgmPlayer = document.getElementById('bgmPlayer');
+    bgmPlayer.src = bgmList[bgmIndex];
+    bgmPlayer.volume = 0.3;
+    var savedTime = parseFloat(localStorage.getItem('shopBgmTime') || '0');
+    if (savedTime > 0) bgmPlayer.currentTime = savedTime;
+    bgmPlayer.play().catch(function(){});
+    bgmPlayer.addEventListener('ended', function() {
+        bgmIndex = (bgmIndex + 1) % bgmList.length;
+        localStorage.setItem('shopBgmIndex', String(bgmIndex));
+        localStorage.setItem('shopBgmTime', '0');
+        bgmPlayer.src = bgmList[bgmIndex];
+        bgmPlayer.play().catch(function(){});
+    });
+    setInterval(function() { localStorage.setItem('shopBgmTime', String(bgmPlayer.currentTime)); }, 2000);
+    function tryPlayBGM() { bgmPlayer.play().then(function(){ document.removeEventListener('click', tryPlayBGM); document.removeEventListener('keydown', tryPlayBGM); }).catch(function(){}); }
+    document.addEventListener('click', tryPlayBGM);
+    document.addEventListener('keydown', tryPlayBGM);
+
+    // ===== 开场备忘录：仅首次进入播放 =====
+    (function () {
+        var memo = document.getElementById('shopMemo');
+        if (localStorage.getItem('shopMemoSeenV2') === '1') { memo.remove(); return; }
+        localStorage.setItem('shopMemoSeenV2', '1');
+        requestAnimationFrame(function(){ requestAnimationFrame(function(){ memo.classList.add('show'); }); });
+        var hide = function() {
+            if (memo.classList.contains('gone')) return;
+            memo.classList.add('gone');
+            memo.classList.remove('show');
+            setTimeout(function(){ memo.remove(); }, 650);
+        };
+        memo.addEventListener('click', hide);
+        setTimeout(hide, 5000);
+    })();
+
+    if (localStorage.getItem('berryFix20260822') !== '1') {
+        localStorage.setItem('berryFix20260822', '1');
+        localStorage.setItem('berryBalance', '3');
+        try {
+            var keep = JSON.parse(localStorage.getItem('berryOwned') || '[]').filter(function (id) {
+                return ['goldberry', 'heartgem', 'moonberry'].indexOf(id) >= 0;
+            });
+            localStorage.setItem('berryOwned', JSON.stringify(keep));
+        } catch (e) {}
+        localStorage.removeItem('berryBgm');
+    }
+
+    // ===== Oshiro 立绘帧动画 =====
+    var OSHIRO_FRAMES = { normal:13, nervous:8, worried:8, drama:6, lostcontrol:6, serious:8, sidehappy:8, sidesuspicious:8, sideworried:9 };
+    var OSHIRO_EMOTION = { '默认':'normal', '不安':'nervous', '不开心':'worried', '怨恨':'drama', '惊讶':'lostcontrol', '无语':'serious', '可爱':'sidehappy' };
+    var oshiroPortrait = document.getElementById('oshiroPortrait');
+    var dialogPortraitImg = document.getElementById('gameDialogPortraitImg');
+    var currentEmotion = 'normal';
+    var frameIdx = 0;
+    var frameTimer = null;
+
+    function startPortraitAnim(emotion) {
+        currentEmotion = emotion || 'normal';
+        frameIdx = 0;
+        if (frameTimer) clearInterval(frameTimer);
+        var count = OSHIRO_FRAMES[currentEmotion] || 13;
+        frameTimer = setInterval(function() {
+            frameIdx = (frameIdx + 1) % count;
+            var src = 'Atlases/Portraits/oshiro/' + currentEmotion + String(frameIdx).padStart(2, '0') + '.png';
+            oshiroPortrait.src = src;
+            dialogPortraitImg.src = src;
+        }, 120);
+    }
+    startPortraitAnim('normal');
+
+    // ===== Oshiro 音效（情绪化语速/音量） =====
+    var OS_VARIANTS = ['mid_a', 'mid_b', 'mid_c', 'end'];
+    var OS_FILE_MAP = { 'mid_a': 'mid_A', 'mid_b': 'mid_B', 'mid_c': 'mid_C', 'end': 'end' };
+    var OS_MAX_NUM = { 'mid_a': 10, 'mid_b': 10, 'mid_c': 8, 'end': 10 };
+    var OS_RATE = { '不安':[0.82,0.95], '不开心':[0.8,0.92], '惊讶':[1.02,1.2], '怨恨':[0.95,1.15], '可爱':[0.95,1.12], '无语':[0.85,0.96], '默认':[0.9,1.08] };
+    var OS_VOL = { '不安':0.62, '不开心':0.55, '惊讶':0.9, '怨恨':0.85, '可爱':0.85, '无语':0.6, '默认':0.78 };
+    var osSpeakSeq = 0;
+    var osDialogEmotion = '默认';
+    var oshiroBlipAudio = new Audio();
+    function playOshiroSound() {
+        if (!window.__audioGestured) return;
+        var dirVariant;
+        if (osSpeakSeq % 5 === 0) {
+            dirVariant = 'end';
+        } else {
+            dirVariant = OS_VARIANTS[osSpeakSeq % 3];
+        }
+        var fileVariant = OS_FILE_MAP[dirVariant];
+        var maxNum = OS_MAX_NUM[dirVariant];
+        var num = String(Math.floor(Math.random() * maxNum) + 1).padStart(2, '0');
+        var src = 'celeste-sounds/oshiro/worried/' + dirVariant + '/worried_' + fileVariant + '_' + num + '.wav';
+        try {
+            var rr = OS_RATE[osDialogEmotion] || OS_RATE['默认'];
+            oshiroBlipAudio.src = src;
+            oshiroBlipAudio.volume = (OS_VOL[osDialogEmotion] || 0.78) + (Math.random() - 0.5) * 0.08;
+            oshiroBlipAudio.playbackRate = rr[0] + Math.random() * (rr[1] - rr[0]);
+            oshiroBlipAudio.currentTime = 0;
+            oshiroBlipAudio.play().catch(function(){});
+        } catch (e) {}
+    }
+
+    // ===== Oshiro 对话框（打字机 + 音效） =====
+    var gameDialog = document.getElementById('gameDialog');
+    var dialogText = document.getElementById('gameDialogText');
+    var dialogTimer = null;
+    var dialogTypeTimer = null;
+
+    function showOshiroDialog(text, emotion) {
+        var emo = OSHIRO_EMOTION[emotion] || emotion || 'normal';
+        osDialogEmotion = emotion || '默认';
+        if (OSHIRO_FRAMES[emo]) startPortraitAnim(emo);
+        dialogText.textContent = '';
+        gameDialog.classList.add('show');
+        if (dialogTimer) clearTimeout(dialogTimer);
+        if (dialogTypeTimer) clearInterval(dialogTypeTimer);
+
+        var charIdx = 0;
+        dialogTypeTimer = setInterval(function() {
+            if (charIdx >= text.length) {
+                clearInterval(dialogTypeTimer);
+                dialogTypeTimer = null;
+                dialogTimer = setTimeout(function() { gameDialog.classList.remove('show'); }, 6000);
+                return;
+            }
+            var ch = text[charIdx];
+            dialogText.textContent += ch;
+            charIdx++;
+            if (!/[\s。！？!?…，,、；;：:（）()*]/.test(ch)) {
+                osSpeakSeq++;
+                if (osSpeakSeq % 3 === 1) playOshiroSound();
+            }
+        }, 50);
+
+        // 害怕情绪（不安/不开心）→ 像素小人坐下
+        if (emotion === '不安' || emotion === '不开心') {
+            osSitScared();
+        }
+    }
+    // 点击对话框立即关闭（与 Madeline 的对话交互一致）
+    gameDialog.addEventListener('click', function() {
+        if (dialogTimer) { clearTimeout(dialogTimer); dialogTimer = null; }
+        if (dialogTypeTimer) { clearInterval(dialogTypeTimer); dialogTypeTimer = null; }
+        gameDialog.classList.remove('show');
+    });
+    // ===== 像素 Oshiro 行为：默认四处游逛，害怕才坐 =====
+    var pixelOshiro = document.getElementById('pixelOshiro');
+    var OS_SRC = {
+        appear: 'celeste-gui/oshiro-appear.gif',
+        idle: 'celeste-gui/oshiro-idle.gif',
+        idle_ground: 'celeste-gui/oshiro-idle_ground.gif',
+        move: 'celeste-gui/oshiro-move.gif',
+        sweeping: 'celeste-gui/oshiro-sweeping.gif',
+        putBroomAway: 'celeste-gui/oshiro-putBroomAway.gif',
+        fall: 'celeste-gui/oshiro-fall.gif',
+        recover: 'celeste-gui/oshiro-recover.gif',
+        side: 'celeste-gui/oshiro-side.gif'
+    };
+    var osMode = '';
+    var osWanderTimer = null;
+
+    function osSetSrc(name) {
+        if (pixelOshiro.src.indexOf(name) === -1) pixelOshiro.src = name;
+    }
+    // ===== 全屏二维游走：随机选点 + 避开弹框 =====
+    function osCurXY() {
+        return {
+            x: parseFloat(pixelOshiro.style.left || '40'),
+            y: parseFloat(pixelOshiro.style.top || '60')
+        };
+    }
+    function osGroundY() {
+        return Math.max(56, window.innerHeight - (pixelOshiro.offsetHeight || 320) - 8);
+    }
+    function osBlockedAt(tx, ty) {
+        var zones = [];
+        var dlg = document.getElementById('gameDialog');
+        if (dlg && dlg.classList.contains('show')) zones.push(dlg.getBoundingClientRect());
+        var chat = document.getElementById('oshiroChatDialog');
+        if (chat && chat.classList.contains('show')) zones.push(chat.getBoundingClientRect());
+        var w = pixelOshiro.offsetWidth || 320, h = pixelOshiro.offsetHeight || 320;
+        for (var i = 0; i < zones.length; i++) {
+            var r = zones[i], m = 16;
+            if (!r || (r.width === 0 && r.height === 0)) continue;
+            if (tx < r.right + m && tx + w > r.left - m && ty < r.bottom + m && ty + h > r.top - m) return true;
+        }
+        return false;
+    }
+    function osPickTarget() {
+        var spriteW = pixelOshiro.offsetWidth || 320;
+        var maxX = Math.max(60, window.innerWidth - spriteW - 10);
+        var minY = 56, maxY = osGroundY();
+        for (var t = 0; t < 8; t++) {
+            var cx = 10 + Math.random() * (maxX - 10);
+            var cy = minY + Math.random() * (maxY - minY);
+            if (!osBlockedAt(cx, cy)) return { x: cx, y: cy };
+        }
+        return { x: 10, y: maxY };
+    }
+    function osWander() {
+        if (osMode === 'sit' || osMode === 'greet' || osMode === 'trip') {
+            osWanderTimer = setTimeout(osWander, 3000);
+            return;
+        }
+        var cur = osCurXY();
+        var tgt = osPickTarget();
+        var dist = Math.sqrt((tgt.x - cur.x) * (tgt.x - cur.x) + (tgt.y - cur.y) * (tgt.y - cur.y));
+        var dur = Math.max(1500, Math.min(8000, dist * (12 + Math.random() * 5)));
+
+        osSetSrc(OS_SRC.move);
+        pixelOshiro.style.transform = tgt.x < cur.x ? 'scaleX(-1)' : '';
+        pixelOshiro.style.transition = 'left ' + dur + 'ms linear, top ' + dur + 'ms linear';
+        pixelOshiro.style.left = tgt.x + 'px';
+        pixelOshiro.style.top = tgt.y + 'px';
+
+        osWanderTimer = setTimeout(function() {
+            pixelOshiro.style.transform = '';
+            if (osMode === 'sit') return;
+            var roll = Math.random();
+            if (roll < 0.06) {
+                osGotoGroundThen(osTrip);
+            } else if (roll < 0.22) {
+                osGotoGroundThen(osSweep);
+            } else if (roll < 0.32) {
+                osGotoGroundThen(osRest);
+            } else if (roll < 0.42) {
+                osGotoGroundThen(osGreet);
+            } else if (roll < 0.50) {
+                osGotoGroundThen(osSideLook);
+            } else {
+                osWander();
+            }
+        }, dur + 200);
+    }
+    // 静止动作（绊倒/扫地/歇息）必须贴地：在半空就先走到地面再做
+    function osGotoGroundThen(fn) {
+        var cur = osCurXY();
+        var gy = osGroundY();
+        if (Math.abs(cur.y - gy) < 30) { fn(); return; }
+        var dur = Math.max(600, Math.abs(gy - cur.y) * 8);
+        osSetSrc(OS_SRC.move);
+        pixelOshiro.style.transition = 'top ' + dur + 'ms linear';
+        pixelOshiro.style.top = gy + 'px';
+        osWanderTimer = setTimeout(fn, dur + 120);
+    }
+
+    function osSweep() {
+        osSetSrc(OS_SRC.sweeping);
+        setTimeout(function() {
+            osSetSrc(OS_SRC.putBroomAway);
+            setTimeout(osWander, 1500);
+        }, 3200);
+    }
+
+    function osRest() {
+        osSetSrc(OS_SRC.idle);
+        setTimeout(osWander, 2500 + Math.random() * 2000);
+    }
+
+    // 新行为：招呼客人（side 素材，侧身挥手）
+    function osGreet() {
+        osSetSrc(OS_SRC.side);
+        var greetLines = ['欢迎光临！今天想喝点什么？', '您来啦，快请进～', '今天天气不错呢，适合住一晚。'];
+        if (Math.random() < 0.4) {
+            showOshiroDialog(greetLines[Math.floor(Math.random() * greetLines.length)], '可爱');
+        }
+        setTimeout(function() {
+            osSetSrc(OS_SRC.idle);
+            setTimeout(osWander, 1200 + Math.random() * 1000);
+        }, 2800);
+    }
+
+    // 新行为：侧身张望（side 素材，四处看看）
+    function osSideLook() {
+        osSetSrc(OS_SRC.side);
+        setTimeout(function() {
+            osSetSrc(OS_SRC.idle);
+            setTimeout(function() {
+                osSetSrc(OS_SRC.side);
+                setTimeout(osWander, 1800 + Math.random() * 1200);
+            }, 1500);
+        }, 1500);
+    }
+
+    function osSitScared() {
+        osMode = 'sit';
+        pixelOshiro.style.transition = 'top 400ms ease';
+        pixelOshiro.style.top = osGroundY() + 'px';
+        osSetSrc(OS_SRC.idle_ground);
+        setTimeout(function() {
+            if (osMode === 'sit') {
+                osMode = '';
+                osSetSrc(OS_SRC.recover);
+                setTimeout(osWander, 1500);
+            }
+        }, 9000);
+    }
+
+    // ===== 绊倒：fall.gif 上岗（走路途中小概率触发） =====
+    function osTrip() {
+        osMode = 'trip';
+        osSetSrc(OS_SRC.fall);
+        setTimeout(function() {
+            osSetSrc(OS_SRC.idle_ground);
+            var lines = ['呀…！失礼了失礼了……', '地、地板怎么突然……', '唔……被您看到丢脸的一面了。'];
+            showOshiroDialog(lines[Math.floor(Math.random() * lines.length)], '惊讶');
+            setTimeout(function() {
+                osSetSrc(OS_SRC.recover);
+                setTimeout(function() { osMode = ''; osWander(); }, 1600);
+            }, 4200);
+        }, 1300);
+    }
+
+    // ===== 成交庆祝：侧身得意姿态 =====
+    function osCelebrate() {
+        osMode = 'greet';
+        osSetSrc(OS_SRC.side);
+        setTimeout(function() { if (osMode === 'greet') osMode = ''; }, 3000);
+    }
+
+    // 进场：appear → 开始游逛
+    osSetSrc(OS_SRC.appear);
+    setTimeout(function() { osWander(); }, 2200);
+
+    // ===== 点击 / 双击（参照 pixelMadeline） =====
+    var osClickTimer = null;
+    pixelOshiro.addEventListener('click', function() {
+        if (osClickTimer) return;
+        osClickTimer = setTimeout(function() {
+            osClickTimer = null;
+            osMode = 'greet';
+            osSetSrc(OS_SRC.side);
+            var greetings = ['嗯？有什么需要帮忙的吗？', '啊，你好你好！随便看看～', '旅馆随时为你敞开大门！', '需要一间能看到雪景的房吗？'];
+            showOshiroDialog(greetings[Math.floor(Math.random() * greetings.length)], '可爱');
+            setTimeout(function() {
+                if (osMode === 'greet') osMode = '';
+            }, 2500);
+        }, 260);
+    });
+    pixelOshiro.addEventListener('dblclick', function() {
+        if (osClickTimer) { clearTimeout(osClickTimer); osClickTimer = null; }
+        toggleOshiroChat();
+    });
+
+    // ===== 聊天历史框 =====
+    var oshiroChatDialog = document.getElementById('oshiroChatDialog');
+    var oshiroChatMessages = document.getElementById('oshiroChatMessages');
+    document.getElementById('ochCloseBtn').addEventListener('click', function() {
+        oshiroChatDialog.classList.remove('show');
+    });
+    function toggleOshiroChat() {
+        oshiroChatDialog.classList.toggle('show');
+        if (oshiroChatDialog.classList.contains('show')) {
+            oshiroChatMessages.scrollTop = oshiroChatMessages.scrollHeight;
+            document.getElementById('ochInput').focus();
+        }
+    }
+    function appendOchMsg(role, text) {
+        var div = document.createElement('div');
+        div.className = 'och-msg ' + role;
+        div.textContent = text;
+        oshiroChatMessages.appendChild(div);
+        oshiroChatMessages.scrollTop = oshiroChatMessages.scrollHeight;
+    }
+    document.getElementById('ochSendBtn').addEventListener('click', function() {
+        sendChat();
+    });
+    document.getElementById('ochInput').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') sendChat();
+    });
+    document.getElementById('ochInput').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') document.getElementById('ochSendBtn').click();
+    });
+
+    // ===== 商品逻辑 =====
+    var SHOP_ITEMS = [
+        { id: 'goldberry', name: '金草莓荣誉', icon: 'celeste-collectables/goldberry/idle00.png', price: 5, desc: '书架右上角点亮金草莓徽章。' },
+        { id: 'heartgem', name: '心之宝石', icon: 'celeste-icons/heartgem0.png', price: 15, desc: '山顶的终极成就。写满 100 篇，它会升满四色。' },
+        { id: 'moonberry', name: '月亮莓', icon: 'celeste-collectables/moonberry/normal00.png', price: 30, desc: '山里藏得最深的传说收藏。拿到它，说明你写到了山顶。' }
+    ];
+    var SAY_BUY = ['太好了！这件收藏品终于找到主人了！', '眼光真好，旅馆的品味有保障～', '恭喜！我这就帮您包好，请收好。'];
+    var SAY_POOR = ['草莓还差一些呢，再写几篇日记吧～', '别急，好东西值得多努力几步。'];
+
+    function balance() { return berryBalance(); }
+    function owned() {
+        try { return JSON.parse(localStorage.getItem('berryOwned') || '[]'); } catch (e) { return []; }
+    }
+    function say(txt) { document.getElementById('mSay').textContent = '「' + txt + '」—— Oshiro'; }
+
+    function render() {
+        var bal = balance(), own = owned();
+        document.getElementById('balNum').textContent = bal;
+        document.getElementById('items').innerHTML = SHOP_ITEMS.map(function(it) {
+            var has = own.indexOf(it.id) >= 0;
+            return '<div class="item' + (has ? ' owned' : '') + '">' +
+                '<img src="' + it.icon + '" alt="" loading="lazy" decoding="async">' +
+                '<div class="info"><div class="name">' + it.name + '</div><div class="desc">' + it.desc + '</div></div>' +
+                '<button class="buy" data-id="' + it.id + '"' + (has ? ' disabled' : (bal < it.price ? ' disabled' : '')) + '>' +
+                (has ? '✓ 已拥有' : it.price + ' 🍓') + '</button></div>';
+        }).join('');
+        document.querySelectorAll('.buy').forEach(function(b) { b.addEventListener('click', function() { buy(b.dataset.id); }); });
+    }
+    function buy(id) {
+        var it = SHOP_ITEMS.find(function(x) { return x.id === id; });
+        if (!it) return;
+        var own = owned();
+        if (own.indexOf(id) >= 0) return;
+        if (balance() < it.price) {
+            var poor = SAY_POOR[Math.floor(Math.random() * SAY_POOR.length)];
+            say(poor);
+            showOshiroDialog(poor, '不开心');
+            return;
+        }
+        own.push(id);
+        localStorage.setItem('berryOwned', JSON.stringify(own));
+        spendBerries(it.price);
+        var line = SAY_BUY[Math.floor(Math.random() * SAY_BUY.length)];
+        say(line);
+        osCelebrate();
+        showOshiroDialog(line, '可爱');
+        render();
+    }
+    render();
+
+    function mkFrames(prefix, n) { var a = []; for (var i = 0; i < n; i++) a.push(prefix + String(i).padStart(2, '0') + '.png'); return a; }
+    function heartTier() {
+        var c = parseInt(localStorage.getItem('diarySaveCount') || '0');
+        return c >= 100 ? 3 : c >= 60 ? 2 : c >= 30 ? 1 : 0;
+    }
+    var ICON_FRAMES = {
+        goldberry: mkFrames('celeste-collectables/goldberry/idle', 12),
+        moonberry: mkFrames('celeste-collectables/moonberry/normal', 52),
+        strawberry: mkFrames('celeste-collectables/strawberry/normal', 62)
+    };
+    Object.keys(ICON_FRAMES).forEach(function(k) { ICON_FRAMES[k].forEach(function(s) { var im = new Image(); im.src = s; }); });
+    var shopFi = 0;
+    setInterval(function() {
+        document.querySelectorAll('.item').forEach(function(el, idx) {
+            var it = SHOP_ITEMS[idx];
+            var f = it && ICON_FRAMES[it.id];
+            if (!f) return;
+            el.querySelector('img').src = f[shopFi % f.length];
+        });
+        var hg = SHOP_ITEMS.findIndex(function(x) { return x.id === 'heartgem'; });
+        if (hg >= 0) {
+            var hel = document.querySelectorAll('.item')[hg];
+            var tier = heartTier();
+            if (hel) hel.querySelector('img').src = tier >= 3
+                ? 'celeste-collectables/heartgem/3/FakeHeart' + String(shopFi % 33).padStart(4, '0') + '.png'
+                : 'celeste-collectables/heartgem/' + tier + '/spin' + String(shopFi % 11).padStart(2, '0') + '.png';
+        }
+        var bal = document.querySelector('.balance img');
+        if (bal) bal.src = ICON_FRAMES.strawberry[shopFi % ICON_FRAMES.strawberry.length];
+        shopFi++;
+    }, 90);
+    if (!owned().length) say('欢迎光临 Celeste 山庄！我是 Oshiro，这里的每一件收藏品都值得细细品味～');
+
+    // ===== Oshiro AI 聊天 =====
+    var chatHistory = [];
+    function sendChat() {
+        var input = document.getElementById('ochInput');
+        var btn = document.getElementById('ochSendBtn');
+        if (!input) return;
+        var msg = input.value.trim();
+        if (!msg) return;
+        chatHistory.push({role:'user', content:msg});
+        appendOchMsg('user', msg);
+        input.value = '';
+        if (btn) btn.disabled = true;
+        api('/diary/oshiro-chat', 'POST', {
+            message: msg,
+            history: JSON.stringify(chatHistory.slice(-6))
+        }).then(function(res) {
+            if (btn) btn.disabled = false;
+            if (!res || !res.success) {
+                var fallback = '啊……我好像没听清。能再说一遍吗？';
+                chatHistory.push({role:'assistant', content:fallback});
+                appendOchMsg('assistant', fallback);
+                showOshiroDialog(fallback, '不安');
+                return;
+            }
+            var reply = (typeof res.data === 'object' && res.data !== null) ? (res.data.message || '') : (res.data || '');
+            var emotion = (typeof res.data === 'object' && res.data !== null) ? (res.data.emotion || '默认') : '默认';
+            chatHistory.push({role:'assistant', content:reply});
+            appendOchMsg('assistant', reply);
+            showOshiroDialog(reply, emotion);
+        }).catch(function() {
+            if (btn) btn.disabled = false;
+            var fallback = '诶？信号好像不太好……稍等一下？';
+            appendOchMsg('assistant', fallback);
+            showOshiroDialog(fallback, '不安');
+        });
+    }
+    setTimeout(function() {
+        var welcome = '欢迎来到 Celeste 山庄！我是 Oshiro，这里的每一间房都留着故事呢～想聊点什么吗？';
+        appendOchMsg('assistant', welcome);
+        showOshiroDialog(welcome, '可爱');
+    }, 2500);
+
+    // ===== 煤球精灵：图层叠加 + 四处游逛 =====
+    (function() {
+        var DUST_DIR = 'celeste-gui/dustCreature/';
+        var DUST_SCALE = 4; // 统一放大倍率（像素图整数倍才清晰）
+        var sprite = document.getElementById('dustSprite');
+        var inner = sprite.querySelector('.dust-inner');
+
+        function addLayer(src) {
+            var im = new Image();
+            im.src = DUST_DIR + src;
+            im.addEventListener('load', function() {
+                im.style.width = im.naturalWidth * DUST_SCALE + 'px';
+                im.style.height = im.naturalHeight * DUST_SCALE + 'px';
+            });
+            inner.appendChild(im);
+            return im;
+        }
+
+        // 身体（3帧抖动）+ 质感层（3帧）+ 眼睛（3帧）
+        var baseImgs = ['base00.png', 'base01.png', 'base02.png'].map(addLayer);
+        var overlayImgs = ['overlay00.png', 'overlay01.png', 'overlay02.png'].map(addLayer);
+        var eyeImgs = ['eyes00.png', 'eyes01.png', 'eyes02.png'].map(addLayer);
+        var deadImg = addLayer('deadEyes.png');
+        deadImg.style.display = 'none';
+
+        // 容器尺寸跟 base 第 0 帧走
+        baseImgs[0].addEventListener('load', function() {
+            sprite.style.width = baseImgs[0].naturalWidth * DUST_SCALE + 'px';
+            sprite.style.height = baseImgs[0].naturalHeight * DUST_SCALE + 'px';
+        });
+
+        function showFrame(list, idx) {
+            list.forEach(function(im, i) { im.style.display = i === idx ? 'block' : 'none'; });
+        }
+
+        // 身体呼吸抖动
+        var dustFi = 0;
+        setInterval(function() {
+            dustFi = (dustFi + 1) % 3;
+            showFrame(baseImgs, dustFi);
+            showFrame(overlayImgs, dustFi);
+        }, 450);
+
+        // 偶尔眨眼/瞟一眼
+        setInterval(function() {
+            if (dustBusy || Math.random() >= 0.35) return;
+            var f = 1 + Math.floor(Math.random() * 2);
+            showFrame(eyeImgs, f);
+            setTimeout(function() { if (!dustBusy) showFrame(eyeImgs, 0); }, 280);
+        }, 2200);
+
+        // ===== 游逛 =====
+        var dustBusy = false;
+        function dustXY() {
+            return { x: parseFloat(sprite.style.left || '140'), y: parseFloat(sprite.style.top || '320') };
+        }
+        function dustGroundY() {
+            return Math.max(60, window.innerHeight - (sprite.offsetHeight || 64) - 10);
+        }
+        function dustPick() {
+            var w = sprite.offsetWidth || 64;
+            var maxX = Math.max(20, window.innerWidth - w - 12);
+            var minY = 80, maxY = dustGroundY();
+            if (Math.random() < 0.7) {
+                // 大多数时候贴地小跑
+                return { x: 12 + Math.random() * (maxX - 12), y: maxY - Math.random() * 30 };
+            }
+            return { x: 12 + Math.random() * (maxX - 12), y: minY + Math.random() * (maxY - minY) };
+        }
+        function dustWander() {
+            if (dustBusy) { setTimeout(dustWander, 1200); return; }
+            var cur = dustXY(), tgt = dustPick();
+            var dist = Math.sqrt(Math.pow(tgt.x - cur.x, 2) + Math.pow(tgt.y - cur.y, 2));
+            var dur = Math.max(900, Math.min(6000, dist * (9 + Math.random() * 6)));
+            sprite.classList.add('moving');
+            sprite.style.transform = tgt.x < cur.x ? 'scaleX(-1)' : '';
+            sprite.style.transition = 'left ' + dur + 'ms linear, top ' + dur + 'ms linear';
+            sprite.style.left = tgt.x + 'px';
+            sprite.style.top = tgt.y + 'px';
+            setTimeout(function() {
+                sprite.classList.remove('moving');
+                sprite.style.transform = '';
+                var rest = Math.random() < 0.25 ? 1500 + Math.random() * 2000 : 300 + Math.random() * 900;
+                setTimeout(dustWander, rest);
+            }, dur + 80);
+        }
+        setTimeout(dustWander, 1500);
+
+        // ===== 点击：压扁 + 晕倒眼 + 受惊蹦走 =====
+        sprite.addEventListener('click', function() {
+            if (dustBusy) return;
+            dustBusy = true;
+            sprite.classList.add('squish');
+            showFrame(eyeImgs, -1);
+            deadImg.style.display = 'block';
+            setTimeout(function() {
+                sprite.classList.remove('squish');
+                deadImg.style.display = 'none';
+                showFrame(eyeImgs, 0);
+                var cur = dustXY();
+                var w = sprite.offsetWidth || 64;
+                var dir = Math.random() < 0.5 ? -1 : 1;
+                var runX = Math.max(12, Math.min(window.innerWidth - w - 12, cur.x + dir * (120 + Math.random() * 160)));
+                sprite.classList.add('moving');
+                sprite.style.transform = runX < cur.x ? 'scaleX(-1)' : '';
+                sprite.style.transition = 'left 500ms ease-out';
+                sprite.style.left = runX + 'px';
+                setTimeout(function() {
+                    sprite.classList.remove('moving');
+                    sprite.style.transform = '';
+                    dustBusy = false;
+                }, 520);
+            }, 700);
+        });
+    })();
+</script>
+</body>
+</html>
