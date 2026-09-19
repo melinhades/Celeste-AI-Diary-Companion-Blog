@@ -15,5 +15,8 @@ public class ChatMessageVo {
     /** AI 自己选定的语气标签：默认/不安/惊讶/怨恨/不开心/可爱/无语 */
     private String emotion;
 
+    /** AI 是否主动发起了金羽毛呼吸邀请（true 时前端在说完 reply 后淡入羽毛游戏） */
+    private Boolean feather;
+
     private Long createDate;
 }

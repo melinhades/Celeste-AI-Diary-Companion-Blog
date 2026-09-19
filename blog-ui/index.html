@@ -40,7 +40,7 @@
         animation:snowDrift 45s linear infinite;
         pointer-events:none;
         z-index:2;
-        opacity:1.00;
+        opacity:.5; /* 与 archives 一致：降低雪地前景层不透明度，消除底部白色条带 */
     }
     @keyframes snowDrift { from{background-position-x:0} to{background-position-x:-440px} }
     .nav-diary-btn {

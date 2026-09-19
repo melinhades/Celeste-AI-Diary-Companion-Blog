@@ -79,6 +79,7 @@ public class ChatServiceImpl implements ChatService {
         }
         String reply = raw.trim();
         String emotion = "默认";
+        boolean feather = false;
         try {
             com.alibaba.fastjson.JSONObject obj = com.alibaba.fastjson.JSON.parseObject(reply);
             String r = obj.getString("reply");
@@ -90,6 +91,8 @@ public class ChatServiceImpl implements ChatService {
                     if (v.equals(em.trim())) { emotion = v; break; }
                 }
             }
+            // AI 主动发起金羽毛呼吸邀请（提示词约束为低情绪漩涡场景才 true）
+            feather = obj.getBooleanValue("feather");
         } catch (Exception e) {
             // JSON 解析失败：当作纯文本回复，情绪回落默认
         }
@@ -119,6 +122,7 @@ public class ChatServiceImpl implements ChatService {
         vo.setRole("assistant");
         vo.setContent(reply);
         vo.setEmotion(emotion);
+        vo.setFeather(feather);
         vo.setPersonaName(persona.getName());
         vo.setCreateDate(now);
         return Result.success(vo);

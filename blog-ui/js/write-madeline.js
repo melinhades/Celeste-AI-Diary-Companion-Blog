@@ -24,17 +24,7 @@
     const snowCtx = snowCanvas.getContext('2d');
     let snowflakes = [];
     let snowAnimFrame = null;
-    // ==================== 初始注入大小样式 ====================
-    const madelineSizeStyle = document.createElement('style');
-    madelineSizeStyle.textContent =
-        // 专门针对 sit, sleep, wake 三个动作把图片放大到 100px，加上 !important 强制覆盖原有的 56px
-        'img[src*="sitdown"], img[src*="sleep"], img[src*="wakeup"] {' +
-        'width: 100px !important;' +
-        'height: auto !important;' +
-        'max-width: none !important;' +
-        '}';
-    document.head.appendChild(madelineSizeStyle);
-// ========================================================
+    // 尺寸完全交由 CSS 属性选择器控制（参照 archives 方案），JS 不再设置内联尺寸
     const PM_SRC = {
         move: 'celeste-gui/madeline-move.gif',
         fun: 'celeste-gui/madeline-fun.gif',
@@ -97,8 +87,6 @@
     }
     function pmSetSrc(name) {
         if (pm.src.indexOf(name) === -1) pm.src = name;
-        pm.style.width = (pm.src.includes('sitdown') || pm.src.includes('sleep') || pm.src.includes('wakeup')) ? '100px' : '56px';
-        pm.style.height = 'auto';
         pmCur = name; pmApplySize();
     }
     function pmCalibrate(src) {
@@ -128,10 +116,8 @@
         im.src = src;
     }
     function pmApplySize() {
-        // sitdown/sleep/wakeup 素材取材尺寸不同，需渲染为 100px 才能与其他 56px 素材视觉一致
-        const big = pm.src.indexOf('sitdown') !== -1 || pm.src.indexOf('sleep') !== -1 || pm.src.indexOf('wakeup') !== -1;
-        pm.style.setProperty('width', big ? '100px' : '56px', 'important');
-        pm.style.setProperty('height', big ? 'auto' : '56px', 'important');
+        // 尺寸由 CSS 属性选择器 #wpPixelMadeline[src*="..."] 控制，此处仅触发布局缓存刷新
+        refreshZoneCache();
     }
 
     const blockedZones = [];
@@ -205,7 +191,8 @@
         ];
         const pool = weights.filter(([k]) =>
             (k === 'sit' || k === 'bounce') ? nearGround : true);
-        enterMode(weightedPick(pool), now);
+        // 传入当前模式作 avoidKey：权重相同时不再连续选中同一动作
+        enterMode(weightedPick(pool, st.mode), now);
     }
     function pmThink(now) {
         if (st.mode === 'peek') return;
@@ -540,7 +527,8 @@
             '.polish-loading-text{color:#ffe36d;font-size:14px;font-family:"Renogare","CelesteZH",sans-serif;text-align:center;text-shadow:0 1px 4px rgba(0,0,0,.8);}' +
             '.loading-dots::after{content:"";animation:ldDots 1.5s steps(4,end) infinite;}' +
             '@keyframes ldDots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}' +
-            '#wpPixelMadeline{position:fixed;left:0;top:0;width:56px !important;height:56px !important;z-index:800;image-rendering:pixelated;cursor:pointer;user-select:none;}';
+            '#wpPixelMadeline{position:fixed;left:0;top:0;width:56px !important;height:56px !important;z-index:800;image-rendering:pixelated;cursor:pointer;user-select:none;}' +
+            '#wpPixelMadeline[src*="madeline-sitdown.gif"],#wpPixelMadeline[src*="madeline-sleep.gif"],#wpPixelMadeline[src*="madeline-wakeup.gif"]{width:100px !important;height:auto !important;}';
 
         document.head.appendChild(style);
 

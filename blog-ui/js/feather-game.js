@@ -544,6 +544,8 @@
         startMadelinePortrait();
         madelineSay(pick(OPEN_LINES));
         startBreathGame();
+        // 通知 FeatherTrigger 工具类：游戏已打开（手动按钮等绕过工具类的入口也统一跟踪）
+        window.dispatchEvent(new CustomEvent('feather-opened'));
     }
 
     // 工具：检测到情绪后调用——【第一段·游戏开始前】让 Madeline 把“羽毛建议”完整说完、

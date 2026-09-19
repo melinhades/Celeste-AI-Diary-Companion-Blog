@@ -550,6 +550,11 @@
             const res = await api('/chat', 'POST', { content: text });
             if (res.success && res.data) {
                 addMadelineMessage(res.data.content || '...', res.data.emotion || '默认', true);
+                // AI 主动发起金羽毛：不 await、不入说话队列——工具类会把建议台词排在
+                // 当前回复之后（说完才淡入游戏），对正在进行的对话零打断
+                if (res.data.feather && window.featherTrigger) {
+                    window.featherTrigger.requestFromAI(res.data.emotion || '不安');
+                }
             } else {
                 addMadelineMessage('Hmm... I didn\'t catch that. Say it again?', '默认', true);
             }
@@ -590,6 +595,10 @@
             if (res.success && res.data) {
                 const reply = res.data.content || '...';
                 addMadelineMessage(reply, res.data.emotion || '默认');
+                // AI 主动发起金羽毛（见 sendQuickMessage 注释）：排队等当前回复说完
+                if (res.data.feather && window.featherTrigger) {
+                    window.featherTrigger.requestFromAI(res.data.emotion || '不安');
+                }
             } else {
                 addMadelineMessage('Hmm... I didn\'t catch that. Say it again?', '默认');
             }
@@ -1475,19 +1484,11 @@ function inferReplyEmotion(text) {
                     if (feedback && !isRepeatedSpeech(feedback)) { rememberSpeech(feedback); addMadelineMessage(feedback, emotion); }
                     updateThemeByEmotion(emotion);
 
-                    // 情绪低落 → Madeline 说完反馈后接着说羽毛建议，再淡入金羽毛游戏（过渡自然）；情绪好 → 先随笔
-                    if (emotion !== '默认') {
-                        const isBadMood = ['悲伤', '孤独', '不开心', '不安', '愤怒', '怨恨'].includes(emotion);
-                        window._featherBadMood = isBadMood;
-                        if (isBadMood) {
-                            if (window.FeatherGame && window.FeatherGame.suggestThenOpen) {
-                                window.FeatherGame.suggestThenOpen(emotion);
-                            } else {
-                                setTimeout(function() { if (window.FeatherGame) window.FeatherGame.open(emotion); }, 2500);
-                            }
-                        } else {
-                            setTimeout(function() { showFeatherNote(); }, 2500);
-                        }
+                    // 金羽毛触发统一走 FeatherTrigger 工具类：
+                    // 情绪低落 → Madeline 说完反馈后接着说羽毛建议（排队不打断），再淡入呼吸游戏；
+                    // 情绪尚可 → 稍后弹羽毛随笔；中性情绪不打扰
+                    if (emotion !== '默认' && window.featherTrigger) {
+                        window.featherTrigger.requestFromSave(emotion);
                     }
                 }
 
@@ -1588,10 +1589,8 @@ function inferReplyEmotion(text) {
     })();
     let pmFrameTimer = null;
     function pmForceSize() {
-        // sitdown/sleep/wakeup 素材取材尺寸不同，需渲染为 100px 才能与其他 56px 素材视觉一致
-        const big = pm.src.indexOf('sitdown') !== -1 || pm.src.indexOf('sleep') !== -1 || pm.src.indexOf('wakeup') !== -1;
-        pm.style.setProperty('width', big ? '100px' : '56px', 'important');
-        pm.style.setProperty('height', big ? 'auto' : '56px', 'important');
+        // 尺寸由 CSS 属性选择器 #pixelMadeline[src*="..."] 控制，此处仅触发布局缓存刷新
+        refreshLayoutCache();
     }
     function pmSetSrc(name) {
         if (pmFrameTimer) { clearInterval(pmFrameTimer); pmFrameTimer = null; }
@@ -1599,14 +1598,10 @@ function inferReplyEmotion(text) {
         if (frames) {
             let i = 0;
             pm.src = frames[0];
-            pm.style.width = (pm.src.includes('sitdown') || pm.src.includes('sleep') || pm.src.includes('wakeup')) ? '100px' : '56px';
-            pm.style.height = 'auto';
             pmFrameTimer = setInterval(() => {
                 i++;
                 if (i >= frames.length) { clearInterval(pmFrameTimer); pmFrameTimer = null; return; }
                 pm.src = frames[i];
-                pm.style.width = (pm.src.includes('sitdown') || pm.src.includes('sleep') || pm.src.includes('wakeup')) ? '100px' : '56px';
-                pm.style.height = 'auto';
                 pmForceSize();
             }, 55);
         } else if (pm.src.indexOf(name) === -1) {
@@ -1740,6 +1735,7 @@ function inferReplyEmotion(text) {
     const enterMode = pmCore.enterMode;
     const canInterrupt = pmCore.canInterrupt;
     const tryInterrupt = pmCore.tryInterrupt;
+    const requestMode = pmCore.requestMode;
 
     function pmNextMode(now) {
         const e = companionState.currentEmotion;
@@ -1757,7 +1753,8 @@ function inferReplyEmotion(text) {
         // 过滤掉不满足前置条件的（如 sit/bounce 需贴地）
         const pool = weights.filter(([k]) =>
             (k === 'sit' || k === 'bounce') ? nearGround : true);
-        enterMode(weightedPick(pool), now);
+        // 传入当前模式作 avoidKey：权重相同时不再连续选中同一动作
+        enterMode(weightedPick(pool, pmState.mode), now);
     }
 
     // ===== 正向情绪触发：开心蹦跳（bounceline）——经中断优先级判定 =====
@@ -1767,6 +1764,8 @@ function inferReplyEmotion(text) {
     }
 
     // ===== 情绪→身体：说完一句话后，用动作回应当前语气 =====
+    // 走 requestMode（冷却 + 驻留仲裁）：不再裸调 enterMode，避免高优先级模式
+    // （peek/celebrate）被低优先级动作瞬间顶掉，也避免连续消息导致动作刷屏
     function pmReactToEmotion(em) {
         if (chatOpen || pmState.mode === 'sleep' || pmState.mode === 'celebrate') return;
         const now = performance.now();
@@ -1774,12 +1773,12 @@ function inferReplyEmotion(text) {
             if (Math.random() < 0.5) {
                 pmBounce();
             } else if (Math.random() < 0.6) {
-                enterMode('fun', now);
+                requestMode('fun', now);
             } else {
                 pmState.hopT = 0;
             }
         } else if (isGloomy(em) && Math.random() < 0.6) {
-            enterMode('sit', now);
+            requestMode('sit', now);
         }
     }
     function pmThink(now) {

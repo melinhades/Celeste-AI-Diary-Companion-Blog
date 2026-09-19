@@ -22,6 +22,16 @@ public class PromptBuilder {
         "判断标准是「你说这句话时的心情」，不是对方写了什么词；拿不准就用「默认」。\n" +
         "以 JSON 输出，只输出 JSON：{\"reply\": \"你要说的话\", \"emotion\": \"标签\"}\n";
 
+    /** 金羽毛触发工具（仅主对话）：对方陷入情绪漩涡时，AI 可主动邀请一次羽毛呼吸 */
+    private static final String FEATHER_TOOL =
+        "【羽毛呼吸法】\n" +
+        "当对方明显陷入焦虑、不安、情绪打转（连续的负面表达、说喘不上气、脑子停不下来、\n" +
+        "越想越乱）时，你可以在 JSON 里加 \"feather\": true，主动提出陪对方做一次 Theo 教你的\n" +
+        "羽毛呼吸：想象一根羽毛浮在水面，随呼吸轻轻起伏，吸气四拍、呼气六拍。你的 reply 里\n" +
+        "要自然带出这个邀请（比如「要不要……试试那个羽毛呼吸？就一次」），页面会接住这句话，\n" +
+        "等你说完再淡入呼吸游戏。平时一律 \"feather\": false；一次对话最多提议一次，别反复。\n" +
+        "JSON 格式：{\"reply\": \"你要说的话\", \"emotion\": \"标签\", \"feather\": false}\n";
+
     /** 主对话 system prompt：人设 + 记忆 + 说话规则 */
     public static String chatSystem(Persona persona, List<Memory> memories) {
         StringBuilder sb = new StringBuilder();
@@ -67,6 +77,7 @@ public class PromptBuilder {
           .append("- 禁止说「作为 AI」「我理解你的感受」「抱抱」这类客套/兜底话术\n")
           .append("- 别替用户把话说完，别帮用户决定心情，留空白给对方接话\n\n");
         sb.append(EMOTION_TOOL);
+        sb.append(FEATHER_TOOL);
         return sb.toString();
     }
 

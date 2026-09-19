@@ -704,6 +704,9 @@ body::before {
     user-select: none;
     -webkit-user-drag: none;
 }
+#pixelMadeline[src*="madeline-sitdown.gif"],
+#pixelMadeline[src*="madeline-sleep.gif"],
+#pixelMadeline[src*="madeline-wakeup.gif"] { width: 100px !important; height: auto !important; }
 .madeline-row .msg-bubble {
     border-radius: 0;
     background: rgba(24, 12, 38, 0.92);
@@ -773,7 +776,15 @@ body::before {
     cursor: pointer;
     background: transparent;
     box-shadow: none;
-    filter: drop-shadow(0 0 6px rgba(170,220,255,.8)) drop-shadow(0 0 16px rgba(120,190,255,.45));
+    /* 黑色描边：图标本体是透明底的浅色雪山，需要一圈深色轮廓保证任何背景下都清晰。
+       4 向 1px 实投影 + 两遍 1px 模糊投影叠加，形成贴合山体轮廓的 ~2px 近黑描边
+       （#10101c，Celeste 夜色近黑；不随屏幕尺寸缩放，任何分辨率下厚度一致），
+       后两个 drop-shadow 保留原有的蓝色辉光。 */
+    filter:
+        drop-shadow(1px 0 0 #10101c) drop-shadow(-1px 0 0 #10101c)
+        drop-shadow(0 1px 0 #10101c) drop-shadow(0 -1px 0 #10101c)
+        drop-shadow(0 0 1px #10101c) drop-shadow(0 0 1px #10101c)
+        drop-shadow(0 0 6px rgba(170,220,255,.8)) drop-shadow(0 0 16px rgba(120,190,255,.45));
     transition: transform .2s, filter .2s;
 }
 #homePosterBtn img {
@@ -784,7 +795,11 @@ body::before {
 }
 #homePosterBtn:hover {
     transform: translateY(-2px) scale(1.05);
-    filter: drop-shadow(0 0 10px rgba(200,235,255,1)) drop-shadow(0 0 24px rgba(120,190,255,.8));
+    filter:
+        drop-shadow(1px 0 0 #10101c) drop-shadow(-1px 0 0 #10101c)
+        drop-shadow(0 1px 0 #10101c) drop-shadow(0 -1px 0 #10101c)
+        drop-shadow(0 0 1px #10101c) drop-shadow(0 0 1px #10101c)
+        drop-shadow(0 0 10px rgba(200,235,255,1)) drop-shadow(0 0 24px rgba(120,190,255,.8));
 }
 /* ===== Celeste 日记本 ===== */
 #journalStage { position:fixed; left:0; right:0; bottom:0; width:100%; margin:0; z-index:5; display:flex; justify-content:center; pointer-events:none; }
