@@ -103,7 +103,7 @@
         const pcEl = document.createElement('div');
         pcEl.className = 'cover-postcard';
         const pcImg = document.createElement('img');
-        pcImg.src = 'celeste-gui/postcard.png';
+        pcImg.src = 'celeste-gui/postcard.webp';
         pcImg.alt = 'postcard';
         pcEl.appendChild(pcImg);
 
@@ -241,15 +241,15 @@
     }
     function stopPortraitAnim() { clearInterval(portraitAnimTimer); portraitAnimTimer = null; }
     const emotionBgMap = {
-        '默认': 'celeste-areas/bg_default.png',
-        '平静': 'celeste-areas/bg_calm.png',
-        '开心': 'celeste-areas/bg_happy.png',
-        '悲伤': 'celeste-areas/bg_sad.png',
-        '愤怒': 'celeste-areas/bg_angry.png',
-        '惊讶': 'celeste-areas/bg_surprised.png',
-        '孤独': 'celeste-areas/bg_lonely.png',
-        '满足': 'celeste-areas/bg_content.png',
-        '希望': 'celeste-areas/bg_hopeful.png'
+        '默认': 'celeste-areas/bg_default.webp',
+        '平静': 'celeste-areas/bg_calm.webp',
+        '开心': 'celeste-areas/bg_happy.webp',
+        '悲伤': 'celeste-areas/bg_sad.webp',
+        '愤怒': 'celeste-areas/bg_angry.webp',
+        '惊讶': 'celeste-areas/bg_surprised.webp',
+        '孤独': 'celeste-areas/bg_lonely.webp',
+        '满足': 'celeste-areas/bg_content.webp',
+        '希望': 'celeste-areas/bg_hopeful.webp'
     };
     // ===== v2 情绪 → 场景主题映射 =====
     const emotionSceneMap = {

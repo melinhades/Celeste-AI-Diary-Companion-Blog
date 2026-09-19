@@ -9,7 +9,7 @@
     <style>
     body::after {
         content:''; position:fixed; left:0; right:0; top:0; bottom:-12%; /* 底边下移：素材图底部自带白色条带，cover 缩放后会露出在视口底部 */
-        background:url('celeste-areas/ForsakenCity01.png') center/cover no-repeat;
+        background:url('celeste-areas/ForsakenCity01.webp') center/cover no-repeat;
         opacity:0.25; pointer-events:none; z-index:0;
     }
     .msg-layout { padding:24px 20px; position:relative; z-index:3; max-width:760px; margin:0 auto; }
@@ -41,7 +41,7 @@
 
     <header class="header">
         <div class="container header-inner">
-            <a href="index.html" class="logo"><img src="celeste-gui/logo.png" alt="Celeste"></a>
+            <a href="index.html" class="logo"><img src="celeste-gui/logo.webp" alt="Celeste" loading="lazy" decoding="async"></a>
             <nav class="nav">
                 <a href="index.html" class="nav-link">Home</a>
                 <a href="archives.html" class="nav-link">Archives</a>

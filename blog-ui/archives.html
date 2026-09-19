@@ -11,7 +11,7 @@
     body::after {
         content:'';
         position:fixed; left:0; right:0; top:0; bottom:-12%; /* 底边下移：素材图底部自带白色条带，cover 缩放后会露出在视口底部 */
-        background:url('celeste-areas/ForsakenCity01.png') center/cover no-repeat;
+        background:url('celeste-areas/ForsakenCity01.webp') center/cover no-repeat;
         opacity:0.3;
         pointer-events:none;
         z-index:0;
@@ -19,7 +19,7 @@
     .snow-strip {
         position:fixed; left:0; right:0; bottom:0;
         height:80px;
-        background:url('celeste-areas/snow-front.png') repeat-x bottom/220px auto;
+        background:url('celeste-areas/snow-front.webp') repeat-x bottom/220px auto;
         animation:snowDrift 45s linear infinite;
         pointer-events:none;
         z-index:2;
@@ -79,12 +79,12 @@
 
 <header class="header">
     <div class="container header-inner">
-        <a href="index.html" class="logo"><img src="celeste-gui/logo.png" alt="Celeste"></a>
+        <a href="index.html" class="logo"><img src="celeste-gui/logo.webp" alt="Celeste" loading="lazy" decoding="async"></a>
         <nav class="nav">
             <a href="index.html" class="nav-link">Home</a>
             <a href="archives.html" class="nav-link active">Archives</a>
             <a href="diary.html" class="nav-link nav-diary-btn" title="Diary with Madeline">
-                <img src="celeste-gui/journal.png" alt="Diary">
+                <img src="celeste-gui/journal.png" alt="Diary" loading="lazy" decoding="async">
             </a>
         </nav>
         <div class="header-right" id="headerRight"></div>
@@ -206,7 +206,7 @@
         years.forEach((year, yi) => {
             const items = groups[year];
             html += `<div class="year-group">
-                <img class="year-cover" src="celeste-gui/chapter-covers/${CH_COVERS[yi % CH_COVERS.length]}.png" alt="">
+                <img class="year-cover" src="celeste-gui/chapter-covers/${CH_COVERS[yi % CH_COVERS.length]}.png" alt="" loading="lazy" decoding="async">
                 <div class="year-label">${year} <span class="archive-count">${items.length} posts</span></div>`;
             items.forEach(item => {
                 const month = item.month ? String(item.month).padStart(2, '0') : '';

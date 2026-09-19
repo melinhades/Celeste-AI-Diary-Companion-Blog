@@ -98,7 +98,7 @@ body {
     z-index:0;
     background:
             linear-gradient(rgba(15,23,42,.35), rgba(15,23,42,.55)),
-            url('../celeste-gui/diary-bg.jpg') center / cover no-repeat fixed;
+            url('../celeste-gui/diary-bg.webp') center / cover no-repeat fixed;
     transition: background-color 1.2s ease;
 }
 body::-webkit-scrollbar { display:none; }
@@ -141,7 +141,7 @@ body::before {
 .title-input::placeholder,.content-editor::placeholder { color:var(--c-text-dim); }
 .content-editor { min-height:320px; resize:vertical; }
 .title-input {
-    background: url('../celeste-gui/card-top.png') center / 100% 100% no-repeat;
+    background: url('../celeste-gui/card-top.webp') center / 100% 100% no-repeat;
     color: #2b2018;
     border: none;
     border-radius: 0;
@@ -151,7 +151,7 @@ body::before {
     z-index: 2;
 }
 .content-editor {
-    background: url('../celeste-gui/card.png') center / 100% 100% no-repeat;
+    background: url('../celeste-gui/card.webp') center / 100% 100% no-repeat;
     color: #3a2e2a;
     border: none;
     border-radius: 0;
@@ -245,7 +245,7 @@ body::before {
 #madeline-chat-dialog {
     width: 420px;
     height: 500px;
-    background: url('../celeste-gui/card.png') top / 100% 123% no-repeat;
+    background: url('../celeste-gui/card.webp') top / 100% 123% no-repeat;
     border: none;
     border-radius: 0;
     display:flex; flex-direction:column;
@@ -680,13 +680,13 @@ body::before {
 /* ===== 背景景深雪层 ===== */
 #bg-snow-back {
   position:fixed; inset:0;
-  background:url('../celeste-areas/snow-back.png') repeat 0 0 / 600px auto;
+  background:url('../celeste-areas/snow-back.webp') repeat 0 0 / 600px auto;
   opacity:.22; pointer-events:none; z-index:1;
   animation:snowDriftSlow 90s linear infinite;
 }
 #bg-snow-front {
   position:fixed; left:0; right:0; bottom:0; height:90px;
-  background:url('../celeste-areas/snow-front.png') repeat-x left bottom / 240px auto;
+  background:url('../celeste-areas/snow-front.webp') repeat-x left bottom / 240px auto;
   opacity:.5; pointer-events:none; z-index:3;
   animation:snowDriftFast 40s linear infinite;
 }
@@ -711,7 +711,7 @@ body::before {
     border-radius: 0;
     background: rgba(24, 12, 38, 0.92);
     border: 12px solid transparent;
-    border-image: url('../celeste-portraits/textbox/madeline.png') 30 fill round;
+    border-image: url('../celeste-portraits/textbox/madeline.webp') 30 fill round;
     padding: 8px 16px;
     box-shadow: none;
 }
@@ -732,7 +732,7 @@ body::before {
     align-items: center;
     gap: 18px;
     padding: 20px 30px;
-    background: url('../celeste-portraits/textbox/madeline.png') center / 100% 100% no-repeat;
+    background: url('../celeste-portraits/textbox/madeline.webp') center / 100% 100% no-repeat;
     opacity: 0;
     pointer-events: none;
     transition: opacity .25s ease, transform .25s ease;

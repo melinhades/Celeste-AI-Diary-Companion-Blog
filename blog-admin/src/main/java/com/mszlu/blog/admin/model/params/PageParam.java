@@ -5,9 +5,11 @@ import lombok.Data;
 @Data
 public class PageParam {
 
-    private Integer currentPage;
+    // 当前页，默认 1，避免前端未传时分页插件空指针
+    private Integer currentPage = 1;
 
-    private Integer pageSize;
+    // 每页条数，默认 10
+    private Integer pageSize = 10;
 
     private String queryString;
 }

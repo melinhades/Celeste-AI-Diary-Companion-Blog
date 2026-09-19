@@ -2,7 +2,7 @@
     'use strict';
 
     const AVATAR = 'celeste-portraits/madeline/normal00.png';
-    const USER_AVATAR = 'celeste-gui/user-avatar.png';
+    const USER_AVATAR = 'celeste-gui/user-avatar.webp';
     const PM_BASE_SIZE = 56;
 
     const pmCal = {};

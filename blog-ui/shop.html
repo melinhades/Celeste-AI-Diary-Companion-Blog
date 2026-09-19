@@ -10,7 +10,7 @@
 * { box-sizing:border-box; margin:0; padding:0; }
 @font-face { font-family:'Renogare'; src:url('celeste-font-en/Renogare-Regular.otf') format('opentype'); font-display:swap; }
 @font-face { font-family:'CelesteZH'; src:url('fonts/NotoSansCJKsc-Medium.otf') format('opentype'); font-display:swap; }
-body { min-height:100vh; background:url('celeste-gui/shop-screen.png') center/cover no-repeat fixed; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; overflow-x:hidden; }
+body { min-height:100vh; background:url('celeste-gui/shop-screen.webp') center/cover no-repeat fixed; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; overflow-x:hidden; }
 .topbar { position:fixed; top:14px; left:16px; z-index:20; }
 .topbar a { display:inline-block; padding:8px 14px; background:rgba(22,34,60,.88); color:#ffe36d; border:2px solid #ffe36d; border-radius:6px; text-decoration:none; font-size:13px; box-shadow:0 0 10px rgba(255,230,109,.35); }
 h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family:'Press Start 2P',monospace; font-size:14px; color:#ffe36d; text-shadow:0 2px 0 rgba(0,0,0,.6); letter-spacing:2px; z-index:20; }
@@ -92,7 +92,7 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     max-width: 92vw;
     height: 480px;
     z-index: 955;
-    background: url('celeste-gui/card_golden.png') top / 100% 123% no-repeat;
+    background: url('celeste-gui/card_golden.webp') top / 100% 123% no-repeat;
     border: none;
     border-radius: 0;
     display: none;
@@ -105,7 +105,7 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     display:flex; align-items:center; gap:10px;
     padding:14px 16px 8px 42px;
     border-bottom:none;
-    background:url('celeste-gui/cardtop_golden.png') center / 100% 100% no-repeat;
+    background:url('celeste-gui/cardtop_golden.webp') center / 100% 100% no-repeat;
     flex-shrink:0;
 }
 #oshiroChatDialog .chat-header img { width:36px; height:36px; object-fit:cover; border-radius:6px; }
@@ -160,21 +160,21 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 <body>
 <h1>CELESTE RESORT</h1>
 <div id="shopMemo">
-    <img src="Atlases/Memo/memo.png" alt="memo">
+    <img src="Atlases/Memo/memo.png" alt="memo" loading="lazy" decoding="async">
     <div class="memo-tip">点击继续</div>
 </div>
 <div class="topbar"><a href="diary.html">← 返回大堂</a></div>
 
 <audio id="bgmPlayer"></audio>
 
-<img id="pixelOshiro" src="celeste-gui/oshiro-appear.gif" alt="Oshiro" title="Oshiro">
+<img id="pixelOshiro" src="celeste-gui/oshiro-appear.gif" alt="Oshiro" title="Oshiro" loading="lazy" decoding="async">
 
 <!-- 煤球精灵：图层由 JS 动态叠加 -->
 <div id="dustSprite"><div class="dust-inner"></div></div>
 
 <div id="gameDialog">
-    <img id="gameDialogOverlay" src="Atlases/Portraits/textbox/oshiro_overlay.png" alt="">
-    <div id="gameDialogPortrait"><img id="gameDialogPortraitImg" src="Atlases/Portraits/oshiro/normal00.png" alt="Oshiro"></div>
+    <img id="gameDialogOverlay" src="Atlases/Portraits/textbox/oshiro_overlay.png" alt="" loading="lazy" decoding="async">
+    <div id="gameDialogPortrait"><img id="gameDialogPortraitImg" src="Atlases/Portraits/oshiro/normal00.png" alt="Oshiro" loading="lazy" decoding="async"></div>
     <div id="gameDialogBody">
         <div id="gameDialogName">Oshiro</div>
         <div id="gameDialogText"></div>
@@ -184,7 +184,7 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 <!-- Oshiro 聊天历史框 -->
 <div id="oshiroChatDialog">
     <div class="chat-header">
-        <img id="ochAvatar" src="Atlases/Portraits/oshiro/normal00.png" alt="Oshiro">
+        <img id="ochAvatar" src="Atlases/Portraits/oshiro/normal00.png" alt="Oshiro" loading="lazy" decoding="async">
         <span class="chat-title">Oshiro</span>
         <button class="close-btn" id="ochCloseBtn">✕</button>
     </div>
@@ -196,9 +196,9 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 </div>
 
 <div class="wrap">
-    <div class="oshiro-wrap"><img id="oshiroPortrait" src="Atlases/Portraits/oshiro/normal00.png" alt="Oshiro"></div>
+    <div class="oshiro-wrap"><img id="oshiroPortrait" src="Atlases/Portraits/oshiro/normal00.png" alt="Oshiro" loading="lazy" decoding="async"></div>
     <div class="balance">
-        <img src="celeste-collectables/strawberry.png" alt="strawberry">
+        <img src="celeste-collectables/strawberry.png" alt="strawberry" loading="lazy" decoding="async">
         <span class="num" id="balNum">0</span>
         <span class="tip">每写一篇日记收一颗草莓</span>
     </div>
@@ -610,7 +610,7 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
         document.getElementById('items').innerHTML = SHOP_ITEMS.map(function(it) {
             var has = own.indexOf(it.id) >= 0;
             return '<div class="item' + (has ? ' owned' : '') + '">' +
-                '<img src="' + it.icon + '" alt="">' +
+                '<img src="' + it.icon + '" alt="" loading="lazy" decoding="async">' +
                 '<div class="info"><div class="name">' + it.name + '</div><div class="desc">' + it.desc + '</div></div>' +
                 '<button class="buy" data-id="' + it.id + '"' + (has ? ' disabled' : (bal < it.price ? ' disabled' : '')) + '>' +
                 (has ? '✓ 已拥有' : it.price + ' 🍓') + '</button></div>';

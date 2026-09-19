@@ -429,7 +429,10 @@
 
     function deletePermission(id) {
         if (!confirm('确定要删除该权限吗？')) return;
-        fetch(`/admin/permission/delete/${id}`)
+        fetch(`/admin/permission/delete/${id}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
         .then(r => r.json())
         .then(res => {
             if (res.success) {
@@ -473,7 +476,7 @@
         return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
     function escAttr(str) {
-        return String(str).replace(/'/g,"\\'").replace(/"/g,'&quot;');
+        return String(str).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
     }
 </script>
 </body>

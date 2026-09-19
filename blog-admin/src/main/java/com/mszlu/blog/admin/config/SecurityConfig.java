@@ -1,5 +1,6 @@
 package com.mszlu.blog.admin.config;
 
+import com.mszlu.blog.admin.service.SecurityUserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -24,16 +25,20 @@ import java.io.PrintWriter;
 @Configuration
 public class SecurityConfig extends WebSecurityConfigurerAdapter {
 
+    @Autowired
+    private SecurityUserService securityUserService;
+
     @Bean
     public BCryptPasswordEncoder bCryptPasswordEncoder(){
         return new BCryptPasswordEncoder();
     }
 
-    public static void main(String[] args) {
-        //加密策略 MD5 不安全 彩虹表  MD5 加盐
-        String mszlu = new BCryptPasswordEncoder().encode("mszlu");
-        System.out.println(mszlu);
+    @Override
+    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+        // 走数据库管理员表（ms_admin）校验账号密码，密码使用 BCrypt 比对
+        auth.userDetailsService(securityUserService).passwordEncoder(bCryptPasswordEncoder());
     }
+
     @Override
     public void configure(WebSecurity web) throws Exception {
         super.configure(web);
@@ -55,7 +60,7 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 .usernameParameter("username") //定义登录时的用户名的key 默认为username
                 .passwordParameter("password") //定义登录时的密码key，默认是password
                 .defaultSuccessUrl("/pages/main.html")
-                .failureUrl("/login.html")
+                .failureUrl("/login.html?error") //失败时带回 error 参数，登录页据此显示错误提示
                 .permitAll() //通过 不拦截，更加前面配的路径决定，这是指和登录表单相关的接口 都通过
                 .and().logout() //退出登录配置
                 .logoutUrl("/logout") //退出登录接口

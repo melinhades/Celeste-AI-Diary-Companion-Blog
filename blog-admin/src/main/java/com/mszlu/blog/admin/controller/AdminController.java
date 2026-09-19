@@ -2,11 +2,9 @@ package com.mszlu.blog.admin.controller;
 
 import com.mszlu.blog.admin.model.params.PageParam;
 import com.mszlu.blog.admin.service.PermissionService;
-import com.mszlu.blog.admin.vo.PageResult;
 import com.mszlu.blog.admin.vo.Result;
 import com.mszlu.blog.admin.pojo.Permission;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -42,8 +40,8 @@ public class AdminController {
         return permissionService.update(permission);
     }
 
-    @GetMapping("permission/delete/{id}")
-    public Result delete (@PathVariable("id") Long id){
+    @PostMapping("permission/delete/{id}")
+    public Result delete(@PathVariable("id") Long id){
         return permissionService.delete(id);
     }
 

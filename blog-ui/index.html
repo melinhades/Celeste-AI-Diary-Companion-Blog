@@ -28,7 +28,7 @@
     body::after {
         content:'';
         position:fixed; left:0; right:0; top:0; bottom:-12%; /* 底边下移：素材图底部自带白色条带，cover 缩放后会露出在视口底部，向下延伸将其移出屏幕 */
-        background:url('celeste-areas/ForsakenCity01.png') center/cover no-repeat;
+        background:url('celeste-areas/ForsakenCity01.webp') center/cover no-repeat;
         opacity:0.3;
         pointer-events:none;
         z-index:0;
@@ -36,7 +36,7 @@
     .snow-strip {
         position:fixed; left:0; right:0; bottom:0;
         height:80px;
-        background:url('celeste-areas/snow-front.png') repeat-x bottom/220px auto;
+        background:url('celeste-areas/snow-front.webp') repeat-x bottom/220px auto;
         animation:snowDrift 45s linear infinite;
         pointer-events:none;
         z-index:2;
@@ -91,15 +91,15 @@
 <!-- 顶部导航 -->
 <header class="header">
     <div class="container header-inner">
-        <a href="index.html" class="logo"><img loading="lazy" src="celeste-gui/logo.png" alt="Celeste" loading="lazy"></a>
+        <a href="index.html" class="logo"><img loading="lazy" src="celeste-gui/logo.webp" alt="Celeste" loading="lazy" decoding="async"></a>
         <nav class="nav">
             <a href="index.html" class="nav-link active">Home</a>
             <a href="archives.html" class="nav-link">Archives</a>
             <a href="diary.html" class="nav-link nav-diary-btn" title="Diary with Madeline">
-                <img loading="lazy" src="celeste-gui/journal.png" alt="Diary">
+                <img loading="lazy" src="celeste-gui/journal.png" alt="Diary" decoding="async">
             </a>
             <a href="shop.html" class="nav-link nav-diary-btn" title="Celeste Resort · Oshiro">
-                <img loading="lazy" src="Atlases/Gui/hover/resort.png" alt="Hotel">
+                <img loading="lazy" src="Atlases/Gui/hover/resort.png" alt="Hotel" decoding="async">
             </a>
         </nav>
         <div class="header-right" id="headerRight">
@@ -242,14 +242,14 @@
         const html = list.map((a, i) => `
             <article class="article-card" style="animation-delay:${i * 0.06}s" onclick="location.href='article.html?id=${a.id}'">
                 <div class="article-meta">
-                    <span class="meta-author"><img loading="lazy" class="meta-author-img" src="${(a.author?.nickname || a.author?.username) ? 'celeste-portraits/madeline/normal00.png' : 'celeste-icons/beat.png'}" alt="">${escHtml(a.author?.nickname || a.author?.username || '匿名')}</span>
-                    <span class="meta-date"><img loading="lazy" class="meta-icon" src="celeste-icons/cs_variantmode.png" alt="">${formatDate(a.createDate)}</span>
-                    <span class="meta-views"><img loading="lazy" class="meta-icon" src="celeste-icons/time.png" alt="">${a.viewCounts || 0}</span>
-                    <span class="meta-views"><img class="meta-icon" src="celeste-icons/heartgem1.png" alt=""><span class="like-num" data-id="${a.id}">0</span></span>
+                    <span class="meta-author"><img loading="lazy" class="meta-author-img" src="${(a.author?.nickname || a.author?.username) ? 'celeste-portraits/madeline/normal00.png' : 'celeste-icons/beat.png'}" alt="" decoding="async">${escHtml(a.author?.nickname || a.author?.username || '匿名')}</span>
+                    <span class="meta-date"><img loading="lazy" class="meta-icon" src="celeste-icons/cs_variantmode.png" alt="" decoding="async">${formatDate(a.createDate)}</span>
+                    <span class="meta-views"><img loading="lazy" class="meta-icon" src="celeste-icons/time.png" alt="" decoding="async">${a.viewCounts || 0}</span>
+                    <span class="meta-views"><img class="meta-icon" src="celeste-icons/heartgem1.png" alt="" loading="lazy" decoding="async"><span class="like-num" data-id="${a.id}">0</span></span>
                     ${a.category ? `<span class="meta-category">${escHtml(a.category.categoryName || a.category.name)}</span>` : ''}
                 </div>
                 <h2 class="article-title">${escHtml(a.title)}</h2>
-                ${(a.images || []).length ? `<div class="card-thumbs">${a.images.slice(0, 3).map(u => `<img loading="lazy" src="${escHtml(u)}" alt="">`).join('')}</div>` : ''}
+                ${(a.images || []).length ? `<div class="card-thumbs">${a.images.slice(0, 3).map(u => `<img loading="lazy" src="${escHtml(u)}" alt="" decoding="async">`).join('')}</div>` : ''}
                 <p class="article-summary">${escHtml(a.summary || '')}</p>
                 <div class="article-tags">
                     ${(a.tags || []).map(t => `<span class="tag">${escHtml(t.tagName || t.name)}</span>`).join('')}
@@ -282,7 +282,7 @@
             ];
             const html = (res.data || []).map((a, i) => `
                 <div class="hot-item" onclick="location.href='article.html?id=${a.id}'">
-                    <span class="hot-rank rank-${i+1}">${RANK_ICONS[i] ? `<img loading="lazy" src="${RANK_ICONS[i]}" alt="${i+1}">` : (i+1)}</span>
+                    <span class="hot-rank rank-${i+1}">${RANK_ICONS[i] ? `<img loading="lazy" src="${RANK_ICONS[i]}" alt="${i+1}" decoding="async">` : (i+1)}</span>
                     <span class="hot-title">${escHtml(a.title)}</span>
                 </div>
             `).join('');

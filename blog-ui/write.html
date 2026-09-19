@@ -68,7 +68,7 @@
         position: fixed; bottom: 12px; right: 12px;
         width: 420px;
         height: 500px;
-        background: url('celeste-gui/card.png') top / 100% 123% no-repeat;
+        background: url('celeste-gui/card.webp') top / 100% 123% no-repeat;
         border: none;
         border-radius: 0;
         display: flex; flex-direction: column;
@@ -88,7 +88,7 @@
         padding: 14px 16px 8px 42px;
         display: flex; align-items: center; gap: 10px;
         border-bottom: none;
-        background: url('celeste-gui/card-top.png') center / 100% 100% no-repeat;
+        background: url('celeste-gui/card-top.webp') center / 100% 100% no-repeat;
         flex-shrink: 0;
     }
     #chat-madeline-avatar-wrap {
@@ -219,7 +219,7 @@
         align-items: center;
         gap: 18px;
         padding: 20px 30px;
-        background: url('celeste-portraits/textbox/madeline.png') center / 100% 100% no-repeat;
+        background: url('celeste-portraits/textbox/madeline.webp') center / 100% 100% no-repeat;
         opacity: 0;
         pointer-events: none;
         transition: opacity .25s ease, transform .25s ease;
@@ -257,12 +257,12 @@
 
 <header class="header">
     <div class="container header-inner">
-        <a href="index.html" class="logo"><img src="celeste-gui/logo.png" alt="Celeste"></a>
+        <a href="index.html" class="logo"><img src="celeste-gui/logo.webp" alt="Celeste" loading="lazy" decoding="async"></a>
         <nav class="nav">
             <a href="index.html" class="nav-link">Home</a>
             <a href="archives.html" class="nav-link">Archives</a>
             <a href="diary.html" class="nav-link nav-diary-btn" title="Diary with Madeline">
-                <img src="celeste-gui/journal.png" alt="Diary">
+                <img src="celeste-gui/journal.png" alt="Diary" loading="lazy" decoding="async">
             </a>
         </nav>
         <div class="header-right" id="headerRight"></div>
@@ -287,11 +287,11 @@
         <button class="toolbar-btn" onclick="insertMd('### ','')">H3</button>
         <button class="toolbar-btn" onclick="insertMd('`','`')">Code</button>
         <button class="toolbar-btn" onclick="insertMd('\n\n','\n```\n')">Code Block</button> <button class="toolbar-btn" onclick="insertMd('> ','')">Quote</button> <button class="toolbar-btn" onclick="insertMd('[link](',')')">Link</button> <button class="toolbar-btn" onclick="insertMd('- ','')">List</button>
-        <button class="toolbar-btn" onclick="document.getElementById('imageInput').click()"><img src="celeste-collectables/goldberry.png" alt="">Image</button>
+        <button class="toolbar-btn" onclick="document.getElementById('imageInput').click()"><img src="celeste-collectables/goldberry.png" alt="" loading="lazy" decoding="async">Image</button>
         <input type="file" id="imageInput" accept="image/*" style="display:none" onchange="uploadImage(this)">
-        <button class="toolbar-btn" id="openMadelineBtn"><img src="celeste-collectables/strawberry.png" alt="">Madeline</button>
-        <button class="toolbar-btn" id="toolbarPolishBtn" style="border-color:rgba(255,227,109,.5);color:#ffe36d;"><img src="celeste-icons/beat.png" alt="">润色</button>
-        <button class="toolbar-btn" id="toolbarGenBtn" style="border-color:rgba(120,220,255,.5);color:#78dcff;"><img src="celeste-collectables/cassette.png" alt="">生成文章</button>
+        <button class="toolbar-btn" id="openMadelineBtn"><img src="celeste-collectables/strawberry.png" alt="" loading="lazy" decoding="async">Madeline</button>
+        <button class="toolbar-btn" id="toolbarPolishBtn" style="border-color:rgba(255,227,109,.5);color:#ffe36d;"><img src="celeste-icons/beat.png" alt="" loading="lazy" decoding="async">润色</button>
+        <button class="toolbar-btn" id="toolbarGenBtn" style="border-color:rgba(120,220,255,.5);color:#78dcff;"><img src="celeste-collectables/cassette.png" alt="" loading="lazy" decoding="async">生成文章</button>
     </div>
     <textarea class="write-body" id="articleBody" placeholder="Start writing... Markdown supported" oninput="updateCount()"></textarea>
     <script>
@@ -316,10 +316,10 @@
     </div>
 </div>
 
-<img id="wpPixelMadeline" src="celeste-gui/bounceline.gif" alt="Madeline" title="单击摸摸她 · 双击打开聊天记录">
+<img id="wpPixelMadeline" src="celeste-gui/bounceline.gif" alt="Madeline" title="单击摸摸她 · 双击打开聊天记录" loading="lazy" decoding="async">
 <canvas id="snowCanvas" style="position:fixed;inset:0;z-index:0;pointer-events:none;"></canvas>
 <div id="wpGameDialog">
-    <div id="wpGameDialogPortrait"><img id="wpGameDialogPortraitImg" src="celeste-portraits/madeline/normal00.png" alt="Madeline"></div>
+    <div id="wpGameDialogPortrait"><img id="wpGameDialogPortraitImg" src="celeste-portraits/madeline/normal00.png" alt="Madeline" loading="lazy" decoding="async"></div>
     <div id="wpGameDialogBody">
         <div id="wpGameDialogName">Madeline</div>
         <div id="wpGameDialogText"></div>
@@ -329,7 +329,7 @@
 <div id="madeline-chat-dialog">
     <div class="chat-header">
         <div id="chat-madeline-avatar-wrap">
-            <img id="chatAvatar" src="celeste-portraits/madeline/normal00.png" alt="Madeline">
+            <img id="chatAvatar" src="celeste-portraits/madeline/normal00.png" alt="Madeline" loading="lazy" decoding="async">
         </div>
         <span class="chat-title">Madeline</span>
         <button class="close-btn" id="closeChatBtn">✕</button>
@@ -377,7 +377,7 @@
 
     const fallLayer = document.createElement('div');
     fallLayer.id = 'genFallLayer';
-    fallLayer.innerHTML = '<img id="genFallSprite" alt="">';
+    fallLayer.innerHTML = '<img id="genFallSprite" alt="" loading="lazy" decoding="async">';
     document.body.appendChild(fallLayer);
 
     const decision = document.createElement('div');
@@ -608,11 +608,11 @@
         if (!bar) return;
         const txt = document.getElementById('articleBody').value;
         const srcs = [];
-        const re = /<img[^>]+src="([^"]+)"/g;
+        const re = /<img[^ loading="lazy" decoding="async">]+src="([^"]+)"/g;
         let m;
         while ((m = re.exec(txt)) !== null) srcs.push(m[1]);
         bar.innerHTML = srcs.map(s =>
-            '<img src="' + s + '" style="max-height:84px;max-width:140px;object-fit:contain;border-radius:6px;border:1px solid rgba(138,43,226,.35);background:rgba(30,27,75,.4);">'
+            '<img src="' + s + '" style="max-height:84px;max-width:140px;object-fit:contain;border-radius:6px;border:1px solid rgba(138,43,226,.35);background:rgba(30,27,75,.4);" loading="lazy" decoding="async">'
         ).join('');
     }
 
@@ -650,7 +650,7 @@
             body: fd
         }).then(r => r.json()).then(res => {
             if (res.success && res.data) {
-                insertMd('<img src="' + BASE_URL + res.data + '" style="max-width:100%;border-radius:8px;margin:12px 0;">\n', '');
+                insertMd('<img src="' + BASE_URL + res.data + '" style="max-width:100%;border-radius:8px;margin:12px 0;" loading="lazy" decoding="async">\n', '');
                 showToast('Image added', 'success');
             } else {
                 showToast(res.msg || 'Upload failed', 'error');

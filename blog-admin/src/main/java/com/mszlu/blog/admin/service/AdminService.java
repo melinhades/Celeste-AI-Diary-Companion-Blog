@@ -18,7 +18,7 @@ public class AdminService {
         LambdaQueryWrapper<Admin> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(Admin::getUsername,username);
         queryWrapper.last("limit 1");
-        Admin admin =(Admin) adminMapper.selectOne(queryWrapper);
+        Admin admin = adminMapper.selectOne(queryWrapper);
         return admin;
 
     }

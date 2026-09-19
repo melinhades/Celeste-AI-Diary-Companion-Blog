@@ -7,7 +7,7 @@ function initHeader() {
     if (token && nickname) {
         el.innerHTML = `
             <div class="user-info">
-                <div class="user-avatar"><img src="celeste-gui/user-avatar.png" alt=""></div>
+                <div class="user-avatar"><img src="celeste-gui/user-avatar.webp" alt=""></div>
                 <span>${escHtml(nickname)}</span>
                 <a href="messages.html" class="btn btn-outline btn-sm" style="position:relative" title="消息">🔔<i id="bellBadge" style="display:none;position:absolute;top:-7px;right:-7px;background:#e6517c;color:#fff;font-style:normal;font-size:10px;min-width:16px;height:16px;line-height:16px;border-radius:8px;text-align:center;padding:0 3px;"></i></a>
                 <a href="me.html" class="btn btn-outline btn-sm">我的空间</a>

@@ -191,7 +191,7 @@
             '.feather-title{font-family:var(--pixel-font,monospace);font-size:15px;color:#ffe36d;letter-spacing:2px;text-shadow:0 0 12px rgba(255,227,109,.5);}' +
             '#featherCloseBtn{border:none;background:transparent;color:#8899bb;font-size:20px;cursor:pointer;}' +
             '#featherCloseBtn:hover{color:#fff;}' +
-            '.feather-madeline{position:absolute;bottom:44px;left:50%;transform:translateX(-50%) translateY(24px);width:min(94vw,700px);min-height:100px;z-index:3;display:flex;align-items:center;gap:18px;padding:20px 30px;background:url("celeste-portraits/textbox/madeline.png") center / 100% 100% no-repeat;opacity:0;pointer-events:none;transition:opacity .25s ease,transform .25s ease;}' +
+            '.feather-madeline{position:absolute;bottom:44px;left:50%;transform:translateX(-50%) translateY(24px);width:min(94vw,700px);min-height:100px;z-index:3;display:flex;align-items:center;gap:18px;padding:20px 30px;background:url("celeste-portraits/textbox/madeline.webp") center / 100% 100% no-repeat;opacity:0;pointer-events:none;transition:opacity .25s ease,transform .25s ease;}' +
             '.feather-madeline.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto;}' +
             '.feather-madeline-portrait{width:84px;height:84px;flex:none;border-radius:6px;overflow:hidden;}' +
             '.feather-madeline-portrait img{width:100%;height:100%;object-fit:cover;display:block;}' +

@@ -33,7 +33,7 @@
         }
         @keyframes starTwinkle { 0%,100%{opacity:.25} 50%{opacity:.9} }
         .register-box {
-            background:url('celeste-gui/poempage.png') center/100% 100% no-repeat;
+            background:url('celeste-gui/poempage.webp') center/100% 100% no-repeat;
             border:none; border-radius:0;
             padding:44px 44px 36px;
             width:440px; max-width:100%;
@@ -113,7 +113,7 @@
         @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
         .snow-strip {
             position:fixed; left:0; right:0; bottom:0; height:80px;
-            background:url('celeste-areas/snow-front.png') repeat-x bottom/220px auto;
+            background:url('celeste-areas/snow-front.webp') repeat-x bottom/220px auto;
             animation:snowDrift 45s linear infinite; pointer-events:none; z-index:2; opacity:.5;
         }
         @keyframes snowDrift { from{background-position-x:0} to{background-position-x:-440px} }
@@ -175,7 +175,7 @@
     }
     </script>
 <div class="register-box">
-    <img class="register-madeline" src="celeste-portraits/madeline/peaceful00.png" alt="Madeline" id="madelineAvatar">
+    <img class="register-madeline" src="celeste-portraits/madeline/peaceful00.png" alt="Madeline" id="madelineAvatar" loading="lazy" decoding="async">
     <h2>NEW TRAVELER</h2>
     <p class="sub">Start your climb up the mountain.</p>
     <form id="regForm" autocomplete="on" novalidate>

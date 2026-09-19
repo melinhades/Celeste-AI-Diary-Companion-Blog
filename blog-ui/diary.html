@@ -10,7 +10,7 @@
     <style>
         /* ===== 羽毛随笔弹框：poempage 纸页 + 登录页同款滑入动画 ===== */
         #featherNoteBox {
-            background:url('celeste-gui/poempage.png') center/100% 100% no-repeat;
+            background:url('celeste-gui/poempage.webp') center/100% 100% no-repeat;
             border:none;
             border-radius:0;
             filter:drop-shadow(0 8px 32px rgba(0,0,0,.6));
@@ -29,20 +29,20 @@
     <div id="bg-snow-back"></div>
     <div id="bg-snow-front"></div>
     <button id="homePosterBtn" title="回到主页 · My Mountain" onclick="location.href='index.html'">
-        <img src="celeste-gui/mymountain_icon.png" alt="My Mountain">
+        <img src="celeste-gui/mymountain_icon.png" alt="My Mountain" loading="lazy" decoding="async">
     </button>
     <button id="journalBackBtn" onclick="location.href='index.html'"><span class="x">✕</span>返回</button>
     <!-- 金羽毛游戏入口（右上角） -->
-    <img id="pixelMadeline" src="celeste-gui/bounceline.gif" alt="Madeline" title="点我聊天">
+    <img id="pixelMadeline" src="celeste-gui/bounceline.gif" alt="Madeline" title="点我聊天" loading="lazy" decoding="async">
     <div id="gameDialog">
-        <div id="gameDialogPortrait"><img id="gameDialogPortraitImg" src="celeste-portraits/madeline/normal00.png" alt="Madeline"></div>
+        <div id="gameDialogPortrait"><img id="gameDialogPortraitImg" src="celeste-portraits/madeline/normal00.png" alt="Madeline" loading="lazy" decoding="async"></div>
         <div id="gameDialogBody">
             <div id="gameDialogName">Madeline</div>
             <div id="gameDialogText"></div>
         </div>
     </div>
     <button id="featherGameBtn" title="金羽毛" style="position:fixed; top:14px; right:16px; z-index:900; width:64px; height:64px; padding:0; background:transparent; border:none; cursor:pointer; transition:transform .3s ease, filter .3s ease; filter:drop-shadow(0 4px 12px rgba(255,170,60,.6));">
-        <img src="celeste-gui/loop.gif" alt="金羽毛" style="width:100%; height:100%; object-fit:contain; display:block;">
+        <img src="celeste-gui/loop.gif" alt="金羽毛" style="width:100%; height:100%; object-fit:contain; display:block;" loading="lazy" decoding="async">
     </button>
     <!-- 羽毛随笔弹框 -->
     <div id="featherNoteBox" style="display:none; position:fixed; top:90px; right:16px; z-index:901; width:260px; padding:18px 16px;">
@@ -63,7 +63,7 @@
     <div id="postcard-overlay">
         <canvas id="snowCanvas"></canvas>
         <div id="postcard-container">
-            <img id="postcard-bg" src="celeste-gui/postcard.png" alt="Postcard">
+            <img id="postcard-bg" src="celeste-gui/postcard.webp" alt="Postcard" loading="lazy" decoding="async">
             <div id="postcard-to"><span class="name" id="postcardName"></span></div>
             <div id="postcard-message"></div>
             <button id="postcard-close">Keep ♥</button>
@@ -74,7 +74,7 @@
     <div id="madeline-wrapper">
         <div id="madeline-float-button">
             <div class="avatar-wrap">
-                <img id="floatAvatar" src="celeste-portraits/madeline/normal00.png" alt="Madeline">
+                <img id="floatAvatar" src="celeste-portraits/madeline/normal00.png" alt="Madeline" loading="lazy" decoding="async">
             </div>
         </div>
         <div class="quick-input-container" id="quickInputBox">
@@ -83,7 +83,7 @@
         <div id="madeline-chat-dialog">
             <div class="chat-header">
                 <div id="chat-madeline-avatar-wrap">
-                    <img id="chatAvatar" src="celeste-portraits/madeline/normal00.png" alt="Madeline">
+                    <img id="chatAvatar" src="celeste-portraits/madeline/normal00.png" alt="Madeline" loading="lazy" decoding="async">
                 </div>
                 <span class="chat-title">Madeline</span>
                 <button class="close-btn" id="closeChatBtn">✕</button>
@@ -98,7 +98,7 @@
 
     <!-- 日记编辑区 -->
     <div class="editor-wrapper">
-        <img src="celeste-gui/journal.png" alt="Journal" style="display:block; margin:0 auto 6px auto; height:72px; filter:drop-shadow(0 0 6px rgba(255,235,59,0.4));">
+        <img src="celeste-gui/journal.png" alt="Journal" style="display:block; margin:0 auto 6px auto; height:72px; filter:drop-shadow(0 0 6px rgba(255,235,59,0.4));" loading="lazy" decoding="async">
         <div id="journalStage">
             <div id="journalBook"></div>
             <div class="book-dots" id="bookDots"></div>

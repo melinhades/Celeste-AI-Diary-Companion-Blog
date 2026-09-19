@@ -11,7 +11,7 @@
     body::after {
         content:'';
         position:fixed; inset:0;
-        background:url('celeste-areas/bg_calm.png') center bottom/cover no-repeat;
+        background:url('celeste-areas/bg_calm.webp') center bottom/cover no-repeat;
         opacity:0.15;
         pointer-events:none;
         z-index:0;
@@ -126,7 +126,7 @@
     }
     #articleLoadingOverlay .ld-snow-strip {
         position: absolute; left: 0; right: 0; bottom: 0; height: 80px;
-        background: url('celeste-areas/snow-front.png') repeat-x bottom/220px auto;
+        background: url('celeste-areas/snow-front.webp') repeat-x bottom/220px auto;
         animation: snowDrift 45s linear infinite;
         opacity: .5; pointer-events: none;
     }
@@ -200,16 +200,16 @@
 
     <!-- 阅读进度条 + 回顶羽毛 -->
     <div id="readProgress"></div>
-    <div id="backToTop" title="Back to top"><img loading="lazy" src="celeste-feather/feather0.png" alt=""></div>
+    <div id="backToTop" title="Back to top"><img loading="lazy" src="celeste-feather/feather0.png" alt="" decoding="async"></div>
 
 <header class="header">
     <div class="container header-inner">
-        <a href="index.html" class="logo"><img loading="lazy" src="celeste-gui/logo.png" alt="Celeste"></a>
+        <a href="index.html" class="logo"><img loading="lazy" src="celeste-gui/logo.webp" alt="Celeste" decoding="async"></a>
         <nav class="nav">
             <a href="index.html" class="nav-link">Home</a>
             <a href="archives.html" class="nav-link">Archives</a>
             <a href="diary.html" class="nav-link nav-diary-btn" title="Diary with Madeline">
-                <img loading="lazy" src="celeste-gui/journal.png" alt="Diary">
+                <img loading="lazy" src="celeste-gui/journal.png" alt="Diary" decoding="async">
             </a>
         </nav>
         <div class="header-right" id="headerRight"></div>
@@ -222,7 +222,7 @@
         <div id="articleBody"></div>
         <div id="likeBar">
             <button id="likeBtn" class="like-btn" title="为这篇文章点亮心之宝石">
-                <img id="likeGem" src="celeste-icons/heartgem0.png" alt="">
+                <img id="likeGem" src="celeste-icons/heartgem0.png" alt="" loading="lazy" decoding="async">
                 <span id="likeCount">0</span>
             </button>
         </div>
@@ -489,7 +489,7 @@
         return `
             <div class="comment-item">
                 <div class="comment-author">
-                    <div class="comment-avatar"><img loading="lazy" src="celeste-portraits/madeline/${MAD_PORTRAITS[(avIdx++) % MAD_PORTRAITS.length]}" alt=""></div>
+                    <div class="comment-avatar"><img loading="lazy" src="celeste-portraits/madeline/${MAD_PORTRAITS[(avIdx++) % MAD_PORTRAITS.length]}" alt="" decoding="async"></div>
                     <div>
                         <div class="comment-name">${escHtml(name)}</div>
                         <div class="comment-date">${formatDate(c.createDate)}</div>
@@ -591,7 +591,7 @@
             ];
             document.getElementById('hotList').innerHTML = (res.data || []).map((a, i) => `
                 <div class="hot-item" onclick="location.href='article.html?id=${a.id}'">
-                    <span class="hot-rank rank-${i+1}">${RANK_ICONS[i] ? `<img loading="lazy" src="${RANK_ICONS[i]}" alt="${i+1}">` : (i+1)}</span>
+                    <span class="hot-rank rank-${i+1}">${RANK_ICONS[i] ? `<img loading="lazy" src="${RANK_ICONS[i]}" alt="${i+1}" decoding="async">` : (i+1)}</span>
                     <span class="hot-title">${escHtml(a.title)}</span>
                 </div>
             `).join('') || '<div class="empty">No data</div>';
