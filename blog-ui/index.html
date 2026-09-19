@@ -27,7 +27,7 @@
         }
     body::after {
         content:'';
-        position:fixed; inset:0;
+        position:fixed; left:0; right:0; top:0; bottom:-12%; /* 底边下移：素材图底部自带白色条带，cover 缩放后会露出在视口底部，向下延伸将其移出屏幕 */
         background:url('celeste-areas/ForsakenCity01.png') center/cover no-repeat;
         opacity:0.3;
         pointer-events:none;

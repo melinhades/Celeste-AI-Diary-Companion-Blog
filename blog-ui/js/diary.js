@@ -1588,8 +1588,10 @@ function inferReplyEmotion(text) {
     })();
     let pmFrameTimer = null;
     function pmForceSize() {
-        pm.style.setProperty('width', '56px', 'important');
-        pm.style.setProperty('height', '56px', 'important');
+        // sitdown/sleep/wakeup 素材取材尺寸不同，需渲染为 100px 才能与其他 56px 素材视觉一致
+        const big = pm.src.indexOf('sitdown') !== -1 || pm.src.indexOf('sleep') !== -1 || pm.src.indexOf('wakeup') !== -1;
+        pm.style.setProperty('width', big ? '100px' : '56px', 'important');
+        pm.style.setProperty('height', big ? 'auto' : '56px', 'important');
     }
     function pmSetSrc(name) {
         if (pmFrameTimer) { clearInterval(pmFrameTimer); pmFrameTimer = null; }
