@@ -7,7 +7,7 @@
 
 <img src="blog-ui/celeste-gui/title.png" alt="CELESTE" width="320">
 
-# 🏔️ AI Diary Companion Blog
+#  AI Diary Companion Blog
 
 > *"Every step up the mountain is a word in your story."*
 > **让每一个字都有温度，让每一天都有意义。**
