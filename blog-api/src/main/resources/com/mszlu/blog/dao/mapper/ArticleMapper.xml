@@ -17,7 +17,7 @@
     </resultMap>
 
     <select id="listArchives" resultType="com.mszlu.blog.dao.dos.Archives">
-        select FROM_UNIXTIME(create_date/1000,'%Y') as year, FROM_UNIXTIME(create_date/1000,'%m') as month,count(*) as count from ms_article group by year,month
+        select id, title, FROM_UNIXTIME(create_date/1000,'%Y') as year, FROM_UNIXTIME(create_date/1000,'%m') as month, create_date as createDate from ms_article order by create_date desc
     </select>
     <select id="listArticle" resultMap="articleMap">
             select * from ms_article

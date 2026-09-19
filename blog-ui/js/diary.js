@@ -795,10 +795,10 @@
     function capPostcardWords(text) {
         const s = String(text || '').trim();
         const words = s.split(/\s+/).filter(Boolean);
-        // 单词偏长（平均≥6字符）时收紧到 25 词，否则放宽到 30 词
+        // 与提示词硬上限(70词)对齐：单词偏长（平均≥6字符）时收紧到 62 词
         const charCount = s.replace(/\s+/g, '').length;
         const avgLen = words.length ? charCount / words.length : 0;
-        const limit = avgLen >= 6 ? 25 : 30;
+        const limit = avgLen >= 6 ? 62 : 70;
         if (words.length <= limit) return s;
         return words.slice(0, limit).join(' ') + '…';
     }

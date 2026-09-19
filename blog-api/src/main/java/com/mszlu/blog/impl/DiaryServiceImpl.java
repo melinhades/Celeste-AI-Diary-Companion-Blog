@@ -207,6 +207,77 @@ public class DiaryServiceImpl implements DiaryService {
     }
 
     @Override
+    public Result heartCrystal() {
+        SysUser user = UserThreadLocal.get();
+        if (user == null) {
+            return Result.fail(403, "未登录");
+        }
+        String userId = user.getId();
+
+        // 近 10 篇日记的情绪 → 主色投票
+        // 红=不安/愤怒（炽热），蓝=平静/疲惫/悲伤/孤独（沉静），黄=开心/期待/满足/惊讶（明亮）
+        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Diary> wrapper =
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
+        wrapper.eq(Diary::getUserId, userId);
+        wrapper.orderByDesc(Diary::getCreateDate);
+        wrapper.last("limit 10");
+        java.util.List<Diary> diaries = diaryMapper.selectList(wrapper);
+
+        int red = 0, blue = 0, yellow = 0;
+        StringBuilder trace = new StringBuilder();
+        for (Diary d : diaries) {
+            String e = d.getEmotion() == null ? "" : d.getEmotion();
+            if (!e.isEmpty()) trace.append(e).append(" ");
+            switch (e) {
+                case "不安": case "愤怒": red++; break;
+                case "平静": case "疲惫": case "悲伤": case "孤独": blue++; break;
+                case "开心": case "期待": case "满足": case "惊讶": yellow++; break;
+                default: break;
+            }
+        }
+        String color;
+        if (diaries.isEmpty()) {
+            color = "blue"; // 没有数据时默认蓝——正典里第一颗水晶心就是蓝色
+        } else if (red >= blue && red >= yellow) {
+            color = "red";
+        } else if (blue >= yellow) {
+            color = "blue";
+        } else {
+            color = "yellow";
+        }
+
+        // AI 生成名称与描述（两行文本：第一行名称，第二行描述）
+        String prompt = PromptBuilder.heartTitle(color, trace.toString());
+        String reply = aiClient.chat(
+                new java.util.ArrayList<>(java.util.Arrays.asList(
+                        new AiMessage("user", prompt))));
+
+        String FALLBACK_TITLE = "red".equals(color) ? "不肯熄的心"
+                : "yellow".equals(color) ? "甜得过分的心" : "不知所谓的机器";
+        String FALLBACK_DESC = "red".equals(color) ? "那些没说出口的火，烧着烧着就成了灯。"
+                : "yellow".equals(color) ? "草莓攒出来的小太阳，专照阴天。" : "山底的冰凉水声，替你把心事泡得很轻。";
+
+        String title = FALLBACK_TITLE, desc = FALLBACK_DESC;
+        if (reply != null && !reply.trim().isEmpty()) {
+            String[] lines = reply.trim().replaceAll("\"", "").split("\n");
+            java.util.List<String> ok = new java.util.ArrayList<>();
+            for (String l : lines) { if (!l.trim().isEmpty()) ok.add(l.trim()); }
+            if (ok.size() >= 1 && ok.get(0).length() >= 2 && ok.get(0).length() <= 10) {
+                title = ok.get(0);
+                if (ok.size() >= 2 && ok.get(1).length() >= 2 && ok.get(1).length() <= 24) {
+                    desc = ok.get(1);
+                }
+            }
+        }
+
+        java.util.Map<String, Object> data = new java.util.HashMap<>();
+        data.put("color", color);
+        data.put("title", title);
+        data.put("desc", desc);
+        return Result.success(data);
+    }
+
+    @Override
     public Result bubble() {
         SysUser user = UserThreadLocal.get();
         if (user == null) return Result.fail(403, "未登录");
@@ -483,6 +554,202 @@ public class DiaryServiceImpl implements DiaryService {
             fallback.put("message", "（Oshiro 正在擦茶壶，耳朵有点红，没听清。你可以再说一遍吗？）");
             fallback.put("emotion", "不安");
             return Result.success(fallback);
+        }
+    }
+
+    @Override
+    public Result badelineChat(String message, String historyJson, String heartsJson) {
+        SysUser user = UserThreadLocal.get();
+        if (user == null) {
+            return Result.fail(403, "未登录");
+        }
+        String userId = user.getId();
+        if (message == null || message.trim().isEmpty()) {
+            return Result.fail(400, "消息不能为空");
+        }
+        String userName = user.getNickname() != null && !user.getNickname().isBlank()
+                ? user.getNickname() : user.getAccount();
+
+        // ===== 方案C：关系状态（由日记自然推导，不硬推阶段） =====
+        List<Diary> recent = diaryMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Diary>()
+                        .eq(Diary::getUserId, userId)
+                        .orderByDesc(Diary::getCreateDate)
+                        .last("limit 10"));
+        Diary first = diaryMapper.selectOne(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Diary>()
+                        .eq(Diary::getUserId, userId)
+                        .orderByAsc(Diary::getCreateDate)
+                        .last("limit 1"));
+        int dayCount = 1;
+        if (first != null && first.getCreateDate() != null) {
+            dayCount = 1 + (int) ((System.currentTimeMillis() - first.getCreateDate().getTime()) / 86400000L);
+        }
+        long now = System.currentTimeMillis();
+        int gapDays = (recent.isEmpty() || recent.get(0).getCreateDate() == null) ? -1
+                : (int) ((now - recent.get(0).getCreateDate().getTime()) / 86400000L);
+        int prevGap = -1;
+        if (recent.size() >= 2 && recent.get(0).getCreateDate() != null && recent.get(1).getCreateDate() != null) {
+            prevGap = (int) ((recent.get(0).getCreateDate().getTime() - recent.get(1).getCreateDate().getTime()) / 86400000L);
+        }
+
+        // ===== 对话历史（先解析，供「上次互动」用） =====
+        List<AiMessage> history = new ArrayList<>();
+        String lastAssistant = null;
+        if (historyJson != null && !historyJson.isBlank()) {
+            try {
+                List<JSONObject> arr = JSON.parseArray(historyJson, JSONObject.class);
+                if (arr != null) {
+                    for (JSONObject o : arr) {
+                        if (o == null) continue;
+                        String c = o.getString("content");
+                        if (c == null || c.trim().isEmpty()) continue;
+                        String r = "assistant".equals(o.getString("role")) ? "assistant" : "user";
+                        history.add(new AiMessage(r, c));
+                        if ("assistant".equals(r)) lastAssistant = c;
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        if (history.size() > 10) {
+            history = new ArrayList<>(history.subList(history.size() - 10, history.size()));
+        }
+        if (lastAssistant != null) {
+            lastAssistant = lastAssistant.trim();
+            if (lastAssistant.length() > 60) lastAssistant = lastAssistant.substring(0, 60) + "…";
+        }
+
+        String[] state = badelineState(recent, dayCount, gapDays, prevGap);
+        String background = PromptBuilder.badelineBackground(userName, dayCount, state[0], gapDays,
+                state[1], state[2], state[3], badelineHeartsLine(heartsJson), lastAssistant);
+
+        // ===== 组装消息：system(人设+背景) + RAG + 最近历史 + 本条 =====
+        List<AiMessage> messages = new ArrayList<>();
+        messages.add(new AiMessage("system", PromptBuilder.badelineSystem(background)));
+        try {
+            List<com.mszlu.blog.vo.ContextChunk> context = memoryService.searchContext(userId, message.trim(), 4);
+            if (context != null && !context.isEmpty()) {
+                messages.add(new AiMessage("system", PromptBuilder.contextBlock(context)));
+            }
+        } catch (Exception ignored) {
+        }
+        messages.addAll(history);
+        messages.add(new AiMessage("user", message.trim()));
+
+        String reply = aiClient.chat(messages);
+        if (reply == null || reply.isBlank()) {
+            reply = "……信号不好。别以为这样就能跳过这段对话。";
+        }
+        reply = reply.trim();
+        // 情绪标记：提示词要求首行 [emotion:xxx]，剥离后下发给前端驱动立绘；缺失则前端按台词自行推断
+        String emotion = "";
+        java.util.regex.Matcher em = java.util.regex.Pattern
+                .compile("^\\[emotion\\s*:\\s*([a-zA-Z]{1,12})\\]\\s*").matcher(reply);
+        if (em.find()) {
+            emotion = em.group(1).toLowerCase();
+            reply = reply.substring(em.end()).trim();
+        }
+        if (reply.isBlank()) {
+            reply = "……";
+        }
+        java.util.Map<String, Object> data = new java.util.HashMap<>();
+        data.put("message", reply);
+        data.put("emotion", emotion);
+        data.put("stage", state[2]);
+        return Result.success(data);
+    }
+
+    /**
+     * 由近期日记软推导 Badeline 的关系状态：[情绪轨迹, 近期模式, 阶段, 阶段说明]
+     * 对应文档六阶段（追逐/对峙/谷底/并肩/山顶/告别），但让它从内容自然浮现，不硬排日程
+     */
+    private String[] badelineState(List<Diary> recentDesc, int dayCount, int gapDays, int prevGap) {
+        String[] out = {"", "", "", ""};
+        if (recentDesc.isEmpty()) {
+            out[1] = "还没有日记";
+            out[2] = "初遇·试探";
+            out[3] = "她只在观察，什么都还不确定";
+            return out;
+        }
+        List<String> emos = new ArrayList<>();
+        for (Diary d : recentDesc) {
+            if (d.getEmotion() != null && !d.getEmotion().isEmpty()) emos.add(d.getEmotion());
+        }
+        java.util.Collections.reverse(emos); // 旧→新
+        out[0] = emos.isEmpty() ? "（未标注）" : String.join("、", emos);
+
+        java.util.Set<String> neg = new java.util.HashSet<>(java.util.Arrays.asList("不安", "悲伤", "孤独", "愤怒", "疲惫"));
+        java.util.Set<String> pos = new java.util.HashSet<>(java.util.Arrays.asList("开心", "期待", "满足"));
+        List<String> last3 = emos.size() > 3 ? new ArrayList<>(emos.subList(emos.size() - 3, emos.size())) : new ArrayList<>(emos);
+        boolean allNeg3 = last3.size() == 3;
+        boolean allSorrow = last3.size() == 3;
+        for (String e : last3) {
+            if (!neg.contains(e)) allNeg3 = false;
+            if (!"悲伤".equals(e) && !"孤独".equals(e)) allSorrow = false;
+        }
+        boolean climbing = last3.size() == 3 && neg.contains(last3.get(0)) && pos.contains(last3.get(2));
+
+        if (allSorrow) {
+            out[1] = "连续的低谷";
+            out[2] = "告别·沉郁";
+            out[3] = "最难的日子里，她反而最好";
+        } else if (allNeg3) {
+            out[1] = "连续下滑";
+            out[2] = "谷底";
+            out[3] = "「行了。你赢了。」——安静、脆弱、挫败";
+        } else if (climbing) {
+            out[1] = "正在爬出来";
+            out[2] = "并肩";
+            out[3] = "「不错。别得寸进尺。」——嘴硬地支持";
+        } else if (gapDays >= 4) {
+            out[1] = "断更中";
+            out[2] = "对峙·退避";
+            out[3] = "她退开了——两种防御之一";
+        } else if (prevGap >= 4) {
+            out[1] = "刚从断更中回来";
+            out[2] = "并肩";
+            out[3] = "回来了，谈开了——嘴硬，但站在同一边";
+        } else if (dayCount >= 30) {
+            out[1] = "长期坚持";
+            out[2] = "山顶";
+            out[3] = "里程碑附近——真心地骄傲（用她自己的方式）";
+        } else {
+            out[1] = "平稳起伏";
+            out[2] = "追逐·共处";
+            out[3] = "尖锐、讽刺、试探——「你以为你是谁啊，天天写日记？」";
+        }
+        return out;
+    }
+
+    /** 四心光谱：前端心之水晶数组 → 「红x 蓝x 黄x；名字…」，解析失败返回 null */
+    private String badelineHeartsLine(String heartsJson) {
+        try {
+            if (heartsJson == null || heartsJson.isBlank()) return null;
+            List<JSONObject> arr = JSON.parseArray(heartsJson, JSONObject.class);
+            if (arr == null || arr.isEmpty()) return null;
+            int red = 0, blue = 0, yellow = 0;
+            List<String> allNames = new ArrayList<>();
+            for (JSONObject o : arr) {
+                if (o == null) continue;
+                String c = o.getString("color");
+                if ("red".equals(c)) red++;
+                else if ("yellow".equals(c)) yellow++;
+                else blue++;
+                String t = o.getString("title");
+                if (t != null && !t.isBlank()) allNames.add("「" + t.trim() + "」");
+            }
+            // 心可无限炼制：比例全量统计，名字只取最近 4 颗，避免背景块无限增长
+            List<String> names = allNames.size() > 4
+                    ? allNames.subList(allNames.size() - 4, allNames.size()) : allNames;
+            StringBuilder sb = new StringBuilder();
+            sb.append("红").append(red).append(" 蓝").append(blue).append(" 黄").append(yellow);
+            if (!names.isEmpty()) {
+                sb.append("；它们的名字").append(String.join("、", names)).append("——这些名字是你的自我意象的一部分");
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            return null;
         }
     }
 

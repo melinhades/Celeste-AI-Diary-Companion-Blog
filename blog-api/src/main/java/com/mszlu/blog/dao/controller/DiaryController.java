@@ -85,6 +85,12 @@ public class DiaryController {
         return diaryService.featherKeyword();
     }
 
+    /** 心之水晶：按近期日记情绪定色，AI 生成名称与描述 */
+    @GetMapping("heart-crystal")
+    public Result heartCrystal() {
+        return diaryService.heartCrystal();
+    }
+
     /** 请求体体：用于 companion 接口 */
     static class CompanionParam {
         private String draft;
@@ -107,5 +113,25 @@ public class DiaryController {
         public void setMessage(String message) { this.message = message; }
         public String getHistory() { return history; }
         public void setHistory(String history) { this.history = history; }
+    }
+
+    /** Badeline 影子聊天 */
+    @PostMapping("badeline-chat")
+    public Result badelineChat(@RequestBody BadelineChatParam param) {
+        return diaryService.badelineChat(param.getMessage(), param.getHistory(), param.getHearts());
+    }
+
+    /** Badeline 聊天请求体 */
+    static class BadelineChatParam {
+        private String message;
+        private String history; // JSON 数组字符串 [{role:'user'|'assistant', content:'...'}]
+        private String hearts;  // JSON 数组字符串 [{color,title,desc,seq}]
+
+        public String getMessage() { return message; }
+        public void setMessage(String message) { this.message = message; }
+        public String getHistory() { return history; }
+        public void setHistory(String history) { this.history = history; }
+        public String getHearts() { return hearts; }
+        public void setHearts(String hearts) { this.hearts = hearts; }
     }
 }

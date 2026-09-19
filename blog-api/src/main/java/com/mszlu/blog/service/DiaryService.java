@@ -44,5 +44,11 @@ public interface DiaryService {
     /** Oshiro 旅馆聊天 */
     Result oshiroChat(String message, String historyJson);
 
+    /** Badeline 影子聊天：自适应人格（方案C 关系状态 + 四旋钮），hearts 为前端心之水晶 JSON 数组字符串；返回 message / emotion(立绘情绪标记，可为空) / stage */
+    Result badelineChat(String message, String historyJson, String heartsJson);
+
     Result featherKeyword();
+
+    /** 心之水晶：按近期日记情绪定色，AI 生成名称与描述 */
+    Result heartCrystal();
 }
