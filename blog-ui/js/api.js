@@ -1,7 +1,7 @@
 
 const BASE_URL = 'https://api.instapix.icu';
 
-function api(path, method, body) {
+function api(path, method, body, timeoutMs) {
     const options = {
         method: method || 'GET',
         headers: { 'Content-Type': 'application/json' }
@@ -9,6 +9,7 @@ function api(path, method, body) {
     const token = localStorage.getItem('token');
     if (token) options.headers['Authorization'] = token;
     if (body) options.body = JSON.stringify(body);
+    if (timeoutMs) options.signal = AbortSignal.timeout(timeoutMs);
     return fetch(BASE_URL + path, options)
         .then(r => r.json())
         .catch(() => ({ success: false, msg: '网络错误' }));

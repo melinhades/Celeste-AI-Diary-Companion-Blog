@@ -46,7 +46,6 @@
         .archives-title { font-size: 22px; font-weight: 700; color: #e8e8f0; margin-bottom: 24px; }
         .year-group { margin-bottom: 32px; }
         .year-label { font-size: 20px; font-weight: 700; color: #a78bfa; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; text-shadow: 0 0 10px rgba(138, 43, 226, 0.5); }
-        .year-cover { height: 56px; width: auto; border-radius: 6px; opacity: .85; margin-bottom: 10px; display: block; border: 1px solid rgba(138, 43, 226, .3); }
         .archive-item {
             display: flex; align-items: center; gap: 16px;
             padding: 12px 20px; background: rgba(30, 27, 75, 0.6); border-radius: 8px;
@@ -63,6 +62,50 @@
         .archive-count { font-size: 12px; color: #a78bfa; background: rgba(138, 43, 226, 0.2); padding: 2px 8px; border-radius: 10px; border: 1px solid rgba(138, 43, 226, 0.3); }
         .year-group { opacity: 0; transform: translateY(24px); transition: opacity 0.6s ease, transform 0.6s ease; }
         .year-group.in-view { opacity: 1; transform: translateY(0); }
+        /* ===== 月份横线：每月一条分组行（月份图 + hover.png 底部覆盖层） ===== */
+        .month-block { margin: 0 0 14px; }
+        .month-row {
+            position: relative; display: flex; align-items: center; gap: 14px;
+            padding: 10px 16px; overflow: hidden;
+            background: rgba(30, 27, 75, 0.6);
+            border: 1px solid rgba(138, 43, 226, 0.2);
+            border-radius: 8px; cursor: pointer;
+            backdrop-filter: blur(10px);
+            transition: border-color .3s, transform .3s, box-shadow .3s;
+        }
+        .month-row:hover {
+            border-color: rgba(138, 43, 226, 0.45);
+            transform: translateX(8px);
+            box-shadow: 0 4px 20px rgba(138, 43, 226, 0.35);
+        }
+        .month-cover {
+            width: 96px; height: 44px; object-fit: cover; border-radius: 6px; flex-shrink: 0;
+            image-rendering: pixelated;
+            box-shadow: 0 2px 8px rgba(0,0,0,.4);
+        }
+        /* 底部覆盖层：每月图片必有对应 hover 层（专属 <name>-hover.png 探测，兜底共享 hover.png） */
+        .month-hover {
+            position: absolute; left: 0; right: 0; bottom: 0; height: 34px;
+            background-repeat: repeat-x;
+            background-position: center bottom;
+            background-size: auto 100%;
+            mix-blend-mode: screen; /* 织物素材黑底透明化，流苏垂在横线底边 */
+            opacity: 0; transform: translateY(40%);
+            transition: opacity .35s ease, transform .35s ease;
+            pointer-events: none;
+        }
+        .month-row:hover .month-hover { opacity: 1; transform: translateY(0); }
+        .month-name { font-size: 15px; font-weight: 700; color: #e8e8f0; flex: 1; transition: color .3s; text-shadow: 0 1px 4px rgba(0,0,0,.6); }
+        .month-row:hover .month-name { color: #a78bfa; text-shadow: 0 0 10px rgba(138, 43, 226, 0.5); }
+        .month-caret { color: #8b8ba0; font-size: 12px; transition: transform .3s; flex-shrink: 0; }
+        .month-block.collapsed .month-caret { transform: rotate(-90deg); }
+        .month-posts { padding: 6px 0 0 20px; }
+        .month-block.collapsed .month-posts { display: none; }
+        @media (max-width: 640px) {
+            .month-cover { width: 72px; height: 36px; }
+            .month-hover { height: 26px; }
+            .month-posts { padding-left: 8px; }
+        }
         /* 底部透明化：消除白色带 */
         .footer { background:transparent; border:none; backdrop-filter:none; }
     </style>
@@ -170,23 +213,48 @@
 
     initHeader();
 
-    api('/articles/listArchives', 'POST').then(res => {
-        if (!res.success || !res.data || res.data.length === 0) {
-            document.getElementById('archiveContent').innerHTML = '<div class="empty">No archives</div>';
-            return;
-        }
+    // 离线演示数据：后端不可达时也能看到月份横线结构（不跳转文章）
+    const DEMO_ARCHIVES = [
+        { id: -1, title: '山顶的呼吸练习', year: 2026, month: 9, createDate: '2026-09-10' },
+        { id: -1, title: '镜子里的另一个我', year: 2026, month: 9, createDate: '2026-09-03' },
+        { id: -1, title: '金草莓与暗面琳', year: 2026, month: 8, createDate: '2026-08-21' },
+        { id: -1, title: '心之水晶的炼成', year: 2026, month: 5, createDate: '2026-05-14' },
+        { id: -1, title: '塞莱斯特的雪', year: 2025, month: 12, createDate: '2025-12-31' }
+    ];
 
+    api('/articles/listArchives', 'POST').then(res => {
+        if (res.success && res.data && res.data.length) renderArchives(res.data, false);
+        else renderArchives(DEMO_ARCHIVES, true);
+    });
+
+    function renderArchives(list, demo) {
         // 按年份分组
         const groups = {};
-        res.data.forEach(item => {
+        list.forEach(item => {
             const year = item.year || (item.createDate ? new Date(item.createDate).getFullYear() : '未知');
             if (!groups[year]) groups[year] = [];
             groups[year].push(item);
         });
 
+        // 月份横线素材：每月一张章节封面；可有专属底部覆盖层 <name>-hover.png，兜底共享 hover.png
+        const ARC_DIR = 'celeste-gui/archive/';
+        const MONTH_COVERS = ['intro', 'city', 'oldsite', 'cliffside', 'resort', 'temple', 'reflection', 'Summit', 'core', 'pico8', 'lock', 'farewell'];
+        const ZH_MONTH = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'];
+        const seenCovers = {};
+        MONTH_COVERS.forEach(c => {
+            if (!seenCovers[c]) {
+                seenCovers[c] = true;
+                const pre = new Image();
+                pre.decoding = 'async';
+                pre.src = ARC_DIR + c + '.png';
+            }
+        });
+
         const years = Object.keys(groups).sort((a, b) => b - a);
-        const totalPosts = res.data.reduce((s, it) => s + (parseInt(it.count) || 0), 0);
-        document.querySelector('.archives-title').innerHTML = ' Archives <span class="archive-count">' + totalPosts + ' posts total</span>';
+        const totalPosts = list.length;
+        document.querySelector('.archives-title').innerHTML = demo
+            ? ' Archives <span class="archive-count">offline demo · 后端未连接</span>'
+            : ' Archives <span class="archive-count">' + totalPosts + ' posts total</span>';
 
         // 我的文章数（数据隔离：只算当前用户写的）
         if (localStorage.getItem('token')) {
@@ -201,25 +269,63 @@
             }).catch(() => {});
         }
 
-        const CH_COVERS = [1,2,3,4,5,6,7,9];
         let html = '';
         years.forEach((year, yi) => {
             const items = groups[year];
+            // 年份内按月分组：每个月一条横线（月份图 + hover 覆盖层 + 可折叠文章列表）
+            const monthMap = {};
+            items.forEach(it => {
+                const m = it.month || (it.createDate ? new Date(it.createDate).getMonth() + 1 : 1);
+                (monthMap[m] = monthMap[m] || []).push(it);
+            });
+            const months = Object.keys(monthMap).sort((a, b) => b - a);
             html += `<div class="year-group">
-                <img class="year-cover" src="celeste-gui/chapter-covers/${CH_COVERS[yi % CH_COVERS.length]}.png" alt="" loading="lazy" decoding="async">
                 <div class="year-label">${year} <span class="archive-count">${items.length} posts</span></div>`;
-            items.forEach(item => {
-                const month = item.month ? String(item.month).padStart(2, '0') : '';
-                html += `<div class="archive-item" onclick="location.href='article.html?id=${item.id}'">
-                    <span class="archive-date">${month ? year + '-' + month : formatDate(item.createDate)}</span>
-                    <span class="archive-title">${escHtml(item.title)}</span>
-                </div>`;
+            months.forEach(m => {
+                const mItems = monthMap[m];
+                const cover = MONTH_COVERS[m - 1] || 'intro';
+                const mm = String(m).padStart(2, '0');
+                html += `<div class="month-block">
+                    <div class="month-row" role="button" data-m="${m}">
+                        <img class="month-cover" src="${ARC_DIR}${cover}.png" alt="" loading="lazy" decoding="async">
+                        <div class="month-hover" style="background-image:url('${ARC_DIR}hover.png')"></div>
+                        <span class="month-name">${year}-${mm} · ${ZH_MONTH[m - 1] || ''}</span>
+                        <span class="archive-count">${mItems.length} posts</span>
+                        <span class="month-caret">▾</span>
+                    </div>
+                    <div class="month-posts">`;
+                mItems.forEach(item => {
+                    const dmonth = item.month ? String(item.month).padStart(2, '0') : '';
+                    html += `<div class="archive-item"${demo ? '' : ` onclick="location.href='article.html?id=${item.id}'"`}>
+                        <span class="archive-date">${dmonth ? year + '-' + dmonth : formatDate(item.createDate)}</span>
+                        <span class="archive-title">${escHtml(item.title || '未命名文章')}</span>
+                    </div>`;
+                });
+                html += `</div></div>`;
             });
             html += '</div>';
         });
         document.getElementById('archiveContent').innerHTML = html;
 
-        // 时间轴渐入动画
+        // 探测每月专属覆盖层 <name>-hover.png：存在则替换该月份行的共享 hover.png
+        MONTH_COVERS.forEach((c, i) => {
+            const pro = new Image();
+            const m = i + 1;
+            pro.onload = function () {
+                document.querySelectorAll('.month-row[data-m="' + m + '"] .month-hover')
+                    .forEach(el => { el.style.backgroundImage = 'url(' + ARC_DIR + c + '-hover.png)'; });
+            };
+            pro.src = ARC_DIR + c + '-hover.png';
+        });
+
+        // 月份横线折叠/展开 + 时间轴渐入动画
+        document.getElementById('archiveContent').addEventListener('click', e => {
+            const row = e.target.closest('.month-row');
+            if (row) {
+                e.stopPropagation();
+                row.closest('.month-block').classList.toggle('collapsed');
+            }
+        });
         const io = new IntersectionObserver(entries => {
             entries.forEach(en => {
                 if (en.isIntersecting) { en.target.classList.add('in-view'); io.unobserve(en.target); }
@@ -229,7 +335,7 @@
             g.style.transitionDelay = (i * 0.08) + 's';
             io.observe(g);
         });
-    });
+    }
 </script>
 <script>
 // ================= 像素 Madeline 行为树 + 点击彩蛋 =================

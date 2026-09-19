@@ -155,6 +155,70 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 @keyframes dustIdle { 0%,100% { transform: scale(1,1); } 50% { transform: scale(1.05,.95); } }
 @keyframes dustHop { 0%,100% { transform: translateY(0) scale(1,1); } 50% { transform: translateY(-7px) scale(.95,1.06); } }
 
+/* ===== 心之水晶（默认空心 → 兑换出彩色水晶心） ===== */
+.heart-loop {
+    animation: heartBob 2.6s ease-in-out infinite;
+    filter: drop-shadow(0 0 10px var(--hg-glow, rgba(120,190,255,.78)));
+}
+@keyframes heartBob { 0%,100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-5px) rotate(2.5deg); } }
+
+/* 获取仪式全屏：暗场 + 放射光 + 心落定 + 命名牌 */
+#heartGet {
+    position:fixed; inset:0; z-index:2000; display:none;
+    align-items:center; justify-content:center; flex-direction:column;
+    background:radial-gradient(120% 120% at 50% 45%, #141628 0%, #0a0b18 55%, #04040c 100%);
+    opacity:0; transition:opacity .45s ease; cursor:pointer; overflow:hidden;
+}
+#heartGet.show { display:flex; }
+#heartGet.vis { opacity:1; }
+#heartGet .hg-rays {
+    position:absolute; left:50%; top:50%; width:170vmax; height:170vmax;
+    transform:translate(-50%,-50%);
+    background:repeating-conic-gradient(from 0deg, rgba(150,200,255,.15) 0deg 4deg, transparent 4deg 14deg);
+    -webkit-mask-image:radial-gradient(closest-side, transparent 12%, #000 30%, transparent 72%);
+    mask-image:radial-gradient(closest-side, transparent 12%, #000 30%, transparent 72%);
+    animation:hgRaySpin 26s linear infinite;
+    opacity:0; transition:opacity 1.2s ease .2s; pointer-events:none;
+}
+#heartGet.vis .hg-rays { opacity:1; }
+@keyframes hgRaySpin { to { transform:translate(-50%,-50%) rotate(360deg); } }
+#heartGet .hg-heart {
+    position:relative; width:112px; height:112px; image-rendering:pixelated; z-index:2;
+    opacity:0; transform:scale(.15);
+    filter:drop-shadow(0 0 26px var(--hg-glow, rgba(120,190,255,.8))) brightness(1.15);
+}
+#heartGet.vis .hg-heart { animation:hgHeartIn .85s cubic-bezier(.2,1.15,.3,1) .35s forwards; }
+@keyframes hgHeartIn {
+    0%   { opacity:0; transform:scale(.15) rotate(-30deg); }
+    70%  { opacity:1; transform:scale(1.22) rotate(4deg); }
+    100% { opacity:1; transform:scale(1) rotate(0deg); }
+}
+#heartGet.vis.shake { animation:hgShake .35s linear; }
+@keyframes hgShake { 0%,100% { transform:translate(0,0); } 20% { transform:translate(-7px,4px); } 40% { transform:translate(6px,-4px); } 60% { transform:translate(-4px,-3px); } 80% { transform:translate(4px,3px); } }
+#heartGet .hg-flash { position:absolute; inset:0; background:#dfe9ff; opacity:0; pointer-events:none; }
+#heartGet.vis .hg-flash { animation:hgFlash .5s ease-out .85s; }
+@keyframes hgFlash { 0% { opacity:.85; } 100% { opacity:0; } }
+#heartGet .hg-title {
+    margin-top:34px; z-index:2; color:#e8f1ff;
+    font-size:clamp(22px, 4.6vw, 34px); letter-spacing:3px;
+    text-shadow:0 0 18px var(--hg-glow, rgba(120,190,255,.9)), 0 2px 0 rgba(0,0,0,.7);
+    opacity:0; transform:translateY(10px);
+    transition:opacity .8s ease 1.15s, transform .8s ease 1.15s;
+}
+#heartGet .hg-desc {
+    margin-top:12px; z-index:2; color:rgba(214,228,255,.72);
+    font-size:14px; letter-spacing:2px;
+    opacity:0; transition:opacity .8s ease 1.55s;
+}
+#heartGet.vis .hg-title { opacity:1; transform:translateY(0); }
+#heartGet.vis .hg-desc { opacity:1; }
+#heartGet .hg-tip {
+    position:absolute; bottom:30px; left:50%; transform:translateX(-50%);
+    color:rgba(255,230,109,.55); font-size:12px; letter-spacing:3px;
+    opacity:0; transition:opacity .6s ease 1.9s;
+}
+#heartGet.vis .hg-tip { opacity:1; }
+
 </style>
 </head>
 <body>
@@ -204,6 +268,16 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     </div>
     <div class="items" id="items"></div>
     <div class="oshiro-say" id="mSay"></div>
+</div>
+
+<!-- 心之水晶获取仪式：暗场 + 放射光 + 破心音效 + 命名牌 -->
+<div id="heartGet">
+    <div class="hg-rays"></div>
+    <div class="hg-flash"></div>
+    <img class="hg-heart" id="hgHeartImg" src="celeste-icons/heartgem_outline.png" alt="heart" loading="lazy" decoding="async">
+    <div class="hg-title" id="hgTitle"></div>
+    <div class="hg-desc" id="hgDesc"></div>
+    <div class="hg-tip">点击收下</div>
 </div>
 
 <script src="js/api.js"></script>
@@ -592,11 +666,40 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     // ===== 商品逻辑 =====
     var SHOP_ITEMS = [
         { id: 'goldberry', name: '金草莓荣誉', icon: 'celeste-collectables/goldberry/idle00.png', price: 5, desc: '书架右上角点亮金草莓徽章。' },
+        { id: 'crystalheart', name: '心之水晶', icon: 'celeste-icons/heartgem_outline.png', price: 10, desc: '山民们管这叫「炼金」——把最近的日记情绪投进坩埚，炼出一颗独一无二的水晶心。可以反复炼制，每一颗都会成为 Badeline 人格的一部分。' },
         { id: 'heartgem', name: '心之宝石', icon: 'celeste-icons/heartgem0.png', price: 15, desc: '山顶的终极成就。写满 100 篇，它会升满四色。' },
         { id: 'moonberry', name: '月亮莓', icon: 'celeste-collectables/moonberry/normal00.png', price: 30, desc: '山里藏得最深的传说收藏。拿到它，说明你写到了山顶。' }
     ];
     var SAY_BUY = ['太好了！这件收藏品终于找到主人了！', '眼光真好，旅馆的品味有保障～', '恭喜！我这就帮您包好，请收好。'];
     var SAY_POOR = ['草莓还差一些呢，再写几篇日记吧～', '别急，好东西值得多努力几步。'];
+
+    // ===== 心之水晶：颜色 / 光晕 / AI 命名兜底 =====
+    var CRYSTAL_PRICE = 10;
+    var CRYSTAL_ICON = { blue: 'celeste-icons/heartgem0.png', red: 'celeste-icons/heartgem1.png', yellow: 'celeste-icons/heartgem2.png' };
+    var CRYSTAL_GLOW = { blue: 'rgba(110,180,255,.8)', red: 'rgba(255,110,120,.8)', yellow: 'rgba(255,214,110,.85)' };
+    var CRYSTAL_FALLBACK = {
+        blue:   { color: 'blue',   title: '不知所谓的机器', desc: '山底的冰凉水声，替你把心事泡得很轻。' },
+        red:    { color: 'red',    title: '不肯熄的心',     desc: '那些没说出口的火，烧着烧着就成了灯。' },
+        yellow: { color: 'yellow', title: '甜得过分的心',   desc: '草莓攒出来的小太阳，专照阴天。' }
+    };
+    function getCrystal() { try { return JSON.parse(localStorage.getItem('crystalHeart') || '{}'); } catch (e) { return {}; } }
+    // 已收集的心数组（heartDoorHearts 优先，兜底单心 crystalHeart）
+    function getHearts() {
+        try {
+            var arr = JSON.parse(localStorage.getItem('heartDoorHearts') || 'null');
+            if (Array.isArray(arr) && arr.length) return arr;
+        } catch (e) {}
+        var c = getCrystal();
+        return (c && c.color) ? [c] : [];
+    }
+    function fxSound(name, volume) {
+        if (!window.__audioGestured) return;
+        try {
+            var a = new Audio('celeste-sounds/' + name);
+            a.volume = volume == null ? 0.8 : volume;
+            a.play().catch(function () {});
+        } catch (e) {}
+    }
 
     function balance() { return berryBalance(); }
     function owned() {
@@ -605,21 +708,37 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     function say(txt) { document.getElementById('mSay').textContent = '「' + txt + '」—— Oshiro'; }
 
     function render() {
-        var bal = balance(), own = owned();
+        var bal = balance(), own = owned(), ch = getCrystal();
+        var hearts = getHearts();
         document.getElementById('balNum').textContent = bal;
         document.getElementById('items').innerHTML = SHOP_ITEMS.map(function(it) {
             var has = own.indexOf(it.id) >= 0;
-            return '<div class="item' + (has ? ' owned' : '') + '">' +
-                '<img src="' + it.icon + '" alt="" loading="lazy" decoding="async">' +
-                '<div class="info"><div class="name">' + it.name + '</div><div class="desc">' + it.desc + '</div></div>' +
-                '<button class="buy" data-id="' + it.id + '"' + (has ? ' disabled' : (bal < it.price ? ' disabled' : '')) + '>' +
-                (has ? '✓ 已拥有' : it.price + ' 🍓') + '</button></div>';
+            var iconTag = '<img src="' + it.icon + '" alt="" loading="lazy" decoding="async">';
+            var descTxt = it.desc;
+            var canBuy = !has && bal >= it.price;
+            var itName = it.name;
+            if (it.id === 'crystalheart') {
+                canBuy = bal >= it.price; // 心可反复炼制（炼金）
+                if (hearts.length) {
+                    var color = ch.color || 'blue';
+                    itName = it.name + ' ×' + hearts.length; // 商店显示炼心数量
+                    iconTag = '<img src="' + (CRYSTAL_ICON[color] || CRYSTAL_ICON.blue) + '" alt="" loading="lazy" decoding="async" class="heart-loop" style="--hg-glow:' + (CRYSTAL_GLOW[color] || CRYSTAL_GLOW.blue) + '">';
+                    descTxt = '「' + (ch.title || '心之水晶') + '」' + (ch.desc || '') + '<br>已炼 <b>' + hearts.length + '</b> 颗' + (hearts.length >= 4 ? '，心门已开' : '，集满 4 颗开启心门');
+                }
+            }
+            var btn = has ? '✓ 已拥有' : ((it.id === 'crystalheart' && hearts.length) ? '再炼一颗？ · ' + it.price + ' 🍓' : it.price + ' 🍓');
+            return '<div class="item' + (has && it.id !== 'crystalheart' ? ' owned' : '') + '">' +
+                iconTag +
+                '<div class="info"><div class="name">' + itName + '</div><div class="desc">' + descTxt + '</div></div>' +
+                '<button class="buy" data-id="' + it.id + '"' + (canBuy ? '' : ' disabled') + '>' +
+                btn + '</button></div>';
         }).join('');
-        document.querySelectorAll('.buy').forEach(function(b) { b.addEventListener('click', function() { buy(b.dataset.id); }); });
+        document.querySelectorAll('.buy').forEach(function(b) { b.addEventListener('click', function() { buy(b.dataset.id, b); }); });
     }
-    function buy(id) {
+    function buy(id, btn) {
         var it = SHOP_ITEMS.find(function(x) { return x.id === id; });
         if (!it) return;
+        if (id === 'crystalheart') { buyCrystal(btn); return; }
         var own = owned();
         if (own.indexOf(id) >= 0) return;
         if (balance() < it.price) {
@@ -638,6 +757,103 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
         render();
     }
     render();
+
+    // ===== 心之水晶兑换：可反复炼制，每颗追加进 heartDoorHearts（Badeline 人格光谱） =====
+    function buyCrystal(btn) {
+        if (balance() < CRYSTAL_PRICE) {
+            var poor = SAY_POOR[Math.floor(Math.random() * SAY_POOR.length)];
+            say(poor);
+            showOshiroDialog(poor, '不开心');
+            return;
+        }
+        if (btn) { btn.disabled = true; btn.textContent = '炼心中…'; }
+        function finish(cr) {
+            spendBerries(CRYSTAL_PRICE);
+            var hearts = getHearts();
+            hearts.push(cr);
+            try { localStorage.setItem('heartDoorHearts', JSON.stringify(hearts)); } catch (e) {}
+            localStorage.setItem('crystalHeart', JSON.stringify(cr)); // 兼容旧展示：同步最新一颗
+            heartGetSequence(cr, hearts.length);
+        }
+        api('/diary/heart-crystal', 'GET', null, 12000).then(function(res) {
+            if (res && res.success && res.data && res.data.color && CRYSTAL_ICON[res.data.color]) {
+                finish({ color: res.data.color, title: res.data.title || CRYSTAL_FALLBACK[res.data.color].title, desc: res.data.desc || CRYSTAL_FALLBACK[res.data.color].desc });
+            } else {
+                finish(CRYSTAL_FALLBACK.blue); // 无情绪数据 → 正典蓝心
+            }
+        }).catch(function() {
+            finish(CRYSTAL_FALLBACK.blue);
+        });
+    }
+
+    // 获取仪式：暗场 → 放射光 → 心坠落定（破心音效+震屏+白闪）→ 命名牌 → 点击收下
+    // 按心色选专属音效集（intro/loop/outro 三段式；黄心用 gold 目录）
+    function heartSfxBase(color) {
+        if (color === 'red') return 'crystalredheart/crystalheart_red_get_';
+        if (color === 'yellow') return 'crystalgoldheart/crystalheart_gold_get_';
+        return 'crystalblueheart/crystalheart_blue_get_';
+    }
+
+    function heartGetSequence(cr, count) {
+        var el = document.getElementById('heartGet');
+        var im = document.getElementById('hgHeartImg');
+        var glow = CRYSTAL_GLOW[cr.color] || CRYSTAL_GLOW.blue;
+        im.src = CRYSTAL_ICON[cr.color] || CRYSTAL_ICON.blue;
+        el.style.setProperty('--hg-glow', glow);
+        document.getElementById('hgTitle').textContent = '· ' + (cr.title || '心之水晶') + ' ·' + (count > 1 ? '（第 ' + count + ' 颗）' : '');
+        document.getElementById('hgDesc').textContent = cr.desc || '';
+        el.classList.add('show');
+        requestAnimationFrame(function() { requestAnimationFrame(function() { el.classList.add('vis'); }); });
+        // 专属心音三段式：Intro 入场 → Loop 停留循环 → Outro 收下
+        var sfx = heartSfxBase(cr.color);
+        var introA = null, loopA = null;
+        try {
+            introA = new Audio('celeste-sounds/' + sfx + 'intro.wav');
+            introA.volume = 0.85;
+            if (window.__audioGestured) introA.play().catch(function() {});
+        } catch (e) {}
+        // 破心（心落定瞬间 ~0.95s）
+        setTimeout(function() {
+            fxSound('wow_so_secret.wav', 0.9);
+            el.classList.add('shake');
+            setTimeout(function() { el.classList.remove('shake'); }, 400);
+        }, 950);
+        // Loop：仪式停留期间低音量循环
+        try {
+            loopA = new Audio('celeste-sounds/' + sfx + 'loop.wav');
+            loopA.loop = true;
+            loopA.volume = 0.3;
+            if (window.__audioGestured) loopA.play().catch(function() {});
+        } catch (e) {}
+        el.onclick = function() {
+            if (!el.classList.contains('vis')) return;
+            try { if (introA) introA.pause(); if (loopA) loopA.pause(); } catch (e) {}
+            fxSound(sfx + 'outro.wav', 0.85); // Outro：收下
+            el.classList.remove('vis');
+            setTimeout(function() {
+                el.classList.remove('show');
+                render();
+                // 炼金彩蛋台词：首颗与再炼不同
+                showOshiroDialog(count > 1
+                    ? '又来炼金啦？这颗心的颜色……是你当时的样子哦，请收好。'
+                    : '这颗心……是从你自己的日记里长出来的。请收好。', '可爱');
+            }, 480);
+        };
+    }
+
+    // 拥有后：预载三色心，商店页持续循环动画由 CSS heart-loop 承担
+    (function preloadCrystals() {
+        Object.keys(CRYSTAL_ICON).forEach(function(k) { var im = new Image(); im.src = CRYSTAL_ICON[k]; });
+    })();
+
+    // Outro：离开商店页时播放收尾音效
+    document.querySelector('.topbar a').addEventListener('click', function(e) {
+        if (!window.__audioGestured) return;
+        e.preventDefault();
+        fxSound('ui_main_postcard_csides_out.wav', 0.6);
+        var href = e.currentTarget.href;
+        setTimeout(function() { location.href = href; }, 240);
+    });
 
     function mkFrames(prefix, n) { var a = []; for (var i = 0; i < n; i++) a.push(prefix + String(i).padStart(2, '0') + '.png'); return a; }
     function heartTier() {

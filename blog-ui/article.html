@@ -10,8 +10,8 @@
     <style>
     body::after {
         content:'';
-        position:fixed; inset:0;
-        background:url('celeste-areas/bg_calm.webp') center bottom/cover no-repeat;
+        position:fixed; left:0; right:0; top:0; bottom:-12%; /* 对齐 index：素材底边随 cover 缩放露出的白色条带向下延伸移出屏幕 */
+        background:url('celeste-areas/bg_calm.webp') center/cover no-repeat;
         opacity:0.15;
         pointer-events:none;
         z-index:0;
@@ -177,6 +177,55 @@
     .like-btn.liked { color: #ffe36d; border-color: rgba(255,227,109,.6); box-shadow: 0 0 18px rgba(255,227,109,.3); }
     .like-btn.pop img { animation: gemPop .5s ease; }
     @keyframes gemPop { 0% { transform: scale(1); } 40% { transform: scale(1.7) rotate(-10deg); } 100% { transform: scale(1); } }
+
+    /* ===== 格式规范：对齐 index 页的侧边栏与 meta 视觉体系 ===== */
+    .main-layout { position: relative; z-index: 1; }
+    .widget { background: rgba(30,27,75,.6); backdrop-filter: blur(10px); border-radius: 10px; padding: 18px 20px; box-shadow: 0 4px 20px rgba(0,0,0,.3); border: 1px solid rgba(138,43,226,.2); }
+    .widget-title { font-size: 15px; font-weight: 600; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 2px solid rgba(138,43,226,.3); background: linear-gradient(135deg,#667eea 0%,#764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .hot-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; cursor: pointer; border-bottom: 1px solid rgba(138,43,226,.1); transition: all .3s; }
+    .hot-item:last-child { border-bottom: none; }
+    .hot-item:hover { transform: translateX(5px); }
+    .hot-item:hover .hot-title { color: #a78bfa; text-shadow: 0 0 10px rgba(138,43,226,.3); }
+    .hot-rank { width: 22px; height: 22px; border-radius: 50%; background: rgba(138,43,226,.3); color: #fff; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .hot-rank img { width: 22px; height: 22px; object-fit: contain; filter: drop-shadow(0 0 4px rgba(255,235,59,.5)); }
+    .hot-rank.rank-1, .hot-rank.rank-2, .hot-rank.rank-3 { background: transparent; box-shadow: none; }
+    .meta-icon { height: 14px; width: auto; vertical-align: -2px; margin-right: 4px; opacity: .9; filter: drop-shadow(0 0 3px rgba(255,235,59,.35)); }
+    .meta-author-img { width: 18px; height: 18px; border-radius: 50%; vertical-align: -4px; margin-right: 5px; border: 1px solid rgba(255,235,59,.6); }
+    .meta-category { background: rgba(138,43,226,.2); color: #a78bfa; padding: 1px 8px; border-radius: 10px; border: 1px solid rgba(138,43,226,.3); }
+    .toc-item { display: block; font-size: 13px; color: #b8b8d0; line-height: 1.6; padding: 5px 10px; margin: 2px 0; border-radius: 6px; cursor: pointer; border-left: 2px solid rgba(138,43,226,.25); transition: all .25s; }
+    .toc-item:hover { color: #a78bfa; background: rgba(138,43,226,.12); border-left-color: #a78bfa; transform: translateX(3px); }
+    /* index 同款底部雪带 */
+    .snow-strip { position: fixed; left: 0; right: 0; bottom: 0; height: 80px; background: url('celeste-areas/snow-front.webp') repeat-x bottom/220px auto; animation: snowDrift 45s linear infinite; pointer-events: none; z-index: 2; opacity: .5; }
+
+    /* ===== 评论表情包：Madeline / Oshiro ===== */
+    .comment-form-footer { justify-content: space-between; align-items: center; }
+    .emoji-wrap { position: relative; }
+    .emoji-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid rgba(138,43,226,.3); background: rgba(15,12,41,.5); border-radius: 8px; padding: 4px 10px; cursor: pointer; transition: all .2s; color: #b8b8d0; font-size: 13px; }
+    .emoji-btn:hover { border-color: #a78bfa; box-shadow: 0 0 12px rgba(138,43,226,.3); }
+    .emoji-btn img { height: 24px; width: auto; image-rendering: pixelated; }
+    .emoji-panel { display: none; position: absolute; bottom: calc(100% + 10px); left: 0; width: 300px; max-width: 78vw; background: rgba(15,12,41,.96); border: 1px solid rgba(138,43,226,.35); border-radius: 10px; padding: 10px; z-index: 50; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+    .emoji-panel.open { display: block; animation: emojiIn .18s ease; }
+    @keyframes emojiIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    .emoji-tabs { display: flex; gap: 6px; margin-bottom: 8px; }
+    .emoji-tab { flex: 1; border: 1px solid rgba(138,43,226,.3); background: transparent; color: #b8b8d0; font-size: 12px; padding: 4px 0; border-radius: 6px; cursor: pointer; transition: all .2s; }
+    .emoji-tab.active { background: linear-gradient(135deg,#667eea,#764ba2); color: #fff; border-color: transparent; }
+    .emoji-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; max-height: 180px; overflow-y: auto; }
+    .emoji-cell { border: none; background: transparent; padding: 3px; cursor: pointer; border-radius: 6px; transition: all .15s; display: flex; align-items: center; justify-content: center; }
+    .emoji-cell:hover { background: rgba(138,43,226,.25); }
+    .emoji-cell img { height: 34px; width: auto; image-rendering: pixelated; }
+    .comment-emoji { height: 34px; width: auto; vertical-align: middle; image-rendering: pixelated; margin: 0 3px; border-radius: 5px; border: 1px solid rgba(138,43,226,.35); background: rgba(15,12,41,.5); }
+
+    /* ===== 响应式：窄屏单列布局 ===== */
+    @media (max-width: 900px) {
+        .main-layout { flex-direction: column; padding: 16px 12px; }
+        .sidebar { width: 100%; }
+        .article-header, .article-body { padding: 20px 16px; }
+        .comments-section { padding: 20px 16px; }
+        .comment-content { padding-left: 0; }
+        .comment-reply-btn { margin-left: 0; }
+        .comment-children { margin-left: 20px; }
+        .emoji-panel { left: auto; right: 0; }
+    }
     </style>
 </head>
 <body>
@@ -197,6 +246,7 @@
 
     <!-- 雪花粒子系统 -->
     <canvas id="snowCanvas" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;"></canvas>
+    <div class="snow-strip"></div>
 
     <!-- 阅读进度条 + 回顶羽毛 -->
     <div id="readProgress"></div>
@@ -234,6 +284,18 @@
                 <div id="replyBanner">回复 <b id="replyToName"></b><button onclick="clearReply()" title="取消回复">✕ 取消回复</button></div>
                 <textarea id="commentContent" placeholder="Write a comment..."></textarea>
                 <div class="comment-form-footer">
+                    <div class="emoji-wrap">
+                        <button type="button" id="emojiBtn" class="emoji-btn" title="插入表情">
+                            <img src="Atlases/Portraits/madeline/peaceful00.png" alt="表情" decoding="async">表情
+                        </button>
+                        <div id="emojiPanel" class="emoji-panel">
+                            <div class="emoji-tabs">
+                                <button type="button" class="emoji-tab active" data-series="mad">Madeline</button>
+                                <button type="button" class="emoji-tab" data-series="oshiro">Oshiro</button>
+                            </div>
+                            <div class="emoji-grid" id="emojiGrid"></div>
+                        </div>
+                    </div>
                     <button class="btn btn-primary btn-sm" onclick="submitComment()">Post Comment</button>
                 </div>
             </div>
@@ -351,9 +413,8 @@
 
     function startSnow() { resizeSnowCanvas(); initSnowflakes(); drawSnowflakes(); }
     window.addEventListener('resize', resizeSnowCanvas);
-    if (window.location.pathname.endsWith('/index.html') || window.location.pathname === '/' || window.location.pathname === '') {
-        startSnow();
-    }
+    // 文章页常驻雪花（原条件沿用 index 的 pathname 判断，在 article.html 恒为 false 导致雪花从不启动）
+    startSnow();
 
     // BGM
     const bgmPlayer = document.getElementById('bgmPlayer');
@@ -403,11 +464,11 @@
                 <div class="article-header">
                     <h1>${escHtml(a.title)}</h1>
                     <div class="article-meta">
-                        <span>✍️ ${escHtml(a.author?.nickname || a.author?.username || 'Anonymous')}</span>
-                        <span>📅 ${formatDate(a.createDate)}</span>
-                        <span>👁 ${a.viewCounts || 0} Reads</span>
-                        <span>⏳ ~${readMin} min read</span>
-                        ${a.category ? `<span>📁 ${escHtml(a.category.categoryName || a.category.name)}</span>` : ''}
+                        <span class="meta-author"><img loading="lazy" class="meta-author-img" src="celeste-portraits/madeline/normal00.png" alt="" decoding="async">${escHtml(a.author?.nickname || a.author?.username || 'Anonymous')}</span>
+                        <span class="meta-date"><img loading="lazy" class="meta-icon" src="celeste-icons/cs_variantmode.png" alt="" decoding="async">${formatDate(a.createDate)}</span>
+                        <span class="meta-views"><img loading="lazy" class="meta-icon" src="celeste-icons/time.png" alt="" decoding="async">${a.viewCounts || 0} Reads</span>
+                        <span class="meta-views"><img loading="lazy" class="meta-icon" src="celeste-icons/time.png" alt="" decoding="async">~${readMin} min read</span>
+                        ${a.category ? `<span class="meta-category">${escHtml(a.category.categoryName || a.category.name)}</span>` : ''}
                     </div>
                     <div class="article-tags">
                         ${(a.tags || []).map(t => `<span class="tag" style="cursor:pointer" onclick="location.href='index.html?tag=${t.id}'" title="查看该标签下的文章">${escHtml(t.tagName || t.name)}</span>`).join('')}
@@ -459,6 +520,72 @@
     const MAD_PORTRAITS = ['normal00.png', 'peaceful00.png', 'determined00.png', 'distracted00.png'];
     let avIdx = 0;
 
+    // ===== 评论表情包：Madeline / Oshiro 两系列（Atlases/Portraits 00 帧） =====
+    const EMOJI_PACKS = {
+        mad: { dir: 'madeline', names: ['normal', 'peaceful', 'determined', 'distracted', 'panic', 'sad', 'sadder', 'surprised', 'angry', 'deadpan', 'upset', 'together'] },
+        oshiro: { dir: 'oshiro', names: ['normal', 'nervous', 'serious', 'sidehappy', 'sideworried', 'sidesuspicious', 'drama', 'lostcontrol', 'worried'] }
+    };
+    let emojiSeries = 'mad';
+    const emojiBtn = document.getElementById('emojiBtn');
+    const emojiPanel = document.getElementById('emojiPanel');
+    const emojiGrid = document.getElementById('emojiGrid');
+
+    function renderEmojiGrid() {
+        if (!emojiGrid) return;
+        const pack = EMOJI_PACKS[emojiSeries];
+        emojiGrid.innerHTML = pack.names.map(n =>
+            `<button type="button" class="emoji-cell" data-mark="[${emojiSeries}:${n}]" title="${n}"><img loading="lazy" src="Atlases/Portraits/${pack.dir}/${n}00.png" alt="${n}" decoding="async"></button>`
+        ).join('');
+    }
+    renderEmojiGrid();
+
+    if (emojiBtn && emojiPanel) {
+        emojiBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            emojiPanel.classList.toggle('open');
+        });
+        emojiPanel.addEventListener('click', e => e.stopPropagation());
+        document.addEventListener('click', e => {
+            if (!e.target.closest('.emoji-wrap')) emojiPanel.classList.remove('open');
+        });
+    }
+    document.querySelectorAll('.emoji-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.emoji-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            emojiSeries = tab.dataset.series;
+            renderEmojiGrid();
+        });
+    });
+    if (emojiGrid) {
+        emojiGrid.addEventListener('click', e => {
+            const cell = e.target.closest('.emoji-cell');
+            if (!cell) return;
+            insertEmojiMark(cell.dataset.mark);
+        });
+    }
+
+    function insertEmojiMark(mark) {
+        const ta = document.getElementById('commentContent');
+        if (!ta) return;
+        const start = typeof ta.selectionStart === 'number' ? ta.selectionStart : ta.value.length;
+        const end = typeof ta.selectionEnd === 'number' ? ta.selectionEnd : ta.value.length;
+        ta.setRangeText(mark, start, end, 'end');
+        ta.focus();
+    }
+
+    // 渲染评论内容：先整体转义，再把白名单内的表情标记替换为图片（保证无 XSS 注入面）
+    function renderCommentContent(text) {
+        let s = escHtml(text);
+        s = s.replace(/\[(mad|oshiro):([a-zA-Z]+)\]/g, (m, series, name) => {
+            const pack = EMOJI_PACKS[series];
+            return (pack && pack.names.includes(name))
+                ? `<img class="comment-emoji" loading="lazy" src="Atlases/Portraits/${pack.dir}/${name}00.png" alt="${series}:${name}" decoding="async">`
+                : m;
+        });
+        return s;
+    }
+
     // ===== 二级评论回复 =====
     let replyTarget = null;
     function setReply(parentId, toUserId, name) {
@@ -495,7 +622,7 @@
                         <div class="comment-date">${formatDate(c.createDate)}</div>
                     </div>
                 </div>
-                <div class="comment-content">${to}${escHtml(c.content)}</div>
+                <div class="comment-content">${to}${renderCommentContent(c.content)}</div>
                 <button class="comment-reply-btn" data-parent="${replyParent}" data-uid="${authorId}" data-name="${escHtml(name)}">Reply</button>
                 ${children}
             </div>`;

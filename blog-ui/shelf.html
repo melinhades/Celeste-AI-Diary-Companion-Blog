@@ -113,7 +113,7 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 #postcardExportModal button:hover { background:rgba(255,230,109,.15); }
 
 /* ===== 篝火（从 diary 迁来） ===== */
-#strawberryBonfire{position:fixed;right:26px;bottom:24px;z-index:20;display:flex;flex-direction:column;align-items:flex-end;gap:8px;user-select:none;cursor:pointer;}
+#strawberryBonfire{position:fixed;right:calc(var(--door-w) + 20px);bottom:24px;z-index:20;display:flex;flex-direction:column;align-items:flex-end;gap:8px;user-select:none;cursor:pointer;}
 .sb-scene{position:relative;display:flex;align-items:flex-end;gap:2px;}
 .sb-scene::before{content:'';position:absolute;left:50%;bottom:-8px;transform:translateX(-50%);width:220px;height:64px;background:radial-gradient(ellipse at center,rgba(255,150,50,.35) 0%,rgba(255,150,50,.12) 45%,transparent 70%);pointer-events:none;animation:sbGlow 1.6s ease-in-out infinite alternate;}
 @keyframes sbGlow{from{opacity:.7}to{opacity:1}}
@@ -124,7 +124,7 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 .sb-fire img{display:block;height:auto;image-rendering:pixelated;filter:drop-shadow(0 0 14px rgba(255,150,50,.65));}
 .sb-label{font-family:'Renogare','CelesteZH',sans-serif;font-size:12px;color:rgba(255,230,109,.9);text-shadow:0 1px 2px rgba(0,0,0,.8);position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);white-space:nowrap;letter-spacing:1px;}
 /* ===== 商店收藏品展示 ===== */
-#berryTrophy{position:fixed;top:70px;right:16px;z-index:20;display:flex;gap:8px;padding:6px 10px;background:rgba(22,34,60,.85);border:1px dashed rgba(255,230,109,.4);border-radius:8px;}
+#berryTrophy{position:fixed;top:70px;right:calc(var(--door-w) + 12px);z-index:20;display:flex;gap:8px;padding:6px 10px;background:rgba(22,34,60,.85);border:1px dashed rgba(255,230,109,.4);border-radius:8px;}
 #berryTrophy img{width:26px;height:26px;image-rendering:pixelated;object-fit:contain;filter:drop-shadow(0 0 4px rgba(255,230,109,.5));}
 #berryTrophy.empty{display:none;}
 
@@ -159,10 +159,10 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 .sj-close { position:absolute; top:4%; right:3%; border:1px solid rgba(90,74,47,.5); background:rgba(255,250,235,.85); color:#5a4a2f; border-radius:6px; padding:6px 14px; font-size:13px; cursor:pointer; font-family:inherit; }
 .sj-close:hover { background:rgba(255,230,109,.5); }
 
-/* ===== 镜子：中间摆放 · 图层叠加 · 点击破碎召唤 Badeline ===== */
+/* ===== 镜子：镜之房间正中 · 图层叠加 · 点击破碎召唤 Badeline ===== */
 #shelfMirror {
     position: relative;
-    margin: 0 auto 34px;
+    margin: 0;
     width: 0;
     height: 0;
     cursor: pointer;
@@ -215,6 +215,189 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     image-rendering: pixelated;
     filter: drop-shadow(0 0 14px rgba(125,80,200,.75));
 }
+
+/* ===== Badeline 聊天面板：镜子召唤后出现 ===== */
+#blChat {
+    position: fixed;
+    left: 50%;
+    bottom: 84px;
+    width: min(92vw, 520px);
+    z-index: 960;
+    background: rgba(16, 10, 28, .93);
+    border: 2px solid rgba(205, 182, 255, .5);
+    border-radius: 10px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, .6), 0 0 18px rgba(205, 182, 255, .18);
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateX(-50%) translateY(16px);
+    transition: opacity .25s ease, transform .25s ease;
+}
+#blChat.show { display: flex; }
+#blChat.vis { opacity: 1; transform: translateX(-50%) translateY(0); }
+#blChat .bl-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(205, 182, 255, .25);
+}
+#blChat .bl-head img { width: 40px; height: 40px; image-rendering: pixelated; border-radius: 6px; background: rgba(0,0,0,.4); object-fit: cover; }
+#blChat .bl-name { flex: 1; color: #cdb6ff; font-family: 'Renogare','CelesteZH','Microsoft YaHei',sans-serif; font-size: 16px; letter-spacing: 1px; text-shadow: 0 0 10px rgba(205,182,255,.4); }
+#blChat .bl-close { background: none; border: none; color: rgba(205,182,255,.6); font-size: 16px; cursor: pointer; }
+#blChat .bl-close:hover { color: #cdb6ff; }
+#blMsgs { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; max-height: 40vh; min-height: 110px; overflow-y: auto; }
+.bl-msg { max-width: 86%; padding: 8px 12px; border-radius: 10px; font-size: 13px; line-height: 1.7; word-break: break-word; font-family: 'Renogare','CelesteZH','Microsoft YaHei',sans-serif; white-space: pre-wrap; }
+.bl-msg.assistant { align-self: flex-start; color: #e8ddff; background: rgba(205,182,255,.12); border: 1px solid rgba(205,182,255,.28); }
+.bl-msg.user { align-self: flex-end; color: #ffe36d; background: rgba(255,230,109,.1); border: 1px solid rgba(255,230,109,.3); }
+.bl-msg.loading { color: rgba(232,221,255,.5); font-style: italic; }
+#blChat .bl-input { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid rgba(205,182,255,.25); }
+#blInput { flex: 1; padding: 9px 10px; border: 1px solid rgba(205,182,255,.4); border-radius: 6px; background: rgba(205,182,255,.1); color: #efe7ff; font-size: 13px; outline: none; font-family: 'Renogare','CelesteZH','Microsoft YaHei',sans-serif; }
+#blInput:focus { border-color: #cdb6ff; background: rgba(205,182,255,.18); }
+#blInput::placeholder { color: rgba(232,221,255,.35); }
+#blSend { padding: 9px 16px; border: none; border-radius: 6px; background: #8a5cff; color: #fff; cursor: pointer; font-size: 14px; letter-spacing: 1px; font-family: 'Renogare','CelesteZH',sans-serif; box-shadow: inset 0 -2px rgba(0,0,0,.35); }
+#blSend:hover:not(:disabled) { background: #9d7bff; }
+#blSend:disabled { opacity: .5; cursor: not-allowed; }
+.bl-emo { display: inline-block; font-size: 10px; color: #b79aff; border: 1px solid rgba(183,154,255,.45); border-radius: 8px; padding: 0 6px; margin-right: 6px; vertical-align: 1px; opacity: .9; }
+
+/* ===== Badeline 游戏对话框：官方文本框 + 情绪立绘（演出层；聊天面板让位上移） ===== */
+#badelineDialog {
+    position: fixed;
+    left: 50%;
+    bottom: 26px;
+    transform: translateX(-50%) translateY(24px);
+    width: min(94vw, 900px);
+    min-height: 128px;
+    z-index: 970;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 20px 30px;
+    background: url('celeste-portraits/textbox/badeline.png') center / 100% 100% no-repeat;
+    opacity: 0;
+    pointer-events: none;
+    cursor: pointer;
+    transition: opacity .25s ease, transform .25s ease;
+}
+#badelineDialog.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+#badelineDialogPortrait { width: 92px; height: 92px; flex-shrink: 0; border-radius: 6px; overflow: hidden; background: rgba(0,0,0,.4); }
+#badelineDialogPortrait img { width: 100%; height: 100%; object-fit: cover; display: block; image-rendering: pixelated; }
+#badelineDialogName { color: #cdb6ff; font-family: 'Renogare','CelesteZH','Microsoft YaHei',sans-serif; font-size: 13px; letter-spacing: 2px; margin-bottom: 5px; text-shadow: 0 0 10px rgba(205,182,255,.45); }
+#badelineDialogText { color: #f2ecff; font-family: 'Renogare','CelesteZH','Microsoft YaHei',sans-serif; font-size: 14px; line-height: 1.7; word-break: break-word; min-height: 48px; white-space: pre-wrap; }
+#blChat.dialog-live { bottom: 178px; }
+@media (max-width: 640px) {
+    #badelineDialog { padding: 14px 18px; min-height: 104px; gap: 12px; }
+    #badelineDialogPortrait { width: 72px; height: 72px; }
+    #blChat.dialog-live { bottom: 150px; }
+}
+
+/* ===== 横向世界：书架 ⇄ 心门后的镜之房间 ===== */
+html, body { overflow-x: hidden; }
+#world { display:flex; width:200vw; transition:transform 1.35s cubic-bezier(.65,0,.35,1); will-change:transform; }
+#world .view { width:100vw; min-height:100vh; flex-shrink:0; position:relative; }
+#shelfView { box-sizing:border-box; padding-right:var(--door-w); }
+#world.panned { transform:translateX(-100vw); }
+
+/* ===== 心门（水晶心大门 · 全高占满右侧 · 未开启） ===== */
+:root { --door-w:200px; }
+#heartDoor {
+    position:absolute; right:0; top:0; bottom:0;
+    width:var(--door-w);
+    cursor:not-allowed; z-index:8; user-select:none;
+    filter:drop-shadow(-6px 0 30px rgba(110,190,255,.28));
+    transition:filter .8s ease, opacity .6s ease;
+}
+#heartDoor .hd-mist {
+    position:absolute; inset:-40px;
+    background:url('heartdoor/mist.png') repeat; background-size:160px 160px;
+    image-rendering:pixelated; opacity:.32;
+    filter:blur(1px) brightness(1.6) hue-rotate(170deg);
+    animation:hdMist 9s linear infinite;
+}
+@keyframes hdMist { from { background-position:0 0; } to { background-position:160px 320px; } }
+#heartDoor .hd-gate { position:absolute; inset:0; transition:transform 1s cubic-bezier(.6,0,.3,1), opacity .9s ease; }
+#heartDoor.open .hd-gate { transform:translateY(-58%); opacity:0; }
+#heartDoor .hd-cap {
+    position:absolute; left:0; right:0; height:32px;
+    background:url('heartdoor/top.png') repeat-x; background-size:32px 32px;
+    image-rendering:pixelated;
+}
+#heartDoor .hd-cap.top { top:0; }
+#heartDoor .hd-cap.bottom { bottom:0; transform:scaleY(-1); }
+#heartDoor .hd-rail {
+    position:absolute; top:32px; bottom:32px; width:32px;
+    background:url('heartdoor/edge.png') repeat-y; background-size:32px 32px;
+    image-rendering:pixelated;
+}
+#heartDoor .hd-rail.l { left:0; }
+#heartDoor .hd-rail.r { right:0; transform:scaleX(-1); }
+#heartDoor .hd-core {
+    position:absolute; left:32px; right:32px; top:32px; bottom:32px;
+    background:linear-gradient(180deg, rgba(140,215,255,.30), rgba(90,170,255,.42) 55%, rgba(140,215,255,.30));
+    overflow:hidden;
+}
+#heartDoor .hd-core::before {
+    content:''; position:absolute; inset:0;
+    background:url('heartdoor/mist.png') repeat; background-size:128px 128px;
+    image-rendering:pixelated; mix-blend-mode:screen; opacity:.5;
+    animation:hdMist 7s linear infinite reverse;
+}
+#heartDoor .hd-hearts {
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    display:grid; grid-template-columns:repeat(2, 50px); gap:14px; z-index:2;
+}
+#heartDoor .hd-hearts img { width:50px; height:50px; image-rendering:pixelated; filter:drop-shadow(0 0 8px rgba(160,220,255,.6)); }
+#heartDoor .hd-hearts img.pop { animation:hdPop .55s cubic-bezier(.22,1.4,.36,1); }
+@keyframes hdPop {
+    0%   { transform:scale(.3); filter:drop-shadow(0 0 0 rgba(160,220,255,0)); }
+    55%  { transform:scale(1.4); filter:drop-shadow(0 0 18px rgba(170,225,255,.95)); }
+    100% { transform:scale(1); filter:drop-shadow(0 0 8px rgba(160,220,255,.6)); }
+}
+#heartDoor.ready { cursor:pointer; filter:drop-shadow(0 0 36px rgba(140,215,255,.6)); }
+#heartDoor.ready .hd-hearts img { animation:hdPulse 1.6s ease-in-out infinite; }
+@keyframes hdPulse { 0%,100% { transform:scale(1); } 50% { transform:scale(1.12); } }
+#heartDoor.shake { animation:hdShake .3s linear 2; }
+@keyframes hdShake { 0%,100% { translate:0 0; } 25% { translate:-6px 0; } 75% { translate:6px 0; } }
+#heartDoor.away { opacity:0; pointer-events:none; }
+
+/* ===== 镜之房间（心门后） ===== */
+#mirrorRoom {
+    background:radial-gradient(120% 95% at 50% 42%, #221736 0%, #120d22 52%, #060410 100%);
+    display:flex; align-items:center; justify-content:center;
+}
+#mirrorRoom::before {
+    content:''; position:absolute; inset:0;
+    background:url('heartdoor/mist.png') repeat; background-size:256px 256px;
+    image-rendering:pixelated; opacity:.16; filter:brightness(1.3);
+    animation:hdMist 16s linear infinite; pointer-events:none;
+}
+#mirrorRoom .room-tag {
+    position:absolute; top:64px; left:50%; transform:translateX(-50%);
+    font-family:'Press Start 2P',monospace; font-size:11px;
+    color:rgba(205,182,255,.75); letter-spacing:2px; text-shadow:0 2px 0 rgba(0,0,0,.6);
+}
+#mirrorRoom .room-back {
+    position:absolute; left:34px; bottom:30px;
+    padding:10px 22px; border-radius:6px;
+    border:2px solid rgba(178,150,255,.5); background:rgba(20,14,40,.7);
+    color:#cdb6ff; font-family:inherit; font-size:13px; cursor:pointer; transition:all .15s;
+}
+#mirrorRoom .room-back:hover { background:rgba(120,80,220,.25); border-color:#cdb6ff; transform:translateX(-3px); }
+/* ===== 响应式：门宽收缩、贴片与心形同步缩放，布局平滑无跳动 ===== */
+@media (max-width:1100px) {
+    :root { --door-w:160px; }
+    #heartDoor .hd-hearts { grid-template-columns:repeat(2,40px); gap:10px; }
+    #heartDoor .hd-hearts img { width:40px; height:40px; }
+}
+@media (max-width:820px) {
+    :root { --door-w:130px; }
+    #heartDoor .hd-cap { height:24px; background-size:24px 24px; }
+    #heartDoor .hd-rail { width:24px; top:24px; bottom:24px; background-size:24px 24px; }
+    #heartDoor .hd-core { left:24px; right:24px; top:24px; bottom:24px; }
+    #heartDoor .hd-hearts { grid-template-columns:repeat(2,32px); gap:8px; }
+    #heartDoor .hd-hearts img { width:32px; height:32px; }
+}
 </style>
 </head>
 <body>
@@ -243,17 +426,65 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     <source src="bgm/dearest-friends.mp3" type="audio/mpeg">
 </audio>
 
-<div class="wrap">
-    <!-- 镜子：图层由 JS 动态叠加，点击破碎召唤 Badeline -->
-    <div id="shelfMirror" title="敲一敲镜子？">
-        <div class="badeline-wrap"><div class="badeline-inner"><img id="badelineImg" src="celeste-player/badeline/idle00.png" alt="Badeline" loading="lazy" decoding="async"></div></div>
+<div id="world">
+    <!-- 第一幕：书架 -->
+    <section id="shelfView" class="view">
+        <!-- 心门：右侧，未开启；开启后镜头右移进镜之房间 -->
+        <div id="heartDoor" class="locked" role="button" title="一道结了冰的心门……">
+            <div class="hd-mist"></div>
+            <div class="hd-gate">
+                <div class="hd-cap top"></div><div class="hd-cap bottom"></div>
+                <div class="hd-rail l"></div><div class="hd-rail r"></div>
+                <div class="hd-core"></div>
+                <div class="hd-hearts">
+                    <img src="heartdoor/icon00.png" alt="" loading="lazy" decoding="async"><img src="heartdoor/icon00.png" alt="" loading="lazy" decoding="async">
+                    <img src="heartdoor/icon00.png" alt="" loading="lazy" decoding="async"><img src="heartdoor/icon00.png" alt="" loading="lazy" decoding="async">
+                </div>
+            </div>
+        </div>
+        <div class="wrap">
+            <div id="cards" class="cards"></div>
+            <div id="detail" class="detail">
+                <button class="back">← 返回列表</button>
+                <div class="detail-nav"><button class="prev-e" title="同日上一篇">←</button><span class="pos"></span><button class="next-e" title="同日下一篇">→</button></div>
+                <div class="t"></div><div class="d"></div><div class="c"></div>
+                <div class="acts"><button class="edit">回去编辑这篇</button><button class="export-postcard">🖼 导出明信片</button><button class="del">删掉它</button></div>
+            </div>
+        </div>
+    </section>
+    <!-- 第二幕：镜之房间（心门后） -->
+    <section id="mirrorRoom" class="view">
+        <div class="room-tag">BEHIND THE DOOR</div>
+        <!-- 镜子：图层由 JS 动态叠加，点击破碎召唤 Badeline -->
+        <div id="shelfMirror" role="button" title="敲一敲镜子？">
+            <div class="badeline-wrap"><div class="badeline-inner"><img id="badelineImg" src="celeste-player/badeline/idle00.png" alt="Badeline" loading="lazy" decoding="async"></div></div>
+        </div>
+        <button class="room-back">← 回书架</button>
+
+        <!-- Badeline 聊天与游戏对话框：fixed 定位，需放在 #world 外（transform 祖先会改变 fixed 包含块） -->
+    </section>
+</div>
+
+<!-- Badeline 聊天：镜子破碎召唤后出现 -->
+<div id="blChat">
+    <div class="bl-head">
+        <img id="blHeadImg" src="celeste-player/badeline/idle00.png" alt="">
+        <div class="bl-name">Badeline</div>
+        <button class="bl-close" id="blClose" title="她先走了">✕</button>
     </div>
-    <div id="cards" class="cards"></div>
-    <div id="detail" class="detail">
-        <button class="back">← 返回列表</button>
-        <div class="detail-nav"><button class="prev-e" title="同日上一篇">←</button><span class="pos"></span><button class="next-e" title="同日下一篇">→</button></div>
-        <div class="t"></div><div class="d"></div><div class="c"></div>
-        <div class="acts"><button class="edit">回去编辑这篇</button><button class="export-postcard">🖼 导出明信片</button><button class="del">删掉它</button></div>
+    <div id="blMsgs"></div>
+    <div class="bl-input">
+        <input id="blInput" type="text" maxlength="200" placeholder="说什么……她都听得见">
+        <button id="blSend">说</button>
+    </div>
+</div>
+
+<!-- Badeline 游戏对话框：官方文本框 + 情绪立绘逐帧动画（参照 diary 页 Madeline gameDialog 架构） -->
+<div id="badelineDialog" role="button" title="点一下让她闭嘴">
+    <div id="badelineDialogPortrait"><img id="blDialogImg" src="celeste-portraits/badeline/normal00.png" alt="Badeline" loading="lazy" decoding="async"></div>
+    <div id="badelineDialogBody">
+        <div id="badelineDialogName">BADELINE</div>
+        <div id="badelineDialogText"></div>
     </div>
 </div>
 <script src="js/api.js"></script>
@@ -637,6 +868,7 @@ function stopPeSnow() {
         const res = await api('/diary/list', 'GET');
         if (res.success && Array.isArray(res.data)) {
             data = res.data;
+            if (window.__setDoorProgress) window.__setDoorProgress(data.length);
             if (!data.length) { cards.innerHTML = '<div class="empty"><span class="em">🗻</span>书架还空着。<br>写下第一篇，它就有了位置。</div>'; return; }
             buildGroups();
             cards.innerHTML = groups.map((g, i) => {
@@ -1002,7 +1234,7 @@ function stopPeSnow() {
     // ===== 镜子：图层叠加 + 点击破碎召唤 Badeline =====
     (function () {
         var M_DIR = 'celeste-journal/mirror/';
-        var M_SCALE = 5;
+        var M_SCALE = 6;
         var mirror = document.getElementById('shelfMirror');
         if (!mirror) return;
         var badelineWrap = mirror.querySelector('.badeline-wrap');
@@ -1013,9 +1245,22 @@ function stopPeSnow() {
             im.style.zIndex = zIndex;
             im.src = M_DIR + src;
             im.addEventListener('load', function () {
-                im.style.width = '100%';
-                im.style.height = '100%';
-                im.style.objectFit = 'fill';
+                if (src === 'glassfg.png') {
+                    // 高光层画布(54x73)与玻璃网格(54x29)不对齐，压进玻璃矩形内避免白条溢出镜框
+                    im.style.width = 54 * M_SCALE + 'px';
+                    im.style.height = 29 * M_SCALE + 'px';
+                    return;
+                }
+                if (src === 'frame.png') {
+                    // 镜框整体放大 6%：雕花镂空处也能完全压住玻璃边缘
+                    im.style.width = im.naturalWidth * M_SCALE * 1.06 + 'px';
+                    im.style.height = im.naturalHeight * M_SCALE * 1.06 + 'px';
+                    return;
+                }
+                // 玻璃系图层（glassbg/mask/break）：5% 过扫描藏进框后——
+                // 框线雕花有起伏，等大玻璃会在起伏处露出镜面边缘
+                im.style.width = im.naturalWidth * M_SCALE * 1.05 + 'px';
+                im.style.height = im.naturalHeight * M_SCALE * 1.05 + 'px';
             });
             mirror.insertBefore(im, badelineWrap);
             return im;
@@ -1098,6 +1343,271 @@ function stopPeSnow() {
             '镜子碎了也没关系，我帮你看着你自己。'
         ];
 
+        // ===== Badeline 聊天：方案C 关系状态由服务端从日记推导，心光谱随请求带上 =====
+        var blPanel = document.getElementById('blChat');
+        var blMsgs = document.getElementById('blMsgs');
+        var blInput = document.getElementById('blInput');
+        var blSendBtn = document.getElementById('blSend');
+        var blHist = [];
+        var blSending = false;
+        try {
+            blHist = JSON.parse(localStorage.getItem('badelineChatLog') || '[]');
+        } catch (e) { blHist = []; }
+        if (!Array.isArray(blHist)) blHist = [];
+
+        function heartsPayload() {
+            try {
+                var h = JSON.parse(localStorage.getItem('heartDoorHearts') || 'null');
+                if (!h || !h.length) {
+                    var c = JSON.parse(localStorage.getItem('crystalHeart') || 'null');
+                    h = c ? [c] : [];
+                }
+                return JSON.stringify(Array.isArray(h) ? h.slice(-4) : []);
+            } catch (e) { return '[]'; }
+        }
+        function blPersist() {
+            try { localStorage.setItem('badelineChatLog', JSON.stringify(blHist.slice(-20))); } catch (e) {}
+        }
+        function blAdd(role, text, emo) {
+            var d = document.createElement('div');
+            d.className = 'bl-msg ' + role;
+            if (role === 'assistant' && emo && BL_EMO_ZH[emo]) {
+                var tag = document.createElement('span');
+                tag.className = 'bl-emo';
+                tag.textContent = BL_EMO_ZH[emo];
+                d.appendChild(tag);
+            }
+            d.appendChild(document.createTextNode(text));
+            blMsgs.appendChild(d);
+            blMsgs.scrollTop = blMsgs.scrollHeight;
+            return d;
+        }
+        function blPush(role, text) {
+            blHist.push({ role: role, content: text });
+            blPersist();
+        }
+
+        // ===== Badeline 情绪对话框系统（参照 diary 页 Madeline gameDialog 架构） =====
+        // 1) 情绪分类：celeste-portraits/badeline/ 下 15 组帧序列，键 = AI 情绪标记，值 = 帧数
+        var BL_PORTRAIT_FRAMES = {
+            normal: 7, sad: 5, angry: 7, angryAlt: 7, yell: 7,
+            worried: 7, worriedAlt: 7, upset: 7, concerned: 7,
+            sigh: 14, serious: 30, scoff: 14,
+            freakA: 11, freakB: 19, freakC: 18
+        };
+        var BL_EMO_ZH = {
+            normal: '平静', sad: '低落', angry: '恼火', angryAlt: '强压怒火', yell: '喊叫',
+            worried: '不安', worriedAlt: '强装镇定', upset: '委屈', concerned: '关切',
+            sigh: '叹息', serious: '认真', scoff: '嘲弄',
+            freakA: '崩溃边缘', freakB: '风暴', freakC: '失控'
+        };
+        Object.keys(BL_PORTRAIT_FRAMES).forEach(function (e) {
+            var im = new Image(); im.src = 'celeste-portraits/badeline/' + e + '00.png'; // 预热每种情绪首帧
+        });
+        // 2) 情绪 ↔ 台词 关系：AI 标记（res.data.emotion）优先，缺失时按台词关键词推断兜底
+        function blInferEmotion(t) {
+            t = String(t || '');
+            if (/！！|！{2,}|\?！|？！/.test(t) && t.length <= 26) return 'yell';
+            if (/亲爱的|宝贝|真可爱|当然了|是吧\s*[？?]?\s*$/.test(t)) return 'scoff';
+            if (/行吧|你赢了|随便你|无所谓/.test(t)) return 'upset';
+            if (/(……[\s\S]*){2,}/.test(t) || (/^……/.test(t) && t.length <= 14)) return 'sigh';
+            if (/别怕|没事的|有我在|活下来了|应得/.test(t)) return 'concerned';
+            if (/对不起|抱歉|冲你发火/.test(t)) return 'worried';
+            if (/早说了|跟每次一样|想太多|别回放/.test(t)) return 'angry';
+            if (/干得不错|别得意|别飘/.test(t)) return 'serious';
+            return 'normal';
+        }
+        // 3) 对话框组件：官方 badeline 文本框 + 立绘逐帧动画（120ms/帧，对齐 Madeline 对话框）
+        var blDialog = document.getElementById('badelineDialog');
+        var blDialogImg = document.getElementById('blDialogImg');
+        var blDialogText = document.getElementById('badelineDialogText');
+        var blHeadImg = document.getElementById('blHeadImg');
+        var blAnimTimer = null, blCurEmo = 'normal';
+        var blDialogToken = 0, blDialogHideTimer = null;
+        var blQueue = Promise.resolve();
+        function blStartPortrait(emo) {
+            if (!BL_PORTRAIT_FRAMES[emo]) emo = 'normal';
+            blCurEmo = emo;
+            clearInterval(blAnimTimer);
+            var n = BL_PORTRAIT_FRAMES[emo], fi = 0;
+            var set = function (i) {
+                var s = 'celeste-portraits/badeline/' + emo + String(i).padStart(2, '0') + '.png';
+                blDialogImg.src = s; blHeadImg.src = s;
+            };
+            set(0);
+            for (var k = 1; k < n; k++) { var im = new Image(); im.src = 'celeste-portraits/badeline/' + emo + String(k).padStart(2, '0') + '.png'; }
+            blAnimTimer = setInterval(function () { fi = (fi + 1) % n; set(fi); }, 120);
+        }
+        function blStopPortrait() {
+            clearInterval(blAnimTimer); blAnimTimer = null;
+            var s = 'celeste-portraits/badeline/' + blCurEmo + '00.png';
+            blDialogImg.src = s; blHeadImg.src = s;
+        }
+        // 文本框弹出/收起音效（复用官方 textbox in/out 音效，音量压低）
+        var BL_SFX = {};
+        function blTextboxSfx(which) {
+            try {
+                var name = 'textbox/ui_game_textbox_madeline_' + which + '.wav';
+                if (!BL_SFX[name]) BL_SFX[name] = new Audio('celeste-sounds/' + name);
+                var a = BL_SFX[name]; a.currentTime = 0; a.volume = 0.4;
+                a.play().catch(function () {});
+            } catch (e) { /* 无声降级 */ }
+        }
+        // 4) 说话声：WebAudio 合成低音 blip（Badeline 低语感），音高/音量随情绪档位
+        function blVoice(emo) {
+            try {
+                var ctx = window.__mirrorAC || (window.__mirrorAC = new (window.AudioContext || window.webkitAudioContext)());
+                if (ctx.state === 'suspended') ctx.resume();
+                var table = { yell: [300, .11], freakA: [320, .12], freakB: [330, .12], freakC: [340, .12], scoff: [230, .09], angry: [250, .1], angryAlt: [240, .08], upset: [170, .07], sad: [150, .06], sigh: [130, .05], worried: [180, .07], worriedAlt: [175, .06], concerned: [190, .07], serious: [200, .07], normal: [195, .07] };
+                var conf = table[emo] || table.normal;
+                var dur = .07, t0 = ctx.currentTime;
+                var o = ctx.createOscillator(); o.type = 'sawtooth';
+                o.frequency.setValueAtTime(conf[0], t0);
+                o.frequency.exponentialRampToValueAtTime(conf[0] * .72, t0 + dur);
+                var lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1100;
+                var g = ctx.createGain();
+                g.gain.setValueAtTime(conf[1], t0);
+                g.gain.exponentialRampToValueAtTime(.0001, t0 + dur);
+                o.connect(lp); lp.connect(g); g.connect(ctx.destination);
+                o.start(t0); o.stop(t0 + dur + .02);
+            } catch (e) { /* 无声降级 */ }
+        }
+        function blDialogOpen() {
+            if (!blDialog.classList.contains('show')) blTextboxSfx('in');
+            blDialog.classList.add('show');
+            blPanel.classList.add('dialog-live');
+        }
+        function blDialogClose() {
+            clearTimeout(blDialogHideTimer);
+            blStopPortrait();
+            if (blDialog.classList.contains('show')) blTextboxSfx('out');
+            blDialog.classList.remove('show');
+            blPanel.classList.remove('dialog-live');
+        }
+        blDialog.addEventListener('click', function () {
+            blDialogToken++;      // 点一下 = 打断：正在打的字立刻停下（对齐 Madeline 的世代号机制）
+            blDialogClose();
+        });
+        window.__blDialogKill = function () { blDialogToken++; blDialogClose(); };
+        function blSplitPages(t) {
+            var parts = t.split(/(?<=[。！？!?…\n])/).map(function (s) { return s.trim(); }).filter(Boolean);
+            var merged = [];
+            parts.forEach(function (p) {
+                var last = merged[merged.length - 1];
+                if (last !== undefined && last.length < 12 && last.length + p.length <= 26) merged[merged.length - 1] = last + p;
+                else merged.push(p);
+            });
+            var out = [];
+            merged.forEach(function (s) {
+                if (s.length <= 42) { out.push(s); return; }
+                for (var i = 0; i < s.length; i += 42) out.push(s.slice(i, i + 42));
+            });
+            return out.length ? out : [t];
+        }
+        function blSleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+        // 5) 演出：入队串行 → 弹框 → 立绘动画 → 逐字（每 3 字一声 blip）→ 结束定格 → 6s 自动收起
+        function blSpeak(text, emo) {
+            blQueue = blQueue.then(function () { return blDoSpeak(text, emo); }).catch(function () {});
+        }
+        async function blDoSpeak(text, emo) {
+            text = String(text || '').replace(/[（(][^（）()]*[）)]/g, '').trim(); // 动作旁白不上屏（对齐 Madeline）
+            if (!text) return;
+            if (!BL_PORTRAIT_FRAMES[emo]) emo = blInferEmotion(text);
+            var my = blDialogToken;
+            blDialogOpen();
+            blStartPortrait(emo);
+            clearTimeout(blDialogHideTimer);
+            var pages = blSplitPages(text);
+            for (var p = 0; p < pages.length; p++) {
+                if (my !== blDialogToken) return;
+                blDialogText.textContent = '';
+                var sc = 0;
+                for (var ci = 0; ci < pages[p].length; ci++) {
+                    if (my !== blDialogToken) return;
+                    var ch = pages[p][ci];
+                    blDialogText.textContent += ch;
+                    if (!/[\s，,、；;：:（）()*「」·—。！？!?…]/.test(ch)) {
+                        sc++;
+                        if (sc % 3 === 1) blVoice(emo);
+                    }
+                    await blSleep(45 + Math.random() * 20);
+                }
+                if (p < pages.length - 1) await blSleep(900 + Math.random() * 500);
+            }
+            if (my === blDialogToken) {
+                blStopPortrait();
+                blDialogHideTimer = setTimeout(blDialogClose, 6000);
+            }
+        }
+        function blSendMsg() {
+            var v = blInput.value.trim();
+            if (!v || blSending) return;
+            blInput.value = '';
+            blAdd('user', v);
+            blPush('user', v);
+            blSending = true;
+            blSendBtn.disabled = true;
+            var ld = blAdd('loading', '……');
+            api('/diary/badeline-chat', 'POST',
+                { message: v, history: JSON.stringify(blHist.slice(-10)), hearts: heartsPayload() }, 15000)
+                .then(function (res) {
+                    ld.remove();
+                    var m = (res && res.success && res.data && res.data.message)
+                        ? res.data.message
+                        : '……（她别过脸去，没接话。）';
+                    var emo = (res && res.success && res.data && res.data.emotion) || blInferEmotion(m); // AI 标记优先，缺失按台词推断
+                    blAdd('assistant', m, emo);
+                    blPush('assistant', m);
+                    blSpeak(m, emo);   // 情绪立绘 + 逐字演出
+                })
+                .finally(function () {
+                    blSending = false;
+                    blSendBtn.disabled = false;
+                    blInput.focus();
+                });
+        }
+        blSendBtn.addEventListener('click', blSendMsg);
+        blInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') blSendMsg(); });
+
+        function openChat() {
+            if (!blHist.length) {
+                var line = LINES[Math.floor(Math.random() * LINES.length)];
+                blAdd('assistant', line);
+                blPush('assistant', line);
+                blSpeak(line);   // 开场白也走游戏对话框演出
+            } else if (!blMsgs.children.length) {
+                // 她记得上次说到哪
+                blHist.slice(-6).forEach(function (m) {
+                    blAdd(m.role === 'assistant' ? 'assistant' : 'user', m.content);
+                });
+            }
+            blPanel.classList.add('show');
+            requestAnimationFrame(function () { requestAnimationFrame(function () { blPanel.classList.add('vis'); }); });
+            setTimeout(function () { blInput.focus(); }, 300);
+        }
+        function closeChat() {
+            blDialogToken++;      // 她走了：作废没说完的话并收起对话框
+            blDialogClose();
+            blPanel.classList.remove('vis');
+            setTimeout(function () {
+                blPanel.classList.remove('show');
+                byeSheLeaves();
+            }, 260);
+        }
+        function byeSheLeaves() {
+            mirror.classList.add('bye');
+            setTimeout(function () {
+                mirror.classList.remove('summoned');
+                mirror.classList.remove('bye');
+                showFrame(breakImgs, -1);
+                showFrame(maskImgs, 0);
+                maskFi = 0;
+                busy = false;
+                if (window.__mirrorBGM) window.__mirrorBGM.refresh(); // 她离开 → 回阶段1（0:00–2:11）
+            }, 750);
+        }
+        document.getElementById('blClose').addEventListener('click', closeChat);
+
         mirror.addEventListener('click', function () {
             if (busy) return;
             busy = true;
@@ -1122,19 +1632,266 @@ function stopPeSnow() {
             maskImgs.forEach(function (im) { im.style.display = 'none'; });
             mirror.classList.add('summoned');
             pcPlay('wow_so_secret.wav');
-            showToast(LINES[Math.floor(Math.random() * LINES.length)]);
-            setTimeout(function () {
-                mirror.classList.add('bye');
-                setTimeout(function () {
-                    mirror.classList.remove('summoned');
-                    mirror.classList.remove('bye');
-                    showFrame(breakImgs, -1);
-                    showFrame(maskImgs, 0);
-                    maskFi = 0;
-                    busy = false;
-                }, 750);
-            }, 6000);
+            if (window.__mirrorBGM) window.__mirrorBGM.refresh(); // 切入阶段2（2:11–4:25）
+            openChat();
         }
+    })();
+
+    // ===== 心门：初始全空 → 每达成一次解锁条件逐颗点亮 → 满心门开后镜头右移 =====
+    (function () {
+        var door = document.getElementById('heartDoor');
+        var world = document.getElementById('world');
+        if (!door || !world) return;
+        var hearts = door.querySelectorAll('.hd-hearts img');
+        var TOTAL = hearts.length;            // 4 颗心
+        var opened = false;                    // 门体已升起
+        var litNow = 0;                        // 当前已点亮的颗数
+
+        // ===== 开启条件：四心为初始条件——心门由商店炼制的水晶心驱动（heartDoorHearts 数组） =====
+        // 每炼一颗心点亮一颗，满 TOTAL 颗门就绪；之后继续炼心不再进门，只改变 Badeline 人格
+        // 预览可加 ?opendoor 强制点亮全部
+        function forceOpen() { return new URLSearchParams(location.search).has('opendoor'); }
+        function targetOf() {
+            if (forceOpen()) return TOTAL;
+            var n = 0;
+            try {
+                var arr = JSON.parse(localStorage.getItem('heartDoorHearts') || 'null');
+                if (Array.isArray(arr) && arr.length) n = arr.length;
+                else {
+                    var c = JSON.parse(localStorage.getItem('crystalHeart') || 'null');
+                    n = (c && c.color) ? 1 : 0;
+                }
+            } catch (e) {}
+            return Math.max(0, Math.min(TOTAL, n));
+        }
+        function persist() { try { localStorage.setItem('heartDoorLit', String(litNow)); } catch (e) {} }
+        function refreshState() {
+            door.classList.toggle('locked', litNow < TOTAL);
+            door.classList.toggle('ready', litNow >= TOTAL && !opened);
+        }
+        function paint(im, lit) { im.src = lit ? 'heartdoor/icon06.png' : 'heartdoor/icon00.png'; }
+
+        // 单颗心：7 帧填充动画 + pop 弹跳反馈
+        function fillHeart(im, done) {
+            var f = 0;
+            var iv = setInterval(function () {
+                f++;
+                if (f >= 6) {
+                    clearInterval(iv);
+                    paint(im, true);
+                    im.classList.add('pop');
+                    setTimeout(function () { im.classList.remove('pop'); }, 580);
+                    if (done) done();
+                } else {
+                    im.src = 'heartdoor/icon0' + f + '.png';
+                }
+            }, 70);
+        }
+
+        // 把点亮数推进到 target：新增部分逐颗动画点亮，减少则静默校正
+        function applyTarget(target, animate) {
+            target = Math.max(0, Math.min(TOTAL, target));
+            if (target <= litNow || !animate) {
+                hearts.forEach(function (im, i) { paint(im, i < target); });
+                litNow = target; persist(); refreshState();
+                return;
+            }
+            refreshState();                    // 动画期间保持锁定
+            hearts.forEach(function (im, i) { if (i < litNow) paint(im, true); });  // 先还原已有进度，再逐颗点亮新增
+            (function next() {
+                if (litNow >= target) { persist(); refreshState(); return; }
+                fillHeart(hearts[litNow], function () { litNow++; setTimeout(next, 300); });
+            })();
+        }
+
+        // 初始：按已炼心数恢复（heartDoorHearts 驱动，有新增则动画点亮）
+        var saved = parseInt(localStorage.getItem('heartDoorLit') || '0', 10);
+        litNow = Math.max(0, Math.min(TOTAL, isNaN(saved) ? 0 : saved));
+        applyTarget(targetOf(), litNow < targetOf());
+
+        // 书架日记加载完成后推进进度（按已炼心数，真实数据优先）
+        window.__setDoorProgress = function () { applyTarget(targetOf(), true); };
+        // 无后端时预览：?opendoor 逐颗点亮剩余的
+        if (forceOpen()) applyTarget(TOTAL, litNow < TOTAL);
+
+        function panRight() {
+            world.classList.add('panned');
+            door.classList.add('away');
+            if (window.__mirrorBGM) window.__mirrorBGM.enter();
+        }
+        document.querySelector('#mirrorRoom .room-back').addEventListener('click', function () {
+            world.classList.remove('panned');
+            door.classList.remove('away');
+            if (window.__blDialogKill) window.__blDialogKill();   // 收起对话框，作废没说完的话
+            if (window.__mirrorBGM) window.__mirrorBGM.exit();
+        });
+
+        door.addEventListener('click', function () {
+            if (opened) { panRight(); return; }
+            if (door.classList.contains('ready')) {
+                // 升门 → 镜头右移
+                opened = true;
+                door.classList.remove('ready');
+                door.classList.add('open');
+                setTimeout(panRight, 950);
+            } else {
+                door.classList.add('shake');
+                setTimeout(function () { door.classList.remove('shake'); }, 650);
+                showToast('心门纹丝不动……（' + litNow + ' / ' + TOTAL + '）');
+            }
+        });
+    })();
+
+    // ===== 紫色房间 BGM：Resurrections 两阶段片段无缝循环 =====
+    // 阶段1（心门未全开 · Badeline 未解锁）：0:00–2:11 循环
+    // 阶段2（四心齐 · Badeline 解锁）：2:11–4:25 循环
+    // 实现：WebAudio 按秒切片 → AudioBufferSourceNode loop=true 采样级无缝循环；
+    //       解码失败降级 HTMLAudio + 60ms 轮询回跳；加载失败静默（不影响页面其他功能）
+    (function () {
+        var SRC = 'bgm/Resurrections.mp3';
+        var P = { p1: { start: 0, end: 131 }, p2: { start: 131, end: 265 } }; // 2:11=131s，4:25=265s
+        var VOL = 0.32;
+        var actx = null, master = null;
+        var bufs = {}, ready = false, failed = false, loading = false;
+        var cur = null, curPhase = null, wantOn = false;
+        var fbAudio = null, fbPhase = null, fbTimer = null;
+
+        function ensureCtx() {
+            if (actx) return actx;
+            try {
+                var AC = window.AudioContext || window.webkitAudioContext;
+                if (!AC) { failed = true; return null; }
+                actx = window.__mirrorAC || new AC();   // 与碎裂音效共用上下文
+                window.__mirrorAC = actx;
+                master = actx.createGain();
+                master.gain.value = VOL;
+                master.connect(actx.destination);
+            } catch (e) { failed = true; }
+            return actx;
+        }
+        // 自动播放策略兜底：首次任意点击恢复被挂起的上下文
+        document.addEventListener('click', function resumeAC() {
+            if (actx && actx.state === 'suspended') { actx.resume().catch(function () {}); }
+            if (actx && actx.state === 'running') document.removeEventListener('click', resumeAC);
+        });
+
+        function badelineUnlocked() {
+            // 映射：镜中 Badeline 现身（召唤中且非告别动画）= 解锁状态
+            var m = document.getElementById('shelfMirror');
+            return !!(m && m.classList.contains('summoned') && !m.classList.contains('bye'));
+        }
+        function phaseOf() { return badelineUnlocked() ? 'p2' : 'p1'; }
+
+        function preload() {
+            if (loading || failed || ready) return;
+            if (!ensureCtx()) return;
+            loading = true;
+            fetch(SRC).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
+                .then(function (ab) { return actx.decodeAudioData(ab); })
+                .then(function (buf) {
+                    ['p1', 'p2'].forEach(function (k) { bufs[k] = sliceBuffer(buf, P[k].start, P[k].end); });
+                    ready = true;
+                    if (wantOn) playPhase(phaseOf());
+                })
+                .catch(function () { failed = true; if (wantOn) fbStart(phaseOf()); });
+        }
+        // 按秒切片：采样级精确（无缝循环的关键——loop 在切片端点处零间隙）
+        function sliceBuffer(buf, s, e) {
+            var sr = buf.sampleRate;
+            var a = Math.max(0, Math.floor(s * sr));
+            var b = Math.min(buf.length, Math.floor(e * sr));
+            var out = actx.createBuffer(buf.numberOfChannels, b - a, sr);
+            for (var ch = 0; ch < buf.numberOfChannels; ch++) {
+                out.copyToChannel(buf.getChannelData(ch).subarray(a, b), ch);
+            }
+            return out;
+        }
+
+        function playPhase(ph) {
+            if (!ready || !wantOn) return;
+            if (curPhase === ph && cur) return;      // 已在播该片段
+            stopCur();
+            curPhase = ph;
+            try {
+                cur = actx.createBufferSource();
+                cur.buffer = bufs[ph];
+                cur.loop = true;
+                cur.connect(master);
+                cur.start(0, 0);                      // 切换耗时 <10ms
+            } catch (e) { cur = null; curPhase = null; }
+        }
+        function stopCur() {
+            try { if (cur) { cur.stop(); cur.disconnect(); } } catch (e) {}
+            cur = null; curPhase = null;
+        }
+
+        // 降级路径：HTMLAudio + 60ms 轮询回跳（循环点可能有极短接缝，属可接受降级）
+        function fbStart(ph) {
+            if (!fbAudio) {
+                try {
+                    fbAudio = new Audio(SRC);
+                    fbAudio.volume = VOL;
+                    fbAudio.preload = 'auto';
+                    fbAudio.addEventListener('error', function () { fbAudio = null; }, { once: true });
+                } catch (e) { fbAudio = null; return; }
+            }
+            fbPhase = ph;
+            var seg = P[ph];
+            var seek = function () {
+                try { fbAudio.currentTime = seg.start; } catch (e) {}
+                fbAudio.play().catch(function () {});
+            };
+            if (fbAudio.readyState >= 1) seek();
+            else fbAudio.addEventListener('loadedmetadata', seek, { once: true });
+            if (fbTimer) clearInterval(fbTimer);
+            fbTimer = setInterval(function () {
+                if (!wantOn || !fbAudio || fbAudio.paused) return;
+                var s2 = P[fbPhase];
+                if (fbAudio.currentTime >= s2.end || fbAudio.currentTime < s2.start) {
+                    try { fbAudio.currentTime = s2.start; } catch (e) {}
+                }
+            }, 60);
+        }
+        function fbStop() {
+            try { if (fbAudio) fbAudio.pause(); } catch (e) {}
+            if (fbTimer) { clearInterval(fbTimer); fbTimer = null; }
+        }
+
+        function enter() {
+            wantOn = true;
+            preload();
+            // 压过全站 BGM，避免两首叠播
+            var bp = document.getElementById('bgmPlayer');
+            if (bp && !bp.paused) { bp.pause(); window.__mirrorBGMDucked = true; }
+            if (ready) playPhase(phaseOf());
+            else if (failed) fbStart(phaseOf());
+        }
+        function exit() {
+            wantOn = false;
+            stopCur();
+            fbStop();
+            var bp = document.getElementById('bgmPlayer');
+            if (bp && window.__mirrorBGMDucked) { bp.play().catch(function () {}); window.__mirrorBGMDucked = false; }
+        }
+        document.addEventListener('visibilitychange', function () {
+            if (document.hidden) { stopCur(); fbStop(); }
+            else if (wantOn) { if (ready) playPhase(phaseOf()); else if (failed) fbStart(phaseOf()); }
+        });
+
+        window.__mirrorBGM = {
+            enter: enter, exit: exit,
+            refresh: function () { if (wantOn) { ready ? playPhase(phaseOf()) : (failed && fbStart(phaseOf())); } },
+            // 自检：切片时长 / 当前阶段 / 上下文状态
+            status: function () {
+                return {
+                    ready: ready, failed: failed, wantOn: wantOn,
+                    phase: curPhase || (fbPhase ? 'fb-' + fbPhase : null),
+                    ctxState: actx ? actx.state : null,
+                    p1Len: bufs.p1 ? bufs.p1.duration : 0,
+                    p2Len: bufs.p2 ? bufs.p2.duration : 0
+                };
+            }
+        };
     })();
 </script>
 </body>
