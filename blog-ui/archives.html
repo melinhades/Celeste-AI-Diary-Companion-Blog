@@ -63,48 +63,53 @@
         .year-group { opacity: 0; transform: translateY(24px); transition: opacity 0.6s ease, transform 0.6s ease; }
         .year-group.in-view { opacity: 1; transform: translateY(0); }
         /* ===== 月份横线：每月一条分组行（月份图 + hover.png 底部覆盖层） ===== */
-        .month-block { margin: 0 0 14px; }
+        .month-block { margin: 0 0 18px; }
         .month-row {
-            position: relative; display: flex; align-items: center; gap: 14px;
-            padding: 10px 16px; overflow: hidden;
-            background: rgba(30, 27, 75, 0.6);
-            border: 1px solid rgba(138, 43, 226, 0.2);
-            border-radius: 8px; cursor: pointer;
-            backdrop-filter: blur(10px);
-            transition: border-color .3s, transform .3s, box-shadow .3s;
+            position: relative; display: flex; align-items: center; gap: 12px;
+            padding: 14px 8px; overflow: visible;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            transition: transform .3s;
         }
-        .month-row:hover {
-            border-color: rgba(138, 43, 226, 0.45);
-            transform: translateX(8px);
-            box-shadow: 0 4px 20px rgba(138, 43, 226, 0.35);
+        .month-row:hover { transform: translateX(6px); }
+        /* 月份图标：hover.png 做框架，章节图嵌在框内窗口 */
+        .month-icon {
+            position: relative;
+            width: 80px; height: 105px;          /* 234×306 ≈ 0.765 比例 */
+            flex-shrink: 0;
+            margin-left: auto;
+            image-rendering: pixelated;
+        }
+        .month-frame {
+            position: absolute; inset: 0;
+            background: url('celeste-gui/archive/hover.png') center/contain no-repeat;
+            pointer-events: none;
+            transition: transform .35s cubic-bezier(.2,.9,.25,1.2);
         }
         .month-cover {
-            width: 96px; height: 44px; object-fit: cover; border-radius: 6px; flex-shrink: 0;
+            position: absolute;
+            top: 14px; left: 50%;
+            transform: translateX(-50%);
+            width: 56px; height: 56px;
+            object-fit: cover;
             image-rendering: pixelated;
-            box-shadow: 0 2px 8px rgba(0,0,0,.4);
+            border-radius: 4px;
+            box-shadow: 0 1px 4px rgba(0,0,0,.5);
+            transition: transform .35s ease, filter .3s;
         }
-        /* 底部覆盖层：每月图片必有对应 hover 层（专属 <name>-hover.png 探测，兜底共享 hover.png） */
-        .month-hover {
-            position: absolute; left: 0; right: 0; bottom: 0; height: 34px;
-            background-repeat: repeat-x;
-            background-position: center bottom;
-            background-size: auto 100%;
-            mix-blend-mode: screen; /* 织物素材黑底透明化，流苏垂在横线底边 */
-            opacity: 0; transform: translateY(40%);
-            transition: opacity .35s ease, transform .35s ease;
-            pointer-events: none;
-        }
-        .month-row:hover .month-hover { opacity: 1; transform: translateY(0); }
-        .month-name { font-size: 15px; font-weight: 700; color: #e8e8f0; flex: 1; transition: color .3s; text-shadow: 0 1px 4px rgba(0,0,0,.6); }
+        .month-row:hover .month-frame { transform: scale(1.08); }
+        .month-row:hover .month-cover { transform: translateX(-50%) scale(1.04); filter: brightness(1.15) drop-shadow(0 0 8px rgba(138,43,226,.6)); }
+        .month-name { font-size: 16px; font-weight: 700; color: #e8e8f0; transition: color .3s; letter-spacing: .04em; }
         .month-row:hover .month-name { color: #a78bfa; text-shadow: 0 0 10px rgba(138, 43, 226, 0.5); }
         .month-caret { color: #8b8ba0; font-size: 12px; transition: transform .3s; flex-shrink: 0; }
         .month-block.collapsed .month-caret { transform: rotate(-90deg); }
-        .month-posts { padding: 6px 0 0 20px; }
+        .month-posts { padding: 6px 0 0 8px; }
         .month-block.collapsed .month-posts { display: none; }
         @media (max-width: 640px) {
-            .month-cover { width: 72px; height: 36px; }
-            .month-hover { height: 26px; }
-            .month-posts { padding-left: 8px; }
+            .month-icon { width: 62px; height: 81px; }
+            .month-cover { width: 42px; height: 42px; top: 10px; }
+            .month-posts { padding-left: 20px; }
         }
         /* 底部透明化：消除白色带 */
         .footer { background:transparent; border:none; backdrop-filter:none; }
@@ -236,10 +241,10 @@
             groups[year].push(item);
         });
 
-        // 月份横线素材：每月一张章节封面；可有专属底部覆盖层 <name>-hover.png，兜底共享 hover.png
+        // 月份横线素材：每月一张章节封面；hover.png 为包裹框架，章节图嵌在框内
         const ARC_DIR = 'celeste-gui/archive/';
         const MONTH_COVERS = ['intro', 'city', 'oldsite', 'cliffside', 'resort', 'temple', 'reflection', 'Summit', 'core', 'pico8', 'lock', 'farewell'];
-        const ZH_MONTH = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'];
+        const EN_MONTH = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
         const seenCovers = {};
         MONTH_COVERS.forEach(c => {
             if (!seenCovers[c]) {
@@ -287,11 +292,13 @@
                 const mm = String(m).padStart(2, '0');
                 html += `<div class="month-block">
                     <div class="month-row" role="button" data-m="${m}">
-                        <img class="month-cover" src="${ARC_DIR}${cover}.png" alt="" loading="lazy" decoding="async">
-                        <div class="month-hover" style="background-image:url('${ARC_DIR}hover.png')"></div>
-                        <span class="month-name">${year}-${mm} · ${ZH_MONTH[m - 1] || ''}</span>
-                        <span class="archive-count">${mItems.length} posts</span>
                         <span class="month-caret">▾</span>
+                        <span class="archive-count">${mItems.length} posts</span>
+                        <span class="month-name">${EN_MONTH[m - 1] || ''}</span>
+                        <div class="month-icon">
+                            <div class="month-frame"></div>
+                            <img class="month-cover" src="${ARC_DIR}${cover}.png" alt="" loading="lazy" decoding="async">
+                        </div>
                     </div>
                     <div class="month-posts">`;
                 mItems.forEach(item => {
@@ -307,16 +314,7 @@
         });
         document.getElementById('archiveContent').innerHTML = html;
 
-        // 探测每月专属覆盖层 <name>-hover.png：存在则替换该月份行的共享 hover.png
-        MONTH_COVERS.forEach((c, i) => {
-            const pro = new Image();
-            const m = i + 1;
-            pro.onload = function () {
-                document.querySelectorAll('.month-row[data-m="' + m + '"] .month-hover')
-                    .forEach(el => { el.style.backgroundImage = 'url(' + ARC_DIR + c + '-hover.png)'; });
-            };
-            pro.src = ARC_DIR + c + '-hover.png';
-        });
+        // hover.png 已作为 month-frame 背景，不再需要单独探测 -hover.png 变体
 
         // 月份横线折叠/展开 + 时间轴渐入动画
         document.getElementById('archiveContent').addEventListener('click', e => {

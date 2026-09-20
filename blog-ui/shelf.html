@@ -1981,7 +1981,6 @@ function stopPeSnow() {
             // 影子离开镜面
             maskImgs.forEach(function (im) { im.style.display = 'none'; });
             mirror.classList.add('summoned');
-            pcPlay('wow_so_secret.wav');
             if (window.__mirrorBGM) window.__mirrorBGM.refresh(); // 切入阶段2（2:11–4:25）
             openChat();
             // 召唤动画（badelineRise 0.9s）走完后，启动自由游荡（模式 A 标记）
@@ -2906,7 +2905,8 @@ function stopPeSnow() {
             requestAnimationFrame(tick);
         }
 
-        door.addEventListener('click', function () {
+        door.addEventListener('click', function (e) {
+            e.stopPropagation();          // 防止 tryPlayBGM 等全局 click 监听重新播放 bgm
             // panned（镜之房间侧）：心门只露一半，点击回书架
             if (world.classList.contains('panned')) {
                 world.classList.remove('panned');
