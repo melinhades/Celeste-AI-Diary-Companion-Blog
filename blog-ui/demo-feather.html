@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Celeste Feather Mode · Golden Comet 演示</title>
+<style>
+  html,body{margin:0;height:100%;background:#0a0b1a;overflow:hidden;font-family:-apple-system,system-ui,sans-serif;color:#fff}
+  #hint{position:fixed;top:16px;left:50%;transform:translateX(-50%);font-size:13px;opacity:.75;
+    background:rgba(0,0,0,.35);padding:6px 14px;border-radius:20px;border:1px solid rgba(255,210,80,.25);pointer-events:none;letter-spacing:.5px}
+  #bottom{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);font-size:11px;opacity:.55;text-align:center;pointer-events:none}
+  #timer{position:fixed;top:16px;right:20px;font-size:14px;font-variant-numeric:tabular-nums;
+    background:rgba(0,0,0,.35);padding:6px 12px;border-radius:10px;border:1px solid rgba(255,210,80,.25)}
+  button.respawn{position:fixed;bottom:14px;right:20px;background:#ffd250;color:#2a1f00;border:none;padding:8px 16px;
+    border-radius:8px;font-weight:700;cursor:pointer;box-shadow:0 0 24px rgba(255,210,80,.4);font-size:13px}
+  button.respawn:hover{background:#ffdf7a}
+  button.respawn:active{transform:scale(.97)}
+  #bg{position:fixed;inset:0;background:
+    radial-gradient(ellipse at 30% 40%, rgba(30,40,80,.6), transparent 60%),
+    radial-gradient(ellipse at 70% 70%, rgba(20,25,60,.6), transparent 55%),
+    linear-gradient(180deg,#08081a,#0a0b20);z-index:-1}
+  /* 星空 */
+  .star{position:absolute;background:#fff;border-radius:50%;opacity:.6}
+</style>
+</head>
+<body>
+<div id="bg"></div>
+<div id="hint">WASD / 方向键 飞行 · 5 秒后自动退出 · 按按钮重生</div>
+<div id="timer">⏱ 5.0</div>
+<button class="respawn" id="btn">重生羽毛 ↻</button>
+<div id="bottom">使用项目内已有素材：player_no_backpack/spin00-13.png</div>
+<canvas id="c"></canvas>
+
+<script>
+(() => {
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const timerEl = document.getElementById('timer');
+const btn = document.getElementById('btn');
+
+function resize(){ canvas.width = innerWidth; canvas.height = innerHeight; }
+addEventListener('resize', resize); resize();
+
+// 背景星星
+const starLayer = document.getElementById('bg');
+for(let i=0;i<80;i++){
+  const s = document.createElement('div');
+  s.className = 'star';
+  const size = Math.random()*2+1;
+  s.style.width = size+'px'; s.style.height = size+'px';
+  s.style.left = Math.random()*100+'%';
+  s.style.top = Math.random()*100+'%';
+  s.style.opacity = (Math.random()*.5+.15).toFixed(2);
+  starLayer.appendChild(s);
+}
+
+// ===== 加载 spin 帧 =====
+const SPIN_FRAMES = 14;
+const spinPaths = [];
+for(let i=0;i<SPIN_FRAMES;i++){
+  const n = String(i).padStart(2,'0');
+  spinPaths.push(`Atlases/Gameplay/characters/player_no_backpack/spin${n}.png`);
+}
+const spinFrames = [];
+let framesReady = 0;
+spinPaths.forEach(p=>{
+  const img = new Image();
+  img.onload = ()=>{ framesReady++; if(framesReady===SPIN_FRAMES) init(); };
+  img.onerror = ()=>{ framesReady++; if(framesReady===SPIN_FRAMES) init(); };
+  img.src = p;
+  spinFrames.push(img);
+});
+
+// ===== 输入 =====
+const keys = {};
+addEventListener('keydown', e=>{ keys[e.code]=true; });
+addEventListener('keyup',   e=>{ keys[e.code]=false; });
+btn.onclick = ()=>{ comet = new GoldenComet(canvas.width/2, canvas.height/2); };
+
+function input(){
+  return {
+    up:    keys['KeyW']||keys['ArrowUp'],
+    down:  keys['KeyS']||keys['ArrowDown'],
+    left:  keys['KeyA']||keys['ArrowLeft'],
+    right: keys['KeyD']||keys['ArrowRight'],
+  };
+}
+
+// ===== GoldenComet =====
+class GoldenComet {
+  constructor(x,y){
+    this.x = x; this.y = y;
+    this.vx = 0; this.vy = 0;
+    this.speed = 260;
+    
+    this.frameIndex = 0;
+    this.frameTimer = 0;
+    this.frameFPS = 22;
+    
+    this.streaks = [];
+    this.sparks = [];
+    this.dust = [];       // 更细的光晕颗粒
+    
+    this.life = 5.0;
+    this.startLife = 5.0;
+    this.exitFlash = false;
+    this.flashTimer = 0;
+    
+    // 入场：从羽毛变成彗星的过渡 0→1
+    this.birth = 0;    // 0..1，1=完全成形
+    this.birthTimer = 0;
+    this.birthDur = 0.35;
+    
+    this.dead = false;
+    
+    this.pulse = 0;
+  }
+  
+  update(dt, inp){
+    // 入场动画
+    if(this.birth < 1){
+      this.birthTimer += dt;
+      this.birth = Math.min(1, this.birthTimer / this.birthDur);
+      // ease-out 三次
+      this.birth = 1 - Math.pow(1 - this.birth, 3);
+    }
+    
+    if(this.dead) return;
+    
+    // 移动（无视重力，8方向自由飞）
+    let dx = 0, dy = 0;
+    if(inp.up)    dy -= 1;
+    if(inp.down)  dy += 1;
+    if(inp.left)  dx -= 1;
+    if(inp.right) dx += 1;
+    if(dx!==0 && dy!==0){ dx*=0.7071; dy*=0.7071; }  // 归一化对角
+    this.vx = dx;
+    this.vy = dy;
+    this.x += dx * this.speed * dt;
+    this.y += dy * this.speed * dt;
+    
+    // 边界软弹
+    const pad = 20;
+    if(this.x < pad)         this.x = pad;
+    if(this.x > canvas.width-pad)  this.x = canvas.width-pad;
+    if(this.y < pad)         this.y = pad;
+    if(this.y > canvas.height-pad) this.y = canvas.height-pad;
+    
+    // spin 帧推进
+    this.frameTimer += dt;
+    if(this.frameTimer >= 1/this.frameFPS){
+      this.frameIndex = (this.frameIndex+1) % SPIN_FRAMES;
+      this.frameTimer = 0;
+    }
+    
+    // 生成拖尾
+    const flying = dx!==0 || dy!==0;
+    if(flying && this.birth >= 1){
+      // streak 线（飞行反方向）
+      this.streaks.push({
+        x: this.x, y: this.y,
+        dx: -dx, dy: -dy,
+        len: 14 + Math.random()*22,
+        life: 0.38, maxLife: 0.38
+      });
+      
+      // 金色 spark 方块
+      for(let i=0;i<2;i++){
+        this.sparks.push({
+          x: this.x + (Math.random()-.5)*8,
+          y: this.y + (Math.random()-.5)*8,
+          vx: -dx*60 + (Math.random()-.5)*80,
+          vy: -dy*60 + (Math.random()-.5)*80,
+          size: 1.5 + Math.random()*3,
+          gold: Math.random() < .75,
+          life: 0.45 + Math.random()*0.2,
+          maxLife: 0.65
+        });
+      }
+    }
+    
+    // 呼吸颗粒（即使不动也有）
+    if(Math.random() < 0.6){
+      this.dust.push({
+        x: this.x + (Math.random()-.5)*10,
+        y: this.y + (Math.random()-.5)*10,
+        vx: (Math.random()-.5)*20,
+        vy: (Math.random()-.5)*20 - 10,
+        size: 1 + Math.random()*2,
+        life: 0.6 + Math.random()*0.4,
+        maxLife: 1.0,
+        gold: Math.random() < .6
+      });
+    }
+    
+    // 粒子寿命
+    this.streaks = this.streaks.filter(s => (s.life -= dt) > 0);
+    this.sparks  = this.sparks.filter(s => {
+      s.x += s.vx*dt; s.y += s.vy*dt;
+      s.vx *= 0.9; s.vy *= 0.9;
+      return (s.life -= dt) > 0;
+    });
+    this.dust = this.dust.filter(s => {
+      s.x += s.vx*dt; s.y += s.vy*dt;
+      s.vx *= 0.92; s.vy *= 0.92;
+      return (s.life -= dt) > 0;
+    });
+    
+    // 生命周期倒计时
+    if(this.birth >= 1){
+      this.life -= dt;
+      if(this.life < 1.0){
+        this.exitFlash = true;
+        this.flashTimer += dt;
+      }
+      if(this.life <= 0){
+        this.dead = true;
+        // 退出爆发
+        for(let i=0;i<30;i++){
+          const a = Math.random()*Math.PI*2;
+          const sp = 100 + Math.random()*160;
+          this.sparks.push({
+            x: this.x, y: this.y,
+            vx: Math.cos(a)*sp, vy: Math.sin(a)*sp,
+            size: 2 + Math.random()*3,
+            gold: Math.random() < .6,
+            life: 0.6 + Math.random()*0.4,
+            maxLife: 1.0
+          });
+        }
+      }
+    }
+    
+    this.pulse += dt;
+  }
+  
+  draw(){
+    if(!framesReady) return;
+    ctx.save();
+    
+    // 根据 birth 控制整体 alpha 和 scale
+    ctx.globalAlpha = this.birth;
+    const scale = this.birth;
+    ctx.translate(this.x, this.y);
+    ctx.scale(scale, scale);
+    ctx.translate(-this.x, -this.y);
+    
+    // ===== 1. streaks =====
+    for(const s of this.streaks){
+      const a = s.life / s.maxLife;
+      const ex = s.x + s.dx * s.len;
+      const ey = s.y + s.dy * s.len;
+      const g = ctx.createLinearGradient(s.x, s.y, ex, ey);
+      if(this.exitFlash && Math.floor(this.flashTimer/0.1)%2){
+        g.addColorStop(0, `rgba(255,80,60,${a*0.85})`);
+      } else {
+        g.addColorStop(0, `rgba(255,220,80,${a*0.85})`);
+      }
+      g.addColorStop(1, 'rgba(255,200,60,0)');
+      ctx.strokeStyle = g;
+      ctx.lineWidth = 2 + a*1.5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+    }
+    
+    // ===== 2. dust（最细的光晕颗粒）=====
+    ctx.globalCompositeOperation = 'lighter';
+    for(const s of this.dust){
+      const a = s.life / s.maxLife;
+      ctx.globalAlpha = a * this.birth;
+      ctx.fillStyle = s.gold ? '#ffd250' : '#fff';
+      ctx.fillRect(s.x - s.size/2, s.y - s.size/2, s.size, s.size);
+    }
+    ctx.globalAlpha = 1;
+    
+    // ===== 3. sparks =====
+    for(const s of this.sparks){
+      const a = s.life / s.maxLife;
+      ctx.globalAlpha = a * this.birth;
+      ctx.fillStyle = s.gold ? '#ffd250' : '#fff';
+      ctx.fillRect(s.x - s.size/2, s.y - s.size/2, s.size, s.size);
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    
+    if(!this.dead){
+      // ===== 4. 发光内核（外层大光晕）=====
+      let c = {r:255,g:210,b:80};
+      if(this.exitFlash && Math.floor(this.flashTimer/0.1)%2){
+        c = {r:255,g:80,b:60};
+      }
+      const pulse = 42 + Math.sin(this.pulse*6) * 5;
+      const rg = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, pulse);
+      rg.addColorStop(0,   `rgba(${c.r},${c.g},${c.b},0.85)`);
+      rg.addColorStop(0.35,`rgba(${c.r},${c.g},${c.b},0.35)`);
+      rg.addColorStop(1,   `rgba(${c.r},${c.g},${c.b},0)`);
+      ctx.fillStyle = rg;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, pulse, 0, Math.PI*2);
+      ctx.fill();
+      
+      // ===== 5. 白色内核（最亮的点）=====
+      const rg2 = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, 10);
+      rg2.addColorStop(0, 'rgba(255,255,230,0.9)');
+      rg2.addColorStop(1, 'rgba(255,220,100,0)');
+      ctx.fillStyle = rg2;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, 10, 0, Math.PI*2);
+      ctx.fill();
+      
+      // ===== 6. spin 帧（旋转的 Madeline）—— additive =====
+      const frame = spinFrames[this.frameIndex];
+      if(frame && frame.complete){
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.55 * this.birth;
+        // 32x32 精灵，放大 1.5x 看起来更清楚
+        const size = 48;
+        ctx.drawImage(frame, this.x - size/2, this.y - size/2, size, size);
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = 'source-over';
+      }
+    }
+    
+    ctx.restore();
+  }
+}
+
+// ===== 主循环 =====
+let comet = null;
+function init(){
+  comet = new GoldenComet(canvas.width/2, canvas.height/2);
+  requestAnimationFrame(loop);
+}
+
+let last = performance.now();
+function loop(now){
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  
+  // 清屏（稍带拖影感——低 alpha 覆盖）
+  ctx.fillStyle = 'rgba(10,11,26,0.28)';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  
+  if(comet){
+    comet.update(dt, input());
+    comet.draw();
+    
+    // UI
+    const t = Math.max(0, comet.life);
+    timerEl.textContent = comet.dead ? '✦ 已消散 · 点按钮重生' : `⏱ ${t.toFixed(1)}`;
+    
+    // 自动重生
+    if(comet.dead){
+      comet.dust = comet.dust.filter(s => s.life > 0);
+      comet.sparks = comet.sparks.filter(s => s.life > 0);
+      if(comet.sparks.length === 0 && comet.dust.length === 0){
+        comet = new GoldenComet(canvas.width/2, canvas.height/2);
+      }
+    }
+  }
+  
+  requestAnimationFrame(loop);
+}
+})();
+</script>
+</body>
+</html>
