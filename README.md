@@ -912,7 +912,6 @@ git push origin feature/your-feature-name
 
 <br>
 
-### ⭐ Star History
 
 <a href="https://www.star-history.com/?repos=melinhades%2Fceleste-ai-diary-companion-blog&type=date&legend=top-left">
  <picture>
