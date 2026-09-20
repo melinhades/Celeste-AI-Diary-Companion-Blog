@@ -8,6 +8,7 @@
   html,body{margin:0;height:100%;background:#0a0b1a;overflow:hidden;font-family:-apple-system,system-ui,sans-serif;color:#fff}
   #hint{position:fixed;top:16px;left:50%;transform:translateX(-50%);font-size:13px;opacity:.75;
     background:rgba(0,0,0,.35);padding:6px 14px;border-radius:20px;border:1px solid rgba(255,210,80,.25);pointer-events:none;letter-spacing:.5px}
+  #hint b{color:#ffd250}
   #bottom{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);font-size:11px;opacity:.55;text-align:center;pointer-events:none}
   #timer{position:fixed;top:16px;right:20px;font-size:14px;font-variant-numeric:tabular-nums;
     background:rgba(0,0,0,.35);padding:6px 12px;border-radius:10px;border:1px solid rgba(255,210,80,.25)}
@@ -25,8 +26,8 @@
 </head>
 <body>
 <div id="bg"></div>
-<div id="hint">WASD / 方向键 飞行 · 5 秒后自动退出 · 按按钮重生</div>
-<div id="timer">⏱ 5.0</div>
+<div id="hint"><b>WASD/方向键</b> 手动飞行 · 无操作时自动飞行 · <b>10秒</b>后消散 · 按按钮重生</div>
+<div id="timer">⏱ 10.0</div>
 <button class="respawn" id="btn">重生羽毛 ↻</button>
 <div id="bottom">使用项目内已有素材：player_no_backpack/spin00-13.png</div>
 <canvas id="c"></canvas>
@@ -101,8 +102,8 @@ class GoldenComet {
     this.sparks = [];
     this.dust = [];       // 更细的光晕颗粒
     
-    this.life = 5.0;
-    this.startLife = 5.0;
+    this.life = 10.0;
+    this.startLife = 10.0;
     this.exitFlash = false;
     this.flashTimer = 0;
     
@@ -112,8 +113,17 @@ class GoldenComet {
     this.birthDur = 0.35;
     
     this.dead = false;
-    
+
     this.pulse = 0;
+
+    // 自动飞行 AI（无键盘输入时自动飞）
+    this.autoT = 0;
+    this.autoDur = 1.5 + Math.random()*1.5;
+    this.autoDx = (Math.random()-.5)*2;
+    this.autoDy = (Math.random()-.5)*2;
+    // 归一化
+    const al = Math.hypot(this.autoDx, this.autoDy) || 1;
+    this.autoDx /= al; this.autoDy /= al;
   }
   
   update(dt, inp){
@@ -125,14 +135,44 @@ class GoldenComet {
       this.birth = 1 - Math.pow(1 - this.birth, 3);
     }
     
-    if(this.dead) return;
-    
+    if(this.dead){
+      // 死亡后仍需更新粒子寿命，否则永远不消亡无法重生
+      this.streaks = [];
+      this.sparks = this.sparks.filter(s => {
+        s.x += s.vx*dt; s.y += s.vy*dt;
+        s.vx *= 0.9; s.vy *= 0.9;
+        return (s.life -= dt) > 0;
+      });
+      this.dust = this.dust.filter(s => {
+        s.x += s.vx*dt; s.y += s.vy*dt;
+        s.vx *= 0.92; s.vy *= 0.92;
+        return (s.life -= dt) > 0;
+      });
+      return;
+    }
+
     // 移动（无视重力，8方向自由飞）
     let dx = 0, dy = 0;
     if(inp.up)    dy -= 1;
     if(inp.down)  dy += 1;
     if(inp.left)  dx -= 1;
     if(inp.right) dx += 1;
+
+    // 无键盘输入时用自动 AI
+    if(dx===0 && dy===0 && this.birth >= 1){
+      this.autoT += dt;
+      if(this.autoT >= this.autoDur){
+        this.autoT = 0;
+        this.autoDur = 1.5 + Math.random()*2.5;
+        this.autoDx = (Math.random()-.5)*2;
+        this.autoDy = (Math.random()-.5)*2;
+        const al2 = Math.hypot(this.autoDx, this.autoDy) || 1;
+        this.autoDx /= al2; this.autoDy /= al2;
+      }
+      dx = this.autoDx;
+      dy = this.autoDy;
+    }
+
     if(dx!==0 && dy!==0){ dx*=0.7071; dy*=0.7071; }  // 归一化对角
     this.vx = dx;
     this.vy = dy;
