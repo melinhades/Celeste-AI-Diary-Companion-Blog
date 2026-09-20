@@ -30,6 +30,9 @@ public class Diary {
     /** 结构化情绪分析 JSON */
     private String emotionDetail;
 
+    /** 日记类型：day=普通日记（白天的事），dream=梦境日记（晚上做的梦） */
+    private String type;
+
     /** 创建时间 */
     private Date createDate;
 

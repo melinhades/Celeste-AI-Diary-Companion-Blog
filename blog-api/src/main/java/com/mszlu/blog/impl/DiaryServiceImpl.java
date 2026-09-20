@@ -48,6 +48,8 @@ public class DiaryServiceImpl implements DiaryService {
         Date now = new Date();
         Diary diary = new Diary();
         diary.setUserId(userId);
+        // 梦境日记与普通日记分开存储：仅当显式传 dream 时为梦境，其余（含历史数据）一律普通日记
+        diary.setType("dream".equals(param.getType()) ? "dream" : "day");
         String title = param.getTitle();
         if (title != null && title.length() > 255) title = title.substring(0, 255);
         diary.setTitle(title);
@@ -64,8 +66,10 @@ public class DiaryServiceImpl implements DiaryService {
             diaryMapper.insert(diary);
         }
 
-        // 情绪分析：异步跑，结果落库，供次日对话/周月汇总消费
-        analyzeEmotionAsync(diary.getId(), param.getContent());
+        // 情绪分析：仅普通日记异步跑（结果落库供次日对话/周月汇总）；梦境不进白天情绪统计
+        if (!"dream".equals(diary.getType())) {
+            analyzeEmotionAsync(diary.getId(), param.getContent());
+        }
 
         // 保存成功后，异步提取记忆（复用 chat 的方式）
         // 这里我们取日记内容的前200字作为用户内容，AI 回复为空（因为日记没有 AI 回复）
@@ -114,6 +118,7 @@ public class DiaryServiceImpl implements DiaryService {
                     new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
             wrapper.eq(Diary::getUserId, userId);
             wrapper.isNotNull(Diary::getEmotionDetail);
+            wrapper.eq(Diary::getType, "day");
             wrapper.ge(Diary::getCreateDate, cal.getTime());
             wrapper.orderByDesc(Diary::getCreateDate);
             wrapper.last("limit 1");
@@ -125,16 +130,19 @@ public class DiaryServiceImpl implements DiaryService {
     }
 
     @Override
-    public Result list(int page, int pageSize) {
+    public Result list(int page, int pageSize, String type) {
         String userId = UserThreadLocal.get().getId();
         // TODO: 实现分页列表，这里先返回所有
         // 为简单起见，我们先不实现分页，返回所有日记
         // 实际项目中应使用分页插件或自行实现
-        List<Diary> diaries = diaryMapper.selectList(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Diary>()
-                        .eq(Diary::getUserId, userId)
-                        .orderByDesc(Diary::getUpdateDate)
-        );
+        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Diary> wrapper =
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
+        wrapper.eq(Diary::getUserId, userId);
+        if ("day".equals(type) || "dream".equals(type)) {
+            wrapper.eq(Diary::getType, type);   // 普通日记与梦境日记互不串列
+        }
+        wrapper.orderByDesc(Diary::getUpdateDate);
+        List<Diary> diaries = diaryMapper.selectList(wrapper);
         return Result.success(diaries);
     }
 
@@ -176,6 +184,7 @@ public class DiaryServiceImpl implements DiaryService {
         com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Diary> wrapper =
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
         wrapper.eq(Diary::getUserId, userId);
+        wrapper.eq(Diary::getType, "day");
         wrapper.ge(Diary::getCreateDate, yesterdayStart);
         wrapper.lt(Diary::getCreateDate, todayStart);
         wrapper.orderByDesc(Diary::getCreateDate);
@@ -219,6 +228,7 @@ public class DiaryServiceImpl implements DiaryService {
         com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Diary> wrapper =
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
         wrapper.eq(Diary::getUserId, userId);
+        wrapper.eq(Diary::getType, "day");
         wrapper.orderByDesc(Diary::getCreateDate);
         wrapper.last("limit 10");
         java.util.List<Diary> diaries = diaryMapper.selectList(wrapper);
@@ -288,6 +298,7 @@ public class DiaryServiceImpl implements DiaryService {
         com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Diary> wrapper =
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
         wrapper.eq(Diary::getUserId, userId);
+        wrapper.eq(Diary::getType, "day");
         wrapper.ge(Diary::getCreateDate, new Date(oneHourAgo));
         wrapper.orderByDesc(Diary::getCreateDate);
         wrapper.last("limit 1");
@@ -574,11 +585,13 @@ public class DiaryServiceImpl implements DiaryService {
         List<Diary> recent = diaryMapper.selectList(
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Diary>()
                         .eq(Diary::getUserId, userId)
+                        .eq(Diary::getType, "day")
                         .orderByDesc(Diary::getCreateDate)
                         .last("limit 10"));
         Diary first = diaryMapper.selectOne(
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Diary>()
                         .eq(Diary::getUserId, userId)
+                        .eq(Diary::getType, "day")
                         .orderByAsc(Diary::getCreateDate)
                         .last("limit 1"));
         int dayCount = 1;
@@ -657,6 +670,120 @@ public class DiaryServiceImpl implements DiaryService {
         data.put("message", reply);
         data.put("emotion", emotion);
         data.put("stage", state[2]);
+        return Result.success(data);
+    }
+
+    /**
+     * 保存梦境日记（type=dream，与普通日记完全分开），并让 Madeline 用"读完梦的感受"口吻回应。
+     * 梦境不跑白天那套情绪统计（analyzeEmotionAsync 仅服务普通日记），但照常提取记忆/分片入 RAG。
+     */
+    @Override
+    public Result saveDream(DiaryParam param) {
+        SysUser user = UserThreadLocal.get();
+        if (user == null) return Result.fail(403, "未登录");
+        String content = param.getContent() == null ? "" : param.getContent().trim();
+        if (content.isEmpty()) return Result.fail(400, "梦的内容为空");
+        String userName = user.getNickname() != null && !user.getNickname().isBlank()
+                ? user.getNickname() : user.getAccount();
+
+        param.setType("dream");
+        Result saved = save(param);   // 复用统一落库（含记忆提取/分片入 RAG）
+        String dreamId = saved.getData() == null ? null : String.valueOf(saved.getData());
+        if (!saved.isSuccess()) return saved;
+
+        String snippet = content.length() > 1500 ? content.substring(0, 1500) : content;
+        String reply = aiClient.chat(new ArrayList<>(java.util.Arrays.asList(
+                new AiMessage("user", PromptBuilder.dreamReading(userName, snippet)))));
+        if (reply == null || reply.isBlank()) {
+            reply = "……我记得这个梦的感觉。等天亮了，我们再慢慢说。";
+        }
+
+        java.util.Map<String, Object> data = new java.util.HashMap<>();
+        data.put("id", dreamId);
+        data.put("message", reply.trim());
+        return Result.success(data);
+    }
+
+    /**
+     * Badeline 夜话：读指定的一篇梦境日记，按梦的上下文多轮对话。
+     * message 为空且无历史 → 她先开口评论这个梦；情绪标记复用 [emotion:xxx] 约定驱动立绘。
+     */
+    @Override
+    public Result dreamNightTalk(String dreamId, String message, String historyJson) {
+        SysUser user = UserThreadLocal.get();
+        if (user == null) return Result.fail(403, "未登录");
+        String userId = user.getId();
+        String userName = user.getNickname() != null && !user.getNickname().isBlank()
+                ? user.getNickname() : user.getAccount();
+
+        Diary dream = null;
+        if (dreamId != null && !dreamId.isBlank()) {
+            dream = diaryMapper.selectById(dreamId);
+            // 只能读自己的梦
+            if (dream != null && !userId.equals(dream.getUserId())) dream = null;
+        }
+        if (dream == null) {
+            dream = diaryMapper.selectOne(
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Diary>()
+                            .eq(Diary::getUserId, userId)
+                            .eq(Diary::getType, "dream")
+                            .orderByDesc(Diary::getCreateDate)
+                            .last("limit 1"));
+        }
+        if (dream == null || dream.getContent() == null || dream.getContent().isBlank()) {
+            return Result.fail(404, "还没有写下的梦。先把梦记下来，她才读得到。");
+        }
+        String dreamText = dream.getContent();
+        if (dreamText.length() > 1800) dreamText = dreamText.substring(0, 1800);
+
+        List<AiMessage> history = new ArrayList<>();
+        if (historyJson != null && !historyJson.isBlank()) {
+            try {
+                List<JSONObject> arr = JSON.parseArray(historyJson, JSONObject.class);
+                if (arr != null) {
+                    for (JSONObject o : arr) {
+                        if (o == null) continue;
+                        String c = o.getString("content");
+                        if (c == null || c.trim().isEmpty()) continue;
+                        history.add(new AiMessage("assistant".equals(o.getString("role")) ? "assistant" : "user", c));
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        if (history.size() > 10) history = new ArrayList<>(history.subList(history.size() - 10, history.size()));
+
+        List<AiMessage> messages = new ArrayList<>();
+        messages.add(new AiMessage("system",
+                PromptBuilder.badelineSystem(PromptBuilder.badelineDreamBackground(userName, dreamText))));
+        messages.addAll(history);
+        String say = message == null ? "" : message.trim();
+        if (say.isEmpty()) {
+            if (!history.isEmpty()) return Result.fail(400, "消息不能为空");
+            // 开场：由 Badeline 先评论这个梦（提示词背景块里已交代开场规则）
+            messages.add(new AiMessage("user", "（她刚把梦写完，抬头看见了你。）"));
+        } else {
+            messages.add(new AiMessage("user", say));
+        }
+
+        String reply = aiClient.chat(messages);
+        if (reply == null || reply.isBlank()) {
+            reply = "……梦里那么能跑，醒了倒没话了？";
+        }
+        reply = reply.trim();
+        String emotion = "";
+        java.util.regex.Matcher em = java.util.regex.Pattern
+                .compile("^\\[emotion\\s*:\\s*([a-zA-Z]{1,12})\\]\\s*").matcher(reply);
+        if (em.find()) {
+            emotion = em.group(1).toLowerCase();
+            reply = reply.substring(em.end()).trim();
+        }
+        if (reply.isBlank()) reply = "……";
+
+        java.util.Map<String, Object> data = new java.util.HashMap<>();
+        data.put("message", reply);
+        data.put("emotion", emotion);
+        data.put("dreamId", dream.getId());
         return Result.success(data);
     }
 

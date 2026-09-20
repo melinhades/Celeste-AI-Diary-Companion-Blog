@@ -11,8 +11,14 @@ public interface DiaryService {
     /** 保存或更新日记 */
     Result save(DiaryParam param);
 
-    /** 获取日记列表（分页） */
-    Result list(int page, int pageSize);
+    /** 获取日记列表（分页）；type 为 null=全部，day=普通日记，dream=梦境日记 */
+    Result list(int page, int pageSize, String type);
+
+    /** 保存一篇梦境日记（type=dream），并返回 Madeline 读完梦后的感受回应 */
+    Result saveDream(DiaryParam param);
+
+    /** Badeline 夜话：她读你写下的梦，用影子视角回应；message 为空时由她先开口评论这个梦 */
+    Result dreamNightTalk(String dreamId, String message, String historyJson);
 
     /** 日记伴侣：根据草稿片段获得 Madeline 的反馈 */
     Result companion(String draftSnippet);

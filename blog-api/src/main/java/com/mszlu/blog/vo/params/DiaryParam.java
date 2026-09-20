@@ -19,4 +19,7 @@ public class DiaryParam {
 
     /** 情绪数据（可选：保存时的分析结果 / 快照时的聚合摘要） */
     private String emotion;
+
+    /** 日记类型：day=普通日记（默认），dream=梦境日记 */
+    private String type;
 }

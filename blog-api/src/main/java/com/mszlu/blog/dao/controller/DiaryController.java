@@ -24,11 +24,12 @@ public class DiaryController {
         return diaryService.companion(param.getDraft());
     }
 
-    /** 获取日记列表（分页） */
+    /** 获取日记列表（分页）；type=day 普通日记 / type=dream 梦境日记，不传则全部 */
     @GetMapping("list")
     public Result list(@RequestParam(defaultValue = "1") int page,
-                       @RequestParam(defaultValue = "10") int pageSize) {
-        return diaryService.list(page, pageSize);
+                       @RequestParam(defaultValue = "10") int pageSize,
+                       @RequestParam(required = false) String type) {
+        return diaryService.list(page, pageSize, type);
     }
 
     /** 获取日记详情 */
@@ -113,6 +114,32 @@ public class DiaryController {
         public void setMessage(String message) { this.message = message; }
         public String getHistory() { return history; }
         public void setHistory(String history) { this.history = history; }
+    }
+
+    /** 梦境日记：保存一个梦（与普通日记分开），返回 Madeline 读完梦的感受回应 */
+    @PostMapping("dream")
+    public Result saveDream(@RequestBody DiaryParam param) {
+        return diaryService.saveDream(param);
+    }
+
+    /** Badeline 夜话请求体 */
+    static class DreamNightParam {
+        private String dreamId;  // 指定读哪篇梦；为空则读最近一篇梦境日记
+        private String message;  // 首轮留空 → Badeline 先开口评论这个梦
+        private String history;  // JSON 数组字符串 [{role:'user'|'assistant', content:'...'}]
+
+        public String getDreamId() { return dreamId; }
+        public void setDreamId(String dreamId) { this.dreamId = dreamId; }
+        public String getMessage() { return message; }
+        public void setMessage(String message) { this.message = message; }
+        public String getHistory() { return history; }
+        public void setHistory(String history) { this.history = history; }
+    }
+
+    /** Badeline 夜话：她在梦里读你的梦，用影子视角回应 */
+    @PostMapping("dream-night-talk")
+    public Result dreamNightTalk(@RequestBody DreamNightParam param) {
+        return diaryService.dreamNightTalk(param.getDreamId(), param.getMessage(), param.getHistory());
     }
 
     /** Badeline 影子聊天 */

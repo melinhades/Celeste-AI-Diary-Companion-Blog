@@ -11,6 +11,8 @@
 @font-face { font-family:'Renogare'; src:url('celeste-font-en/Renogare-Regular.otf') format('opentype'); font-display:swap; }
 @font-face { font-family:'CelesteZH'; src:url('fonts/NotoSansCJKsc-Medium.otf') format('opentype'); font-display:swap; }
 body { min-height:100vh; background:url('celeste-gui/shelf-screen.webp') center/cover no-repeat fixed; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; opacity:0; animation:pageFadeIn .8s ease forwards; }
+/* #world 宽 200% 必然横向溢出：禁掉横向滚动，防止点击门时浏览器把页面带着横滚（scrollLeft 残留会让镜之房间错位露出 body 背景） */
+html, body { overflow-x:hidden; overflow-x:clip; }
 @keyframes pageFadeIn { from { opacity:0; } to { opacity:1; } }
 /* 可访问性：键盘聚焦高亮 */
 :focus-visible { outline:2px solid #ffe36d; outline-offset:2px; border-radius:4px; }
@@ -129,15 +131,8 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 #berryTrophy.empty{display:none;}
 
 /* ===== 磁带选曲（cassette 收集品点歌） ===== */
-#cassetteBgm{position:fixed;left:22px;bottom:22px;z-index:25;user-select:none;}
-#cassetteBgmImg{width:56px;height:56px;image-rendering:pixelated;cursor:pointer;filter:drop-shadow(0 4px 10px rgba(0,0,0,.5));}
-#cassetteBgmPanel{position:absolute;left:0;bottom:66px;min-width:200px;padding:12px 12px 10px;background:rgba(22,34,60,.96);border:2px solid rgba(255,230,109,.45);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.6);opacity:0;transform:translateY(10px) scale(.95);transform-origin:bottom left;pointer-events:none;transition:opacity .2s ease,transform .24s cubic-bezier(.34,1.56,.64,1);z-index:26;}
-#cassetteBgmPanel.show{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;}
-.cb-title{font-family:'Press Start 2P',monospace;font-size:9px;color:#ffe36d;letter-spacing:1px;margin-bottom:10px;opacity:.8;}
-.cb-item{padding:7px 10px;margin:2px 0;border-radius:6px;cursor:pointer;font-family:'Renogare','CelesteZH',sans-serif;font-size:13px;color:rgba(255,255,255,.78);transition:background .15s,color .15s;}
-.cb-item:hover{background:rgba(255,230,109,.12);color:#ffe36d;}
-.cb-item.on{background:rgba(255,230,109,.2);color:#ffe36d;font-weight:600;}
-.cb-item.on::before{content:'\266A  ';}
+/* 磁带选曲 CSS 已删 */
+/* ===== 篝火（从 diary 迁来） ===== */
 /* ===== 快照明信片行（列表里的一条） ===== */
 .shelf-row.snapshot { background:url('celeste-journal/memo.png') center/100% 100% no-repeat; border:none; }
 /* ===== 快照详情：翻开的 Journal 跨页 ===== */
@@ -199,6 +194,16 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     pointer-events: none;
     z-index: 6;
 }
+/* 自由游荡态：wrap 被 DOM 移到 #mirrorRoom 子级后启用，相对房间全屏定位 */
+.badeline-wrap.free {
+    position: absolute;
+    opacity: 1;
+    pointer-events: auto;          /* 自由游荡时可点击本人触发对话 */
+    z-index: 10;                    /* 比心门(z-index:8)高，不被门盖住 */
+    transition: opacity .8s ease, left 1.5s ease, top 1.5s ease, transform .3s ease;
+    will-change: left, top, transform;
+}
+.badeline-wrap.free .badeline-inner { animation: none; }   /* 自由游荡时关闭原 floating 浮动，避免与 transition 冲突 */
 #shelfMirror.summoned .badeline-wrap { animation: badelineRise .9s cubic-bezier(0.34,1.56,0.64,1) forwards; }
 @keyframes badelineRise {
     from { opacity: 0; transform: translate(-50%,10%) scale(.3); }
@@ -215,6 +220,15 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     image-rendering: pixelated;
     filter: drop-shadow(0 0 14px rgba(125,80,200,.75));
 }
+/* Badeline 立绘统一 56px：5 个 gif 像素尺寸不一，统一固定像素值防止跳动 */
+#badelineImg {
+    width: 56px;
+    height: auto;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+#badelineImg:hover { filter: drop-shadow(0 0 18px rgba(160,110,220,.95)); transition: filter .2s ease; }
 
 /* ===== Badeline 聊天面板：镜子召唤后出现 ===== */
 #blChat {
@@ -294,107 +308,415 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 
 /* ===== 横向世界：书架 ⇄ 心门后的镜之房间 ===== */
 html, body { overflow-x: hidden; }
-#world { display:flex; width:200vw; transition:transform 1.35s cubic-bezier(.65,0,.35,1); will-change:transform; }
-#world .view { width:100vw; min-height:100vh; flex-shrink:0; position:relative; }
+#world { display:flex; width:200%; transition:transform 1.35s cubic-bezier(.65,0,.35,1); will-change:transform; }
+#world .view { width:50%; min-height:100vh; flex-shrink:0; position:relative; }
 #shelfView { box-sizing:border-box; padding-right:var(--door-w); }
-#world.panned { transform:translateX(-100vw); }
+#world.panned { transform:translateX(-50%); }
 
 /* ===== 心门（水晶心大门 · 全高占满右侧 · 未开启） ===== */
 :root { --door-w:200px; }
 #heartDoor {
-    position:absolute; right:0; top:0; bottom:0;
+    position:absolute; right:0; top:0; height:100vh;
     width:var(--door-w);
     cursor:not-allowed; z-index:8; user-select:none;
-    filter:drop-shadow(-6px 0 30px rgba(110,190,255,.28));
+    filter:drop-shadow(-6px 0 34px rgba(70,160,200,.45));
     transition:filter .8s ease, opacity .6s ease;
 }
 #heartDoor .hd-mist {
     position:absolute; inset:-40px;
     background:url('heartdoor/mist.png') repeat; background-size:160px 160px;
-    image-rendering:pixelated; opacity:.32;
-    filter:blur(1px) brightness(1.6) hue-rotate(170deg);
+    image-rendering:pixelated; opacity:.24;
+    filter:blur(1px) brightness(1.2) hue-rotate(182deg);
     animation:hdMist 9s linear infinite;
 }
 @keyframes hdMist { from { background-position:0 0; } to { background-position:160px 320px; } }
-#heartDoor .hd-gate { position:absolute; inset:0; transition:transform 1s cubic-bezier(.6,0,.3,1), opacity .9s ease; }
-#heartDoor.open .hd-gate { transform:translateY(-58%); opacity:0; }
+#heartDoor .hd-gate { position:absolute; inset:0; }
+/* 裁剪壳：深冷门龛底色 + 溢出裁剪；心形门体嵌在龛中，分裂后露出亮心光柱 */
+#heartDoor .hd-clip {
+    position:absolute; inset:0; overflow:hidden;
+    background:linear-gradient(180deg, #2c3f54 0%, #1c2c3d 45%, #121e2b 100%);
+    box-shadow:inset 0 0 34px rgba(5,11,19,.78);
+}
+#heartDoor .hd-bright {
+    position:absolute; inset:0; opacity:0;
+    background:
+        radial-gradient(58% 46% at 50% 50%, #ffffff 0%, #eafcff 18%, #bdeffb 42%, #7fd2f0 68%, rgba(110,200,240,.38) 88%, rgba(110,200,240,0) 100%),
+        linear-gradient(180deg, #9adcf0, #5cb9dc);
+    box-shadow:0 0 46px 16px rgba(150,225,255,.5);
+    transition:opacity .8s ease .12s;
+}
+#heartDoor.split .hd-bright { opacity:1; }
+/* ===== 心形门：低分辨率像素整心，上下两半 canvas 贴裂缝拼接，闭合即无缝整心 ===== */
+#heartDoor { --crack:16px; --cap-h:32px; }
+#heartDoor .hd-half {
+    position:absolute; left:0; right:0; height:50%; overflow:hidden;
+    transition:transform 1.15s cubic-bezier(.65,0,.22,1);
+}
+#heartDoor .hd-half-t { top:0; }
+#heartDoor .hd-half-b { bottom:0; }
+/* 分裂微开：上/下半向相反方向移动一小段距离后停住（一次性，终态保持） */
+#heartDoor.split .hd-half-t { transform:translateY(calc(-1 * var(--crack))); }
+#heartDoor.split .hd-half-b { transform:translateY(var(--crack)); }
+/* 半心 canvas：底边/顶边贴裂缝，闭合时上下两块拼成一整颗心 */
+#heartDoor .hd-heart {
+    position:absolute; left:0; width:100%; height:auto; display:block;
+    image-rendering:pixelated; z-index:2;
+}
+#heartDoor .hd-half-t .hd-heart { bottom:0; }
+#heartDoor .hd-half-b .hd-heart { top:0; }
+/* 四颗心嵌入门体：上/下半各一排 2 颗，随半门一起移动 */
+#heartDoor .hd-gate { z-index:2; }
+#heartDoor .hd-hearts {
+    position:absolute; left:50%; transform:translateX(-50%);
+    display:grid; grid-template-columns:repeat(2, 50px); gap:14px; z-index:3;
+}
+#heartDoor .hd-half-t .hd-hearts { bottom:26px; }
+#heartDoor .hd-half-b .hd-hearts { top:26px; }
+/* 裂缝透光：分裂后两半之间亮起一道光缝（藏在门体后，只从缝里漏出来） */
+#heartDoor .hd-clip::after {
+    content:''; position:absolute; left:11%; right:11%; top:50%; height:6px;
+    transform:translateY(-50%); z-index:1; opacity:0; border-radius:3px;
+    background:#f2fdff;
+    box-shadow:0 0 14px 4px rgba(220,248,255,.95), 0 0 40px 14px rgba(150,225,255,.55);
+    transition:opacity .5s ease .35s;
+}
+#heartDoor.split .hd-clip::after { opacity:.95; }
+#heartDoor.split .hd-heart { filter:drop-shadow(0 0 16px rgba(190,240,255,.7)); }
+/* ===== 门框：top.png 顶冠/底冠 + edge.png 两侧立柱，心形门体嵌在框中 ===== */
 #heartDoor .hd-cap {
-    position:absolute; left:0; right:0; height:32px;
-    background:url('heartdoor/top.png') repeat-x; background-size:32px 32px;
+    position:absolute; left:0; right:0; height:var(--cap-h); z-index:4;
+    background:url('heartdoor/top.png') repeat-x; background-size:var(--cap-h) var(--cap-h);
     image-rendering:pixelated;
 }
 #heartDoor .hd-cap.top { top:0; }
 #heartDoor .hd-cap.bottom { bottom:0; transform:scaleY(-1); }
 #heartDoor .hd-rail {
-    position:absolute; top:32px; bottom:32px; width:32px;
-    background:url('heartdoor/edge.png') repeat-y; background-size:32px 32px;
+    position:absolute; top:var(--cap-h); bottom:var(--cap-h); width:var(--cap-h); z-index:4;
+    background:url('heartdoor/edge.png') repeat-y; background-size:var(--cap-h) var(--cap-h);
     image-rendering:pixelated;
 }
-#heartDoor .hd-rail.l { left:0; }
-#heartDoor .hd-rail.r { right:0; transform:scaleX(-1); }
-#heartDoor .hd-core {
-    position:absolute; left:32px; right:32px; top:32px; bottom:32px;
-    background:linear-gradient(180deg, rgba(140,215,255,.30), rgba(90,170,255,.42) 55%, rgba(140,215,255,.30));
-    overflow:hidden;
+#heartDoor .hd-rail.left { left:0; }
+#heartDoor .hd-rail.right { right:0; transform:scaleX(-1); }
+#heartDoor .hd-hearts img {
+    width:50px; height:50px; image-rendering:pixelated;
+    opacity:.85; filter:drop-shadow(0 0 6px rgba(215,245,255,.5));
+    transition:opacity .45s ease, filter .45s ease;
 }
-#heartDoor .hd-core::before {
-    content:''; position:absolute; inset:0;
-    background:url('heartdoor/mist.png') repeat; background-size:128px 128px;
-    image-rendering:pixelated; mix-blend-mode:screen; opacity:.5;
-    animation:hdMist 7s linear infinite reverse;
+#heartDoor.split .hd-hearts img {
+    opacity:1;
+    filter:drop-shadow(0 0 6px rgba(255,255,255,.9)) drop-shadow(0 0 14px rgba(90,180,225,.8));
 }
-#heartDoor .hd-hearts {
-    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-    display:grid; grid-template-columns:repeat(2, 50px); gap:14px; z-index:2;
+/* 空心态（icon00 细白轮廓）：暗色晕圈+青光衬底，让未点亮的空心清晰可辨 */
+#heartDoor .hd-hearts img[src*='icon00'] {
+    opacity:1;
+    filter:drop-shadow(0 0 3px rgba(6,16,28,.95)) drop-shadow(0 0 8px rgba(120,200,235,.5));
 }
-#heartDoor .hd-hearts img { width:50px; height:50px; image-rendering:pixelated; filter:drop-shadow(0 0 8px rgba(160,220,255,.6)); }
 #heartDoor .hd-hearts img.pop { animation:hdPop .55s cubic-bezier(.22,1.4,.36,1); }
 @keyframes hdPop {
     0%   { transform:scale(.3); filter:drop-shadow(0 0 0 rgba(160,220,255,0)); }
-    55%  { transform:scale(1.4); filter:drop-shadow(0 0 18px rgba(170,225,255,.95)); }
-    100% { transform:scale(1); filter:drop-shadow(0 0 8px rgba(160,220,255,.6)); }
+    55%  { transform:scale(1.4); filter:drop-shadow(0 0 18px rgba(230,250,255,.95)); }
+    100% { transform:scale(1); opacity:.85; filter:drop-shadow(0 0 6px rgba(215,245,255,.5)); }
 }
-#heartDoor.ready { cursor:pointer; filter:drop-shadow(0 0 36px rgba(140,215,255,.6)); }
+#heartDoor.ready { cursor:pointer; }
+#heartDoor.ready .hd-heart { filter:drop-shadow(0 0 12px rgba(190,240,255,.9)) drop-shadow(0 0 30px rgba(140,220,255,.5)); }
 #heartDoor.ready .hd-hearts img { animation:hdPulse 1.6s ease-in-out infinite; }
 @keyframes hdPulse { 0%,100% { transform:scale(1); } 50% { transform:scale(1.12); } }
 #heartDoor.shake { animation:hdShake .3s linear 2; }
 @keyframes hdShake { 0%,100% { translate:0 0; } 25% { translate:-6px 0; } 75% { translate:6px 0; } }
 #heartDoor.away { opacity:0; pointer-events:none; }
+/* panned（镜之房间侧）：心门只露左半边，右半跑出视口；点击回书架
+   position:fixed 绕过 #world transform 的 containing block，让 left:calc(100vw-...) 真正按视口算 */
+#world.panned #heartDoor {
+    position: fixed;
+    top: 0;
+    height: 100vh;
+    width: var(--door-w);
+    right: auto;
+    left: calc(100vw - var(--door-w) / 2);
+    cursor: pointer;
+    opacity: 1;
+    pointer-events: auto;
+    z-index: 8;
+}
 
 /* ===== 镜之房间（心门后） ===== */
 #mirrorRoom {
-    background:radial-gradient(120% 95% at 50% 42%, #221736 0%, #120d22 52%, #060410 100%);
+    /* 极暗紫渐变 + Badeline 专属背景图叠加，图片 cover 铺满 */
+    background:
+        radial-gradient(120% 95% at 50% 42%, #221736 0%, #120d22 52%, #060410 100%),
+        url('celeste-areas/bg-badeline/00.png') center / cover no-repeat;
+    background-blend-mode: multiply;    /* 渐变乘上图片，暗部压黑、亮部保留 */
     display:flex; align-items:center; justify-content:center;
+    isolation:isolate;
 }
-#mirrorRoom::before {
-    content:''; position:absolute; inset:0;
-    background:url('heartdoor/mist.png') repeat; background-size:256px 256px;
-    image-rendering:pixelated; opacity:.16; filter:brightness(1.3);
-    animation:hdMist 16s linear infinite; pointer-events:none;
+
+/* ===== 紫色空间粒子：3 类星点 PNG 纯竖直下落 + 蓝色拖尾（取素材 stars 实际色） ===== */
+.mv-layer { position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:-1; }
+/* 进镜之房间后隐藏全屏雪花画布（暗色空间不要雪） */
+#shelfSnow { transition:opacity .5s ease; }
+body:has(#world.panned) #shelfSnow { opacity:0; }
+/* 进紫色空间后，shelf 侧的草莓篝火 + Madeline 隐藏，不跟着移 */
+body:has(#world.panned) #strawberryBonfire { opacity:0; pointer-events:none; transition:opacity .5s ease; }
+.star {
+    position:absolute; top:-56px; left:var(--x);
+    image-rendering:pixelated; opacity:0;
+    animation:starFall linear forwards;
+    will-change:transform, opacity, filter;
+    /* drop-shadow 发光半径用 --glowAmount 变量，由 keyframes 从 0 逐步涨到 72px */
+    filter:drop-shadow(0 0 calc(var(--glowAmount) * .4) rgba(95,205,228,.7))
+           drop-shadow(0 0 var(--glowAmount) rgba(48,96,130,.45));
+}
+/* 注册 --glowAmount 为 <length>，让 drop-shadow 在 keyframes 里能插值动画（Chrome 85+/Safari 15.4+ 支持） */
+@property --glowAmount { syntax:'<length>'; initial-value:0px; inherits:false; }
+@keyframes starFall {
+    /* 纯竖直下落 + 发光从小到大：入场弱光 → 中段爆亮 → 消散前光最盛 */
+    0%   { transform:translate3d(0,0,0); opacity:0;   --glowAmount: 0px; }
+    6%   { opacity:1;  --glowAmount: 24px; }
+    50%  { --glowAmount: 48px; }
+    92%  { opacity:.55; --glowAmount: 64px; }
+    100% { transform:translate3d(0, var(--dist), 0); opacity:0; --glowAmount: 72px; }
+}
+
+/* ===== dream 场景：极光夜空 + 雪原篝火（像素风：硬边缘 · 平色带 · 台阶轮廓） ===== */
+#dreamScene {
+    position:fixed; inset:0; z-index:1500; overflow:hidden;
+    /* 天空：深靛夜空，极光带微亮（参照实机第七章梦境天色） */
+    background:linear-gradient(180deg, #110d38 0%, #181245 26%, #221a58 44%, #1e1550 58%, #16103e 78%, #110b30 100%);
+    opacity:0; visibility:hidden; pointer-events:none;
+    transition:opacity 1.1s ease, visibility 0s linear 1.1s;
+}
+#dreamScene.show { opacity:1; visibility:visible; pointer-events:auto; transition:opacity 1.1s ease; }
+/* 星空：方形像素点（background 硬边方块，百分比定位自适应宽度） */
+.ds-stars { position:absolute; inset:0 0 32% 0; opacity:.85;
+    background:
+        linear-gradient(#ffffff,#ffffff) 8% 18%/2px 2px no-repeat,
+        linear-gradient(#cfeaff,#cfeaff) 16% 64%/2px 2px no-repeat,
+        linear-gradient(#ffffff,#ffffff) 23% 36%/3px 3px no-repeat,
+        linear-gradient(#9fd8ff,#9fd8ff) 30% 8%/2px 2px no-repeat,
+        linear-gradient(#ffffff,#ffffff) 37% 52%/2px 2px no-repeat,
+        linear-gradient(#cfeaff,#cfeaff) 44% 24%/2px 2px no-repeat,
+        linear-gradient(#ffffff,#ffffff) 51% 70%/3px 3px no-repeat,
+        linear-gradient(#9fd8ff,#9fd8ff) 58% 14%/2px 2px no-repeat,
+        linear-gradient(#ffffff,#ffffff) 64% 42%/2px 2px no-repeat,
+        linear-gradient(#cfeaff,#cfeaff) 71% 30%/2px 2px no-repeat,
+        linear-gradient(#ffffff,#ffffff) 78% 60%/3px 3px no-repeat,
+        linear-gradient(#9fd8ff,#9fd8ff) 85% 20%/2px 2px no-repeat,
+        linear-gradient(#ffffff,#ffffff) 92% 46%/2px 2px no-repeat,
+        linear-gradient(#cfeaff,#cfeaff) 96% 12%/2px 2px no-repeat;
+    animation:dsTwinkle 3.6s steps(2) infinite;
+}
+@keyframes dsTwinkle { 0%,100% { opacity:.4; } 50% { opacity:.95; } }
+/* 极光：游戏截图裁出的极光帘幕（celeste-gui/dream/aurora.png，4x 最近邻降采样保像素颗粒），
+   收窄到 92vw 按原图比例定高（16:9 屏下光幕垂至约 53% 高度，对齐实机构图）；
+   左右+底部 mask 渐隐融入夜空，小幅横移不露边 */
+.ds-aurora { position:absolute; left:4%; right:4%; top:0;
+    background-repeat:no-repeat; image-rendering:pixelated; z-index:2; }
+.ds-aurora.a1 {
+    height:auto; aspect-ratio:391/127; opacity:.98;
+    background-image:url('celeste-gui/dream/aurora.png');
+    background-size:100% 100%;
+    animation:dsSway 12s linear infinite alternate;
+    -webkit-mask-image:
+        linear-gradient(90deg, transparent 0, #000 5%, #000 95%, transparent 100%),
+        linear-gradient(180deg, #000 74%, transparent 99%);
+    -webkit-mask-composite:source-in;
+    mask-image:
+        linear-gradient(90deg, transparent 0, #000 5%, #000 95%, transparent 100%),
+        linear-gradient(180deg, #000 74%, transparent 99%);
+    mask-composite:intersect;
+}
+.ds-aurora.a2, .ds-aurora.a3 { display:none; }
+@keyframes dsSway {
+    0%   { transform:translateX(0); }
+    100% { transform:translateX(-1.8%); }
+}
+/* 远山：截图极光层已带山脊剪影，far 层隐藏；near 层保留作雪台后的近景深紫坡 */
+.ds-mtn { position:absolute; left:0; right:0; background-size:100% 100%; background-repeat:no-repeat; image-rendering:pixelated; }
+.ds-mtn.far { display:none; }
+.ds-mtn.near { top:52%; height:27%; }
+/* 雪台：canvas 白雪台面 + 垂雪圆缘 + 暗紫岩层晶簇 */
+.ds-ground { position:absolute; left:0; right:0; bottom:0; height:26%;
+    background-size:100% 100%; background-repeat:no-repeat; image-rendering:pixelated; }
+/* 两侧紫色晶岩柱：贴边高耸窄柱，canvas 斑驳紫晶 + 积雪盖 */
+.ds-rock { position:absolute; bottom:0; width:6%; height:92%;
+    background-size:100% 100%; background-repeat:no-repeat; image-rendering:pixelated; }
+.ds-rock.l { left:0; }
+.ds-rock.r { right:0; transform:scaleX(-1); width:9%; height:82%; }
+/* 篝火光晕圆（ds-fire-glow）已删：极光本身够亮，不需要额外中心光斑 */
+#dsFire { position:absolute; left:50%; bottom:16%; width:clamp(160px,32vmin,230px);
+    transform:translateX(-50%); image-rendering:pixelated; }
+/* 围炉睡觉的 Madeline（篝火左侧）：可点击，hover 泛暖光提示“可叫醒” */
+#dsMadeline {
+    position:absolute; left:39%; bottom:16.5%; z-index:3;
+    width:clamp(52px,11vmin,84px); image-rendering:pixelated;
+    cursor:pointer; user-select:none; -webkit-user-drag:none;
+    transition:filter .2s ease, transform .15s ease;
+}
+#dsMadeline:hover { filter:drop-shadow(0 0 10px rgba(255,210,150,.85)); transform:translateY(-2px); }
+#dsMadeline.waking { cursor:default; pointer-events:none; }
+
+/* ===== dream 功能入口：记梦 / Badeline 夜话 ===== */
+#dreamTools { position:absolute; top:20px; left:50%; transform:translateX(-50%); z-index:5; display:flex; gap:14px; }
+.dt-btn {
+    display:flex; align-items:center; gap:7px; padding:9px 16px; cursor:pointer;
+    font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; font-size:13px; letter-spacing:3px;
+    color:#d9e7ff; background:rgba(14,18,48,.62);
+    border:2px solid rgba(150,190,255,.4);
+    box-shadow:0 0 0 2px rgba(8,10,30,.75), 3px 3px 0 rgba(0,0,0,.55);
+    transition:all .18s ease;
+}
+.dt-btn .dt-ico { font-size:14px; line-height:1; filter:drop-shadow(0 0 6px rgba(160,210,255,.8)); }
+#dreamNightBtn { border-color:rgba(190,150,255,.5); color:#e6dcff; }
+.dt-btn:hover { background:rgba(60,90,180,.35); transform:translateY(-2px); box-shadow:0 0 14px rgba(120,170,255,.45), 3px 3px 0 rgba(0,0,0,.55); }
+#dreamNightBtn:hover { background:rgba(90,55,170,.32); box-shadow:0 0 14px rgba(170,120,255,.5), 3px 3px 0 rgba(0,0,0,.55); }
+.dt-btn:active { transform:translateY(1px); }
+
+/* ===== 梦境面板：更暗的底 · 半透明文字 · 飘浮光尘（区别于书架纸页质感） ===== */
+.dream-panel {
+    position:absolute; inset:0; z-index:20; display:flex; align-items:center; justify-content:center;
+    background:rgba(7,8,26,.55); backdrop-filter:blur(3px);
+    opacity:0; visibility:hidden; transition:opacity .35s ease, visibility 0s linear .35s;
+}
+.dream-panel.show { opacity:1; visibility:visible; transition:opacity .35s ease; }
+.dp-motes { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
+.dp-motes i {
+    position:absolute; bottom:-10px; width:3px; height:3px;
+    background:rgba(190,220,255,.85); box-shadow:0 0 6px 1px rgba(150,200,255,.7);
+    animation:dpMote linear infinite;
+}
+#dreamNightPanel .dp-motes i { background:rgba(214,190,255,.85); box-shadow:0 0 6px 1px rgba(180,140,255,.7); }
+@keyframes dpMote {
+    0%   { transform:translateY(0) translateX(0); opacity:0; }
+    12%  { opacity:.9; }
+    88%  { opacity:.6; }
+    100% { transform:translateY(-92vh) translateX(var(--drift,24px)); opacity:0; }
+}
+.dp-card {
+    position:relative; width:min(92vw,720px); max-height:86vh; display:flex; flex-direction:column;
+    background:linear-gradient(180deg, rgba(18,20,52,.93), rgba(11,12,36,.95));
+    border:2px solid rgba(140,175,255,.35);
+    box-shadow:0 0 40px rgba(60,90,200,.25), 0 0 0 3px rgba(6,8,24,.8), 6px 6px 0 rgba(0,0,0,.45);
+}
+#dreamNightPanel .dp-card { border-color:rgba(178,140,255,.4); box-shadow:0 0 40px rgba(110,60,200,.28), 0 0 0 3px rgba(6,8,24,.8), 6px 6px 0 rgba(0,0,0,.45); }
+.dp-head {
+    display:flex; align-items:center; justify-content:space-between; flex-shrink:0;
+    padding:13px 18px; border-bottom:1px solid rgba(140,175,255,.22);
+}
+#dreamNightPanel .dp-head { border-bottom-color:rgba(178,140,255,.3); }
+.dp-head h2 {
+    margin:0; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif;
+    font-size:16px; letter-spacing:5px; color:#cfe0ff; text-shadow:0 0 12px rgba(130,180,255,.5);
+}
+#dreamNightPanel .dp-head h2 { color:#d9c8ff; text-shadow:0 0 12px rgba(180,130,255,.55); }
+.dp-close {
+    width:30px; height:30px; cursor:pointer; color:rgba(210,225,255,.8);
+    background:transparent; border:1px solid rgba(150,180,255,.35); font-size:14px;
+    transition:all .15s;
+}
+.dp-close:hover { background:rgba(120,80,220,.3); color:#fff; border-color:#cdb6ff; }
+.dp-body { flex:1; min-height:0; display:flex; gap:14px; padding:14px 18px 16px; }
+.dp-write { flex:1; display:flex; flex-direction:column; gap:10px; min-width:0; }
+#dreamTitle, #dreamContent, #ntInput {
+    width:100%; box-sizing:border-box; color:rgba(226,236,255,.88);
+    background:rgba(8,10,32,.55); border:1px solid rgba(140,175,255,.28);
+    font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; font-size:14px; line-height:1.8;
+    outline:none; transition:border-color .2s, box-shadow .2s;
+}
+#dreamTitle { padding:9px 12px; letter-spacing:2px; }
+#dreamContent { flex:1; min-height:200px; resize:none; padding:12px; }
+#dreamTitle::placeholder, #dreamContent::placeholder, #ntInput::placeholder { color:rgba(170,195,235,.38); }
+#dreamTitle:focus, #dreamContent:focus, #ntInput:focus {
+    border-color:rgba(160,200,255,.7); box-shadow:0 0 12px rgba(100,160,255,.22);
+}
+.dp-actions { display:flex; justify-content:flex-end; flex-shrink:0; }
+.dp-primary {
+    padding:9px 20px; cursor:pointer; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif;
+    font-size:13px; letter-spacing:3px; color:#eaf2ff;
+    background:linear-gradient(180deg, rgba(70,110,220,.55), rgba(45,70,170,.65));
+    border:2px solid rgba(170,200,255,.55); box-shadow:3px 3px 0 rgba(0,0,0,.5);
+    transition:all .15s;
+}
+.dp-primary:hover { transform:translateY(-1px); box-shadow:0 0 16px rgba(120,170,255,.5), 3px 3px 0 rgba(0,0,0,.5); }
+.dp-primary:disabled { opacity:.5; cursor:wait; transform:none; box-shadow:3px 3px 0 rgba(0,0,0,.5); }
+
+/* Madeline 解梦回应卡 */
+.dream-reply { display:none; flex-shrink:0; max-height:180px; overflow-y:auto;
+    background:rgba(20,28,66,.6); border:1px solid rgba(140,190,255,.3); padding:11px 13px; gap:10px; }
+.dream-reply.show { display:flex; }
+.dream-reply img { width:46px; height:46px; flex-shrink:0; image-rendering:pixelated; align-self:flex-start; }
+.dream-reply .dr-body { min-width:0; }
+.dream-reply .dr-name { font-size:11px; letter-spacing:2px; color:#9fc6ff; margin-bottom:4px; }
+.dream-reply .dr-text { font-size:13.5px; line-height:1.85; color:rgba(228,238,255,.92); white-space:pre-wrap; word-break:break-word; }
+.dream-reply .dr-text::after { content:'▍'; color:rgba(150,200,255,.8); animation:drCaret 1s steps(1) infinite; }
+.dream-reply.done .dr-text::after { content:''; }
+@keyframes drCaret { 50% { opacity:0; } }
+
+/* 旧梦列表 */
+.dp-old { width:180px; flex-shrink:0; display:flex; flex-direction:column; min-height:0; }
+.dp-old h3 { margin:0 0 8px; font-size:12px; letter-spacing:3px; color:rgba(180,200,240,.65); font-weight:normal; }
+.dp-old ul { list-style:none; margin:0; padding:0; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:7px; }
+.dp-old li {
+    padding:8px 10px; cursor:pointer; background:rgba(12,15,40,.6);
+    border-left:3px solid rgba(130,160,255,.4); transition:all .15s;
+}
+.dp-old li:hover { background:rgba(50,70,150,.3); border-left-color:#9fc6ff; }
+.dp-old li.active { background:rgba(60,90,180,.35); border-left-color:#bcd6ff; }
+.dp-old li .dl-t { font-size:13px; color:rgba(225,235,255,.9); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.dp-old li .dl-d { font-size:10px; color:rgba(160,180,220,.5); margin-top:3px; letter-spacing:1px; }
+.dp-old .dl-empty { font-size:12px; line-height:1.8; color:rgba(170,190,230,.45); cursor:default; border:none; padding:4px 2px; background:none; }
+.dp-old .dl-empty:hover { background:none; }
+
+/* Badeline 夜话聊天 */
+.nt-card { width:min(92vw,640px); }
+.nt-dreampick { display:flex; align-items:center; gap:8px; margin-left:auto; margin-right:10px; font-size:11px; color:rgba(200,185,240,.6); }
+.nt-dreampick select {
+    max-width:170px; color:#d9c8ff; background:rgba(16,10,36,.8);
+    border:1px solid rgba(178,140,255,.4); font-size:11px; padding:4px 6px; outline:none;
+}
+.nt-msgs { flex:1; min-height:260px; max-height:52vh; overflow-y:auto; padding:14px 18px; display:flex; flex-direction:column; gap:11px; }
+.nt-row { display:flex; gap:9px; align-items:flex-start; }
+.nt-row.user { flex-direction:row-reverse; }
+.nt-row img { width:38px; height:38px; flex-shrink:0; image-rendering:pixelated; }
+.nt-bub {
+    max-width:76%; padding:9px 13px; font-size:13.5px; line-height:1.8; white-space:pre-wrap; word-break:break-word;
+    background:rgba(40,24,80,.55); border:1px solid rgba(178,140,255,.3); color:rgba(238,230,255,.95);
+}
+.nt-row.user .nt-bub { background:rgba(30,44,100,.5); border-color:rgba(130,170,255,.35); }
+.nt-empty { margin:auto; text-align:center; color:rgba(190,175,230,.55); font-size:13px; line-height:2.1; }
+.nt-empty button { margin-top:10px; }
+.nt-typing { font-size:12px; color:rgba(200,185,240,.6); letter-spacing:2px; }
+.nt-inputrow { display:flex; gap:10px; padding:12px 18px 16px; flex-shrink:0; border-top:1px solid rgba(178,140,255,.22); }
+#ntInput { flex:1; padding:9px 12px; }
+.nt-send {
+    padding:0 20px; cursor:pointer; color:#efe8ff; font-size:13px; letter-spacing:3px;
+    background:linear-gradient(180deg, rgba(120,70,210,.55), rgba(80,45,160,.65));
+    border:2px solid rgba(195,160,255,.55); box-shadow:3px 3px 0 rgba(0,0,0,.5);
+    font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif;
+}
+.nt-send:hover { box-shadow:0 0 14px rgba(170,120,255,.55), 3px 3px 0 rgba(0,0,0,.5); }
+.nt-send:disabled { opacity:.5; cursor:wait; }
+@media (max-width:640px) {
+    .dp-old { display:none; }
+    .nt-dreampick select { max-width:100px; }
+    #dreamTools { gap:8px; }
+    .dt-btn { padding:8px 11px; font-size:12px; letter-spacing:2px; }
 }
 #mirrorRoom .room-tag {
     position:absolute; top:64px; left:50%; transform:translateX(-50%);
     font-family:'Press Start 2P',monospace; font-size:11px;
     color:rgba(205,182,255,.75); letter-spacing:2px; text-shadow:0 2px 0 rgba(0,0,0,.6);
 }
-#mirrorRoom .room-back {
-    position:absolute; left:34px; bottom:30px;
-    padding:10px 22px; border-radius:6px;
-    border:2px solid rgba(178,150,255,.5); background:rgba(20,14,40,.7);
-    color:#cdb6ff; font-family:inherit; font-size:13px; cursor:pointer; transition:all .15s;
-}
-#mirrorRoom .room-back:hover { background:rgba(120,80,220,.25); border-color:#cdb6ff; transform:translateX(-3px); }
+/* 回书架按钮已删：心门在镜之房间侧只露一半，点击心门回书架 */
 /* ===== 响应式：门宽收缩、贴片与心形同步缩放，布局平滑无跳动 ===== */
 @media (max-width:1100px) {
     :root { --door-w:160px; }
+    #heartDoor { --crack:13px; }
     #heartDoor .hd-hearts { grid-template-columns:repeat(2,40px); gap:10px; }
     #heartDoor .hd-hearts img { width:40px; height:40px; }
 }
 @media (max-width:820px) {
     :root { --door-w:130px; }
-    #heartDoor .hd-cap { height:24px; background-size:24px 24px; }
-    #heartDoor .hd-rail { width:24px; top:24px; bottom:24px; background-size:24px 24px; }
-    #heartDoor .hd-core { left:24px; right:24px; top:24px; bottom:24px; }
+    #heartDoor { --crack:10px; --cap-h:24px; }
     #heartDoor .hd-hearts { grid-template-columns:repeat(2,32px); gap:8px; }
     #heartDoor .hd-hearts img { width:32px; height:32px; }
 }
@@ -404,6 +726,66 @@ html, body { overflow-x: hidden; }
 <h1>MEMORY SHELF</h1>
 <div class="topbar"><a href="diary.html" class="nav-diary-btn" title="回到日记本 · Back to Diary"><img src="celeste-gui/journal.png" alt="Diary" loading="lazy" decoding="async"></a></div>
 <canvas id="shelfSnow" style="position:fixed;inset:0;z-index:1;pointer-events:none;"></canvas>
+<!-- dream 模式场景：极光 + 篝火 + 围炉睡觉的 Madeline（点她本人 → 睡醒动画 → 离开梦境）；置于 body 层级，避免 transform 祖先影响 fixed 定位 -->
+<div id="dreamScene">
+    <div class="ds-aurora a1"></div>
+    <img id="dsFire" src="celeste-gui/campfire/dream00.png" alt="" decoding="async">
+    <img id="dsMadeline" src="celeste-gui/madeline-sleep.gif" alt="Madeline" title="叫醒 Madeline" decoding="async">
+    <div id="dreamTools">
+        <button class="dt-btn" id="dreamJournalBtn"><span class="dt-ico">🌙</span>记 梦</button>
+        <button class="dt-btn" id="dreamNightBtn"><span class="dt-ico">🟣</span>夜 话</button>
+    </div>
+
+    <!-- 梦境日记：暗调书写卡 + 旧梦列表 + Madeline 解梦回应 -->
+    <div id="dreamJournalPanel" class="dream-panel">
+        <div class="dp-motes"></div>
+        <div class="dp-card">
+            <div class="dp-head">
+                <h2>梦境日记</h2>
+                <button class="dp-close" id="djClose" title="收起">✕</button>
+            </div>
+            <div class="dp-body">
+                <div class="dp-write">
+                    <input id="dreamTitle" maxlength="40" placeholder="给这个梦起个名字（可不写）">
+                    <textarea id="dreamContent" placeholder="趁还没忘干净——梦里你在哪？谁在？发生了什么？哪里不对劲？"></textarea>
+                    <div class="dp-actions">
+                        <button class="dp-primary" id="dreamSaveBtn">封存这个梦</button>
+                    </div>
+                    <div class="dream-reply" id="dreamReply">
+                        <img src="celeste-portraits/madeline/normal00.png" alt="Madeline">
+                        <div class="dr-body">
+                            <div class="dr-name">MADELINE</div>
+                            <div class="dr-text" id="dreamReplyText"></div>
+                        </div>
+                    </div>
+                </div>
+                <aside class="dp-old">
+                    <h3>旧 梦</h3>
+                    <ul id="dreamList"></ul>
+                </aside>
+            </div>
+        </div>
+    </div>
+
+    <!-- Badeline 夜话：她读你的梦，用影子视角戳破 -->
+    <div id="dreamNightPanel" class="dream-panel">
+        <div class="dp-motes"></div>
+        <div class="dp-card nt-card">
+            <div class="dp-head">
+                <h2>夜 话</h2>
+                <label class="nt-dreampick">她在读
+                    <select id="ntDreamPick"></select>
+                </label>
+                <button class="dp-close" id="ntClose" title="收起">✕</button>
+            </div>
+            <div class="nt-msgs" id="ntMsgs"></div>
+            <div class="nt-inputrow">
+                <input id="ntInput" maxlength="500" placeholder="回她一句……">
+                <button class="nt-send" id="ntSend">说</button>
+            </div>
+        </div>
+    </div>
+</div>
 <div id="strawberryBonfire">
     <div class="sb-scene">
         <img class="sb-madeline" src="celeste-gui/madeline-sitdown.gif" alt="Madeline" loading="lazy" decoding="async">
@@ -413,13 +795,7 @@ html, body { overflow-x: hidden; }
 </div>
 <div id="berryTrophy" class="empty"></div>
 
-<!-- 磁带选曲 -->
-<div id="cassetteBgm">
-    <img id="cassetteBgmImg" src="celeste-collectables/cassette/idle00.png" alt="cassette" title="换一首" loading="lazy" decoding="async">
-    <div id="cassetteBgmPanel">
-        <div class="cb-title">CASSETTE · 选一首</div>
-    </div>
-</div>
+<!-- 磁带选曲已删：进紫色空间自动切 Resurrections，回书架自动切回 Dearest Friends -->
 
 <!-- BGM 播放器 -->
 <audio id="bgmPlayer" loop>
@@ -432,16 +808,32 @@ html, body { overflow-x: hidden; }
         <!-- 心门：右侧，未开启；开启后镜头右移进镜之房间 -->
         <div id="heartDoor" class="locked" role="button" title="一道结了冰的心门……">
             <div class="hd-mist"></div>
-            <div class="hd-gate">
-                <div class="hd-cap top"></div><div class="hd-cap bottom"></div>
-                <div class="hd-rail l"></div><div class="hd-rail r"></div>
-                <div class="hd-core"></div>
-                <div class="hd-hearts">
-                    <img src="heartdoor/icon00.png" alt="" loading="lazy" decoding="async"><img src="heartdoor/icon00.png" alt="" loading="lazy" decoding="async">
-                    <img src="heartdoor/icon00.png" alt="" loading="lazy" decoding="async"><img src="heartdoor/icon00.png" alt="" loading="lazy" decoding="async">
+            <div class="hd-clip">
+                <div class="hd-bright"></div>
+                <div class="hd-gate">
+                    <!-- 上半心：闭合时与下半拼成完整心形；四心填满后上移微开 -->
+                    <div class="hd-half hd-half-t">
+                        <canvas class="hd-heart" width="56" height="34"></canvas>
+                        <div class="hd-hearts">
+                            <img src="heartdoor/icon00.png" alt="" decoding="async"><img src="heartdoor/icon00.png" alt="" decoding="async">
+                        </div>
+                    </div>
+                    <!-- 下半心：四心填满后下移微开 -->
+                    <div class="hd-half hd-half-b">
+                        <canvas class="hd-heart" width="56" height="34"></canvas>
+                        <div class="hd-hearts">
+                            <img src="heartdoor/icon00.png" alt="" decoding="async"><img src="heartdoor/icon00.png" alt="" decoding="async">
+                        </div>
+                    </div>
                 </div>
             </div>
+            <!-- 门框：顶冠/底冠横饰 + 两侧立柱，心形门体嵌在框中（不随半门移动） -->
+            <div class="hd-cap top"></div>
+            <div class="hd-cap bottom"></div>
+            <div class="hd-rail left"></div>
+            <div class="hd-rail right"></div>
         </div>
+        <!-- dream 模式入口：改由 shelf 上 Madeline 旁边的草莓篝火（#strawberryBonfire）触发，不再单独立按钮 -->
         <div class="wrap">
             <div id="cards" class="cards"></div>
             <div id="detail" class="detail">
@@ -457,9 +849,8 @@ html, body { overflow-x: hidden; }
         <div class="room-tag">BEHIND THE DOOR</div>
         <!-- 镜子：图层由 JS 动态叠加，点击破碎召唤 Badeline -->
         <div id="shelfMirror" role="button" title="敲一敲镜子？">
-            <div class="badeline-wrap"><div class="badeline-inner"><img id="badelineImg" src="celeste-player/badeline/idle00.png" alt="Badeline" loading="lazy" decoding="async"></div></div>
+            <div class="badeline-wrap"><div class="badeline-inner"><img id="badelineImg" src="celeste-player/badeline/lookingUp.gif" alt="Badeline" loading="lazy" decoding="async"></div></div>
         </div>
-        <button class="room-back">← 回书架</button>
 
         <!-- Badeline 聊天与游戏对话框：fixed 定位，需放在 #world 外（transform 祖先会改变 fixed 包含块） -->
     </section>
@@ -468,7 +859,7 @@ html, body { overflow-x: hidden; }
 <!-- Badeline 聊天：镜子破碎召唤后出现 -->
 <div id="blChat">
     <div class="bl-head">
-        <img id="blHeadImg" src="celeste-player/badeline/idle00.png" alt="">
+        <img id="blHeadImg" src="celeste-player/badeline/lookingUp.gif" alt="">
         <div class="bl-name">Badeline</div>
         <button class="bl-close" id="blClose" title="她先走了">✕</button>
     </div>
@@ -536,9 +927,7 @@ html, body { overflow-x: hidden; }
     })();
 
     const bgmPlayer = document.getElementById('bgmPlayer');
-    // 记住上次选的磁带
-    const savedBgmFile = localStorage.getItem('shelfBgmFile');
-    if (savedBgmFile) bgmPlayer.src = 'bgm/' + savedBgmFile;
+    // 默认 Dearest Friends（磁带选曲已删，用户无法手动切换 BGM）
     const savedTime = parseFloat(localStorage.getItem('bgmTimeShelf') || '0');
     if (savedTime > 0) bgmPlayer.currentTime = savedTime;
     bgmPlayer.volume = 0.3;
@@ -548,56 +937,7 @@ html, body { overflow-x: hidden; }
     document.addEventListener('click', tryPlayBGM);
     document.addEventListener('keydown', tryPlayBGM);
 
-    // ===== 磁带选曲：7 首收集曲目，点了就播，选择会记住 =====
-    (function () {
-        const BGM_LIST = [
-            { f: 'dearest-friends.mp3', n: 'Dearest Friends' },
-            { f: 'checking-in.mp3', n: 'Checking In' },
-            { f: 'exhale.mp3', n: 'Exhale' },
-            { f: 'farewell.mp3', n: 'Farewell' },
-            { f: 'madeline-and-theo.mp3', n: 'Madeline & Theo' },
-            { f: 'postcard.mp3', n: 'Postcard' },
-            { f: 'womanbird.mp3', n: 'Womanbird' }
-        ];
-        const img = document.getElementById('cassetteBgmImg');
-        const panel = document.getElementById('cassetteBgmPanel');
-
-        // 磁带自己一直慢慢转（19 帧）
-        const frames = [];
-        for (let i = 0; i < 19; i++) frames.push('celeste-collectables/cassette/idle' + String(i).padStart(2, '0') + '.png');
-        frames.forEach(s => { const im = new Image(); im.src = s; });
-        let fi = 0;
-        setInterval(() => {
-            if (document.hidden) return;
-            fi = (fi + 1) % frames.length; img.src = frames[fi];
-        }, 110);
-
-        function renderList() {
-            panel.querySelectorAll('.cb-item').forEach(e => e.remove());
-            const cur = (bgmPlayer.src || '').split('/').pop();
-            BGM_LIST.forEach(t => {
-                const d = document.createElement('div');
-                d.className = 'cb-item' + (t.f === cur || (!cur && t.f === savedBgmFile) ? ' on' : '');
-                d.textContent = t.n;
-                d.addEventListener('click', () => {
-                    bgmPlayer.src = 'bgm/' + t.f;
-                    bgmPlayer.play().catch(() => {});
-                    localStorage.setItem('shelfBgmFile', t.f);
-                    localStorage.removeItem('bgmTimeShelf');
-                    renderList();
-                    pcPlay('ui_world_journal_page_cover_forward_01.wav');
-                });
-                panel.appendChild(d);
-            });
-        }
-        img.addEventListener('click', () => {
-            renderList();
-            panel.classList.toggle('show');
-        });
-        document.addEventListener('click', e => {
-            if (!panel.contains(e.target) && e.target !== img) panel.classList.remove('show');
-        });
-    })();
+    // ===== 磁带选曲已删：进紫色空间自动切 Resurrections，回书架自动切回 Dearest Friends =====
 
 function renderPostcardCanvas(canvas, title, dateStr, content, summary, strawCount) {
     var ctx = canvas.getContext('2d');
@@ -625,36 +965,64 @@ function renderPostcardCanvas(canvas, title, dateStr, content, summary, strawCou
         ctx.fillText(dateStr || '', W * 0.14, H * 0.200);
 
         // ===== 中间大片书写区：内容总结（【】里的字红色高亮） =====
+        // 自动适配书写框：字号按字数二分试探（21→11.5px 连续取最大可容字号）；实在装不下才在框底截断补 "…"
         var RED_INK = '#c8433a';
-        var snip = (content || '').substring(0, 300);
+        var FONT_STACK = '"Renogare","CelesteZH","Microsoft YaHei",sans-serif';
+        var full = (content || '').substring(0, 1000);
         var segs = [], mSeg, reSeg = /【([^】]*)】/g, lastI = 0;
-        while ((mSeg = reSeg.exec(snip)) !== null) {
-            if (mSeg.index > lastI) segs.push({ t: snip.slice(lastI, mSeg.index), r: false });
+        while ((mSeg = reSeg.exec(full)) !== null) {
+            if (mSeg.index > lastI) segs.push({ t: full.slice(lastI, mSeg.index), r: false });
             segs.push({ t: mSeg[1], r: true });
             lastI = reSeg.lastIndex;
         }
-        if (lastI < snip.length) segs.push({ t: snip.slice(lastI), r: false });
-        ctx.font = '21px "Renogare","CelesteZH","Microsoft YaHei",sans-serif';
-        var ly = H * 0.34, mh = H * 0.62, lx = W * 0.07, maxX = W * 0.56, x = lx;
-        for (var si = 0; si < segs.length; si++) {
-            var chars = segs[si].t.split('');
-            for (var ci = 0; ci < chars.length; ci++) {
-                var ch = chars[ci];
-                if (ch === '\n') { x = lx; ly += 36; continue; }
-                var cw = ctx.measureText(ch).width;
-                if (x + cw > maxX) { x = lx; ly += 36; }
-                if (ly > mh) break;
-                ctx.fillStyle = segs[si].r ? RED_INK : INK;
-                ctx.fillText(ch, x, ly);
-                x += cw;
+        if (lastI < full.length) segs.push({ t: full.slice(lastI), r: false });
+        var lx = W * 0.07, maxX = W * 0.56, ly0 = H * 0.34, mh = H * 0.62;
+        // 逐字排版走查：draw=false 仅模拟（看装不装得下），draw=true 落笔；超出书写框底即停
+        function layoutSegs(list, fs, lh, draw) {
+            ctx.font = fs + 'px ' + FONT_STACK;
+            var ly = ly0, x = lx, fits = true, px = lx, py = ly0;
+            for (var si = 0; si < list.length; si++) {
+                var chars = list[si].t.split('');
+                for (var ci = 0; ci < chars.length; ci++) {
+                    var ch = chars[ci];
+                    if (ch === '\n') { x = lx; ly += lh; continue; }
+                    var cw = ctx.measureText(ch).width;
+                    if (x + cw > maxX) { x = lx; ly += lh; }
+                    if (ly > mh) { fits = false; si = list.length; break; }
+                    px = x; py = ly;
+                    if (draw) {
+                        ctx.fillStyle = list[si].r ? RED_INK : INK;
+                        ctx.fillText(ch, x, ly);
+                    }
+                    x += cw;
+                }
             }
-            if (ly > mh) break;
+            return { fits: fits, ly: ly, x: x, px: px, py: py };
         }
-        if (x > lx) ly += 36;
+        var pick = null;
+        (function () {
+            var lhFull = Math.round(21 * 1.71);
+            if (layoutSegs(segs, 21, lhFull, false).fits) { pick = { fs: 21, lh: lhFull }; return; }   // 短文：直接用最大字号
+            var lo = 11.5, hi = 21;                                                                    // lo=字号下限，hi=已知装不下
+            for (var it = 0; it < 6; it++) {                                                           // 二分：按字数连续取最大可容字号
+                var mid = Math.round(((lo + hi) / 2) * 4) / 4, lhMid = Math.round(mid * 1.71);
+                if (layoutSegs(segs, mid, lhMid, false).fits) { pick = { fs: mid, lh: lhMid }; lo = mid; }
+                else hi = mid;
+            }
+            if (!pick) pick = { fs: 11.5, lh: Math.round(11.5 * 1.71) };                               // 11.5px 也装不下：框底截断
+        })();
+        var fin = layoutSegs(segs, pick.fs, pick.lh, true);
+        if (!fin.fits) {                          // 框底截断：末尾补 "…"（行宽放不下就省略）
+            ctx.font = pick.fs + 'px ' + FONT_STACK;
+            var ew = ctx.measureText('\u2026').width;
+            if (fin.x + ew <= maxX) { ctx.fillStyle = INK; ctx.fillText('\u2026', fin.x, fin.py); }
+        }
+        var endLy = fin.fits ? fin.ly : (fin.py + pick.lh), endX = fin.fits ? fin.x : fin.px;
+        if (endX > lx) endLy += pick.lh;
 
         // ===== 金句（最打动的一句）=====
         if (summary) {
-            var sy2 = Math.min(ly + 20, H * 0.74);
+            var sy2 = Math.min(endLy + 20, H * 0.74);
             ctx.strokeStyle = 'rgba(143,74,60,.35)'; ctx.lineWidth = 1;
             ctx.beginPath(); ctx.moveTo(W * 0.07, sy2 - 10); ctx.lineTo(W * 0.57, sy2 - 10); ctx.stroke();
             ctx.fillStyle = INK;
@@ -865,7 +1233,7 @@ function stopPeSnow() {
     });
     async function load() {
         cards.innerHTML = '<div class="empty"><span class="em">📖</span>正在搬书……</div>';
-        const res = await api('/diary/list', 'GET');
+        const res = await api('/diary/list?type=day', 'GET');
         if (res.success && Array.isArray(res.data)) {
             data = res.data;
             if (window.__setDoorProgress) window.__setDoorProgress(data.length);
@@ -1220,15 +1588,8 @@ function stopPeSnow() {
             else { flag.style.display = 'none'; }
         }
         updateBonfire();
-        document.getElementById('strawberryBonfire').addEventListener('click', () => {
-            const s = parseInt(localStorage.getItem('diaryStreak') || '0');
-            const line = s >= 30 ? '篝火已经燃成传说了！\u2605'
-                : s >= 7 ? '火光正旺，继续攀登！'
-                : s >= 3 ? '篝火稳定燃烧着。'
-                : s >= 1 ? '小火苗也在努力发光。'
-                : '火堆冷了……写一篇日记把它点燃吧。';
-            showToast(line);
-        });
+        // 注意：#strawberryBonfire 的 click 已用作 dream 模式入口（见 dream IIFE），
+        // 这里不再绑定 showToast 燃烧进度提示，避免与入梦逻辑冲突。
     })();
 
     // ===== 镜子：图层叠加 + 点击破碎召唤 Badeline =====
@@ -1299,21 +1660,8 @@ function stopPeSnow() {
             showFrame(maskImgs, maskFi);
         }, 700);
 
-        // Badeline 出场帧（9 帧 idle）
-        var badelineImg = document.getElementById('badelineImg');
-        var B_FRAMES = [];
-        for (var fi2 = 0; fi2 < 9; fi2++) B_FRAMES.push('celeste-player/badeline/idle' + String(fi2).padStart(2, '0') + '.png');
-        B_FRAMES.forEach(function (s) { var im = new Image(); im.src = s; });
-        var bFi = 0;
-        setInterval(function () {
-            if (document.hidden || !badelineImg.offsetParent) return;
-            bFi = (bFi + 1) % B_FRAMES.length;
-            badelineImg.src = B_FRAMES[bFi];
-        }, 110);
-        badelineImg.addEventListener('load', function () {
-            badelineImg.style.width = badelineImg.naturalWidth * 6 + 'px';
-            badelineImg.style.height = badelineImg.naturalHeight * 6 + 'px';
-        });
+        // Badeline 待机帧已改为 lookingUp.gif（HTML 默认 src），动作树 IIFE 接管所有动作切换
+        // —— idle00-08 帧序列与 walk00-11 已删除，不再需要 setInterval 切帧
 
         // 玻璃碎裂声（WebAudio 合成，点击即手势，无需音频文件）
         function crackSound() {
@@ -1591,7 +1939,9 @@ function stopPeSnow() {
             blPanel.classList.remove('vis');
             setTimeout(function () {
                 blPanel.classList.remove('show');
-                byeSheLeaves();
+                // 动作树接管：模式 A（召唤出来）让她走 byeSheLeaves；模式 B（自由游荡）恢复游荡
+                var mode = window.__badelineCloseChat ? window.__badelineCloseChat() : 'summoned';
+                if (mode === 'summoned') byeSheLeaves();
             }, 260);
         }
         function byeSheLeaves() {
@@ -1634,18 +1984,751 @@ function stopPeSnow() {
             pcPlay('wow_so_secret.wav');
             if (window.__mirrorBGM) window.__mirrorBGM.refresh(); // 切入阶段2（2:11–4:25）
             openChat();
+            // 召唤动画（badelineRise 0.9s）走完后，启动自由游荡（模式 A 标记）
+            setTimeout(function () {
+                if (window.__badelineStartFreeRoam) window.__badelineStartFreeRoam(50, 50, false, true);
+            }, 900);
+        }
+        // 暴露 openChat 给动作树 IIFE 调用（点击 Badeline 本人时触发对话）
+        window.__badelineOpenChat = openChat;
+    })();
+
+    // ===== Badeline 动作树：镜之房间内自由游荡（5 套 gif + 状态机 + 全屏定位）=====
+    (function () {
+        var room = document.getElementById('mirrorRoom');
+        var mirror = document.getElementById('shelfMirror');
+        var wrap = mirror ? mirror.querySelector('.badeline-wrap') : null;
+        var img = document.getElementById('badelineImg');
+        if (!room || !mirror || !wrap || !img) return;
+
+        var DIR = 'celeste-player/badeline/';
+        // 5 套动作定义：gif 文件名 + 是否移动 + 持续时长范围 [min, max] ms
+        var ACTIONS = {
+            lookUp:    { gif: 'lookingUp.gif',   move: false, dur: [2000, 4000] },
+            sleep:     { gif: 'sleep.gif',       move: false, dur: [3000, 6000] },
+            roll:      { gif: 'pretendDead.gif', move: false, dur: [2000, 4000] },
+            rollGetUp: { gif: 'rollGetUp.gif',   move: true,  dur: [800, 1200] },   // 一次性起身动画
+            spin:      { gif: 'spin.gif',        move: true,  dur: [1500, 2500] }
+        };
+        // 状态转移概率表：roll → rollGetUp 必走，其他按权重随机
+        var TRANS = {
+            lookUp:    [['spin', .6], ['sleep', .2], ['roll', .2]],
+            sleep:     [['lookUp', .5], ['spin', .3], ['roll', .2]],
+            roll:      [['rollGetUp', 1]],
+            rollGetUp: [['lookUp', .7], ['spin', .3]],
+            spin:      [['lookUp', .5], ['roll', .3], ['sleep', .2]]
+        };
+
+        var cur = 'lookUp', face = 1, x = 50, y = 50;
+        var timer = null, roaming = false, inDialog = false, summonedMode = false;
+
+        // 5 gif 预加载（进 IIFE 时一次性加载，切换无网络延迟）
+        Object.keys(ACTIONS).forEach(function (k) { var im = new Image(); im.src = DIR + ACTIONS[k].gif; });
+
+        function place(nx, ny, fx) {
+            x = nx; y = ny; face = fx;
+            wrap.style.left = x + '%';
+            wrap.style.top = y + '%';
+            wrap.style.transform = 'translate(-50%, -50%) scaleX(' + face + ')';
+        }
+        function setState(name) {
+            cur = name;
+            var a = ACTIONS[name];
+            img.src = DIR + a.gif;
+            if (a.move) {
+                // 移动类动作：选目标点（spin 远 / rollGetUp 近）
+                var range = name === 'spin' ? { x: 80, y: 60 } : { x: 25, y: 15 };
+                var nx = Math.max(8, Math.min(92, x + (Math.random() * 2 - 1) * range.x));
+                var ny = Math.max(18, Math.min(78, y + (Math.random() * 2 - 1) * range.y));
+                var dx = nx - x;
+                place(nx, ny, dx < 0 ? -1 : 1);
+            } else if (name === 'lookUp') {
+                // 原地随机翻转朝向（环顾感）
+                wrap.style.transform = 'translate(-50%, -50%) scaleX(' + (Math.random() < .5 ? -1 : 1) + ')';
+            }
+            var d = a.dur[0] + Math.random() * (a.dur[1] - a.dur[0]);
+            clearTimeout(timer);
+            timer = setTimeout(next, d);
+        }
+        function next() {
+            if (inDialog || !roaming) return;
+            var opts = TRANS[cur] || TRANS.lookUp;
+            var r = Math.random(), acc = 0;
+            for (var i = 0; i < opts.length; i++) {
+                acc += opts[i][1];
+                if (r < acc) return setState(opts[i][0]);
+            }
+            setState(opts[0][0]);
+        }
+
+        // ===== 自由游荡模式启动：DOM 移到 #mirrorRoom 子级，开启 .free 类 =====
+        function startFreeRoam(initialX, initialY, withFade, fromSummon) {
+            if (roaming) return;
+            room.appendChild(wrap);
+            wrap.classList.add('free');
+            wrap.style.left = initialX + '%';
+            wrap.style.top = initialY + '%';
+            wrap.style.transform = 'translate(-50%, -50%)';
+            if (withFade) {
+                wrap.style.opacity = '0';
+                requestAnimationFrame(function () { wrap.style.opacity = '1'; });
+            }
+            x = initialX; y = initialY;
+            roaming = true; inDialog = false;
+            summonedMode = !!fromSummon;
+            setState('lookUp');
+        }
+        function stopFreeRoam() {
+            roaming = false; inDialog = false; summonedMode = false;
+            clearTimeout(timer);
+            wrap.classList.remove('free');
+            wrap.style.opacity = '';
+            wrap.style.transition = '';
+            wrap.style.left = '';
+            wrap.style.top = '';
+            wrap.style.transform = '';
+            mirror.appendChild(wrap);   // DOM 移回 #shelfMirror
+        }
+
+        // ===== 钩子暴露 =====
+        window.__badelineStartFreeRoam = startFreeRoam;
+        window.__badelineLeaveRoom = stopFreeRoam;
+        // closeChat 钩子：模式 A 返回 'summoned'（让外部走 byeSheLeaves 让她走）；模式 B 返回 'free'（恢复游荡）
+        window.__badelineCloseChat = function () {
+            if (!roaming) return 'summoned';
+            if (summonedMode) {
+                stopFreeRoam();           // 模式 A：DOM 复位回 #shelfMirror，让 byeSheLeaves 的 .bye 动画接管
+                return 'summoned';
+            } else {
+                inDialog = false;         // 模式 B：仅恢复游荡，不走 byeSheLeaves
+                setState('lookUp');
+                return 'free';
+            }
+        };
+        // 进镜之房间时随机选模式
+        window.__badelineEnterRoom = function () {
+            var modeA = Math.random() < .5;
+            if (modeA) {
+                stopFreeRoam();                                    // 模式 A：留镜子里，等敲镜子召唤
+                img.src = DIR + ACTIONS.lookUp.gif;
+            } else {
+                var ix = 20 + Math.random() * 60;                  // 模式 B：直接破镜出来游荡
+                var iy = 30 + Math.random() * 35;
+                startFreeRoam(ix, iy, true, false);
+            }
+        };
+
+        // ===== 点击 Badeline 本人 → 暂停游荡 + 切 lookUp 朝向玩家 + 触发对话 =====
+        img.addEventListener('click', function (e) {
+            if (inDialog || !roaming) return;   // 模式 A 未召唤时不响应（点镜子才召唤）
+            e.stopPropagation();
+            inDialog = true; clearTimeout(timer);
+            var faceForPlayer = x < 50 ? 1 : -1;  // 朝向屏幕中央的玩家
+            wrap.style.transform = 'translate(-50%, -50%) scaleX(' + faceForPlayer + ')';
+            img.src = DIR + ACTIONS.lookUp.gif;
+            if (window.__badelineOpenChat) window.__badelineOpenChat();
+        });
+    })();
+
+    // ===== 紫色空间粒子：3 类星点 PNG 纯竖直下落 + 独立切帧 + 蓝色拖尾 =====
+    (function () {
+        var room = document.getElementById('mirrorRoom');
+        var world = document.getElementById('world');
+        if (!room || !world) return;
+        var layer = document.createElement('div');
+        layer.className = 'mv-layer';
+        room.appendChild(layer);
+
+        var DIR = 'Atlases/Gameplay/bgs/02/stars/';
+        var TYPES = ['a', 'b', 'c'];
+        var FRAMES = 4;
+        // 预加载 12 张 PNG + 缓存 background url 字符串
+        var cache = {};
+        TYPES.forEach(function (t) {
+            cache[t] = [];
+            for (var i = 0; i < FRAMES; i++) {
+                var src = DIR + t + String(i).padStart(2, '0') + '.png';
+                cache[t].push('url("' + src + '") center / 100% 100% no-repeat');
+                var im = new Image(); im.src = src;
+            }
+        });
+
+        var SIZE = 50;        // 统一 50px（用户指定）
+        var MAX_STARS = 28;   // 同屏上限
+
+        function spawn() {
+            if (!document.hidden && world.classList.contains('panned')) {
+                if (layer.children.length < MAX_STARS) {
+                    var t = TYPES[Math.floor(Math.random() * TYPES.length)];
+                    var el = document.createElement('i');
+                    el.className = 'star';
+                    el.style.width = el.style.height = SIZE + 'px';
+                    el.style.background = cache[t][Math.floor(Math.random() * FRAMES)];  // 随机起始帧
+                    el.style.setProperty('--x', (Math.random() * 96).toFixed(1) + '%');
+                    el.style.setProperty('--dist', (room.clientHeight + 64) + 'px');
+                    // --glowAmount 由 keyframes 控制动画，JS 不再设置初始值
+                    // 降落速度差异：12-27s（比之前慢 3 倍）
+                    el.style.animationDuration = (12 + Math.random() * 15).toFixed(2) + 's';
+                    // 每个粒子独立切帧间隔 240-480ms（比之前慢 3 倍）
+                    var frameIdx = Math.floor(Math.random() * FRAMES);
+                    var tick = 240 + Math.random() * 240;
+                    var interval = setInterval(function () {
+                        if (!el.parentNode) { clearInterval(interval); return; }
+                        frameIdx = (frameIdx + 1) % FRAMES;
+                        el.style.background = cache[t][frameIdx];
+                    }, tick);
+                    el.addEventListener('animationend', function () { el.remove(); });
+                    layer.appendChild(el);
+                }
+                setTimeout(spawn, 660 + Math.random() * 1260);   // 发射间隔慢 3 倍
+                return;
+            }
+            layer.innerHTML = '';
+            setTimeout(spawn, 800);
+        }
+        spawn();
+    })();
+
+    // ===== dream 模式：点击 shelf 上 Madeline 旁边的草莓篝火 → 极光梦境场景 =====
+    (function () {
+        var bonfire = document.getElementById('strawberryBonfire');   // dream 入口已合并到这个篝火上
+        var scene = document.getElementById('dreamScene');
+        var dsFire = document.getElementById('dsFire');
+        var dsMadeline = document.getElementById('dsMadeline');
+        if (!bonfire || !scene) return;
+        var FRAMES = [];
+        for (var i = 0; i <= 8; i++) FRAMES.push('celeste-gui/campfire/dream0' + i + '.png');
+        var SLEEP_GIF = 'celeste-gui/madeline-sleep.gif';
+        var SLEEP_LAST = 'celeste-gui/madeline-sleep-last.png';   // sleep.gif 最后一帧静态 PNG：播一次就停
+        var SLEEP_MS = 2800;   // sleep.gif 29 帧约 2.8s，播完后换静态 PNG
+        var WAKE_GIF = 'celeste-gui/madeline-wakeup.gif';
+        var WAKE_MS = 2400;        // wakeup.gif 实测总时长 2.4s（24 帧），播完再离开梦境
+        var timer = null, playing = false, waking = false, sleepTimer = null;
+        // 预加载睡觉 gif / 最后一帧 PNG / 睡醒 gif，保证点击叫醒时即时切换不闪白
+        [SLEEP_GIF, SLEEP_LAST, WAKE_GIF].forEach(function (src) { var im = new Image(); im.src = src; });
+
+        // 预加载 9 帧（帧极小通常瞬时；场景打开前先就绪，避免首帧闪白）
+        FRAMES.forEach(function (src) { var im = new Image(); im.src = src; });
+
+        // 逐帧驱动：只更新 dream 场景内的大火（shelf 上的草莓篝火维持原 FIRE_FRAMES 动画，互不干扰）
+        function playSeq(list, ms, loop) {
+            clearInterval(timer);
+            var idx = 0;
+            timer = setInterval(function () {
+                dsFire.src = list[idx];
+                idx++;
+                if (idx >= list.length) {
+                    if (loop) idx = 1;   // 循环时跳回第 1 帧，火焰持续摇曳不跳变
+                    else { clearInterval(timer); playing = false; }
+                }
+            }, ms);
+        }
+
+        // —— 像素场景绘制：低分辨率 canvas 台阶轮廓 → dataURL，CSS pixelated 拉伸 ——
+        // LCG 确定性伪随机：每次进入场景轮廓完全一致
+        function lcg(seed) {
+            var v = seed;
+            return function () {
+                v = (v * 1103515245 + 12345) % 2147483648;
+                return v / 2147483648;
+            };
+        }
+        function mkRidge(n, base, amp, seed, runMax) {
+            var r = lcg(seed), a = [], v = base;
+            // 台阶随机游走：相邻列高度接近 + 分块平台化，轮廓连贯（山脊/雪台），不是梳齿
+            while (a.length < n) {
+                v = Math.max(2, Math.min(base + amp, v + (r() * 2 - 1) * amp * 0.45));
+                var run = 2 + ((r() * (runMax || 6)) | 0);
+                for (var j = 0; j < run && a.length < n; j++) a.push(v | 0);
+            }
+            return a;
+        }
+        // 极光垂幕 v6：连片大幕 —— 宽褶皱段 + 窄暗缝 + 段底块状锯齿 + 段内细竖纹（参照实机大幕布）
+        function mkFolds(n, seed, depthBase, depthAmp) {
+            var r = lcg(seed), bots = [], tones = [];
+            var x = 0, base = depthBase;
+            while (x < n) {
+                var gap = 2 + ((r() * 3) | 0);                          // 窄暗缝：褶皱间折痕
+                for (var i = 0; i < gap && x < n; i++) { bots.push(0); tones.push(0); x++; }
+                base = Math.max(depthBase - depthAmp, Math.min(depthBase + depthAmp, base + (r() * 2 - 1) * depthAmp * 0.5));
+                var fd = Math.max(24, Math.min(54, (base + (r() * 2 - 1) * 4) | 0));
+                var fw = 14 + ((r() * 17) | 0);                         // 褶皱段宽
+                var tone = 1 + ((r() * 2) | 0);                         // 段基准明暗
+                for (var i2 = 0; i2 < fw && x < n; i2++) {
+                    var d = fd;
+                    if (i2 < 2 || i2 >= fw - 2) d -= 3 + ((r() * 3) | 0);   // 段端收短（褶皱间 V 形谷）
+                    else if (i2 % 5 === 0) d -= 2;                          // 段底块状锯齿台阶
+                    bots.push(Math.max(10, d));
+                    tones.push((r() < 0.15) ? 0 : tone);                // 段内偶发暗纹（细竖纹）
+                    x++;
+                }
+            }
+            return { bots: bots, tones: tones };
+        }
+        // 褶皱幕填充：bots[x]=0 为缝隙透明；底缘 4px 流苏逐级提亮（幕布下垂亮边）
+        function pixCurtain(w, h, bots, tones, P) {
+            var cv = document.createElement('canvas');
+            cv.width = w; cv.height = h;
+            var g = cv.getContext('2d');
+            for (var x = 0; x < w; x++) {
+                var b = bots[x % bots.length] | 0;
+                if (b <= 0) continue;
+                var t = tones[x % tones.length] | 0;
+                g.fillStyle = P[t];
+                g.fillRect(x, 0, 1, Math.max(1, b - 4));
+                g.fillStyle = P[t + 1];
+                g.fillRect(x, Math.max(0, b - 4), 1, 3);
+                g.fillStyle = P[t + 2];
+                g.fillRect(x, b - 1, 1, 1);
+            }
+            return cv.toDataURL();
+        }
+        // 按列填充台阶轮廓：heights 为每列高度，colFn 返回该列颜色
+        function pixCols(w, h, heights, colFn) {
+            var cv = document.createElement('canvas');
+            cv.width = w; cv.height = h;
+            var g = cv.getContext('2d');
+            for (var x = 0; x < w; x++) {
+                var hh = heights[x % heights.length] | 0;
+                if (hh <= 0) continue;
+                g.fillStyle = colFn(x, hh);
+                g.fillRect(x, h - hh, 1, hh);
+            }
+            return cv.toDataURL();
+        }
+        function setBg(sel, url) {
+            var el = scene.querySelector(sel);
+            if (el) el.style.backgroundImage = 'url("' + url + '")';
+        }
+        // 极光改为截图素材层（celeste-gui/dream/aurora.png，见 CSS .ds-aurora.a1），不再生成像素幕布
+        // 远山两层剪影（far 层 CSS 隐藏：截图极光层已含山脊；near 深紫作雪台后景）
+        setBg('.ds-mtn.far', pixCols(160, 40, mkRidge(160, 10, 26, 5, 14), function () { return '#2a2060' }));
+        setBg('.ds-mtn.near', pixCols(160, 40, mkRidge(160, 6, 22, 77, 12), function () { return '#170e38'; }));
+        // 雪台：暗紫岩层 + 紫晶簇 + 白雪台面垂雪圆缘（参照实机长雪台）
+        (function () {
+            var w = 160, h = 40, cv = document.createElement('canvas');
+            cv.width = w; cv.height = h;
+            var g = cv.getContext('2d');
+            g.fillStyle = '#6a3fa8'; g.fillRect(0, 12, w, 8);      // 岩层三段（上亮下暗，雪缘下亮紫近实机）
+            g.fillStyle = '#432578'; g.fillRect(0, 20, w, 9);
+            g.fillStyle = '#20113e'; g.fillRect(0, 29, w, 11);
+            var rr = lcg(57);
+            for (var c = 0; c < 16; c++) {                          // 岩面紫晶簇
+                var cx = (rr() * w) | 0, cy = 13 + ((rr() * 16) | 0), s = 1 + ((rr() * 3) | 0);
+                g.fillStyle = rr() < 0.5 ? '#c77ff0' : '#9a5fe0';
+                g.fillRect(cx, cy, s, s + 1);
+                g.fillStyle = '#efc9ff';
+                g.fillRect(cx, cy, 1, 1);
+            }
+            var r = lcg(31);
+            for (var x = 0; x < w; x++) {                           // 雪柱：顶微起伏 + 底部垂雪
+                var top = (r() * 3) | 0;
+                var drip = 2 + ((r() * 5) | 0) + ((r() < 0.2) ? 3 : 0);
+                g.fillStyle = (x % 5 < 2) ? '#ffffff' : '#eef0ff';
+                g.fillRect(x, 2 + top, 1, 12 - top + drip);
+                g.fillStyle = '#c9cdf6';
+                g.fillRect(x, 12 + drip - 2, 1, 2);
+            }
+            setBg('.ds-ground', cv.toDataURL());
+        })();
+        // 两侧晶岩柱：块状叠岩（石板错台堆叠，外缘贴屏幕边、内缘台阶）+ 斑驳紫晶 + 板顶积雪
+        (function () {
+            function mkRock(seed, w, h) {
+                var cv = document.createElement('canvas');
+                cv.width = w; cv.height = h;
+                var g = cv.getContext('2d'), r = lcg(seed);
+                var y = h, cw = w - 2;                              // 底部最宽，向上随机收放
+                while (y > 0) {
+                    var slab = 4 + ((r() * 6) | 0);                 // 石板高
+                    var jut = (r() < 0.15) ? 14 : 0;                // 偶发大错台
+                    cw = Math.max(4, Math.min(w, cw + (((r() * 2 - 1) * 9) | 0) + (jut ? (r() < 0.5 ? -jut : jut) : 0)));
+                    var x0 = w - cw, y0 = Math.max(0, y - slab);
+                    g.fillStyle = '#8a52c8'; g.fillRect(x0, y0, cw, y - y0);
+                    g.fillStyle = '#5c3592';                        // 暗斑
+                    for (var k = 0; k < cw / 2; k++) g.fillRect(x0 + ((r() * cw) | 0), y0 + ((r() * (y - y0)) | 0), 1 + ((r() * 2) | 0), 1);
+                    g.fillStyle = '#b87ae8';                        // 亮斑
+                    for (var k2 = 0; k2 < cw / 2; k2++) g.fillRect(x0 + ((r() * cw) | 0), y0 + ((r() * (y - y0)) | 0), 1, 1 + ((r() * 2) | 0));
+                    g.fillStyle = '#c9a0ee'; g.fillRect(x0, y0, cw, 1);     // 板顶亮棱
+                    if (y0 < h * 0.38 || r() < 0.15) { g.fillStyle = '#f2edff'; g.fillRect(x0, y0, cw, 1 + ((r() * 2) | 0)); }   // 顶部积雪为主
+                    y -= slab;
+                }
+                return cv.toDataURL();
+            }
+            setBg('.ds-rock.l', mkRock(63, 20, 64));
+            setBg('.ds-rock.r', mkRock(91, 26, 72));
+        })();
+
+        bonfire.addEventListener('click', function () {
+            if (playing) return;                  // 防重复触发
+            playing = true;
+            waking = false;
+            if (dsMadeline) {                      // Madeline 回到围炉睡觉态（唯一 query 强制 gif 从头播）
+                dsMadeline.classList.remove('waking');
+                dsMadeline.src = SLEEP_GIF + '?t=' + Date.now();
+                // sleep.gif 播一次后停在最后一帧静态 PNG，不再循环
+                clearTimeout(sleepTimer);
+                sleepTimer = setTimeout(function () {
+                    if (!waking) dsMadeline.src = SLEEP_LAST;
+                }, SLEEP_MS);
+            }
+            scene.classList.add('show');          // 直接淡入极光场景（跳过点燃过程）
+            dsFire.src = FRAMES[8];               // 篝火直接全燃
+            playSeq(FRAMES.slice(2), 130, true);  // 立即进入火焰摇曳小循环
+        });
+
+        // 叫醒 Madeline：睡觉 → 睡醒动画（2.4s）→ 离开梦境；动画期间防重复点击
+        function wakeMadeline() {
+            if (waking || !scene.classList.contains('show')) return;
+            waking = true;
+            if (dsMadeline) {
+                dsMadeline.classList.add('waking');
+                dsMadeline.src = WAKE_GIF + '?t=' + Date.now();
+                setTimeout(exitDream, WAKE_MS);
+            } else {
+                exitDream();
+            }
+        }
+        if (dsMadeline) dsMadeline.addEventListener('click', wakeMadeline);
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && scene.classList.contains('show')) wakeMadeline();
+        });
+
+        function exitDream() {
+            scene.classList.remove('show');
+            document.dispatchEvent(new CustomEvent('dream:exiting'));  // 通知记梦/夜话面板收起
+            clearInterval(timer);
+            clearTimeout(sleepTimer);
+            playing = false;
+            waking = false;
+            if (dsMadeline) { dsMadeline.classList.remove('waking'); dsMadeline.src = SLEEP_GIF; }
+            dsFire.src = FRAMES[0];
         }
     })();
 
-    // ===== 心门：初始全空 → 每达成一次解锁条件逐颗点亮 → 满心门开后镜头右移 =====
+    // ===== dream 功能：梦境日记（Madeline 解梦）+ Badeline 夜话（影子视角读梦） =====
+    (function () {
+        var scene = document.getElementById('dreamScene');
+        var jPanel = document.getElementById('dreamJournalPanel');
+        var nPanel = document.getElementById('dreamNightPanel');
+        if (!scene || !jPanel || !nPanel) return;
+
+        // 面板内飘浮光尘（蓝光尘/紫光尘各一组）
+        document.querySelectorAll('.dp-motes').forEach(function (box) {
+            for (var i = 0; i < 14; i++) {
+                var m = document.createElement('i');
+                m.style.left = (Math.random() * 100) + '%';
+                m.style.animationDuration = (9 + Math.random() * 11) + 's';
+                m.style.animationDelay = (-Math.random() * 16) + 's';
+                m.style.setProperty('--drift', (Math.random() * 90 - 45) + 'px');
+                m.style.transform = 'scale(' + (0.6 + Math.random() * 1.1) + ')';
+                box.appendChild(m);
+            }
+        });
+
+        var dreams = [];
+        function dreamDate(d) {
+            try { var dt = new Date(d.createDate); return isNaN(dt) ? '' :
+                (dt.getMonth() + 1) + '月' + dt.getDate() + '日 ' + String(dt.getHours()).padStart(2, '0') + ':' + String(dt.getMinutes()).padStart(2, '0'); }
+            catch (e) { return ''; }
+        }
+        function loadDreams() {
+            return api('/diary/list?page=1&pageSize=50&type=dream', 'GET').then(function (res) {
+                dreams = (res && res.success && Array.isArray(res.data)) ? res.data : [];
+                renderDreamList();
+                renderDreamPick();
+                return dreams;
+            }).catch(function () { dreams = []; renderDreamList(); renderDreamPick(); return dreams; });
+        }
+
+        // ---------- 面板开关 ----------
+        function openPanel(p) { closeAll(); p.classList.add('show'); }
+        function closePanel(p) { p.classList.remove('show'); }
+        function closeAll() { closePanel(jPanel); closePanel(nPanel); }
+        function somePanelOpen() { return jPanel.classList.contains('show') || nPanel.classList.contains('show'); }
+
+        document.getElementById('dreamJournalBtn').addEventListener('click', function () {
+            loadDreams().then(function () { openPanel(jPanel); });
+        });
+        document.getElementById('dreamNightBtn').addEventListener('click', function () {
+            loadDreams().then(function () { openPanel(nPanel); ensureNightOpening(); });
+        });
+        document.getElementById('djClose').addEventListener('click', function () { closePanel(jPanel); });
+        document.getElementById('ntClose').addEventListener('click', function () { closePanel(nPanel); });
+        document.addEventListener('dream:exiting', closeAll);
+        // 面板打开时 Esc 只关面板（捕获阶段拦在"叫醒 Madeline"监听之前）
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && somePanelOpen()) { e.stopPropagation(); closeAll(); }
+        }, true);
+
+        // ---------- 梦境日记 ----------
+        var titleEl = document.getElementById('dreamTitle');
+        var contentEl = document.getElementById('dreamContent');
+        var saveBtn = document.getElementById('dreamSaveBtn');
+        var listEl = document.getElementById('dreamList');
+        var replyBox = document.getElementById('dreamReply');
+        var replyText = document.getElementById('dreamReplyText');
+        var replyTimer = null;
+
+        function renderDreamList() {
+            listEl.innerHTML = '';
+            if (!dreams.length) {
+                var empty = document.createElement('li');
+                empty.className = 'dl-empty';
+                empty.textContent = '还没有旧梦。醒来时别忘了写下来。';
+                listEl.appendChild(empty);
+                return;
+            }
+            dreams.forEach(function (d) {
+                var li = document.createElement('li');
+                var t = document.createElement('div');
+                t.className = 'dl-t';
+                t.textContent = d.title && d.title.trim() ? d.title : (d.content || '').slice(0, 18) || '无题的梦';
+                var dt = document.createElement('div');
+                dt.className = 'dl-d';
+                dt.textContent = dreamDate(d);
+                li.appendChild(t); li.appendChild(dt);
+                li.addEventListener('click', function () {
+                    [].forEach.call(listEl.children, function (c) { c.classList.remove('active'); });
+                    li.classList.add('active');
+                    titleEl.value = d.title || '';
+                    contentEl.value = d.content || '';
+                    replyBox.classList.remove('show');   // 旧梦不再重播当时的回应（回应是一次性私语）
+                });
+                listEl.appendChild(li);
+            });
+        }
+
+        function typeReply(text) {
+            clearInterval(replyTimer);
+            replyText.textContent = '';
+            replyBox.classList.add('show');
+            replyBox.classList.remove('done');
+            var i = 0;
+            replyTimer = setInterval(function () {
+                replyText.textContent = text.slice(0, ++i);
+                if (i >= text.length) { clearInterval(replyTimer); replyBox.classList.add('done'); }
+            }, 38);
+        }
+
+        saveBtn.addEventListener('click', function () {
+            var content = contentEl.value.trim();
+            if (!content) { contentEl.focus(); return; }
+            saveBtn.disabled = true;
+            saveBtn.textContent = '封存中…';
+            api('/diary/dream', 'POST', { title: titleEl.value.trim(), content: content }, 20000)
+                .then(function (res) {
+                    if (res && res.success && res.data) {
+                        typeReply(res.data.message || '……我在呢。');
+                        titleEl.value = ''; contentEl.value = '';
+                        loadDreams();
+                    } else {
+                        typeReply((res && res.msg) ? res.msg : '梦没存住……再试一次，好吗？');
+                    }
+                })
+                .catch(function () { typeReply('梦没存住……网络那边雾太大了。'); })
+                .finally(function () { saveBtn.disabled = false; saveBtn.textContent = '封存这个梦'; });
+        });
+
+        // ---------- Badeline 夜话 ----------
+        var pick = document.getElementById('ntDreamPick');
+        var msgs = document.getElementById('ntMsgs');
+        var ntInput = document.getElementById('ntInput');
+        var ntSend = document.getElementById('ntSend');
+        var ntHist = [], ntDreamId = null, ntBusy = false, ntOpenedFor = null;
+        var NT_EMO = ['normal','concerned','serious','scoff','angry','angryAlt','yell','upset','sad','sigh','worried','worriedAlt','freakA','freakB','freakC'];
+
+        function portrait(emo) {
+            if (NT_EMO.indexOf(emo) === -1) emo = 'normal';
+            return 'celeste-portraits/badeline/' + emo + '00.png';
+        }
+        function renderDreamPick() {
+            pick.innerHTML = '';
+            if (!dreams.length) {
+                var o = document.createElement('option');
+                o.value = ''; o.textContent = '（还没有梦）';
+                pick.appendChild(o);
+                return;
+            }
+            dreams.forEach(function (d) {
+                var o = document.createElement('option');
+                o.value = d.id;
+                o.textContent = (d.title && d.title.trim()) ? d.title.slice(0, 12) : (d.content || '无题的梦').slice(0, 12);
+                pick.appendChild(o);
+            });
+        }
+        function addRow(role, text, emo) {
+            var row = document.createElement('div');
+            row.className = 'nt-row ' + (role === 'user' ? 'user' : 'bl');
+            if (role !== 'user') {
+                var img = document.createElement('img');
+                img.src = portrait(emo);
+                img.alt = 'Badeline';
+                img.onerror = function () { img.src = portrait('normal'); };
+                row.appendChild(img);
+            }
+            var bub = document.createElement('div');
+            bub.className = 'nt-bub';
+            bub.textContent = text;
+            row.appendChild(bub);
+            msgs.appendChild(row);
+            msgs.scrollTop = msgs.scrollHeight;
+            return bub;
+        }
+        function showEmpty() {
+            msgs.innerHTML = '';
+            var box = document.createElement('div');
+            box.className = 'nt-empty';
+            box.innerHTML = '她在梦的边缘等着。<br>你还没写下任何梦——没有梦，她读什么？';
+            var b = document.createElement('button');
+            b.className = 'dp-primary';
+            b.textContent = '去记一个梦';
+            b.addEventListener('click', function () { closePanel(nPanel); openPanel(jPanel); contentEl.focus(); });
+            box.appendChild(b);
+            msgs.appendChild(box);
+        }
+        function resetNight(dreamId) {
+            ntHist = []; ntDreamId = dreamId; ntOpenedFor = dreamId;
+            msgs.innerHTML = '';
+        }
+        function ensureNightOpening() {
+            if (!dreams.length) { ntDreamId = null; showEmpty(); return; }
+            var id = pick.value || dreams[0].id;
+            pick.value = id;
+            if (ntOpenedFor === id && msgs.children.length) return;  // 这个梦已经开聊过，保留现场
+            resetNight(id);
+            ntBusy = true; ntSend.disabled = true;
+            addRow('bl', '……', 'normal').classList.add('nt-typing');
+            api('/diary/dream-night-talk', 'POST', { dreamId: id, message: '', history: '[]' }, 20000)
+                .then(function (res) {
+                    msgs.innerHTML = '';
+                    if (res && res.success && res.data) {
+                        addRow('bl', res.data.message, res.data.emotion || 'normal');
+                        ntHist.push({ role: 'assistant', content: res.data.message });
+                    } else {
+                        addRow('bl', (res && res.msg) ? res.msg : '……梦太散了，我什么都没抓到。', 'sigh');
+                    }
+                })
+                .catch(function () { msgs.innerHTML = ''; addRow('bl', '……雾太大。靠近火堆再说。', 'sigh'); })
+                .finally(function () { ntBusy = false; ntSend.disabled = false; ntInput.focus(); });
+        }
+        pick.addEventListener('change', function () { ensureNightOpening(); });
+
+        function sendNight() {
+            var v = ntInput.value.trim();
+            if (!v || ntBusy || !ntDreamId) return;
+            ntInput.value = '';
+            addRow('user', v);
+            ntHist.push({ role: 'user', content: v });
+            ntBusy = true; ntSend.disabled = true;
+            api('/diary/dream-night-talk', 'POST',
+                { dreamId: ntDreamId, message: v, history: JSON.stringify(ntHist.slice(-10)) }, 20000)
+                .then(function (res) {
+                    if (res && res.success && res.data) {
+                        addRow('bl', res.data.message, res.data.emotion || 'normal');
+                        ntHist.push({ role: 'assistant', content: res.data.message });
+                    } else {
+                        addRow('bl', (res && res.msg) ? res.msg : '……（她别过脸，没接话。）', 'sigh');
+                    }
+                })
+                .catch(function () { addRow('bl', '……信号断了。像做梦做到一半被人摇醒。', 'worried'); })
+                .finally(function () { ntBusy = false; ntSend.disabled = false; ntInput.focus(); });
+        }
+        ntSend.addEventListener('click', sendNight);
+        ntInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') sendNight(); });
+    })();
+
+    // 硬防横向滚动：overflow-x:clip 的兼容兜底 —— 任何来源的横向滚动（如点击门时浏览器把门滚回视野）立即归零，
+    // 否则 body.scrollLeft 残留会让平移后的镜之房间错位、露出 body 背景
+    document.addEventListener('scroll', function () {
+        if (document.body && document.body.scrollLeft) document.body.scrollLeft = 0;
+        if (document.documentElement && document.documentElement.scrollLeft) document.documentElement.scrollLeft = 0;
+    }, true);
+
+    // ===== 心门像素心：低分辨率栅格整心一次生成，裁成上下两半各绘一 canvas（闭合即无缝整心） =====
+    (function () {
+        var cvs = document.querySelectorAll('#heartDoor .hd-heart');
+        if (cvs.length < 2) return;
+        var W = 56, HH = 34, H = HH * 2;            // 半心 34 行 → 整心 68 行
+        var TOP = 1.32, SPAN = 2.44;                // 心形曲线纵向范围：my ∈ [-1.12, 1.32]
+        var STOPS = [[139,208,232],[103,173,202],[74,147,180],[53,130,166],[39,110,147]]; // 顶亮 → 底深
+        function inside(x, y) {                     // 经典心形隐式曲线 (x²+y²-1)³ - x²y³ ≤ 0
+            var mx = (x + 0.5) / W * 2.6 - 1.3;
+            var my = TOP - (y + 0.5) / H * SPAN;
+            var a = mx * mx + my * my - 1;
+            return a * a * a - mx * mx * my * my * my <= 0;
+        }
+        var seed = 20260919;
+        function rnd() { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; }
+        // 整心栅格化：0=外 1=内 2=霜边描边
+        var g = [];
+        for (var y = 0; y < H; y++) { g.push([]); for (var x = 0; x < W; x++) g[y][x] = inside(x, y) ? 1 : 0; }
+        for (var y1 = 0; y1 < H; y1++) for (var x1 = 0; x1 < W; x1++) {
+            if (!g[y1][x1]) continue;
+            if (x1 === 0 || x1 === W - 1 || y1 === 0 || y1 === H - 1 ||
+                !g[y1][x1 - 1] || !g[y1][x1 + 1] || !g[y1 - 1] || !g[y1 - 1][x1] || !g[y1 + 1] || !g[y1 + 1][x1]) g[y1][x1] = 2;
+        }
+        // 逐格上色：纵向渐变 + 颗粒噪点 + 左上受光 + 零星闪晶，右下贴边处加深
+        function cellColor(x, y) {
+            var my = TOP - (y + 0.5) / H * SPAN;
+            var mx = (x + 0.5) / W * 2.6 - 1.3;
+            if (g[y][x] === 2) return rnd() < 0.28 ? '#ffffff' : (my > 0.3 ? '#cfeef9' : '#e8fbff');
+            var idx = Math.max(0, Math.min(4, Math.round((1.32 - my) / SPAN * 4)));
+            var r = rnd();
+            if (r < 0.018) return '#f4feff';                              // 闪晶
+            if (r < 0.25) idx++; else if (r < 0.5 && idx > 0) idx--;      // 颗粒噪点
+            if (my > 0.45 && mx < -0.1 && rnd() < 0.6 && idx > 0) idx--;  // 左上受光
+            var below = y + 1 < H ? g[y + 1][x] : 0, right = x + 1 < W ? g[y][x + 1] : 0;
+            if (below === 2 || right === 2) idx++;                        // 右下内阴影
+            idx = Math.max(0, Math.min(4, idx));
+            var c = STOPS[idx];
+            return 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
+        }
+        [cvs[0], cvs[1]].forEach(function (cv, half) {
+            var ctx = cv.getContext('2d');
+            for (var ly = 0; ly < HH; ly++) {
+                var gy = half * HH + ly;
+                for (var gx = 0; gx < W; gx++) {
+                    if (!g[gy][gx]) continue;
+                    ctx.fillStyle = cellColor(gx, gy);
+                    ctx.fillRect(gx, ly, 1, 1);
+                }
+            }
+        });
+    })();
+
+    // ===== 心门音效：7 个 WAV 预加载 + 按需触发（避开 BGM 音量） =====
+    (function () {
+        var DIR = 'heartdoor/sounds/';
+        var NAMES = ['heartdoor_entry','heartdoor_slam','frontdoor_heartfill_1','frontdoor_heartfill_2','frontdoor_heartfill_3','frontdoor_heartfill_4','frontdoor_unlock'];
+        var VOL = 0.7;
+        var pool = {};
+        NAMES.forEach(function (n) {
+            var a = new Audio(DIR + n + '.wav');
+            a.preload = 'auto'; a.volume = VOL; a.muted = false;
+            pool[n] = a;
+        });
+        // play 支持多实例：每次 new Audio 避免同标签重入打断
+        function play(name) {
+            var src = pool[name]; if (!src) return;
+            var a = new Audio(src.src); a.volume = VOL; a.play().catch(function () {});
+        }
+        window.__hdSfx = { play: play };
+    })();
+
+    // ===== 心门：初始全空 → 每达成一次解锁条件逐颗点亮 → 四心填满自动播放一次性分裂 → 点击进门 =====
     (function () {
         var door = document.getElementById('heartDoor');
         var world = document.getElementById('world');
         if (!door || !world) return;
         var hearts = door.querySelectorAll('.hd-hearts img');
         var TOTAL = hearts.length;            // 4 颗心
-        var opened = false;                    // 门体已升起
+        var opened = false;                    // 分裂已完成（此后点击进门）
         var litNow = 0;                        // 当前已点亮的颗数
+        var splitting = false;                 // 分裂动画播放中
+        // 分裂为一次性动画：播过即永久保持最终态，刷新直接恢复 split 态、不再重播
+        var splitDone = false;
+        try { splitDone = localStorage.getItem('heartDoorSplit') === '1'; } catch (e) {}
+        if (splitDone) { opened = true; door.classList.add('split'); }
 
         // ===== 开启条件：四心为初始条件——心门由商店炼制的水晶心驱动（heartDoorHearts 数组） =====
         // 每炼一颗心点亮一颗，满 TOTAL 颗门就绪；之后继续炼心不再进门，只改变 Badeline 人格
@@ -1667,9 +2750,22 @@ function stopPeSnow() {
         function persist() { try { localStorage.setItem('heartDoorLit', String(litNow)); } catch (e) {} }
         function refreshState() {
             door.classList.toggle('locked', litNow < TOTAL);
-            door.classList.toggle('ready', litNow >= TOTAL && !opened);
+            door.classList.toggle('ready', litNow >= TOTAL && !opened && !splitting);
         }
         function paint(im, lit) { im.src = lit ? 'heartdoor/icon06.png' : 'heartdoor/icon00.png'; }
+
+        // 一次性分裂：补内侧边框（瞬现）→ 左半左滑、右半右滑露出亮心光柱 → 心形转亮白发光；终态保持不循环
+        function triggerSplit() {
+            if (splitDone || splitting) return;
+            splitting = true;
+            door.classList.remove('ready');
+            door.classList.add('split');
+            try { localStorage.setItem('heartDoorSplit', '1'); } catch (e) {}
+            // 分裂完成瞬间 → heartdoor_slam
+            setTimeout(function () { splitting = false; splitDone = true; opened = true; }, 1300);
+            setTimeout(function () { if (window.__hdSfx) window.__hdSfx.play('heartdoor_slam'); }, 1300);
+        }
+        function maybePlaySplit(delay) { if (!splitDone && !splitting) setTimeout(triggerSplit, delay); }
 
         // 单颗心：7 帧填充动画 + pop 弹跳反馈
         function fillHeart(im, done) {
@@ -1689,18 +2785,43 @@ function stopPeSnow() {
         }
 
         // 把点亮数推进到 target：新增部分逐颗动画点亮，减少则静默校正
+        // applySeq 链序号：新的推进会作废上一条填充链，防止双链并发把 litNow 跳奇数颗
+        var applySeq = 0;
         function applyTarget(target, animate) {
             target = Math.max(0, Math.min(TOTAL, target));
+            var seq = ++applySeq;
+            // 第一次有心点亮 → heartdoor_entry
+            if (animate && litNow === 0 && target > 0 && window.__hdSfx) window.__hdSfx.play('heartdoor_entry');
             if (target <= litNow || !animate) {
                 hearts.forEach(function (im, i) { paint(im, i < target); });
                 litNow = target; persist(); refreshState();
+                if (target >= TOTAL) {
+                    // 满心静默校正 → frontdoor_unlock
+                    if (window.__hdSfx) window.__hdSfx.play('frontdoor_unlock');
+                    maybePlaySplit(650);
+                }
                 return;
             }
             refreshState();                    // 动画期间保持锁定
             hearts.forEach(function (im, i) { if (i < litNow) paint(im, true); });  // 先还原已有进度，再逐颗点亮新增
             (function next() {
-                if (litNow >= target) { persist(); refreshState(); return; }
-                fillHeart(hearts[litNow], function () { litNow++; setTimeout(next, 300); });
+                if (seq !== applySeq) return;  // 已被更新的推进取代，整链作废
+                if (litNow >= target) {
+                    persist(); refreshState();
+                    if (target >= TOTAL) {
+                        // 最后一颗 pop 落定 → frontdoor_unlock
+                        if (window.__hdSfx) window.__hdSfx.play('frontdoor_unlock');
+                        maybePlaySplit(580);
+                    }
+                    return;
+                }
+                var idx = litNow;  // 当前要填第几颗（0-based，对应 heartfill idx+1）
+                fillHeart(hearts[litNow], function () {
+                    if (seq !== applySeq) return;   // 过期链不计进度
+                    // 每颗心填充完成 → frontdoor_heartfill_{idx+1}
+                    if (window.__hdSfx) window.__hdSfx.play('frontdoor_heartfill_' + (idx + 1));
+                    litNow++; setTimeout(next, 300);
+                });
             })();
         }
 
@@ -1711,34 +2832,95 @@ function stopPeSnow() {
 
         // 书架日记加载完成后推进进度（按已炼心数，真实数据优先）
         window.__setDoorProgress = function () { applyTarget(targetOf(), true); };
-        // 无后端时预览：?opendoor 逐颗点亮剩余的
-        if (forceOpen()) applyTarget(TOTAL, litNow < TOTAL);
 
         function panRight() {
             world.classList.add('panned');
-            door.classList.add('away');
+            // 不再 door.classList.add('away') — 心门在镜之房间侧只露一半，可点击回书架
             if (window.__mirrorBGM) window.__mirrorBGM.enter();
+            if (window.__badelineEnterRoom) window.__badelineEnterRoom();   // 进镜之房间：随机模式 A/B
         }
-        document.querySelector('#mirrorRoom .room-back').addEventListener('click', function () {
-            world.classList.remove('panned');
-            door.classList.remove('away');
-            if (window.__blDialogKill) window.__blDialogKill();   // 收起对话框，作废没说完的话
-            if (window.__mirrorBGM) window.__mirrorBGM.exit();
-        });
+
+        // ===== 破门星尘：白色像素尘埃以横向为主从门心爆散（参照 Farewell 开门） =====
+        function doorBurst() {
+            var layer = document.createElement('div');
+            layer.style.cssText = 'position:absolute;inset:0;overflow:visible;pointer-events:none;z-index:8;';
+            door.appendChild(layer);
+            var cx = door.clientWidth / 2, cy = door.clientHeight / 2;
+            var pieces = [];
+            for (var k = 0; k < 56; k++) {
+                var horiz = Math.random() < 0.62;          // 六成沿横向喷成一条光带
+                var i = document.createElement('i');
+                var s = Math.random() < 0.75 ? 2 : 3;      // 2~3px 像素尘
+                i.style.cssText = 'position:absolute;left:' + (cx - s / 2) + 'px;top:' + (cy - s / 2) +
+                    'px;width:' + s + 'px;height:' + s + 'px;background:' +
+                    (Math.random() < 0.3 ? '#d8f4ff' : '#ffffff') +
+                    ';box-shadow:0 0 4px rgba(200,240,255,.9);';
+                layer.appendChild(i);
+                var ang, spd, dir = Math.random() < 0.5 ? -1 : 1;
+                if (horiz) { ang = Math.random() * 0.9 - 0.45; spd = 180 + Math.random() * 300; }
+                else { ang = Math.random() * Math.PI * 2; spd = 60 + Math.random() * 160; }
+                pieces.push({
+                    el: i, x: cx, y: cy,
+                    vx: Math.cos(ang) * spd * dir,
+                    vy: Math.sin(ang) * spd * (horiz ? 0.5 : 1) - 40,
+                    life: 0, ttl: 0.55 + Math.random() * 0.5
+                });
+            }
+            // 爆裂音：高频噪声 + 水晶 ping
+            try {
+                var AC = window.__mirrorAC || (window.__mirrorAC = new (window.AudioContext || window.webkitAudioContext)());
+                var buf = AC.createBuffer(1, Math.floor(AC.sampleRate * 0.35), AC.sampleRate);
+                var d = buf.getChannelData(0);
+                for (var n = 0; n < d.length; n++) d[n] = (Math.random() * 2 - 1) * Math.pow(1 - n / d.length, 2.2);
+                var src = AC.createBufferSource(); src.buffer = buf;
+                var hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2400;
+                var g = AC.createGain(); g.gain.value = 0.35;
+                src.connect(hp); hp.connect(g); g.connect(AC.destination); src.start();
+                [3200, 2500].forEach(function (f, i2) {
+                    var o = AC.createOscillator(), og = AC.createGain();
+                    o.type = 'triangle';
+                    o.frequency.setValueAtTime(f, AC.currentTime);
+                    o.frequency.exponentialRampToValueAtTime(f * 0.55, AC.currentTime + 0.22);
+                    og.gain.setValueAtTime(i2 ? 0.07 : 0.11, AC.currentTime);
+                    og.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + 0.28);
+                    o.connect(og); og.connect(AC.destination);
+                    o.start(); o.stop(AC.currentTime + 0.3);
+                });
+            } catch (e) {}
+            // 物理：微重力横向扩散，逐渐淡出
+            var last = performance.now();
+            function tick(now) {
+                var dt = Math.min(0.05, (now - last) / 1000); last = now;
+                var alive = false;
+                pieces.forEach(function (p) {
+                    p.life += dt;
+                    if (p.life >= p.ttl) { p.el.style.opacity = '0'; return; }
+                    alive = true;
+                    p.vy += 160 * dt;
+                    p.x += p.vx * dt; p.y += p.vy * dt;
+                    p.el.style.opacity = String(1 - p.life / p.ttl);
+                    p.el.style.transform = 'translate(' + (p.x - cx) + 'px,' + (p.y - cy) + 'px)';
+                });
+                if (alive) requestAnimationFrame(tick); else layer.remove();
+            }
+            requestAnimationFrame(tick);
+        }
 
         door.addEventListener('click', function () {
-            if (opened) { panRight(); return; }
-            if (door.classList.contains('ready')) {
-                // 升门 → 镜头右移
-                opened = true;
-                door.classList.remove('ready');
-                door.classList.add('open');
-                setTimeout(panRight, 950);
-            } else {
-                door.classList.add('shake');
-                setTimeout(function () { door.classList.remove('shake'); }, 650);
-                showToast('心门纹丝不动……（' + litNow + ' / ' + TOTAL + '）');
+            // panned（镜之房间侧）：心门只露一半，点击回书架
+            if (world.classList.contains('panned')) {
+                world.classList.remove('panned');
+                if (window.__blDialogKill) window.__blDialogKill();
+                if (window.__mirrorBGM) window.__mirrorBGM.exit();
+                if (window.__badelineLeaveRoom) window.__badelineLeaveRoom();
+                return;
             }
+            if (opened) { panRight(); return; }        // 分裂终态：点击进入镜之房间
+            if (splitting) return;                     // 分裂动画播放中：忽略
+            if (litNow >= TOTAL) { triggerSplit(); return; }   // 满心就绪：点击可立即触发分裂
+            door.classList.add('shake');
+            setTimeout(function () { door.classList.remove('shake'); }, 650);
+            showToast('心门纹丝不动……（' + litNow + ' / ' + TOTAL + '）');
         });
     })();
 

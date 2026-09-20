@@ -2130,7 +2130,7 @@ function inferReplyEmotion(text) {
     }
     async function shelfLoad() {
         shelfList.innerHTML = '<div class="shelf-empty">正在搬书……</div>';
-        const res = await api('/diary/list', 'GET');
+        const res = await api('/diary/list?type=day', 'GET');
         if (res.success && Array.isArray(res.data)) {
             shelfData = res.data;
             if (!shelfData.length) { shelfList.innerHTML = '<div class="shelf-empty">书架还空着。<br>写下第一篇，它就有了位置。</div>'; return; }
@@ -2314,7 +2314,7 @@ function inferReplyEmotion(text) {
         const editId = new URLSearchParams(location.search).get('edit');
         if (editId) {
             history.replaceState(null, '', 'diary.html');
-            api('/diary/list', 'GET').then(r => {
+            api('/diary/list?type=day', 'GET').then(r => {
                 if (r.success && Array.isArray(r.data)) {
                     const d = r.data.find(x => String(x.id) === String(editId));
                     if (d) {

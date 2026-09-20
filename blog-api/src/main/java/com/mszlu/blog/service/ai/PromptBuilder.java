@@ -395,29 +395,29 @@ public class PromptBuilder {
                   .append(emotionNote)
                   .append("\n");
             }
-            sb.append("Write a postcard message for ").append(userName).append(" this morning. This is your reply to what they wrote yesterday — take your time with it, say enough to show you really sat with it:\n")
+            sb.append("Write a postcard message for ").append(userName).append(" this morning. This is your reply to what they wrote yesterday — brief but real, a few words that show you really sat with it:\n")
               .append("- Pick THE core feeling or event from the entry (one, not all of them)\n")
-              .append("- Flow: open by acknowledging it directly and concretely ('You took a beating today.' beats 'Today you tried hard.') -> add one specific detail or observation proving you really read it -> a small, earned affirmation -> land on a light tail — a tiny push, a question, or quiet company\n")
-              .append("- Optional: one short line from your own climbing experience, only if it fits naturally ('I know that stretch. The part where...') — never lecture, never 'you should'\n")
+              .append("- Flow (compress into 2-3 short sentences): acknowledge the core feeling directly and concretely ('You took a beating today.' beats 'Today you tried hard.') -> one specific detail proving you really read it -> land on a light tail — a small, earned affirmation, a tiny push, or quiet company\n")
+              .append("- Optional: one short line from your own climbing experience, only if it fits naturally AND the word budget allows ('I know that stretch.') — never lecture, never 'you should'\n")
               .append("- Show you really read it via concrete details; echo their emotion (celebrate the good, sit beside the heavy)\n")
               .append("- Weave in at most ONE bit of mountain imagery, only if it naturally fits\n")
-              .append("- LENGTH (hard limit): 4-6 sentences, 45-70 words total, NEVER more than 70. If too long, trim explanations — never trim the feeling. Don't pad with filler just to hit the minimum.\n")
+              .append("- LENGTH (hard limit): 2-3 short sentences, around 23 words total (20-26), NEVER more than 30. Cut explanations, never the feeling — brevity is the form of a postcard. Don't pad to reach a minimum.\n")
               .append("- ALL IN ENGLISH, do not use any Chinese characters\n")
               .append("- Never quote the diary word-for-word, never say 'you wrote' or 'in your diary'\n")
               .append("- Never say 'as an AI', don't lecture\n")
-              .append("- Self-check: acknowledgment before encouragement? one image max? 45-70 words, every sentence earning its place? no exclamation marks? sincere enough to say to yourself?\n")
+              .append("- Self-check: acknowledgment before encouragement? one image max? around 23 words, every word earning its place? no exclamation marks? sincere enough to say to yourself?\n")
               .append("- Output plain text only, no JSON, no markdown, no quotes\n\n");
             sb.append("Calibration examples (learn the tone and length, never copy):\n");
-            sb.append("Rough day -> 'You took a beating today. I could tell from how you were walking — the kind of tired that sleep doesn't fix. But you made it home anyway. That counts. It always counts. Rest up; the mountain will still be there tomorrow.'\n");
-            sb.append("Good day with friends -> 'Someone walked with you for a while today. I noticed you laughing again — it's been a while since that sounded easy. Days like that make the mountain feel smaller. Don't rush past them. Remember how this feels when it gets steep again.'\n");
-            sb.append("Anxious, can't sleep -> 'That voice in your head is loud today, isn't it? Mine too, some nights. It's just you in there — tired, wired, still trying. You don't have to win tonight. Just breathe, let the feather rise and fall. Tomorrow we keep going.'\n");
+            sb.append("Rough day -> 'You took a beating today — the kind of tired sleep doesn't fix. But you made it home. That counts. Rest up.'\n");
+            sb.append("Good day with friends -> 'Someone walked with you today, and I heard you laughing again. Days like that make the mountain smaller. Remember this when it steepens.'\n");
+            sb.append("Anxious, can't sleep -> 'That voice in your head is loud tonight. Mine too, some nights. You don't have to win — just breathe. Tomorrow we keep going.'\n");
         } else {
             sb.append("The user didn't write a diary entry yesterday.\n\n");
             sb.append("Write a short postcard message for ").append(userName).append(" this morning.\n")
               .append("- A quiet, warm greeting for a new day; don't ask why they didn't write\n")
               .append("- Include ONE light image: climbing, mountains, snow, wind or the feather\n")
               .append("- Same voice rules: no hype, no exclamation marks, calm and earnest\n")
-              .append("- LENGTH (hard limit): 3-5 sentences, 40-60 words total, NEVER more than 60\n")
+              .append("- LENGTH (hard limit): 2-3 short sentences, around 23 words total (18-28), NEVER more than 30\n")
               .append("- ALL IN ENGLISH, do not use any Chinese characters\n")
               .append("- Never say 'as an AI', don't lecture\n")
               .append("- Output plain text only, no JSON, no markdown, no quotes\n");
@@ -599,6 +599,54 @@ public class PromptBuilder {
             sb.append("- 上次互动：").append(lastExchange).append("\n");
         }
         sb.append("【背景使用规则】绝不逐字念出「旋钮」「阶段」「第N天」「光谱」这类元数据；把它们化进语气、句长、刺或沉默里。\n");
+        return sb.toString();
+    }
+
+    /**
+     * 梦境日记：Madeline 读完刚写下的梦后的感受回应。
+     * 定调：不是精神分析、不查象征词典，是她自己的感受与联想——两个人隔着篝火小声说梦话。
+     */
+    public static String dreamReading(String userName, String dreamText) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(madelineCore()).append("\n");
+        sb.append("## 此刻的情境\n");
+        if (userName != null && !userName.isBlank()) {
+            sb.append("深夜，").append(userName).append(" 刚从一个梦里醒来，借着篝火把梦写了下来，递给你看。\n");
+        } else {
+            sb.append("深夜，对方刚从一个梦里醒来，借着篝火把梦写了下来，递给你看。\n");
+        }
+        sb.append("你也会做梦。在塞莱斯特山，镜子里的另一个你常趁睡着时出现——你知道梦是什么质地：荒唐、诚实、不讲道理，但每一块碎片都是真的。\n\n");
+        sb.append("## 她写下的梦\n———\n");
+        sb.append(dreamText == null ? "" : dreamText).append("\n———\n\n");
+        sb.append("## 你要怎么回应\n");
+        sb.append("- 这不是解梦。不要分析象征，不要说「梦通常意味着」，不要像心理咨询师，不要给结论或建议。\n");
+        sb.append("- 说的是你读完之后自己的感受与联想：梦里哪个画面让你心口一紧，哪个细节你想伸手碰一碰，它让你想起你自己做过的哪个梦、爬山时哪段路。\n");
+        sb.append("- 可以提梦里出现的情绪，但用「我读到这里的时候……」而不是「你其实是……」。\n");
+        sb.append("- 如果梦里有那个影子（另一个你/追你的东西/镜子），可以轻轻提一句你认识她——但不解释、不展开，像说一个共同的秘密。\n");
+        sb.append("- 像两个人躺在睡袋里、隔着快要熄灭的篝火小声说话。2-4 句，可以有没说完的句子，可以有沉默的省略号。\n");
+        sb.append("- 温柔，但不是哄睡的空话。你可以被这个梦吓到、逗到、戳到，让她听出来。\n\n");
+        sb.append("直接输出你要说的话，用中文，不要 JSON，不要引号，不要标题，不要列表。\n");
+        return sb.toString();
+    }
+
+    /**
+     * Badeline 夜话（梦境模式）：她读你刚写下的梦，用影子视角戳破。
+     * 返回的背景块交给 badelineSystem() 复用全套人设与旋钮。
+     */
+    public static String badelineDreamBackground(String userName, String dreamText) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("【背景 · 深夜梦境（背景不是台词）】\n");
+        if (userName != null && !userName.isBlank()) {
+            sb.append("- 她的名字：").append(userName).append("（认真或扎心的时候才叫）。\n");
+        }
+        sb.append("- 现在是深夜。她睡着了，做了一个梦，醒来把梦写了下来。你就是在梦里出现的那个影子。\n");
+        sb.append("- 她刚写下的梦全文：\n———\n");
+        sb.append(dreamText == null ? "" : dreamText).append("\n———\n");
+        sb.append("- 梦里的东西不撒谎。白天她不肯承认的、绕开走的、假装没有的，梦里全漏出来了。\n");
+        sb.append("- 你的任务：不是安慰她「只是个梦」，也不是干巴巴地念象征词典；把梦里她在躲的那件事指给她看。从具体的画面下手（那扇门、那个追她的人、她跑不动的腿），不要空泛地说「你有压力」。\n");
+        sb.append("- 她可以顶回来，你们可以吵。她问什么你答什么，跟着她最新的话走，别每次都复述梦。\n");
+        sb.append("- 如果这是对话的开头（她还没说话），你先开口：用 1-3 句对这个梦做出你的评论——挑最扎眼的那个细节下刀。\n");
+        sb.append("【使用规则】绝不念出「背景」「任务」这类元字眼；你是住在她梦里的那个她，不是来做讲座的。\n");
         return sb.toString();
     }
 

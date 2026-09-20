@@ -178,16 +178,43 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     -webkit-mask-image:radial-gradient(closest-side, transparent 12%, #000 30%, transparent 72%);
     mask-image:radial-gradient(closest-side, transparent 12%, #000 30%, transparent 72%);
     animation:hgRaySpin 26s linear infinite;
-    opacity:0; transition:opacity 1.2s ease .2s; pointer-events:none;
+    opacity:0; transition:opacity 1.2s ease 1.75s; pointer-events:none;
 }
 #heartGet.vis .hg-rays { opacity:1; }
 @keyframes hgRaySpin { to { transform:translate(-50%,-50%) rotate(360deg); } }
+
+/* 像素假心：仪式开场先跳动，破成碎片后真心才坠落（位置由 JS 对齐 .hg-heart） */
+#hgFakeHeart {
+    position:absolute; width:60px; height:60px; image-rendering:pixelated;
+    opacity:0; z-index:3; filter:drop-shadow(0 0 10px rgba(160,220,255,.7));
+    transform:translate(-50%,-50%);
+}
+#heartGet.vis #hgFakeHeart { animation:hgFakePulse .42s ease-in-out infinite alternate; }
+#heartGet.vis #hgFakeHeart.breaking { animation:hgFakeBreak .2s ease-in forwards; }
+@keyframes hgFakePulse {
+    from { opacity:1; transform:translate(-50%,-50%) scale(.94); }
+    to   { opacity:1; transform:translate(-50%,-50%) scale(1.08); }
+}
+@keyframes hgFakeBreak {
+    0%  { opacity:1; transform:translate(-50%,-50%) scale(1); }
+    100% { opacity:0; transform:translate(-50%,-50%) scale(1.35); filter:brightness(3) drop-shadow(0 0 18px rgba(200,240,255,1)); }
+}
+#hgFakeHeart.gone { display:none; }
+/* 碎片层 */
+#hgShards { position:absolute; inset:0; overflow:visible; pointer-events:none; z-index:3; }
+#hgShards img {
+    position:absolute; image-rendering:pixelated;
+    filter:drop-shadow(0 0 4px rgba(170,225,255,.85));
+    will-change:transform,opacity;
+}
+
 #heartGet .hg-heart {
     position:relative; width:112px; height:112px; image-rendering:pixelated; z-index:2;
     opacity:0; transform:scale(.15);
     filter:drop-shadow(0 0 26px var(--hg-glow, rgba(120,190,255,.8))) brightness(1.15);
 }
-#heartGet.vis .hg-heart { animation:hgHeartIn .85s cubic-bezier(.2,1.15,.3,1) .35s forwards; }
+/* 破心（~1.95s）后真心才坠落 */
+#heartGet.vis .hg-heart { animation:hgHeartIn .85s cubic-bezier(.2,1.15,.3,1) 1.95s forwards; }
 @keyframes hgHeartIn {
     0%   { opacity:0; transform:scale(.15) rotate(-30deg); }
     70%  { opacity:1; transform:scale(1.22) rotate(4deg); }
@@ -196,26 +223,26 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 #heartGet.vis.shake { animation:hgShake .35s linear; }
 @keyframes hgShake { 0%,100% { transform:translate(0,0); } 20% { transform:translate(-7px,4px); } 40% { transform:translate(6px,-4px); } 60% { transform:translate(-4px,-3px); } 80% { transform:translate(4px,3px); } }
 #heartGet .hg-flash { position:absolute; inset:0; background:#dfe9ff; opacity:0; pointer-events:none; }
-#heartGet.vis .hg-flash { animation:hgFlash .5s ease-out .85s; }
+#heartGet.vis .hg-flash { animation:hgFlash .5s ease-out 2.45s; }
 @keyframes hgFlash { 0% { opacity:.85; } 100% { opacity:0; } }
 #heartGet .hg-title {
     margin-top:34px; z-index:2; color:#e8f1ff;
     font-size:clamp(22px, 4.6vw, 34px); letter-spacing:3px;
     text-shadow:0 0 18px var(--hg-glow, rgba(120,190,255,.9)), 0 2px 0 rgba(0,0,0,.7);
     opacity:0; transform:translateY(10px);
-    transition:opacity .8s ease 1.15s, transform .8s ease 1.15s;
+    transition:opacity .8s ease 2.75s, transform .8s ease 2.75s;
 }
 #heartGet .hg-desc {
     margin-top:12px; z-index:2; color:rgba(214,228,255,.72);
     font-size:14px; letter-spacing:2px;
-    opacity:0; transition:opacity .8s ease 1.55s;
+    opacity:0; transition:opacity .8s ease 3.15s;
 }
 #heartGet.vis .hg-title { opacity:1; transform:translateY(0); }
 #heartGet.vis .hg-desc { opacity:1; }
 #heartGet .hg-tip {
     position:absolute; bottom:30px; left:50%; transform:translateX(-50%);
     color:rgba(255,230,109,.55); font-size:12px; letter-spacing:3px;
-    opacity:0; transition:opacity .6s ease 1.9s;
+    opacity:0; transition:opacity .6s ease 3.5s;
 }
 #heartGet.vis .hg-tip { opacity:1; }
 
@@ -274,6 +301,8 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 <div id="heartGet">
     <div class="hg-rays"></div>
     <div class="hg-flash"></div>
+    <img id="hgFakeHeart" src="heartdoor/icon06.png" alt="" loading="lazy" decoding="async">
+    <div id="hgShards"></div>
     <img class="hg-heart" id="hgHeartImg" src="celeste-icons/heartgem_outline.png" alt="heart" loading="lazy" decoding="async">
     <div class="hg-title" id="hgTitle"></div>
     <div class="hg-desc" id="hgDesc"></div>
@@ -794,39 +823,143 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
         return 'crystalblueheart/crystalheart_blue_get_';
     }
 
+    // ===== 破心：像素心碎成 shard.png 碎片四散（噪声爆裂 + 水晶 ping） =====
+    function hgCrackSound() {
+        try {
+            var ctx = window.__shopAC || (window.__shopAC = new (window.AudioContext || window.webkitAudioContext)());
+            var dur = 0.4;
+            var buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);
+            var d = buf.getChannelData(0);
+            for (var i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2.4);
+            var src = ctx.createBufferSource();
+            src.buffer = buf;
+            var hp = ctx.createBiquadFilter();
+            hp.type = 'highpass'; hp.frequency.value = 2200;
+            var g = ctx.createGain(); g.gain.value = 0.4;
+            src.connect(hp); hp.connect(g); g.connect(ctx.destination);
+            src.start();
+            [3200, 2400].forEach(function(f, i) {
+                var o = ctx.createOscillator(), og = ctx.createGain();
+                o.type = 'triangle';
+                o.frequency.setValueAtTime(f, ctx.currentTime);
+                o.frequency.exponentialRampToValueAtTime(f * 0.55, ctx.currentTime + 0.25);
+                og.gain.setValueAtTime(i ? 0.08 : 0.12, ctx.currentTime);
+                og.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+                o.connect(og); og.connect(ctx.destination);
+                o.start(); o.stop(ctx.currentTime + 0.32);
+            });
+        } catch (e) {}
+    }
+
+    // 从 (cx,cy) 爆出 14 片碎片，物理与心门破心同参数
+    function hgBurst(cx, cy) {
+        var layer = document.getElementById('hgShards');
+        if (layer) layer.innerHTML = '';
+        var pieces = [];
+        for (var k = 0; k < 14; k++) {
+            var size = 7 + Math.random() * 9;
+            var p = document.createElement('img');
+            p.src = 'heartdoor/shard.png';
+            p.style.width = size + 'px';
+            p.style.height = size + 'px';
+            var x0 = cx - size / 2, y0 = cy - size / 2;
+            p.style.left = x0 + 'px';
+            p.style.top = y0 + 'px';
+            layer.appendChild(p);
+            var ang = Math.random() * Math.PI * 2;
+            var spd = 130 + Math.random() * 210;
+            pieces.push({
+                el: p, x: x0, y: y0, x0: x0, y0: y0,
+                vx: Math.cos(ang) * spd,
+                vy: Math.sin(ang) * spd - 120,
+                rot: Math.random() * 360,
+                vr: (Math.random() * 2 - 1) * 720,
+                life: 0, ttl: 0.65 + Math.random() * 0.25
+            });
+        }
+        var last = performance.now();
+        function tick(now) {
+            var dt = Math.min(0.05, (now - last) / 1000);
+            last = now;
+            var alive = false;
+            pieces.forEach(function(p) {
+                p.life += dt;
+                if (p.life >= p.ttl) { p.el.style.opacity = '0'; return; }
+                alive = true;
+                p.vy += 950 * dt;
+                p.vx *= Math.pow(0.92, dt * 60);
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+                p.rot += p.vr * dt;
+                var fade = p.life > p.ttl * 0.55
+                    ? 1 - (p.life - p.ttl * 0.55) / (p.ttl * 0.45) : 1;
+                p.el.style.opacity = String(fade);
+                p.el.style.transform = 'translate(' + (p.x - p.x0) + 'px,' + (p.y - p.y0) + 'px) rotate(' + p.rot + 'deg)';
+            });
+            if (alive) requestAnimationFrame(tick);
+            else setTimeout(function() { layer.innerHTML = ''; }, 200);
+        }
+        requestAnimationFrame(tick);
+    }
+
     function heartGetSequence(cr, count) {
         var el = document.getElementById('heartGet');
         var im = document.getElementById('hgHeartImg');
+        var fake = document.getElementById('hgFakeHeart');
         var glow = CRYSTAL_GLOW[cr.color] || CRYSTAL_GLOW.blue;
         im.src = CRYSTAL_ICON[cr.color] || CRYSTAL_ICON.blue;
         el.style.setProperty('--hg-glow', glow);
         document.getElementById('hgTitle').textContent = '· ' + (cr.title || '心之水晶') + ' ·' + (count > 1 ? '（第 ' + count + ' 颗）' : '');
         document.getElementById('hgDesc').textContent = cr.desc || '';
+        // 重置破心状态
+        fake.classList.remove('breaking', 'gone');
+        var sh = document.getElementById('hgShards'); if (sh) sh.innerHTML = '';
+        el.classList.remove('shake');
         el.classList.add('show');
-        requestAnimationFrame(function() { requestAnimationFrame(function() { el.classList.add('vis'); }); });
+        // 假心对齐真心落定位置（布局完成后读几何）
+        requestAnimationFrame(function() {
+            var r = im.getBoundingClientRect(), er = el.getBoundingClientRect();
+            fake.style.left = (r.left - er.left + r.width / 2) + 'px';
+            fake.style.top = (r.top - er.top + r.height / 2) + 'px';
+            requestAnimationFrame(function() { el.classList.add('vis'); });
+        });
         // 专属心音三段式：Intro 入场 → Loop 停留循环 → Outro 收下
         var sfx = heartSfxBase(cr.color);
         var introA = null, loopA = null;
         try {
             introA = new Audio('celeste-sounds/' + sfx + 'intro.wav');
             introA.volume = 0.85;
-            if (window.__audioGestured) introA.play().catch(function() {});
         } catch (e) {}
-        // 破心（心落定瞬间 ~0.95s）
+        // 假心跳动 ~0.8s → 鼓胀 0.2s → t=1s 爆裂（碎片+音效+震屏）
+        setTimeout(function() { fake.classList.add('breaking'); }, 800);
         setTimeout(function() {
+            var fr = fake.getBoundingClientRect(), e2 = el.getBoundingClientRect();
+            var bx = fr.left - e2.left + fr.width / 2;
+            var by = fr.top - e2.top + fr.height / 2;
+            fake.classList.add('gone');
+            hgBurst(bx, by);
+            hgCrackSound();
+        }, 1000);
+        // 碎片散尽：t=1.95s 真心开始坠落，intro 同步响起
+        setTimeout(function() {
+            if (window.__audioGestured && introA) introA.play().catch(function() {});
+        }, 1950);
+        // t=2.8s 真心落定：wow + 震屏，loop 起，允许点击收下
+        var canTake = false;
+        setTimeout(function() {
+            canTake = true;
             fxSound('wow_so_secret.wav', 0.9);
             el.classList.add('shake');
             setTimeout(function() { el.classList.remove('shake'); }, 400);
-        }, 950);
-        // Loop：仪式停留期间低音量循环
-        try {
-            loopA = new Audio('celeste-sounds/' + sfx + 'loop.wav');
-            loopA.loop = true;
-            loopA.volume = 0.3;
-            if (window.__audioGestured) loopA.play().catch(function() {});
-        } catch (e) {}
+            try {
+                loopA = new Audio('celeste-sounds/' + sfx + 'loop.wav');
+                loopA.loop = true;
+                loopA.volume = 0.3;
+                if (window.__audioGestured) loopA.play().catch(function() {});
+            } catch (e) {}
+        }, 2800);
         el.onclick = function() {
-            if (!el.classList.contains('vis')) return;
+            if (!el.classList.contains('vis') || !canTake) return;  // 破心/坠落阶段点击不响应
             try { if (introA) introA.pause(); if (loopA) loopA.pause(); } catch (e) {}
             fxSound(sfx + 'outro.wav', 0.85); // Outro：收下
             el.classList.remove('vis');
