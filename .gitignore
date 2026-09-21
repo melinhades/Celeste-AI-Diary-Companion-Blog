@@ -59,6 +59,11 @@ blog-ui/icon/
 blog-ui/namespace/
 blog-ui/save/
 blog-ui/sounds/
+blog-ui/badeline-sounds/
+blog-ui/heartdoor/sounds/
+
+### TRAE HTML Share Packages ###
+.trae-html-share-packages/
 
 ### Fix Scripts ###
 fix-*.js
