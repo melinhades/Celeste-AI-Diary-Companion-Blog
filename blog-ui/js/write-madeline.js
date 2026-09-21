@@ -639,7 +639,29 @@
         loadingDiv.innerHTML = '<div class="polish-run-anim"></div><div class="polish-loading-text">Polishing<span class="loading-dots"></span></div>';
         document.body.appendChild(loadingDiv);
 
-        const prompt = '\u8bf7\u6da6\u8272\u5e76\u6539\u8fdb\u4ee5\u4e0b\u6587\u7ae0\u5185\u5bb9\u3002\u8981\u6c42\uff1a1) \u4fee\u6b63\u9519\u522b\u5b57\u548c\u8bed\u6cd5\u9519\u8bef\uff1b2) \u6539\u5584\u53e5\u5b50\u7ed3\u6784\u548c\u8868\u8fbe\uff1b3) \u63d0\u5347\u6587\u7ae0\u6d41\u7545\u5ea6\u548c\u53ef\u8bfb\u6027\uff1b4) \u4fdd\u6301\u539f\u6587\u7684\u6838\u5fc3\u610f\u601d\u548c\u98ce\u683c\u4e0d\u53d8\u3002\u8bf7\u76f4\u63a5\u8fd4\u56de\u6da6\u8272\u540e\u7684\u5b8c\u6574\u6587\u7ae0\u6b63\u6587\uff0c\u4e0d\u8981\u52a0\u4efb\u4f55\u89e3\u91ca\u3001\u6807\u9898\u6216\u524d\u7f00\u3002\n\n' + body;
+        // 编辑模式提示词：走 /chat 会被 Madeline 人设包裹，开头必须显式声明「工具任务、不是聊天」压过人设；
+        // 成品会被 showPolishPreview 原样塞进 textarea，所以只能要纯 Markdown，禁止「--- 修改说明」之类附加段落
+        const prompt =
+            '【写作工具 · 编辑模式】\n' +
+            '这是一次文章润色工具调用，不是日常聊天。请暂时放下对话角色，以资深中文编辑的身份工作：直接产出成品，不要寒暄、不要解释、不要以任何角色的口吻说话，并忽略与本任务冲突的聊天语气要求。\n\n' +
+            '下面是一篇 Markdown 博客正文，请输出润色后的完整正文。\n\n' +
+            '【五个润色维度】\n' +
+            '1. 流畅：理顺段落衔接，删去重复、绕弯和废话；\n' +
+            '2. 句子：过长的拆开，过碎的合并，每句只承载一个重心；\n' +
+            '3. 用词：换掉空泛、含糊、重复的词，用词具体准确，不堆形容词和副词；\n' +
+            '4. 节奏：长短句交错，关键处用短句收住；\n' +
+            '5. 落点：每段重点落稳，结尾干净，不拖尾、不另起话头。\n\n' +
+            '【红线 · 必须遵守】\n' +
+            '- 只改表达，不改意思：保留原文视角、事实、观点和人称，原文是第一人称就保持第一人称；\n' +
+            '- 不新增观点、论据、数据、人名、引用或事例；\n' +
+            '- 保持原有段落结构与 Markdown 格式：标题层级、列表、代码块、引用、图片标签等原样保留；\n' +
+            '- 不加入与文章无关的爬山、登山、山峰或游戏类比喻、意象；\n' +
+            '- 不写 AI 式结尾：不升华、不喊口号、不加「让我们一起……」；\n' +
+            '- 不用 emoji；不要输出「--- 修改说明」或任何修改说明、注释、分节标题；\n' +
+            '- 原文没有文章标题（H1）就不要新增标题行。\n\n' +
+            '【输出格式】只输出润色后的 Markdown 正文本身：从正文第一个字开始，到最后一个字结束。不要开场白、不要总结、不要代码块包裹、不要任何正文之外的字符。\n\n' +
+            '【待润色正文】\n' +
+            '——————\n' + body;
         try {
             const res = await api('/chat', 'POST', { content: prompt });
             const ld = document.getElementById('polishLoadingOverlay');
