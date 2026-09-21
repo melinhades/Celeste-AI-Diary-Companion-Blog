@@ -72,11 +72,6 @@
     function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
     let breathPhaseCount = 0;
-    // ===== 呼吸渐进暗化：每完成一个呼吸周期，背景向纯黑推进一截 =====
-    // 3 个周期后完全黑（2 个周期游戏就开始落地，所以第 2 周期末已经接近纯黑）
-    let breathTotalCycles = 0;     // 累计完成的完整呼吸周期数（吸气→屏息→呼气=1周期）
-    const CYCLES_TO_BLACK = 3;    // 总共要多少个周期完全黑
-    let bgBlack = 0;              // 0 = 原暗紫，1 = 纯黑；每周期 +1/3
 
     const goal = { y: 0, ty: 0, w: 400, h: 260, glow: 0 };
     let captionEl = null, audioCtx = null;
@@ -279,9 +274,6 @@
             breathIdx = (breathIdx + 1) % BREATH.length;
             if (breathIdx === 0) {
                 breathCycles++;
-                // 每完成一个完整呼吸周期 → 背景向纯黑推进一截
-                breathTotalCycles++;
-                bgBlack = Math.min(1, breathTotalCycles / CYCLES_TO_BLACK);
                 if (breathCycles >= 2) {
                     startLanding();
                     return;
@@ -445,12 +437,7 @@
 
     function render() {
         ctx.clearRect(0, 0, GW, GH);
-        // 呼吸渐进暗化：原背景 #0a0d18（蓝紫暗）→ 纯黑 #000000
-        // bgBlack 从 0 → 1，每完整呼吸周期推进 1/3
-        const r = Math.round(10 * (1 - bgBlack));
-        const g = Math.round(13 * (1 - bgBlack));
-        const b = Math.round(24 * (1 - bgBlack));
-        ctx.fillStyle = 'rgb(' + r + ',' + g + ',' + b + ')';
+        ctx.fillStyle = '#0a0d18';
         ctx.fillRect(0, 0, GW, GH);
 
         ctx.save();
@@ -539,8 +526,6 @@
         floaters = [];
         breathIdx = 0; breathT = 0;
         breathPhaseCount = 0;
-        breathTotalCycles = 0;
-        bgBlack = 0;
         guideIdx = -1;
         lastInGlow = false;
         landingPhase = false;

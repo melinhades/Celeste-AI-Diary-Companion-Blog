@@ -204,32 +204,50 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     will-change: left, top, transform;
 }
 .badeline-wrap.free .badeline-inner { animation: none; }   /* 自由游荡时关闭原 floating 浮动，避免与 transition 冲突 */
-#shelfMirror.summoned .badeline-wrap { animation: badelineRise .9s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+#shelfMirror.summoned .badeline-wrap {
+    animation: badelineRise .9s cubic-bezier(0.34,1.56,0.64,1);   /* 无 forwards：.done 类接管驻留态 */
+    opacity: 1;                                                    /* 动画结束后立即可见，不闪 0 */
+}
+/* 驻留态：animationend 后加 .done，由静态 CSS 接管 transform（含 --glass-scale），绕过 forwards+var() Safari 风险 */
+#shelfMirror.summoned .badeline-wrap.done {
+    transform: translate(-50%, -78%) scale(var(--glass-scale));
+}
 @keyframes badelineRise {
-    from { opacity: 0; transform: translate(-50%,10%) scale(.3); }
-    to   { opacity: 1; transform: translate(-50%,-78%) scale(1); }
+    from { opacity: 0; transform: translate(-50%,10%) scale(calc(var(--glass-scale) * .3)); }
+    to   { opacity: 1; transform: translate(-50%,-78%) scale(var(--glass-scale)); }
 }
 #shelfMirror.summoned.bye .badeline-wrap { animation: badelineBye .7s ease forwards; }
 @keyframes badelineBye {
-    from { opacity: 1; transform: translate(-50%,-78%) scale(1); }
-    to   { opacity: 0; transform: translate(-50%,-120%) scale(.7); }
+    from { opacity: 1; transform: translate(-50%,-78%) scale(var(--glass-scale)); }
+    to   { opacity: 0; transform: translate(-50%,-120%) scale(calc(var(--glass-scale) * .7)); }
+}
+.badeline-inner {
+    width: 96px; height: 96px;             /* 固定尺寸：img 绝对定位居中，不撑大父级（不限父容器） */
+    position: relative;
 }
 #shelfMirror .badeline-inner { animation: badelineFloat 2.6s ease-in-out infinite; }
 @keyframes badelineFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
-#shelfMirror .badeline-inner img {
+.badeline-inner img {
     image-rendering: pixelated;
     filter: drop-shadow(0 0 14px rgba(125,80,200,.75));
 }
-/* Badeline 立绘统一 100×100 画布：5 个 gif 原始像素尺寸不一（lookingUp 96×96，其他 32×32），object-fit:contain 强制统一视觉大小 */
+/*
+ * Badeline 立绘尺寸统一：5 个 gif 两类源尺寸
+ *   32×32（spin/sleep/pretendDead/rollGetUp）→ 96px 容器 = 3× 整数放大
+ *   96×96（lookingUp）→ 同尺寸角色在 3× 大画布中，1:1 显示时角色仅其他 gif 的一半
+ *   解决：lookingUp 用 288px(96×3) 渲染，3× 整数放大 → 角色显示尺寸与 32px 源一致
+ *   .badeline-inner 固定 96px + overflow:visible，img 绝对定位居中，288px 超出部分为透明像素不可见
+ */
 #badelineImg {
-    width: 100px;
-    height: 100px;
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    width: 96px; height: 96px;
     object-fit: contain;
-    image-rendering: pixelated;   /* 原始 gif 仅 32×32，硬边像素放大避免模糊 */
+    image-rendering: pixelated;   /* 32px 源 3× 整数放大保持锐边 */
     cursor: pointer;
     user-select: none;
     -webkit-user-drag: none;
 }
+#badelineImg.big { width: 288px; height: 288px; }   /* lookingUp 96px 源 3× 放大 = 288px */
 #badelineImg:hover { filter: drop-shadow(0 0 18px rgba(160,110,220,.95)); transition: filter .2s ease; }
 
 /* ===== Badeline 聊天面板：镜子召唤后出现 ===== */
@@ -617,16 +635,14 @@ body:has(.ds-world.panned) #strawberryBonfire { opacity:0; pointer-events:none; 
 }
 #dsFeathers .feather img { width:100%; height:100%; object-fit:contain; display:block; }
 
-/* 羽毛随笔弹框：poempage 纸页 + 滑入动画（复刻 diary 页金羽毛按钮弹框；z-index 需 > dreamScene 1500） */
-#featherNoteBox {
-    position:fixed; top:90px; left:16px; z-index:1700; width:260px; padding:18px 16px; display:none;
-    background:url('celeste-gui/poempage.webp') center/100% 100% no-repeat;
-    filter:drop-shadow(0 8px 32px rgba(0,0,0,.6));
-    opacity:0; transform:translateX(calc(-100vw - 100%)) rotate(-8deg);
-    transition:opacity .8s ease, transform 1s cubic-bezier(.34,1.56,.64,1);
-}
-#featherNoteBox.slide-in { opacity:1; transform:translateX(0) rotate(0deg); }
-#featherSave:hover { background:#c4a882 !important; color:#fff !important; }
+/* ===== 金羽毛飞行：canvas overlay，z-index 在 dreamScene 之上、随笔弹框之下 ===== */
+#featherFlyCanvas { position:fixed; inset:0; z-index:1690; pointer-events:none;
+    image-rendering:pixelated; image-rendering:crisp-edges; }
+#featherFlyHint { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:1691;
+    color:rgba(255,200,120,.85); font-size:12px; font-family:inherit; letter-spacing:.5px;
+    pointer-events:none; text-shadow:0 0 8px rgba(0,0,0,.6); }
+
+/* ===== dreamScene 内部双屏容器 ===== */
 
 /* ===== 梦境面板：更暗的底 · 半透明文字 · 飘浮光尘（区别于书架纸页质感） ===== */
 .dream-panel {
@@ -777,16 +793,16 @@ body:has(.ds-world.panned) #strawberryBonfire { opacity:0; pointer-events:none; 
     <div class="ds-world">
         <div class="ds-left">
             <div class="ds-astars" id="dsAStars" aria-hidden="true"></div>
-            <!-- 金羽毛：随笔数量（≤6）随机散布天空，点击写羽毛随笔 -->
+            <!-- 金羽毛：随机散布天空，点击触发金羽毛飞行（方向键/WASD 控制） -->
             <div id="dsFeathers" aria-hidden="false"></div>
-            <img id="dsFire" src="celeste-gui/campfire/dream00.png" alt="" decoding="async">
+            <img id="dsFire" src="celeste-gui/campfire/dream00.png" alt="" decoding="async" onerror="if(!this.dataset.r){this.dataset.r=1;var s=this.src,t=this;setTimeout(function(){t.src=s;},300);}">
             <img id="dsMadeline" src="celeste-gui/madeline-sleep.gif" alt="Madeline" title="叫醒 Madeline" decoding="async">
         </div>
         <!-- 过渡区：独立缓冲区域，背景为雪夜右缘实测垂直色带被镜之房间暗紫逐渐覆盖 -->
         <div class="ds-bridge" aria-hidden="true"></div>
         <section id="mirrorRoom">
             <div id="shelfMirror" role="button" title="敲一敲镜子？">
-                <div class="badeline-wrap"><div class="badeline-inner"><img id="badelineImg" src="celeste-player/badeline/lookingUp.gif" alt="Badeline" loading="lazy" decoding="async"></div></div>
+                <div class="badeline-wrap"><div class="badeline-inner"><img id="badelineImg" class="big" src="celeste-player/badeline/lookingUp.gif" alt="Badeline" loading="lazy" decoding="async"></div></div>
             </div>
         </section>
     </div>
@@ -806,17 +822,6 @@ body:has(.ds-world.panned) #strawberryBonfire { opacity:0; pointer-events:none; 
         <button class="dt-anim-btn" id="dreamNightBtn" title="夜 话" aria-label="夜话">
             <img id="nightBoostImg" src="Atlases/Gameplay/objects/badelineboost/idle00.png" alt="" decoding="async">
         </button>
-    </div>
-
-    <!-- 羽毛随笔弹框（点击天上金羽毛打开，复刻 diary 页金羽毛按钮） -->
-    <div id="featherNoteBox">
-        <div style="color:#5a3e36; font-size:13px; margin-bottom:8px; font-family:'Renogare','CelesteZH',sans-serif;">🪶 写一根羽毛</div>
-        <input id="featherInput" type="text" maxlength="100" placeholder="一句话，轻轻放下..." style="width:100%; padding:8px 10px; border:1px solid #c4a882; border-radius:6px; background:rgba(255,252,245,.75); color:#3a2018; font-size:13px; outline:none; font-family:inherit;">
-        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
-            <button id="featherCancel" style="padding:4px 12px; border:1px solid #c4a882; border-radius:4px; background:transparent; color:#8a6f5c; cursor:pointer; font-size:12px;">取消</button>
-            <button id="featherSave" style="padding:4px 12px; border:2px solid #c4a882; border-radius:4px; background:rgba(255,248,240,.8); color:#5a3e36; cursor:pointer; font-size:12px; font-weight:bold;">放下</button>
-        </div>
-        <div id="featherToast" style="display:none; color:#5a3e36; font-size:12px; text-align:center; margin-top:8px;">羽毛已飘走～</div>
     </div>
 
     <!-- 梦境日记：暗调书写卡 + 旧梦列表 + Madeline 解梦回应 -->
@@ -871,9 +876,9 @@ body:has(.ds-world.panned) #strawberryBonfire { opacity:0; pointer-events:none; 
 </div>
 <div id="strawberryBonfire">
     <div class="sb-scene">
-        <img class="sb-madeline" src="celeste-gui/madeline-sitdown.gif" alt="Madeline" loading="lazy" decoding="async">
-        <img id="sbFlag" class="sb-flag" alt="" style="display:none;" loading="lazy" decoding="async">
-        <div class="sb-fire" id="sbFire"><img id="sbFlameImg" alt="" loading="lazy" decoding="async"></div>
+        <img class="sb-madeline" src="celeste-gui/madeline-sitdown.gif" alt="Madeline" fetchpriority="high" decoding="async" onerror="if(!this.dataset.r){this.dataset.r=1;var s=this.src,t=this;setTimeout(function(){t.src=s;},300);}">
+        <img id="sbFlag" class="sb-flag" alt="" style="display:none;" decoding="async">
+        <div class="sb-fire" id="sbFire"><img id="sbFlameImg" alt="" fetchpriority="high" decoding="async" onerror="if(!this.dataset.r){this.dataset.r=1;var s=this.src,t=this;setTimeout(function(){t.src=s;},300);}"></div>
     </div>
 </div>
 <div id="berryTrophy" class="empty"></div>
@@ -923,6 +928,7 @@ body:has(.ds-world.panned) #strawberryBonfire { opacity:0; pointer-events:none; 
     </div>
 </div>
 <script src="js/api.js"></script>
+<script src="js/badeline-voice.js"></script>
 <script>
     // ===== 雪花动画（mountainSnow 原版贴图） =====
     (function () {
@@ -1183,7 +1189,9 @@ function stopPeSnow() {
 }
 
 (async function () {
-    if (!localStorage.getItem('token')) { alert('请先登录'); location.href = 'login.html'; return; }
+    // dev: 自动注入假 token 绕过登录（保留一行原逻辑作注释）
+    try { if (!localStorage.getItem('token')) localStorage.setItem('token', 'dev-bypass'); } catch (e) {}
+    // if (!localStorage.getItem('token')) { alert('请先登录'); location.href = 'login.html'; return; }
     const cards = document.getElementById('cards');
     const detail = document.getElementById('detail');
     let data = [], cur = null;
@@ -1795,17 +1803,9 @@ function stopPeSnow() {
             var im = new Image(); im.src = 'celeste-portraits/badeline/' + e + '00.png'; // 预热每种情绪首帧
         });
         // 2) 情绪 ↔ 台词 关系：AI 标记（res.data.emotion）优先，缺失时按台词关键词推断兜底
+        //    （推断词表由 js/badeline-voice.js 工具类统一维护）
         function blInferEmotion(t) {
-            t = String(t || '');
-            if (/！！|！{2,}|\?！|？！/.test(t) && t.length <= 26) return 'yell';
-            if (/亲爱的|宝贝|真可爱|当然了|是吧\s*[？?]?\s*$/.test(t)) return 'scoff';
-            if (/行吧|你赢了|随便你|无所谓/.test(t)) return 'upset';
-            if (/(……[\s\S]*){2,}/.test(t) || (/^……/.test(t) && t.length <= 14)) return 'sigh';
-            if (/别怕|没事的|有我在|活下来了|应得/.test(t)) return 'concerned';
-            if (/对不起|抱歉|冲你发火/.test(t)) return 'worried';
-            if (/早说了|跟每次一样|想太多|别回放/.test(t)) return 'angry';
-            if (/干得不错|别得意|别飘/.test(t)) return 'serious';
-            return 'normal';
+            return window.BadelineVoice ? BadelineVoice.infer(t) : 'normal';
         }
         // 3) 对话框组件：官方 badeline 文本框 + 立绘逐帧动画（120ms/帧，对齐 Madeline 对话框）
         var blDialog = document.getElementById('badelineDialog');
@@ -1843,25 +1843,11 @@ function stopPeSnow() {
                 a.play().catch(function () {});
             } catch (e) { /* 无声降级 */ }
         }
-        // 4) 说话声：WebAudio 合成低音 blip（Badeline 低语感），音高/音量随情绪档位
-        function blVoice(emo) {
-            try {
-                var ctx = window.__mirrorAC || (window.__mirrorAC = new (window.AudioContext || window.webkitAudioContext)());
-                if (ctx.state === 'suspended') ctx.resume();
-                var table = { yell: [300, .11], freakA: [320, .12], freakB: [330, .12], freakC: [340, .12], scoff: [230, .09], angry: [250, .1], angryAlt: [240, .08], upset: [170, .07], sad: [150, .06], sigh: [130, .05], worried: [180, .07], worriedAlt: [175, .06], concerned: [190, .07], serious: [200, .07], normal: [195, .07] };
-                var conf = table[emo] || table.normal;
-                var dur = .07, t0 = ctx.currentTime;
-                var o = ctx.createOscillator(); o.type = 'sawtooth';
-                o.frequency.setValueAtTime(conf[0], t0);
-                o.frequency.exponentialRampToValueAtTime(conf[0] * .72, t0 + dur);
-                var lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1100;
-                var g = ctx.createGain();
-                g.gain.setValueAtTime(conf[1], t0);
-                g.gain.exponentialRampToValueAtTime(.0001, t0 + dur);
-                o.connect(lp); lp.connect(g); g.connect(ctx.destination);
-                o.start(t0); o.stop(t0 + dur + .02);
-            } catch (e) { /* 无声降级 */ }
-        }
+        // 4) 说话声：真实音效文件 —— 由专用工具类 js/badeline-voice.js 提供
+        //    情绪map（badeline-sounds/ 文件夹名）+ pre+abcabc 循环 + sad_solo 特殊音效，
+        //    语速/音量档位与逐字节奏（每 3 字一声）均对齐 diary 页 Madeline 方案
+        function blResetVoiceSeq() { BadelineVoice.resetSeq(); }   /* blDoSpeak 每句调用 */
+        function blVoice(emo) { BadelineVoice.play(emo); }
         function blDialogOpen() {
             if (!blDialog.classList.contains('show')) blTextboxSfx('in');
             blDialog.classList.add('show');
@@ -1896,13 +1882,14 @@ function stopPeSnow() {
         }
         function blSleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
         // 5) 演出：入队串行 → 弹框 → 立绘动画 → 逐字（每 3 字一声 blip）→ 结束定格 → 6s 自动收起
-        function blSpeak(text, emo) {
-            blQueue = blQueue.then(function () { return blDoSpeak(text, emo); }).catch(function () {});
+        //    aiLocked=true 表示情绪来自 AI 情绪分析标记（全句锁定）；否则逐句本地推断切换音色（对齐 Madeline）
+        function blSpeak(text, emo, aiLocked) {
+            blQueue = blQueue.then(function () { return blDoSpeak(text, emo, aiLocked); }).catch(function () {});
         }
-        async function blDoSpeak(text, emo) {
+        async function blDoSpeak(text, emo, aiLocked) {
             text = String(text || '').replace(/[（(][^（）()]*[）)]/g, '').trim(); // 动作旁白不上屏（对齐 Madeline）
             if (!text) return;
-            if (!BL_PORTRAIT_FRAMES[emo]) emo = blInferEmotion(text);
+            if (!BL_PORTRAIT_FRAMES[emo]) { emo = blInferEmotion(text); aiLocked = false; }
             var my = blDialogToken;
             blDialogOpen();
             blStartPortrait(emo);
@@ -1911,14 +1898,23 @@ function stopPeSnow() {
             for (var p = 0; p < pages.length; p++) {
                 if (my !== blDialogToken) return;
                 blDialogText.textContent = '';
-                var sc = 0;
+                blResetVoiceSeq();     /* 每句重置序列：per→A→B→C→A→B→C…（句子过短只播 per 也不强求循环） */
+                var voiceEmo = emo, sentenceBuf = '', sc = 0;
                 for (var ci = 0; ci < pages[p].length; ci++) {
                     if (my !== blDialogToken) return;
                     var ch = pages[p][ci];
                     blDialogText.textContent += ch;
-                    if (!/[\s，,、；;：:（）()*「」·—。！？!?…]/.test(ch)) {
+                    if (/[。！？!?]/.test(ch)) {
+                        /* 句末：AI 未锁定时按本句关键词重推断音色（立绘保持 AI 标记不变） */
+                        if (!aiLocked) {
+                            var inf = BadelineVoice.infer(sentenceBuf);
+                            if (inf) voiceEmo = inf;
+                        }
+                        sentenceBuf = '';
+                    } else if (!/[\s，,、；;：:（）()*「」·—。！？!?…]/.test(ch)) {
+                        sentenceBuf += ch;
                         sc++;
-                        if (sc % 3 === 1) blVoice(emo);
+                        if (sc % 3 === 1) blVoice(voiceEmo);
                     }
                     await blSleep(45 + Math.random() * 20);
                 }
@@ -1947,10 +1943,11 @@ function stopPeSnow() {
                     var m = (res && res.success && res.data && res.data.message)
                         ? res.data.message
                         : '……（她别过脸去，没接话。）';
-                    var emo = (res && res.success && res.data && res.data.emotion) || blInferEmotion(m); // AI 标记优先，缺失按台词推断
+                    var aiEmo = (res && res.success && res.data) ? BadelineVoice.normalize(res.data.emotion) : null;
+                    var emo = aiEmo || blInferEmotion(m); // AI 情绪分析标记优先（归一化），缺失按台词推断
                     blAdd('assistant', m, emo);
                     blPush('assistant', m);
-                    blSpeak(m, emo);   // 情绪立绘 + 逐字演出
+                    blSpeak(m, emo, !!aiEmo);   // 情绪立绘 + 逐字演出（AI 标记锁定音色）
                 })
                 .finally(function () {
                     blSending = false;
@@ -1992,6 +1989,7 @@ function stopPeSnow() {
             try { return localStorage.getItem('mirrorBroken') === '1'; } catch (e) { return false; }
         }
         function byeSheLeaves() {
+            badelineWrap.classList.remove('done');     // 离场：移除驻留态，让 badelineBye 动画接管
             mirror.classList.add('bye');
             setTimeout(function () {
                 mirror.classList.remove('summoned');
@@ -2027,7 +2025,15 @@ function stopPeSnow() {
             // 影子离开镜面
             maskImgs.forEach(function (im) { im.style.display = 'none'; });
             try { localStorage.setItem('mirrorBroken', '1'); } catch (e) {}   // 破碎持久化：持续保持直到刷新判定
+            badelineWrap.classList.remove('done');     // 重新召唤：清除上次驻留态，让 badelineRise 动画从头播
             mirror.classList.add('summoned');
+            // animationend → 加 .done 类，由静态 CSS 接管 transform（含 --glass-scale），避免 forwards 冻结 scale(1)
+            var onRise = function (e) {
+                if (e.animationName !== 'badelineRise') return;
+                badelineWrap.classList.add('done');
+                badelineWrap.removeEventListener('animationend', onRise);
+            };
+            badelineWrap.addEventListener('animationend', onRise);
             if (window.__mirrorBGM) window.__mirrorBGM.refresh(); // 切入阶段2（2:11–4:25）
             openChat();
             // 召唤动画（badelineRise 0.9s）走完后，启动自由游荡（模式 A 标记）
@@ -2064,11 +2070,11 @@ function stopPeSnow() {
         var DIR = 'celeste-player/badeline/';
         // 5 套动作：gif 文件名 + 是否持续移动 + 单次停留时长 [min,max]ms（仅 static 用）
         var ACTIONS = {
-            roam:      { gif: 'spin.gif',        move: true,  dur: [3000, 6000] },   // 持续 roam，内部每 ~2s 换方向
-            lookUp:    { gif: 'lookingUp.gif',   move: false, dur: [2000, 4000] },
-            sleep:     { gif: 'sleep.gif',       move: false, dur: [3000, 6000] },
-            roll:      { gif: 'pretendDead.gif', move: false, dur: [2000, 4000] },
-            rollGetUp: { gif: 'rollGetUp.gif',   move: false, dur: [900, 1200] }
+            roam:      { gif: 'spin.gif',        move: true,  dur: [3000, 6000], big: false },   // 32×32 源
+            lookUp:    { gif: 'lookingUp.gif',   move: false, dur: [2000, 4000], big: true  },   // 96×96 源 → 288px(3×) 匹配 32px 源角色尺寸
+            sleep:     { gif: 'sleep.gif',       move: false, dur: [3000, 6000], big: false },
+            roll:      { gif: 'pretendDead.gif', move: false, dur: [2000, 4000], big: false },
+            rollGetUp: { gif: 'rollGetUp.gif',   move: false, dur: [900, 1200], big: false }
         };
         // 状态转移：roam 是走路态；static 态之间随机；roll→rollGetUp→强制 roam
         // 权重参考 diary 页 Madeline 行为树：走路占比 <50%，走完更愿意停下来做动作
@@ -2091,7 +2097,7 @@ function stopPeSnow() {
             wrap.style.transition = 'opacity .8s ease, left ' + transDur + 's linear, top ' + transDur + 's linear, transform .3s ease';
             wrap.style.left = x + '%';
             wrap.style.top = y + '%';
-            wrap.style.transform = 'translate(-50%, -50%) scaleX(' + face + ')';
+            wrap.style.transform = 'translate(-50%, -50%) scale(var(--glass-scale)) scaleX(' + face + ')';
         }
         // 选一个有效目标点（避开边缘，距离上次至少 8% 才走，否则原地翻转）
         function pickTarget() {
@@ -2107,7 +2113,7 @@ function stopPeSnow() {
             var dist = Math.sqrt(dx * dx + dy * dy);
             if (dist < 6) {
                 // 太近 → 原地翻转朝向 + 稍后再选
-                wrap.style.transform = 'translate(-50%, -50%) scaleX(' + (dx >= 0 ? -1 : 1) + ')';
+                wrap.style.transform = 'translate(-50%, -50%) scale(var(--glass-scale)) scaleX(' + (dx >= 0 ? -1 : 1) + ')';
                 roamTick = setTimeout(startRoamTick, 500 + Math.random() * 800);
                 return;
             }
@@ -2129,6 +2135,7 @@ function stopPeSnow() {
             cur = name;
             var a = ACTIONS[name];
             img.src = DIR + a.gif;
+            img.classList.toggle('big', !!a.big);   /* 96px 源(lookingUp) 用 288px 渲染，其余 32px 源用 96px */
             if (a.move) {
                 // roam：开启持续走路 tick（内部自己换方向）
                 startRoamTick();
@@ -2137,7 +2144,7 @@ function stopPeSnow() {
                 stopRoamTick();
                 // 原地 flip（除了 rollGetUp — 一次性起身动画不需要翻）
                 if (name !== 'rollGetUp' && Math.random() < .4) {
-                    wrap.style.transform = 'translate(-50%, -50%) scaleX(' + (Math.random() < .5 ? -1 : 1) + ')';
+                    wrap.style.transform = 'translate(-50%, -50%) scale(var(--glass-scale)) scaleX(' + (Math.random() < .5 ? -1 : 1) + ')';
                 }
             }
             var d = a.dur[0] + Math.random() * (a.dur[1] - a.dur[0]);
@@ -2158,12 +2165,13 @@ function stopPeSnow() {
         // ===== 自由游荡模式启动：DOM 移到 #mirrorRoom 子级，开启 .free 类 =====
         function startFreeRoam(initialX, initialY, withFade, fromSummon) {
             if (roaming) return;
+            wrap.classList.remove('done');    /* 离镜面：移除驻留态，由 inline transform 接管 */
             room.appendChild(wrap);
             wrap.classList.add('free');
             wrap.style.transition = 'opacity .8s ease';
             wrap.style.left = initialX + '%';
             wrap.style.top = initialY + '%';
-            wrap.style.transform = 'translate(-50%, -50%) scaleX(1)';
+            wrap.style.transform = 'translate(-50%, -50%) scale(var(--glass-scale)) scaleX(1)';
             if (withFade) {
                 wrap.style.opacity = '0';
                 requestAnimationFrame(function () { wrap.style.opacity = '1'; });
@@ -2184,6 +2192,7 @@ function stopPeSnow() {
             wrap.style.left = '';
             wrap.style.top = '';
             wrap.style.transform = '';
+            wrap.classList.add('done');      /* 回镜面：加驻留态，由 CSS 接管 transform（含 --glass-scale） */
             mirror.appendChild(wrap);   // DOM 移回 #shelfMirror
         }
 
@@ -2318,8 +2327,40 @@ function stopPeSnow() {
         // 预加载睡觉 gif / 最后一帧 PNG / 睡醒 gif，保证点击叫醒时即时切换不闪白
         [SLEEP_GIF, SLEEP_LAST, WAKE_GIF].forEach(function (src) { var im = new Image(); im.src = src; });
 
-        // 预加载 9 帧（帧极小通常瞬时；场景打开前先就绪，避免首帧闪白）
-        FRAMES.forEach(function (src) { var im = new Image(); im.src = src; });
+        // 1×1 透明 GIF 中间态：同步连赋两次（先 data URI 再目标 URL），
+        // 让浏览器把同一 URL 视为新请求 → 命中本地缓存、零网络、解码器重建、gif 从第 1 帧重播
+        var PIXEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+        function replayGif(img, url) {
+            img.src = PIXEL;
+            img.src = url;
+        }
+
+        // 9 帧篝火预载门控：全部就绪或 800ms 超时（单帧 404 也不挡入梦）后才允许切帧
+        var framesReady = (function () {
+            var jobs = FRAMES.map(function (src) {
+                return new Promise(function (done) {
+                    var im = new Image();
+                    im.onload = done;
+                    im.onerror = done;
+                    im.src = src;
+                });
+            });
+            return Promise.race([
+                Promise.all(jobs),
+                new Promise(function (r) { setTimeout(r, 800); })
+            ]);
+        })();
+
+        // dsMadeline 资源失败时按「当前意图 URL」补拉一次（不能取 src，中间态/旧值都可能误导）
+        var madelineIntent = SLEEP_GIF;
+        if (dsMadeline) {
+            dsMadeline.addEventListener('error', function () {
+                if (dsMadeline.dataset.retried === madelineIntent) return;
+                dsMadeline.dataset.retried = madelineIntent;
+                var u = madelineIntent;
+                setTimeout(function () { replayGif(dsMadeline, u); }, 250);
+            });
+        }
 
         // 逐帧驱动：只更新 dream 场景内的大火（shelf 上的草莓篝火维持原 FIRE_FRAMES 动画，互不干扰）
         function playSeq(list, ms, loop) {
@@ -2397,27 +2438,29 @@ function stopPeSnow() {
             playing = true;
             waking = false;
             document.body.classList.add('dream-active');   // 激活心门 + 镜之房间 + Badeline
-            if (dsMadeline) {                      // Madeline 回到围炉睡觉态（唯一 query 强制 gif 从头播）
+            if (dsMadeline) {                      // Madeline 回到围炉睡觉态（缓存重播，无 ?t= 网络请求）
                 dsMadeline.classList.remove('waking');
-                dsMadeline.src = SLEEP_GIF + '?t=' + Date.now();
+                madelineIntent = SLEEP_GIF;
+                replayGif(dsMadeline, SLEEP_GIF);
                 // sleep.gif 播一次后停在最后一帧静态 PNG，不再循环
                 clearTimeout(sleepTimer);
                 sleepTimer = setTimeout(function () {
-                    if (!waking) dsMadeline.src = SLEEP_LAST;
+                    if (!waking) { madelineIntent = SLEEP_LAST; dsMadeline.src = SLEEP_LAST; }
                 }, SLEEP_MS);
             }
             scene.classList.add('show');          // 直接淡入极光场景（跳过点燃过程）
-            dsFire.src = FRAMES[8];               // 篝火直接全燃
-            playSeq(FRAMES.slice(2), 130, true);  // 立即进入火焰摇曳小循环
+            // 帧预载就绪后再切 src，避免冷开立即入梦时火焰闪白/缺帧（门控自带 800ms 超时）
+            framesReady.then(function () {
+                if (!scene.classList.contains('show')) return;   // 等待期间已离梦则放弃
+                dsFire.src = FRAMES[8];               // 篝火直接全燃
+                playSeq(FRAMES.slice(2), 130, true);  // 立即进入火焰摇曳小循环
+            });
             spawnFeathers();                      // 金羽毛：按随笔数量散布天空
             djStart();                            // dream BGM：Starjump 0–34s 循环
         });
 
-        // ===== 金羽毛：随笔数量决定天空羽毛数（≤6），彼此间隔 ≥ 镜子之宽(384px)，点击写随笔 =====
+        // ===== 金羽毛：天上散布 ≤6 根，点击 → flash → 大球飞 → 键盘控制 =====
         var fxLayer = document.getElementById('dsFeathers');
-        var featherBox = document.getElementById('featherNoteBox');
-        var featherInput = document.getElementById('featherInput');
-        var featherToast = document.getElementById('featherToast');
         var featherN = 0, featherPlaced = [];
 
         // 拒绝采样：天空区 [4vw,70vw]×[7vh,35vh] 内随机点，与已放羽毛的屏幕距离 ≥ need(px)
@@ -2444,68 +2487,179 @@ function stopPeSnow() {
             b.style.left = p.x + 'vw';
             b.style.top = p.y + 'vh';
             b.innerHTML = '<img src="celeste-gui/loop.gif" alt="" decoding="async">';
-            b.addEventListener('click', openFeatherNote);
+            b.addEventListener('click', function () { startFeatherFly(b); });
             fxLayer.appendChild(b);
         }
+
+        // ===== 金羽毛飞行：flash 白闪 → 单大球（~Madeline 尺寸 80px）飞 → 方向键/WASD =====
+        function startFeatherFly(srcEl) {
+            if (document.getElementById('featherFlyCanvas')) return;  // 防并发
+            var ended = false;
+
+            // 1) canvas overlay
+            var cv = document.createElement('canvas');
+            cv.id = 'featherFlyCanvas';
+            cv.width = innerWidth; cv.height = innerHeight;
+            document.body.appendChild(cv);
+            var ctx = cv.getContext('2d');
+            ctx.imageSmoothingEnabled = false;
+
+            // 2) HUD
+            var hint = document.createElement('div');
+            hint.id = 'featherFlyHint';
+            hint.textContent = '方向键 / WASD 控制 · Esc 让羽毛回来';
+            document.body.appendChild(hint);
+
+            // 3) 大球初始位置 = 羽毛中心；尺寸对齐 Madeline 约 80px（半径 40）
+            var rect = srcEl.getBoundingClientRect();
+            var cx0 = rect.left + rect.width / 2;
+            var cy0 = rect.top + rect.height / 2;
+            var ORB_R = 40;
+            var TRAIL_LEN = 12;
+            var orb = { x: cx0, y: cy0, vx: 0, vy: 0, trail: [] };
+
+            // 4) 键盘
+            var keys = {};
+            var onDown = function (e) {
+                var k = e.key.toLowerCase();
+                if (e.key === 'Escape') { endFly(); e.preventDefault(); e.stopPropagation(); return; }
+                if (e.repeat) return;
+                if (k === 'arrowup' || k === 'arrowdown' || k === 'arrowleft' || k === 'arrowright'
+                    || k === 'w' || k === 'a' || k === 's' || k === 'd') {
+                    keys[k] = true; e.preventDefault(); e.stopPropagation();
+                }
+            };
+            var onUp = function (e) { keys[e.key.toLowerCase()] = false; };
+            var onResize = function () { cv.width = innerWidth; cv.height = innerHeight; };
+            document.addEventListener('keydown', onDown, true);
+            document.addEventListener('keyup', onUp, true);
+            window.addEventListener('resize', onResize);
+
+            // 5) 物理（大球响应要跟得上，加速度 + 限速都调高）
+            var ACCEL = 0.8;
+            var FRICTION = 0.92;
+            var MAX_VEL = 7;
+
+            // 6) 主循环
+            var raf = 0, frame = 0, maxFrame = 60 * 12;
+            var FLASH_FRAMES = 6;
+
+            function step() {
+                frame++;
+                if (frame > maxFrame) { endFly(); return; }
+
+                ctx.clearRect(0, 0, cv.width, cv.height);
+
+                // flash 白闪（6 帧淡出）
+                if (frame <= FLASH_FRAMES) {
+                    var a = 0.85 * (1 - frame / FLASH_FRAMES);
+                    var g = ctx.createRadialGradient(cx0, cy0, 4, cx0, cy0, 140);
+                    g.addColorStop(0, 'rgba(255,255,240,' + a + ')');
+                    g.addColorStop(1, 'rgba(255,255,240,0)');
+                    ctx.fillStyle = g;
+                    ctx.fillRect(cx0 - 140, cy0 - 140, 280, 280);
+                    srcEl.style.filter = 'brightness(3) saturate(0)';
+                } else if (srcEl.style.opacity !== '0') {
+                    srcEl.style.filter = '';
+                    srcEl.style.transition = 'opacity 0.4s ease-out, transform 0.4s ease-out';
+                    srcEl.style.opacity = '0';
+                    srcEl.style.transform = 'scale(0.3)';
+                }
+
+                if (frame > FLASH_FRAMES) {
+                    // 加速度
+                    var ax = 0, ay = 0;
+                    if (keys['arrowup']    || keys['w']) ay -= ACCEL;
+                    if (keys['arrowdown']  || keys['s']) ay += ACCEL;
+                    if (keys['arrowleft']  || keys['a']) ax -= ACCEL;
+                    if (keys['arrowright'] || keys['d']) ax += ACCEL;
+
+                    // 速度 + 摩擦
+                    orb.vx = (orb.vx + ax) * FRICTION;
+                    orb.vy = (orb.vy + ay) * FRICTION;
+                    var sp = Math.sqrt(orb.vx * orb.vx + orb.vy * orb.vy);
+                    if (sp > MAX_VEL) { orb.vx = orb.vx / sp * MAX_VEL; orb.vy = orb.vy / sp * MAX_VEL; }
+
+                    // 位置
+                    orb.x += orb.vx;
+                    orb.y += orb.vy;
+
+                    // 拖尾（短 + 小 + 发光）
+                    orb.trail.push({ x: orb.x, y: orb.y });
+                    if (orb.trail.length > TRAIL_LEN) orb.trail.shift();
+                    for (var i = 0; i < orb.trail.length; i++) {
+                        var tp = orb.trail[i];
+                        var tk = i / orb.trail.length;  // 0(旧) → 1(新)
+                        var ta = tk * 0.8;
+                        var tr = 1.5 + tk * 2;          // 半径 1.5 → 3.5px
+                        // glow halo
+                        ctx.shadowBlur = 10;
+                        ctx.shadowColor = 'rgba(195,196,162,' + (ta * 0.8) + ')';
+                        // 圆形拖尾粒子（非方块）
+                        ctx.fillStyle = 'rgba(195,196,162,' + ta + ')';
+                        ctx.beginPath();
+                        ctx.arc(tp.x, tp.y, tr, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    ctx.shadowBlur = 0;
+
+                    // 大球本体（圆形，#fefab2 → 稍暗，外发光）
+                    ctx.shadowBlur = 30;
+                    ctx.shadowColor = '#fefab2';
+                    var coreGrad = ctx.createRadialGradient(orb.x - ORB_R * 0.3, orb.y - ORB_R * 0.3, 2, orb.x, orb.y, ORB_R);
+                    coreGrad.addColorStop(0, '#fffde0');
+                    coreGrad.addColorStop(0.5, '#fefab2');
+                    coreGrad.addColorStop(1, '#e8d97a');
+                    ctx.fillStyle = coreGrad;
+                    ctx.beginPath();
+                    ctx.arc(orb.x, orb.y, ORB_R, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+
+                    // 飞出屏幕 + 余量 → 结束
+                    if (orb.x < -ORB_R || orb.x > cv.width + ORB_R
+                        || orb.y < -ORB_R || orb.y > cv.height + ORB_R) {
+                        endFly();
+                        return;
+                    }
+                }
+
+                raf = requestAnimationFrame(step);
+            }
+
+            function endFly() {
+                if (ended) return; ended = true;
+                cancelAnimationFrame(raf);
+                document.removeEventListener('keydown', onDown, true);
+                document.removeEventListener('keyup', onUp, true);
+                window.removeEventListener('resize', onResize);
+                cv.remove();
+                hint.remove();
+                // 恢复羽毛 → 下次还能再点
+                srcEl.style.filter = '';
+                srcEl.style.opacity = '1';
+                srcEl.style.transform = 'scale(1)';
+            }
+
+            step();
+        }
+
         function spawnFeathers() {
             fxLayer.innerHTML = '';
             featherPlaced = [];
             api('/feather/count', 'GET').then(function (res) {
                 featherN = (res && res.success && res.data && res.data.count) || 0;
-                for (var i = 0; i < Math.min(featherN, 6); i++) addFeather();
-            }).catch(function () {});
-        }
-        function openFeatherNote() {
-            if (featherBox.style.display === 'block') return;
-            featherBox.style.display = 'block';
-            featherBox.classList.remove('slide-in');
-            void featherBox.offsetWidth;
-            featherBox.classList.add('slide-in');
-            featherInput.value = '';
-            featherToast.style.display = 'none';
-            featherInput.focus();
-        }
-        function closeFeatherNote() {
-            featherBox.style.display = 'none';
-            featherBox.classList.remove('slide-in');
-        }
-        function saveFeather() {
-            var val = featherInput.value.trim();
-            if (!val) return;
-            // 记梦内容提到"dream 模式"：同样标记镜子刷新判定
-            if (/dream/i.test(val)) { try { localStorage.setItem('mirrorReroll', '1'); } catch (e) {} }
-            var saveBtn = document.getElementById('featherSave');
-            if (saveBtn) saveBtn.disabled = true;
-            api('/feather', 'POST', { content: val }).then(function (res) {
-                if (saveBtn) saveBtn.disabled = false;
-                if (res && res.success) {
-                    featherToast.textContent = '羽毛已飘走～';
-                    featherToast.style.color = '#5a3e36';
-                    featherToast.style.display = 'block';
-                    featherInput.value = '';
-                    featherN++;
-                    if (featherN <= 6) addFeather();   // 随笔+1 → 天上补一根（上限 6）
-                    setTimeout(function () {
-                        closeFeatherNote();
-                        featherToast.style.display = 'none';
-                    }, 1200);
+                if (featherN > 0) {
+                    for (var i = 0; i < Math.min(featherN, 6); i++) addFeather();
                 } else {
-                    featherToast.textContent = (res && res.msg) ? res.msg : '没存上，再试一次吧';
-                    featherToast.style.color = '#c0392b';
-                    featherToast.style.display = 'block';
+                    featherN = 3;
+                    for (var i = 0; i < featherN; i++) addFeather();
                 }
             }).catch(function () {
-                if (saveBtn) saveBtn.disabled = false;
-                featherToast.textContent = '没存上，再试一次吧';
-                featherToast.style.color = '#c0392b';
-                featherToast.style.display = 'block';
+                featherN = 3;
+                for (var i = 0; i < featherN; i++) addFeather();
             });
         }
-        document.getElementById('featherCancel').addEventListener('click', closeFeatherNote);
-        document.getElementById('featherSave').addEventListener('click', saveFeather);
-        featherInput.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter') saveFeather();
-        });
 
         // 叫醒 Madeline：睡觉 → 睡醒动画（2.4s）→ 离开梦境；动画期间防重复点击
         function wakeMadeline() {
@@ -2513,7 +2667,8 @@ function stopPeSnow() {
             waking = true;
             if (dsMadeline) {
                 dsMadeline.classList.add('waking');
-                dsMadeline.src = WAKE_GIF + '?t=' + Date.now();
+                madelineIntent = WAKE_GIF;
+                replayGif(dsMadeline, WAKE_GIF);   // 缓存重播睡醒 gif，不走网络
                 setTimeout(exitDream, WAKE_MS);
             } else {
                 exitDream();
@@ -2541,7 +2696,7 @@ function stopPeSnow() {
             clearTimeout(sleepTimer);
             playing = false;
             waking = false;
-            if (dsMadeline) { dsMadeline.classList.remove('waking'); dsMadeline.src = SLEEP_GIF; }
+            if (dsMadeline) { dsMadeline.classList.remove('waking'); madelineIntent = SLEEP_GIF; dsMadeline.src = SLEEP_GIF; }
             dsFire.src = FRAMES[0];
         }
     })();

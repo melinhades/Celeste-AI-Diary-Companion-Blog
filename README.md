@@ -39,6 +39,7 @@
 - [✨ Core Features](#-core-features)
 - [🖼️ Screenshots Gallery](#️-screenshots-gallery)
 - [🪶 Golden Feather System](#-golden-feather-system)
+- [🪞 Dream Mirror & Badeline](#dream-mirror--badeline)
 - [🏗️ System Architecture](#️-system-architecture)
 - [📁 Project Structure](#-project-structure)
 - [🚀 Quick Start](#-quick-start)
@@ -61,7 +62,7 @@
 
 The **Celeste AI Diary Companion Blog** is a dual-platform system that merges **private AI-assisted diary writing** with **optional public blog sharing**. Inspired by the indie masterpiece *Celeste* (Extremely OK Games), every pixel, sound, and interaction is themed around Madeline's journey to the summit.
 
-Write your diaries here, and **Madeline** — warm, sincere, delicate — will be your constant climbing companion: offering writing feedback, proactive check-ins, cozy chats, feather-breathing gameplay, daily postcards, and bookshelf snapshots. The tsundere innkeeper **Oshiro** permanently resides in the shop.
+Write your diaries here, and **Madeline** — warm, sincere, delicate — will be your constant climbing companion: offering writing feedback, proactive check-ins, cozy chats, feather-breathing gameplay, daily postcards, and bookshelf snapshots. In the dream world behind the bookshelf lives **Badeline** — your sharp-tongued shadow self: shatter the mirror to summon her, talk through the night, and open the crystal **Heart Door**. The tsundere innkeeper **Oshiro** permanently resides in the shop.
 
 This dual-platform flow creates meaning: **intimate personal reflections in the diary can evolve into thoughtful blog entries** when you choose to share your insights with the world.
 
@@ -81,6 +82,9 @@ This dual-platform flow creates meaning: **intimate personal reflections in the 
 | <img src="blog-ui/celeste-collectables/cassette.png" width="28"> | **Memory System** | Daily postcards & monthly snapshot reflections (RAG-powered) | ✅ |
 | <img src="blog-ui/celeste-feather/feather0.png" width="28"> | **Feather Breathing Game** | Physics-based falling feather for anxiety relief | ✅ |
 | <img src="blog-ui/celeste-collectables/strawberry.png" width="28"> | **Strawberry Economy** | Earn 🍓 through writing, spend in Oshiro's shop | ✅ |
+| 🪞 | **Badeline Night Talk** | Shatter the mirror to summon your shadow self; 15 emotion portraits + emotion-driven voice sfx | ✅ |
+| 🌙 | **Dream World** | Snow-night campfire & mirror room with smooth cinematic camera pan | ✅ |
+| 💎 | **Crystal Heart Door** | Split-open heart door, star-dust burst, crystal-heart ceremony | ✅ |
 | 📝 | **Private Diary Writing** | Secure, formatted text with auto-save & AI feedback | ✅ |
 | 🌐 | **Public Blog Sharing** | Transform diary entries into blog posts with one click | ✅ |
 | 🔄 | **Diary → Blog Flow** | Seamless transition from private reflection to public sharing | ✅ |
@@ -151,6 +155,36 @@ A dual-core healing module inspired by *Celeste*: **Reflective Journaling** + **
 **🎯 Workflow:** `Awareness (Write)` ➔ `Relief (Breathe)` ➔ `Reward (Get Feather)` ➔ `Restart`
 
 > *Let every reflection be heard, and every anxiety find an exit.*
+
+---
+
+## 🪞 Dream Mirror & Badeline
+
+<p align="center">
+  <img src="blog-ui/celeste-gui/dream/scene.png" alt="Dream World" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
+</p>
+
+Behind the bookshelf lies a **two-part dream world** — a snow-night campfire on the left and a purple mirror room on the right, joined by a cinematic one-viewport camera pan. Click the mirror to **shatter it** and summon **Badeline**, the part of you that is sharp, honest, and over-protective.
+
+| 🎮 | Element | How it works |
+|:---:|---------|--------------|
+| 🌙 | **Dream Scene** | Snow-night campfire + mirror room on a 200vw stage; smooth horizontal camera pan |
+| 🪞 | **Mirror Shatter** | Click to crack & shatter (WebAudio sfx); the break persists across visits |
+| 🎭 | **15 Emotion Portraits** | AI tags each line with one of 15 states; frame-by-frame pixel portrait animation |
+| 🔊 | **Emotion Voice SFX** | Real voice samples matched to emotion (see below) |
+| 🚶 | **Free-roam Behavior Tree** | Badeline wanders, looks up, sleeps, plays dead — with idle/move state machine |
+| 💎 | **Crystal Heart Door** | White flash → door splits → star-dust burst → crystal-heart ceremony |
+
+### 🔊 Emotion-driven Voice System
+
+A dedicated utility [`badeline-voice.js`](blog-ui/js/badeline-voice.js) (`window.BadelineVoice`) plays real voice samples, keeping the same style/pacing as Madeline's voice in the diary page:
+
+- **Emotion map** is built from the folder names under `badeline-sounds/` — 10 loopable emotions (`normal`, `angry`, `concerned`, `freak`, `scoff`, `serious`, `skeptical`, `upset`, `worried`, `yell`)
+- **`pre` + `abcabc` loop**: each sentence opens with the `per` (pre) sample, then cycles `mid_A → mid_B → mid_C`, each step randomly picking one of 10 numbered clips
+- **Playback rate & volume** shift per emotion; the typewriter triggers one blip every 3 characters — identical pacing to Madeline
+- **`sad_solo`**: a single standalone clip on its own channel, triggered **only** when the AI detects the special deep-sorrow emotion (`sad`); it never enters the loop
+
+> 🎙️ *Audio unlocks after your first click/keypress (browser autoplay policy).*
 
 ---
 
@@ -276,11 +310,12 @@ blog/
     ├── index.html                       # Blog index
     ├── diary.html                       # Diary main page
     ├── write.html                       # Writing editor (Markdown + AI tools)
-    ├── shelf.html                       # Bookshelf (snapshots)
+    ├── shelf.html                       # Dream world: Heart Door & Badeline
     ├── shop.html                        # Oshiro Inn (strawberry economy)
     ├── me.html                          # Personal space
     ├── archives.html / article.html     # Blog archives & detail
     ├── login.html / register.html       # Auth pages
+    ├── badeline-sounds/                 # Badeline voice clips (10 emotions + sad_solo)
     ├── css/  js/  celeste-gui/  celeste-sounds/  celeste-font-en/ ...
 ```
 
@@ -468,6 +503,12 @@ logging:
 
 **Oshiro** (Tsundere innkeeper) — Shop page exclusive, with `PromptBuilder.oshiroChat` and strawberry economy interactions.
 
+**Badeline** (Shadow self) — Dream world behind the bookshelf:
+- **Summon**: shatter the mirror (`/diary/badeline-chat`); the broken state persists and can be refreshed by the dream-mode reroll
+- **15-state emotion system**: the AI prefixes each reply with `[emotion:xxx]`, driving both pixel portraits and the voice sfx
+- **Night talk**: `/diary/dream-night-talk` lets her read and respond to a specific dream
+- **Voice sfx**: the `badeline-voice.js` utility maps emotions to real clips (`pre+abcabc` loop, plus the one-shot `sad_solo`)
+
 **RAG Memory** (bge-m3 embeddings):
 - `MemoryServiceImpl.searchContext()` — Semantic search over diary history
 - `ContextChunk{source, text, label, relevanceScore}` augmenting prompts
@@ -540,7 +581,7 @@ blog-ui/
 ├── index.html          → Blog feed (category filter, search, popular, tags)
 ├── diary.html          → Postcard viewer + Madeline chat (~2400-line diary.js)
 ├── write.html          → Markdown editor + AI toolbar (Polish, Generate, Madeline)
-├── shelf.html          → Bookshelf snapshots (grid, modal, export)
+├── shelf.html          → Dream world (Heart Door, mirror room, Badeline)
 ├── shop.html           → Oshiro Inn (dialogue, strawberry shop)
 ├── me.html             → Profile, stats, collection, settings
 ├── article.html        → Blog article detail (content, comments, likes)
@@ -551,6 +592,7 @@ blog-ui/
 **Key JS Modules**:
 - `api.js` — Centralized fetch wrapper with auth interceptors, strawberry balance
 - `diary.js` — Immersive typewriter, streaming AI, emotion UI, autosave, feather game integration
+- `badeline-voice.js` — Badeline emotion voice: `pre+abcabc` loop, per-emotion rate/volume, `sad_solo` special
 - `write-madeline.js` — 8-pose pixel avatar, resource optimizer, spatial audio
 - `feather-game.js` — Physics engine, difficulty scaling, event system
 
@@ -827,6 +869,7 @@ git push origin feature/your-feature-name
 | Compile "cannot find symbol" | 1. Check import path (e.g. `UserThreadLocal` in `utils` pkg) |
 | Constructor mismatch | 1. `@AllArgsConstructor` field order = param order |
 | Audio 404 | 1. Path missing `madeline/` layer (`celeste-sounds/madeline/...`) |
+| Badeline voice silent | 1. First click/keypress unlocks audio  2. Confirm `badeline-sounds/` restored (10 dirs + `sad_solo`) |
 | Emotion display broken | 1. AI response must be one of 7 valid values (else falls back to `default`) |
 | `diarySaveCount` weird | 1. Check `localStorage` diary count logic |
 | Feather game unresponsive | 1. Browser console for JS errors |
@@ -915,9 +958,9 @@ git push origin feature/your-feature-name
 
 <a href="https://www.star-history.com/?repos=melinhades%2Fceleste-ai-diary-companion-blog&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=melinhades/celeste-ai-diary-companion-blog&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=melinhades/celeste-ai-diary-companion-blog&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=melinhades/celeste-ai-diary-companion-blog&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=melinhades/blog&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=melinhades/blog&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=melinhades/blog&type=date&legend=top-left" />
  </picture>
 </a>
 
