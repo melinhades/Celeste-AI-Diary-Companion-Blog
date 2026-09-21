@@ -692,8 +692,10 @@ public class DiaryServiceImpl implements DiaryService {
         if (!saved.isSuccess()) return saved;
 
         String snippet = content.length() > 1500 ? content.substring(0, 1500) : content;
+        Persona persona = personaService.getActive(user.getId());
+        List<Memory> memories = memoryService.getRelevant(user.getId(), snippet);
         String reply = aiClient.chat(new ArrayList<>(java.util.Arrays.asList(
-                new AiMessage("user", PromptBuilder.dreamReading(userName, snippet)))));
+                new AiMessage("user", PromptBuilder.dreamReading(persona, memories, userName, snippet)))));
         if (reply == null || reply.isBlank()) {
             reply = "……我记得这个梦的感觉。等天亮了，我们再慢慢说。";
         }
