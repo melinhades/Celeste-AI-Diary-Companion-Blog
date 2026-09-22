@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BerryOS Demo</title>
+<style>
+  @font-face {
+    font-family: 'Renogare';
+    src: url('celeste-font-en/Renogare-Regular.otf') format('opentype');
+  }
+  @font-face {
+    font-family: 'CelesteZH';
+    src: url('fonts/NotoSansCJKsc-Medium.otf') format('opentype');
+  }
+  /* PPT 播放器用模板原版字体 */
+  @font-face {
+    font-family: 'RenoTpl';
+    src: url('Atlases/WaveDashing/font/Renogare.ttf') format('truetype');
+  }
+  @font-face {
+    font-family: 'HanTplMed';
+    src: url('Atlases/WaveDashing/font/SourceHanSansSC-Medium.otf') format('opentype');
+  }
+  @font-face {
+    font-family: 'HanTplReg';
+    src: url('Atlases/WaveDashing/font/SourceHanSansSC-Regular.otf') format('opentype');
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; cursor: none; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+
+  /* 游戏画面舞台：2540×1429（16:9，截图去除四边黑边后的真实区域），等比缩放居中 */
+  #stage {
+    position: fixed;
+    left: 50%; top: 50%;
+    translate: -50% -50%;
+    width: min(100vw, calc(100vh * 2540 / 1429));
+    aspect-ratio: 2540 / 1429;
+    container-type: size;
+    overflow: hidden;
+    /* 桌面：纯青绿底色 */
+    background: #118475;
+  }
+
+  /* ============ 桌面图标通用组件 ============
+     约定：任何桌面文件只要生成如下结构即可自动拥有 hover/选中/双击进入：
+     <div class="deskicon" data-href="可选跳转地址"
+          style="--x:中心%;--y:顶部%;--w:图标宽cqw;">
+       <div class="di-img"><img src="..."></div>
+       <span class="di-label">文件名</span>
+     </div>
+     所有图标格子（--cell-w）尺寸完全一致；文件名过长时居中探出格子，不影响框大小。
+     交互由 #stage 上的事件委托统一处理，新节点无需再绑事件。 */
+  .deskicon {
+    position: absolute;
+    left: var(--x);
+    top: var(--y);
+    transform: translateX(-50%);
+    width: var(--cell-w, 7.9cqw); /* 统一格子宽：所有图标的 hover/选中框一样大 */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .deskicon .di-img { position: relative; width: var(--w); }
+  .deskicon .di-img img { display: block; width: 100%; }
+
+  .di-label {
+    margin-top: 1.42cqw; /* 图标底到文字 36px @2540（实测） */
+    white-space: nowrap;
+    line-height: 1;
+    color: #fff;
+    font-family: 'Renogare', 'CelesteZH', sans-serif;
+    font-size: 1.299cqw; /* 33px @2540 */
+  }
+
+  /* hover：白色虚线框沿统一格子边缘（选中后不再显示） */
+  .deskicon:not(.selected):hover {
+    outline: 0.14cqw dashed #fff;
+    outline-offset: 0.26cqw;
+  }
+  /* 选中：白色实线框 + 半透明白色高亮，与 hover 框同位置同大小（垫在内容下层，不遮图标文字） */
+  .deskicon.selected::after {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    pointer-events: none;
+    inset: -0.26cqw;
+    background: rgba(255, 255, 255, 0.20);
+    border: 0.18cqw solid #fff;
+  }
+  /* 选中后文字变深色（游戏内选中态） */
+  .deskicon.selected .di-label { color: #2e2e40; }
+
+  /* 回收站：纯静态图标，不参与任何 hover/选中/进入 */
+  .ico { position: absolute; display: block; }
+  #icoRecycle  { left: 5.025%; top: 23.77%; width: 6.610%; }
+  #lblRecycle {
+    position: absolute;
+    left: 6.417%; top: 37.86%; width: 3.858%;
+    text-align: center;
+    white-space: nowrap;
+    line-height: 1;
+    color: #fff;
+    font-family: 'CelesteZH', sans-serif;
+    font-size: 1.299cqw;
+  }
+
+  /* 底部任务栏：米色主体 + 顶部 6px 高光沿（截图色值） */
+  #taskbar {
+    position: absolute;
+    left: 0; right: 0;
+    top: 92.582%;
+    height: 7.418%;
+    background: linear-gradient(to bottom,
+      #DFE3D2 0%,
+      #ECE9D8 0.94%,
+      #ECE9D8 4.72%,
+      #DEDABC 4.72%,
+      #DEDABC 5.66%,
+      #D9D3B1 5.66%
+    );
+  }
+
+  /* BerryOS 开始按钮：奶油色块 + 1px 凸起边框 */
+  #startBtn {
+    position: absolute;
+    left: 0.433%; top: 93.28%;
+    width: 9.173%; height: 5.878%;
+    background: #ECE9D8;
+    border: solid #E2DDC4;
+    border-width: 0.0700cqh 0.0394cqw;
+  }
+  #startBerry {
+    position: absolute;
+    left: 0.998%; top: 94.42%;
+    width: 2.040%;
+  }
+
+  /* 任务栏深色文字（实测色值，Renogare，横向微压缩） */
+  .tasktext {
+    position: absolute;
+    top: 95.52%;
+    line-height: 1;
+    white-space: nowrap;
+    color: #32312c;
+    font-family: 'Renogare', sans-serif;
+  }
+  #startText {
+    left: 3.701%;
+    font-size: 1.417cqw; /* 36px @2540 */
+    transform: scaleX(0.827);
+    transform-origin: left top;
+  }
+  #clock {
+    right: 1.457%;
+    font-size: 1.260cqw; /* 32px @2540 */
+    transform: scaleX(0.902);
+    transform-origin: right top;
+  }
+
+  /* 鼠标光标 = 原版小鸟 cursor.png，鸟喙为热点 */
+  #bird {
+    position: absolute;
+    left: 48.88%; top: 59.02%;
+    width: 6.479%;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  /* ================= PPT 播放器 ================= */
+  #pptPlayer {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    display: none;
+    perspective: 2200px;
+    transform-origin: center center;
+    transition: transform .55s cubic-bezier(.2,.8,.25,1), opacity .42s ease;
+    will-change: transform, opacity;
+  }
+  #pptPlayer.show { display: block; }
+
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: none;
+    overflow: hidden;
+    transform-style: preserve-3d;
+  }
+  .slide.active, .slide.leaving { display: block; }
+
+  /* ---- 元素基础 ---- */
+  .it {
+    position: absolute;
+    opacity: 0;
+    color: #000;
+  }
+  .slide.active .it, .slide.leaving .it { animation: rise .72s cubic-bezier(.2,.9,.3,1.2) both; animation-delay: var(--d, 0s); }
+  .slide.active .it.anim-pop,    .slide.leaving .it.anim-pop    { animation-name: pop; }
+  .slide.active .it.anim-left,   .slide.leaving .it.anim-left   { animation-name: slideL; }
+  .slide.active .it.anim-whoosh, .slide.leaving .it.anim-whoosh { animation-name: whooshIn; }
+  .slide.active .it.anim-rot,    .slide.leaving .it.anim-rot    { animation-name: rotWhoosh; transform-origin: 60% 80%; }
+  .slide.active .it.anim-bounce, .slide.leaving .it.anim-bounce { animation-name: bounceIn; }
+  .slide.active .it.anim-zoom,   .slide.leaving .it.anim-zoom   { animation-name: zoomSpin; }
+  .slide.active .it.anim-rise,   .slide.leaving .it.anim-rise   { animation-name: rise; }
+  .it .ch { display: inline-block; opacity: 0; }
+  /* 逐字容器：自身不做入场，只播子字动画 */
+  .slide.active .it.chars-box, .slide.leaving .it.chars-box { animation: none; opacity: 1; }
+  .slide.active .it .ch, .slide.leaving .it .ch { animation: charPop .59s cubic-bezier(.2,.8,.3,1.4) both; animation-delay: calc(var(--d, 0s) + var(--cd, 0s) * 0.091s); }
+
+  @keyframes charPop {
+    0%   { opacity: 0; transform: scale(0.1) translateX(0); }
+    50%  { opacity: 1; transform: scale(1.08) translateX(0.08em); }
+    100% { opacity: 1; transform: scale(1) translateX(0); }
+  }
+  @keyframes pop    { 0%{opacity:0; transform: scale(.3) rotate(-8deg);} 70%{transform:scale(1.08) rotate(2deg);} 100%{opacity:1; transform:none;} }
+  @keyframes rise   { from{opacity:0; transform: translateY(45px);} to{opacity:1; transform:none;} }
+  @keyframes slideL { from{opacity:0; transform: translateX(-80px);} to{opacity:1; transform:none;} }
+  @keyframes whooshIn { 0%{opacity:0; transform: translateX(160px) skewX(-22deg);} 100%{opacity:1; transform:none;} }
+  @keyframes rotWhoosh { 0%{opacity:0; transform: translateX(180px) skewX(-25deg) rotate(20deg);} 100%{opacity:1; transform: rotate(-28deg);} }
+  @keyframes bounceIn {
+    0%{opacity:0; transform: translateY(-300px) scale(.6);}
+    55%{opacity:1; transform: translateY(18px) scale(1.04);}
+    75%{transform: translateY(-8px) scale(.98);}
+    100%{opacity:1; transform:none;}
+  }
+  @keyframes zoomSpin { 0%{opacity:0; transform: scale(.2) rotate(-200deg);} 100%{opacity:1; transform:none;} }
+
+  /* 转场：入场 */
+  .slide.active.tr-cube    { animation: cubeIn  1.17s ease both; transform-origin: right center; }
+  .slide.active.tr-dissolve{ animation: dissolveIn 1.04s ease both; }
+  .slide.active.tr-fade    { animation: fadeIn .91s ease both; }
+  .slide.active.tr-spin    { animation: spinIn  1.14s cubic-bezier(.3,.8,.4,1) both; }
+  @keyframes cubeIn     { from{opacity:0; transform: rotateY(-90deg);} to{opacity:1; transform:none;} }
+  @keyframes dissolveIn { from{opacity:0; filter: blur(6px);} to{opacity:1; filter:none;} }
+  @keyframes fadeIn     { from{opacity:0;} to{opacity:1;} }
+  @keyframes spinIn     { 0%{opacity:0; transform: scale(2) rotate(-420deg);} 100%{opacity:1; transform:none;} }
+  /* 转场：出场 */
+  .slide.leaving.tr-cube     { animation: cubeOut 1.17s ease both; transform-origin: left center; }
+  .slide.leaving.tr-dissolve { animation: dissolveOut 1.04s ease both; }
+  .slide.leaving.tr-fade     { animation: fadeOut .91s ease both; }
+  .slide.leaving.tr-spin     { animation: spinOut 1.14s ease-in both; }
+  @keyframes cubeOut     { from{opacity:1; transform:none;} to{opacity:0; transform: rotateY(90deg);} }
+  @keyframes dissolveOut { from{opacity:1; filter:none;} to{opacity:0; filter: blur(6px);} }
+  @keyframes fadeOut     { from{opacity:1;} to{opacity:0;} }
+  @keyframes spinOut     { 0%{opacity:1; transform:none;} 100%{opacity:0; transform: scale(.25) rotate(420deg);} }
+  /* 新闻闪白屏 */
+  #pptFlash {
+    position: absolute; inset: 0; z-index: 5;
+    background: #fff; opacity: 0; pointer-events: none;
+  }
+  #pptPlayer.flash #pptFlash { animation: flashOnce .72s ease both; }
+  @keyframes flashOnce { 0%{opacity:0;} 25%{opacity:.85;} 100%{opacity:0;} }
+
+  /* ---- 文字样式（尺寸按参考图画面占比折算；cqw 随舞台缩放） ---- */
+  /* 所有 PPT 文字统一加细黑描边 + 底部投影，模拟原作立体感；描边在填充之下 */
+  .it {
+    -webkit-text-stroke: 0.022em #000;
+    paint-order: stroke fill;
+    text-shadow:
+      0 0.02em 0 #000,
+      0 0.04em 0 #000,
+      0 0.07em 0.08em rgba(0,0,0,.55);
+  }
+  .t-cover { font-family: 'RenoTpl','HanTplMed',sans-serif; font-size: 6.4cqw; letter-spacing: .04em; text-align:center; font-weight: normal; -webkit-text-stroke-width: 0.025em; white-space: nowrap; }
+  .t-sub   { font-family: 'HanTplMed',sans-serif; font-size: 1.9cqw; text-align:center; color:#555; font-weight: normal; -webkit-text-stroke-width: 0.012em; white-space: nowrap; }
+  .t-head  { font-family: 'HanTplMed',sans-serif; font-size: 5.4cqw; color:#fff; font-weight: normal; -webkit-text-stroke-width: 0.03em; white-space: nowrap; }
+  .t-head-en { font-family: 'RenoTpl','HanTplMed',sans-serif; font-size: 5.4cqw; color:#fff; font-weight: normal; -webkit-text-stroke-width: 0.03em; white-space: nowrap; }
+  .t-body  { font-family: 'RenoTpl','HanTplReg',sans-serif; font-size: 1.75cqw; line-height: 1.9; font-weight: normal; -webkit-text-stroke-width: 0.012em; }
+  .t-big   { font-family: 'RenoTpl','HanTplMed',sans-serif; font-size: 6.8cqw; color:#111; font-weight: normal; -webkit-text-stroke-width: 0.03em; white-space: nowrap; display: flex; flex-wrap: nowrap; justify-content: center; }
+  .t-warn  { font-family: 'HanTplReg',sans-serif; font-size: 1.5cqw; line-height: 1.7; color: #FF2600; font-weight: normal; -webkit-text-stroke-width: 0.012em; }
+  .t-end   { font-family: 'RenoTpl','HanTplMed',sans-serif; font-size: 6.4cqw; text-align:center; font-weight: normal; -webkit-text-stroke-width: 0.025em; white-space: nowrap; }
+  .t-ph    { display:flex; align-items:center; justify-content:center;
+             border: .12cqw dashed rgba(0,0,0,.35); border-radius: .3cqw;
+             background: rgba(255,255,255,.28); color: rgba(0,0,0,.45);
+             font-family: 'HanTplReg',sans-serif; font-size: 1.15cqw; text-align:center; -webkit-text-stroke-width: 0; }
+  .s-img img { width: 100%; height: 100%; object-fit: contain; display:block; }
+
+  /* 彩虹字：每字 HSB 色相 0~308 等差，饱和 80% 亮 90% → 换算为 HSL(78%,54%) */
+  .ch { color: hsl(var(--hue, 0), 78%, 54%); }
+
+  /* 操作提示 */
+  #pptHint {
+    position: absolute; right: 1.2cqw; bottom: 1.0cqw; z-index: 6;
+    font-family: 'HanTplReg',sans-serif; font-size: 1.05cqw;
+    color: rgba(0,0,0,.5); pointer-events: none;
+  }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <div class="deskicon" id="icoMountain" data-href="index.html"
+         style="--x:8.319%;--y:5.206%;--w:6.690cqw;">
+      <div class="di-img"><img src="Atlases/WaveDashing/desktop/mymountain_icon.png" alt="我的大山"></div>
+      <span class="di-label">我的大山</span>
+    </div>
+
+    <div class="deskicon" id="icoPpt" data-player="monthly"
+         style="--x:31.236%;--y:40.38%;--w:6.672cqw;">
+      <div class="di-img"><img src="Atlases/WaveDashing/desktop/wavedashing_icon.png" alt="月度总结"></div>
+      <span class="di-label" id="lblPpt"></span>
+    </div>
+
+    <img id="icoRecycle" class="ico" src="Atlases/WaveDashing/desktop/recyclebin_icon.png" alt="回收站">
+    <div id="lblRecycle">回收站</div>
+
+    <div id="taskbar"></div>
+    <div id="startBtn"></div>
+    <img id="startBerry" src="Atlases/WaveDashing/desktop/startberry.png" alt="BerryOS">
+    <div id="startText" class="tasktext">BerryOS</div>
+    <div id="clock" class="tasktext">5:09 PM</div>
+
+    <img id="bird" src="Atlases/WaveDashing/desktop/cursor.png" alt="cursor">
+
+    <!-- PPT 播放器：6 页由 JS 按 SLIDES 数据渲染（以后换成 AI 生成的月度 JSON） -->
+    <div id="pptPlayer">
+      <div id="pptFlash"></div>
+      <div id="pptHint">点击 / 方向键翻页 · Esc 退出</div>
+    </div>
+  </div>
+
+<script>
+  (function () {
+    var stage = document.getElementById('stage');
+    var bird  = document.getElementById('bird');
+    var HOTX = 0.4531, HOTY = 0.5008; // 鸟喙热点（相对128画布）
+
+    // 进入页面播放开机音效；浏览器拦截自动播放时，等首次点击/按键补播（仅一次）
+    (function () {
+      var sfx = new Audio('Atlases/WaveDashing/sound/cafe_computer_startupsfx.wav');
+      var played = false;
+      function playStartup() {
+        if (played) return;
+        var p = sfx.play();
+        if (p && p.catch) {
+          p.then(function () { played = true; }).catch(function () {
+            var unlock = function () {
+              sfx.play().then(function () { played = true; }).catch(function () {});
+            };
+            window.addEventListener('pointerdown', unlock, { once: true });
+            window.addEventListener('keydown', unlock, { once: true });
+          });
+        } else { played = true; }
+      }
+      playStartup();
+    })();
+
+    // 月度总结标签：按当前日期生成，如 2026年9月 -> “26年9月总结.ppt”
+    (function () {
+      var d = new Date();
+      document.getElementById('lblPpt').textContent =
+        String(d.getFullYear()).slice(2) + '年' + (d.getMonth() + 1) + '月总结.ppt';
+    })();
+
+    // 任务栏时钟：实时同步，格式 5:09 PM（分钟变化时刷新）
+    (function () {
+      var el = document.getElementById('clock');
+      function tick() {
+        var d = new Date();
+        var h = d.getHours() % 12 || 12;
+        var m = String(d.getMinutes()).padStart(2, '0');
+        el.textContent = h + ':' + m + (d.getHours() < 12 ? ' AM' : ' PM');
+      }
+      tick();
+      // 对齐到下一个整分钟，之后每 30s 兜底刷新
+      setTimeout(function () {
+        tick();
+        setInterval(tick, 30000);
+      }, (60 - new Date().getSeconds()) * 1000);
+    })();
+
+    function move(clientX, clientY) {
+      var r = stage.getBoundingClientRect();
+      var x = clientX - r.left  - bird.offsetWidth  * HOTX;
+      var y = clientY - r.top   - bird.offsetHeight * HOTY;
+      bird.style.left = x + 'px';
+      bird.style.top  = y + 'px';
+    }
+    window.addEventListener('mousemove', function (e) { move(e.clientX, e.clientY); });
+
+    // 图标选中/进入：事件委托，之后动态生成的 .deskicon 自动生效
+    // 规则：第一次点击仅选中（白实线框+深色文字），再次点击同一图标才进入；点空白处取消选中
+    var selected = null;
+    stage.addEventListener('click', function (e) {
+      var icon = e.target.closest('.deskicon');
+      if (!icon) {
+        if (selected) { selected.classList.remove('selected'); selected = null; }
+        return;
+      }
+      if (icon === selected) {
+        var player = icon.getAttribute('data-player');
+        if (player) { PPT.open(player); return; }
+        var href = icon.getAttribute('data-href');
+        if (href) { window.location.href = href; }
+      } else {
+        if (selected) { selected.classList.remove('selected'); }
+        selected = icon;
+        icon.classList.add('selected');
+      }
+    });
+
+    /* ============== PPT 播放器（内容数据与渲染/播放分离，AI 以后只替换 SLIDES） ============== */
+    var SD = 'Atlases/WaveDashing/sound/';
+    var sfx = {
+      on: new Audio(SD + 'cafe_computer_on.wav'),
+      off: new Audio(SD + 'cafe_computer_off.wav'),
+      cube: new Audio(SD + 'ppt_cubetransition.wav'),
+      dissolve: new Audio(SD + 'ppt_dissolvetransition.wav'),
+      spin: new Audio(SD + 'ppt_spinningtransition.wav'),
+      whoosh: new Audio(SD + 'ppt_wavedash_whoosh.wav'),
+      impossible: new Audio(SD + 'ppt_impossible.wav'),
+      easy: new Audio(SD + 'ppt_itseasy.wav'),
+      happy: new Audio(SD + 'ppt_happywavedashing.wav'),
+      bgm: new Audio()
+    };
+    sfx.bgm.loop = true; sfx.bgm.volume = 0.35;
+    sfx.cube.volume = sfx.dissolve.volume = sfx.spin.volume = 0.7;
+    sfx.whoosh.volume = 0.5;
+    // BGM 走 fetch→blob：规避部分静态服务器不支持 Range 导致的 ERR_ABORTED
+    var bgmReady = false;
+    function ensureBgm() {
+      if (bgmReady) return Promise.resolve();
+      return fetch(SD + 'ppt_bgm.mp3').then(function (r) { return r.blob(); }).then(function (b) {
+        sfx.bgm.src = URL.createObjectURL(b);
+        bgmReady = true;
+      }).catch(function () {});
+    }
+    function playSfx(name, delay, vol) {
+      setTimeout(function () {
+        var a = sfx[name];
+        if (vol != null) a.volume = vol;
+        a.currentTime = 0;
+        a.play().catch(function () {});
+      }, delay || 0);
+    }
+
+    // 坐标均为模板 26.667in×15in 画幅实测的百分比；tr=转场，dur=自动停留毫秒
+    var SLIDES = [
+      { bg: '#9FC5E8', tr: '', dur: 6000, items: [
+        { cls: 't-cover anim-zoom', chars: true, d: .15, x: 7.28, y: 12.87, w: 85.4, t: '凌波微步.ppt 与你' },
+        { cls: 't-sub anim-rise', d: 1.5, x: 7.28, y: 57.67, w: 85.4, t: '学习凌波微步的实用方法' }
+      ]},
+      { bg: '#FFF2CC', tr: 'cube', dur: 8500, items: [
+        { cls: 't-head anim-left', d: .25, x: 5.78, y: 11.13, w: 70, t: '学不会 凌波微步？' },
+        { cls: 't-body anim-left', d: 1.0, x: 9.15, y: 28.07, w: 25, t: '- 事实：凌波微步确实很难学' },
+        { cls: 't-body anim-left', d: 1.4, x: 9.15, y: 35.5, w: 25, t: '- 有时候没能刷新冲刺' },
+        { cls: 't-body anim-left', d: 1.8, x: 9.15, y: 43.0, w: 25, t: '- 有时候没能跳的很远' },
+        { cls: 't-body anim-left', d: 2.2, x: 9.15, y: 50.5, w: 25, t: '- 而且打第九章还必须得学' },
+        { cls: 't-body anim-left', d: 2.6, x: 9.15, y: 58.0, w: 25, t: '- （这最坏了）' },
+        { cls: 't-big anim-rot', d: 3.3, x: 53.06, y: 36.93, w: 46, t: '根本学不会？' },
+        { kind: 'img', cls: 'anim-bounce', d: 3.9, x: 63.90, y: 38.47, w: 35.21, src: 'Atlases/WaveDashing/Guy Clip Art.png' }
+      ]},
+      { bg: '#D9EAD3', tr: 'dissolve', dur: 8500, items: [
+        { cls: 't-head-en', d: .3, x: 5.36, y: 11.47, w: 90, t: '介绍…凌波微步.ppt!!' },
+        { kind: 'ph', cls: 'anim-rise', d: 1.1, x: 29.63, y: 21.27, w: 40.76, ratio: 10.87/6.11, t: '本月配图位' },
+        { cls: 't-body anim-rise', d: 2.0, x: 34.43, y: 62.47, w: 33, t: '凌波微步.ppt 可以让你学习凌波微步，而且教程很详细！' },
+        { cls: 't-big anim-whoosh', chars: true, center: true, d: 3.0, x: 15, y: 73.13, w: 70, t: '这很"简单"！' }
+      ]},
+      { bg: '#F4CCCC', tr: 'fade', dur: 8000, items: [
+        { cls: 't-head anim-left', d: .25, x: 5.63, y: 11.2, w: 55, t: '操作方法' },
+        { kind: 'ph', cls: 'anim-rise', d: .9, x: 29.29, y: 20.6, w: 41.4, ratio: 11.04/6.21, t: '本月配图位' },
+        { cls: 't-body anim-left', d: 1.6, x: 7.58, y: 63.27, w: 27, t: '- 前往第九章' },
+        { cls: 't-body anim-left', d: 2.0, x: 7.58, y: 70.5, w: 27, t: '- 来到视界线开头的这个场景' },
+        { cls: 't-body anim-left', d: 2.4, x: 7.58, y: 77.8, w: 27, t: '- 走到房间里观看凌波微步.ppt' },
+        { cls: 't-body anim-left', d: 2.8, x: 7.58, y: 85.1, w: 27, t: '- 学会了！（走你）' }
+      ]},
+      { bg: '#FFF2CC', tr: 'spin', dur: 8500, items: [
+        { cls: 't-head anim-pop', d: .25, x: 5.59, y: 11.13, w: 55, t: '天堂中的麻烦？' },
+        { kind: 'ph', cls: 'anim-rise', d: .9, x: 17.93, y: 27.53, w: 17.48, ratio: 4.66/4.31, t: '配图位' },
+        { cls: 't-warn anim-rise', d: 1.5, x: 17.93, y: 63.6, w: 18.5, t: '如果你打不到视界线<br>请继续尝试 或者先打B或C面。' },
+        { kind: 'ph', cls: 'anim-rise', d: 1.3, x: 58.65, y: 27.53, w: 28.76, ratio: 7.67/4.31, t: '配图位' },
+        { cls: 't-warn anim-rise', d: 1.9, x: 60.5, y: 63.6, w: 24, t: '如果你过不去前面的心门<br>请自行攒满15个心 或者学习跳过心门教程。' }
+      ]},
+      { bg: '#DBD8ED', tr: 'cube', dur: null, items: [
+        { cls: 't-end', chars: true, d: .25, x: 2.5, y: 10.4, w: 95, t: '凌波微步.ppt, 快乐的ppt!' },
+        { kind: 'img', cls: 'anim-zoom', d: 1.4, x: 42, y: 42, w: 16, src: 'Atlases/WaveDashing/Bird Clip Art.png' }
+      ]}
+    ];
+    // 每页进入后的音效（转场音 / 语音梗 / whoosh）
+    var PAGE_SFX = {
+      1: [['cube', 0], ['impossible', 900]],
+      2: [['dissolve', 0], ['whoosh', 3300], ['easy', 3350]],
+      4: [['spin', 0]],
+      5: [['cube', 0], ['happy', 1600]]
+    };
+
+    var PPT = (function () {
+      var player = document.getElementById('pptPlayer');
+      var hint = document.getElementById('pptHint');
+      var cur = -1, busy = false, autoTimer = null, rendered = false;
+      var slideEls = [];
+
+      function render() {
+        SLIDES.forEach(function (sd, si) {
+          var sec = document.createElement('section');
+          sec.className = 'slide';
+          sec.style.background = sd.bg;
+          sd.items.forEach(function (it) {
+            var el = document.createElement('div');
+            el.className = 'it ' + (it.cls || '');
+            el.style.left = it.x + '%';
+            el.style.top = it.y + '%';
+            el.style.width = it.w + '%';
+            if (it.center) el.style.textAlign = 'center';
+            el.style.setProperty('--d', (it.d * 1.3) + 's');
+            if (it.kind === 'img') {
+              el.classList.add('s-img');
+              var img = document.createElement('img');
+              img.src = it.src;
+              el.appendChild(img);
+            } else if (it.kind === 'ph') {
+              el.style.paddingTop = (100 / it.ratio) + '%';
+              el.style.height = '0';
+              var inner = document.createElement('div');
+              inner.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;';
+              inner.textContent = it.t;
+              el.appendChild(inner);
+            } else if (it.chars) {
+              el.classList.add('chars-box');
+              var arr = it.t.split('');
+              var last = Math.max(1, arr.length - 1);
+              arr.forEach(function (ch, i) {
+                var s = document.createElement('span');
+                s.className = 'ch';
+                s.textContent = ch === ' ' ? '\u00A0' : ch;
+                s.style.setProperty('--cd', i);
+                // HSB：色相 0~308 等差，饱和 80%，亮 90%
+                s.style.setProperty('--hue', Math.round(i / last * 308));
+                el.appendChild(s);
+              });
+            } else {
+              el.innerHTML = it.t;
+            }
+            sec.appendChild(el);
+          });
+          player.appendChild(sec);
+          slideEls.push(sec);
+        });
+        rendered = true;
+      }
+
+      function enterSfx(i) {
+        (PAGE_SFX[i] || []).forEach(function (p) { playSfx(p[0], Math.round(p[1] * 1.3)); });
+      }
+
+      function go(n) {
+        if (n < 0 || n >= SLIDES.length || busy) return;
+        clearTimeout(autoTimer);
+        var prev = slideEls[cur];
+        var next = slideEls[n];
+        var same = (cur === n);
+        if (prev && !same) {
+          busy = true;
+          prev.classList.remove('active');
+          prev.classList.add('leaving', 'tr-' + SLIDES[cur].tr);
+          (function (old) { setTimeout(function () {
+            old.classList.remove('leaving', 'tr-cube', 'tr-dissolve', 'tr-fade', 'tr-spin');
+          }, 1300); })(prev);
+        }
+        // 强制重排以重放入场动画
+        if (SLIDES[n].tr === 'spin') { void next.offsetWidth; player.classList.add('flash'); setTimeout(function(){player.classList.remove('flash');},800); }
+        void next.offsetWidth;
+        next.classList.add('active');
+        if (SLIDES[n].tr) next.classList.add('tr-' + SLIDES[n].tr);
+        if (!same) { if (prev) setTimeout(function(){busy=false;}, 1250); else busy = false; }
+        cur = n;
+        enterSfx(n);
+        hint.style.opacity = '.6';
+        setTimeout(function(){ hint.style.opacity = '0'; }, 2600);
+        var dur = SLIDES[n].dur;
+        if (dur) autoTimer = setTimeout(function () { go(n + 1); }, dur * 1.3);
+      }
+
+      // 以桌面 PPT 图标中心为缩放原点
+      function iconOrigin() {
+        var icon = document.getElementById('icoPpt');
+        var pr = player.getBoundingClientRect();
+        var ir = icon.getBoundingClientRect();
+        return ((ir.left + ir.width / 2) - pr.left) + 'px ' +
+               ((ir.top + ir.height / 2) - pr.top) + 'px';
+      }
+
+      return {
+        open: function () {
+          if (!rendered) render();
+          player.classList.remove('closing');
+          player.classList.add('show');
+          player.style.transformOrigin = iconOrigin();
+          player.style.transform = 'scale(0.02)';
+          player.style.opacity = '0';
+          // 等下一帧再放大，确保过渡触发
+          requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+              player.style.transform = 'scale(1)';
+              player.style.opacity = '1';
+            });
+          });
+          sfx.on.currentTime = 0; sfx.on.play().catch(function(){});
+          ensureBgm().then(function () { if (PPT.isOpen) sfx.bgm.play().catch(function(){}); });
+          cur = -1;
+          setTimeout(function(){ go(0); }, 220);
+        },
+        close: function () {
+          if (busy) return;
+          clearTimeout(autoTimer);
+          busy = true;
+          player.style.transformOrigin = iconOrigin();
+          player.style.transform = 'scale(0.02)';
+          player.style.opacity = '0';
+          sfx.bgm.pause(); sfx.bgm.currentTime = 0;
+          sfx.off.currentTime = 0; sfx.off.play().catch(function(){});
+          setTimeout(function () {
+            player.classList.remove('show', 'flash', 'closing');
+            player.style.transform = '';
+            player.style.opacity = '';
+            player.style.transformOrigin = '';
+            slideEls.forEach(function (s) { s.classList.remove('active', 'leaving', 'tr-cube', 'tr-dissolve', 'tr-fade', 'tr-spin'); });
+            cur = -1; busy = false;
+          }, 580);
+        },
+        next: function () { if (cur === SLIDES.length - 1) { this.close(); } else go(cur + 1); },
+        prev: function () { go(cur - 1); },
+        show: function (n) { go(n); },
+        get isOpen() { return player.classList.contains('show'); }
+      };
+    })();
+    window.BerryPPT = PPT;
+
+    // 播放器内：点击下一页（末页点击退出）；键盘翻页/Esc
+    document.getElementById('pptPlayer').addEventListener('click', function () { PPT.next(); });
+    window.addEventListener('keydown', function (e) {
+      if (!PPT.isOpen) return;
+      if (e.key === 'Escape') PPT.close();
+      else if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') { e.preventDefault(); PPT.next(); }
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') PPT.prev();
+    });
+
+    // 桌面鼠标点击音（按下/抬起，小鸟光标下仍有反馈）
+    var clickDown = new Audio(SD + 'cafe_mouseclick_down.wav');
+    var clickUp   = new Audio(SD + 'cafe_mouseclick_up.wav');
+    clickDown.volume = clickUp.volume = 0.35;
+    stage.addEventListener('pointerdown', function () { if (!PPT.isOpen) { clickDown.currentTime = 0; clickDown.play().catch(function(){}); } });
+    stage.addEventListener('pointerup',   function () { if (!PPT.isOpen) { clickUp.currentTime = 0; clickUp.play().catch(function(){}); } });
+  })();
+</script>
+</body>
+</html>

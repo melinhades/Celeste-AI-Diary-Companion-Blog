@@ -2606,11 +2606,11 @@ function stopPeSnow() {
             var rect = srcEl.getBoundingClientRect();
             var cx0 = rect.left + rect.width / 2;
             var cy0 = rect.top + rect.height / 2;
-            var ORB_D = 24;                    // 球直径（缩小 65% 后）
+            var ORB_D = 24;                    // 球直径
             var ORB_R = ORB_D / 2;             // 12
             var PX = 3;                        // 球内一颗"像素"的屏幕边长
-            var TRAIL_PX_LEN = Math.round(ORB_D * 0.7);  // 拖尾长度 = 球直径 70% ≈ 48px（沿路径实际长度）
-            var orb = { x: cx0, y: cy0, vx: 0, vy: 0, trail: [], trailLen: 0 };
+            var TRAIL_PX_LEN = Math.round(ORB_D * 4);  // 拖尾长度 = 球直径 4 倍 ≈ 96px（还原原作彗星尾比例）
+            var orb = { x: cx0, y: cy0, vx: 0, vy: 0, trail: [], trailLen: 0, particles: [] };
 
             // 3.5) 像素球图案（确定性 hash → 不逐帧闪烁；每颗像素金色仅差"一小度"）
             function ph(a, b) { var v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return v - Math.floor(v); }
@@ -2694,7 +2694,21 @@ function stopPeSnow() {
             var FRICTION = 0.92;
             var MAX_VEL = 7;
 
-            // 6) 主循环
+            // 6) 辅助：绘制逐段插值宽度的彗星尾（近球宽 W1，远端宽 W0）
+            function drawTaperedTrail(ctx, pts, T, W1, W0) {
+                if (pts.length < 2) return;
+                for (var i = 0; i < pts.length - 1; i++) {
+                    var tNear = i / (T - 1);   // 0(远) → 1(近)
+                    var tFar = (i + 1) / (T - 1);
+                    ctx.lineWidth = W0 + (W1 - W0) * ((tNear + tFar) / 2);
+                    ctx.beginPath();
+                    ctx.moveTo(pts[i].x, pts[i].y);
+                    ctx.lineTo(pts[i + 1].x, pts[i + 1].y);
+                    ctx.stroke();
+                }
+            }
+
+            // 7) 主循环
             var raf = 0, frame = 0, maxFrame = 60 * 12;
             var FLASH_FRAMES = 6;
 
@@ -2738,34 +2752,88 @@ function stopPeSnow() {
                     orb.x += orb.vx;
                     orb.y += orb.vy;
 
-                    // 拖尾：记录路径，按"沿路径实际长度"截断到球直径的 70%（≈48px）
+                    // 拖尾采样：每 1px 一个点，截断到 TRAIL_PX_LEN
                     var lastP = orb.trail[orb.trail.length - 1];
                     var moved = lastP ? Math.hypot(orb.x - lastP.x, orb.y - lastP.y) : 0;
-                    orb.trail.push({ x: orb.x, y: orb.y });
-                    orb.trailLen += moved;
+                    var N = Math.max(1, Math.ceil(moved));
+                    for (var ni = 1; ni <= N; ni++) {
+                        var tx = lastP ? lastP.x + (orb.x - lastP.x) * ni / N : orb.x;
+                        var ty = lastP ? lastP.y + (orb.y - lastP.y) * ni / N : orb.y;
+                        var px0 = lastP ? (ni > 1 ? lastP.x + (orb.x - lastP.x) * (ni-1) / N : lastP.x) : tx;
+                        var py0 = lastP ? (ni > 1 ? lastP.y + (orb.y - lastP.y) * (ni-1) / N : lastP.y) : ty;
+                        orb.trail.push({ x: tx, y: ty });
+                        orb.trailLen += Math.hypot(tx - px0, ty - py0);
+                    }
                     while (orb.trailLen > TRAIL_PX_LEN && orb.trail.length > 1) {
                         var o0 = orb.trail[0], o1 = orb.trail[1];
-                        orb.trailLen -= Math.hypot(o1.x - o0.x, o1.y - o0.y);
+                        var drop = Math.hypot(o1.x - o0.x, o1.y - o0.y);
+                        if (orb.trailLen - drop < TRAIL_PX_LEN) break;
+                        orb.trailLen -= drop;
                         orb.trail.shift();
                     }
 
-                    // —— 像素拖尾：一颗颗金色像素方块，颜色彼此仅差一小度 ——
-                    for (var i = 0; i < orb.trail.length; i++) {
-                        var tp = orb.trail[i];
-                        var tk = i / (orb.trail.length - 1 || 1);  // 0(旧·远) → 1(新·贴球)
-                        var sz = tk > 0.55 ? PX : 2;               // 近处颗粒与球同粒度
-                        var l = 62 + tk * 24 + (ph(i, 3) - 0.5) * 8;   // 暗金 → 亮金，微差
-                        var h = 46 + (ph(i, 7) - 0.5) * 5;
-                        ctx.fillStyle = 'hsla(' + h + ',90%,' + l + '%,' + (0.18 + tk * 0.62) + ')';
-                        ctx.fillRect(Math.round(tp.x - sz / 2), Math.round(tp.y - sz / 2), sz, sz);
+                    // 飘落粒子：trail 末端发射，金色 + 青色混合（还原原作雪花蓝绿点）
+                    if (orb.trail.length > 6 && Math.random() < 0.85) {
+                        var eIdx = Math.max(0, orb.trail.length - 6);
+                        var ex = orb.trail[eIdx].x, ey = orb.trail[eIdx].y;
+                        var eAng = Math.atan2(orb.vy, orb.vx);
+                        var isCyan = Math.random() < 0.25;
+                        orb.particles.push({
+                            x: ex + (Math.random() - 0.5) * 10,
+                            y: ey + (Math.random() - 0.5) * 10,
+                            vx: -Math.cos(eAng) * (0.4 + Math.random() * 0.6) + (Math.random() - 0.5) * 0.5,
+                            vy: -Math.sin(eAng) * (0.4 + Math.random() * 0.6) + Math.random() * 0.35 + 0.05,
+                            life: 0, ttl: 35 + Math.random() * 30,
+                            sz: Math.random() < 0.7 ? 2 : 3,
+                            cyan: isCyan,
+                            hue: isCyan ? (175 + Math.random() * 30) : (44 + (Math.random() - 0.5) * 10)
+                        });
+                    }
+                    for (var pi = orb.particles.length - 1; pi >= 0; pi--) {
+                        var pa = orb.particles[pi];
+                        pa.life++; pa.x += pa.vx; pa.y += pa.vy;
+                        pa.vx *= 0.97; pa.vy *= 0.97;
+                        if (pa.life >= pa.ttl || pa.x < -20 || pa.x > cv.width + 20
+                            || pa.y < -20 || pa.y > cv.height + 20) orb.particles.splice(pi, 1);
                     }
 
-                    // —— 中心光源发光：柔光晕精灵（1 次 drawImage） ——
+                    // ===== 渲染顺序：粒子 → 彗星尾 → 柔光晕 → 球本体 =====
+
+                    // —— 1) 飘落像素粒子（原作末端散落的金 + 青色小点） ——
+                    for (var pi2 = 0; pi2 < orb.particles.length; pi2++) {
+                        var pa2 = orb.particles[pi2];
+                        var pk = pa2.life / pa2.ttl;
+                        var palpha = (1 - pk) * 0.85;
+                        var pSat = pa2.cyan ? 70 : 92;
+                        var pLit = pa2.cyan ? (80 - pk * 30) : (85 - pk * 28);
+                        ctx.fillStyle = 'hsla(' + pa2.hue + ',' + pSat + '%,' + pLit + '%,' + palpha + ')';
+                        ctx.fillRect(Math.round(pa2.x - pa2.sz / 2), Math.round(pa2.y - pa2.sz / 2), pa2.sz, pa2.sz);
+                    }
+
+                    // —— 2) 彗星尾：逐段插值宽度，近球宽 ≈ ORB_D，远端 taper 到 1px；三层叠加（外光晕 / 核心光 / 白芯） ——
+                    if (orb.trail.length >= 2) {
+                        var T = orb.trail.length;
+                        ctx.lineCap = 'butt';
+                        // 外光晕（最宽、最暗）
+                        ctx.strokeStyle = 'rgba(255,210,110,0.18)';
+                        ctx.lineWidth = ORB_D * 1.1;
+                        drawTaperedTrail(ctx, orb.trail, T, ORB_D * 1.1, 1);
+                        // 核心光
+                        ctx.strokeStyle = 'rgba(255,230,140,0.55)';
+                        ctx.lineWidth = ORB_D * 0.6;
+                        drawTaperedTrail(ctx, orb.trail, T, ORB_D * 0.6, 0.6);
+                        // 白芯（最亮最窄）
+                        ctx.strokeStyle = 'rgba(255,250,210,0.9)';
+                        ctx.lineWidth = ORB_D * 0.25;
+                        drawTaperedTrail(ctx, orb.trail, T, ORB_D * 0.25, 0.25);
+                    }
+
+                    // —— 3) 中心光源柔光晕精灵 ——
                     ctx.drawImage(glowSprite,
                         Math.round(orb.x - glowSprite.width / 2),
                         Math.round(orb.y - glowSprite.height / 2));
 
-                    // —— 球外像素金光：硬边颗粒 + 十字光芒 ——
+                    // —— 4) 球外像素金光 + 十字光芒 ——
                     var rx0 = Math.round(orb.x), ry0 = Math.round(orb.y);
                     for (var ri = 0; ri < rayCells.length; ri++) {
                         var rc = rayCells[ri];
@@ -2773,7 +2841,7 @@ function stopPeSnow() {
                         ctx.fillRect(rx0 + rc.dx, ry0 + rc.dy, rc.sz, rc.sz);
                     }
 
-                    // —— 像素球本体：颗颜色微差的金色像素混合（无 shadow，硬边） ——
+                    // —— 5) 像素球本体 ——
                     for (var ci2 = 0; ci2 < orbCells.length; ci2++) {
                         var cell = orbCells[ci2];
                         ctx.fillStyle = cell.c;
