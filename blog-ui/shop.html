@@ -10,9 +10,23 @@
 * { box-sizing:border-box; margin:0; padding:0; }
 @font-face { font-family:'Renogare'; src:url('celeste-font-en/Renogare-Regular.otf') format('opentype'); font-display:swap; }
 @font-face { font-family:'CelesteZH'; src:url('fonts/NotoSansCJKsc-Medium.otf') format('opentype'); font-display:swap; }
-body { min-height:100vh; background:url('celeste-gui/shop-screen.webp') center/cover no-repeat fixed; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; overflow-x:hidden; }
+body { min-height:100vh; background:url('celeste-gui/resort-room-native.png') center/cover no-repeat fixed; image-rendering:pixelated; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; overflow-x:hidden; }
 .topbar { position:fixed; top:14px; left:16px; z-index:20; }
 .topbar a { display:inline-block; padding:8px 14px; background:rgba(22,34,60,.88); color:#ffe36d; border:2px solid #ffe36d; border-radius:6px; text-decoration:none; font-size:13px; box-shadow:0 0 10px rgba(255,230,109,.35); }
+/* 冰山返回主页按钮（同 diary 的 #homePosterBtn） */
+#homePosterBtn {
+    position:fixed; top:16px; left:16px; z-index:900;
+    width:96px; height:96px; padding:0; border:none; background:transparent; cursor:pointer;
+    transition:transform .2s, filter .2s;
+}
+#homePosterBtn img { width:100%; height:100%; object-fit:contain; display:block; }
+#homePosterBtn:hover {
+    transform:translateY(-2px) scale(1.05);
+    filter:
+        drop-shadow(1px 0 0 #10101c) drop-shadow(-1px 0 0 #10101c)
+        drop-shadow(0 1px 0 #10101c) drop-shadow(0 -1px 0 #10101c)
+        drop-shadow(0 0 10px rgba(200,235,255,1)) drop-shadow(0 0 24px rgba(120,190,255,.8));
+}
 h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family:'Press Start 2P',monospace; font-size:14px; color:#ffe36d; text-shadow:0 2px 0 rgba(0,0,0,.6); letter-spacing:2px; z-index:20; }
 .wrap { max-width:760px; margin:0 auto; padding:86px 20px 160px; }
 .oshiro-wrap { text-align:center; margin-bottom:16px; }
@@ -34,8 +48,8 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 .item.owned { border-color:rgba(255,230,109,.75); }
 .item.owned .buy { border-color:#7dcf7d; color:#a5e8a5; }
 .oshiro-say { margin-top:26px; text-align:center; color:rgba(255,227,109,.85); font-size:13px; min-height:22px; }
-#shopMemo { position:fixed; inset:0; z-index:999; background:rgba(4,4,16,.96); display:flex; align-items:center; justify-content:center; flex-direction:column; cursor:pointer; opacity:0; transition:opacity .6s ease; }
-#shopMemo.show { opacity:1; }
+#shopMemo { position:fixed; inset:0; z-index:999; background:rgba(4,4,16,.96); display:flex; align-items:center; justify-content:center; flex-direction:column; cursor:pointer; opacity:0; pointer-events:none; transition:opacity .6s ease; }
+#shopMemo.show { opacity:1; pointer-events:auto; }
 #shopMemo img { max-width:min(92vw,560px); max-height:72vh; border-radius:6px; box-shadow:0 10px 50px rgba(0,0,0,.7); transform:scale(.94); transition:transform .8s cubic-bezier(.2,.8,.3,1); }
 #shopMemo.show img { transform:scale(1); }
 #shopMemo .memo-tip { position:absolute; bottom:26px; left:50%; transform:translateX(-50%); color:rgba(255,230,109,.6); font-size:12px; letter-spacing:2px; }
@@ -71,8 +85,8 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     position: fixed;
     top: 60px;
     left: 40px;
-    width: 320px;
-    height: 320px;
+    width: 512px;
+    height: 512px;
     object-fit: contain;
     object-position: center bottom;
     image-rendering: pixelated;
@@ -122,6 +136,13 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 #oshiroChatDialog .chat-input input::placeholder { color:rgba(43,58,82,.45); }
 #oshiroChatDialog .chat-input button { padding:8px 14px; border:none; border-radius:6px; background:#FFEB3B; color:#111; cursor:pointer; font-size:14px; letter-spacing:1px; font-family:'Renogare','CelesteZH',sans-serif; box-shadow:inset 0 -2px #111111; }
 #oshiroChatDialog .chat-input button:hover { background:#ffeb85; }
+
+/* ===== 两侧烟囱烟雾（环境层，位于一切交互元素之下） ===== */
+#chimneySmoke { position:fixed; inset:0; pointer-events:none; z-index:1; overflow:hidden; }
+#chimneySmoke img {
+    position:absolute; image-rendering:pixelated;
+    will-change: transform, opacity;
+}
 
 /* ===== 煤球精灵（dustCreature 图层叠加） ===== */
 #dustSprite {
@@ -246,22 +267,59 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 }
 #heartGet.vis .hg-tip { opacity:1; }
 
+/* ===== 悬停提示按钮：idle 指针呼吸，hover 切换图示（右=highlight 左=resort 挂牌） ===== */
+.dot-bubble {
+    position:fixed; z-index:940; padding:0; border:none; background:transparent;
+    cursor:pointer; user-select:none; -webkit-user-drag:none;
+}
+.dot-bubble .dot-layer {
+    position:absolute; display:block; pointer-events:none;
+}
+.dot-bubble .dot-hover { opacity:0; transition:opacity .15s ease; }
+.dot-bubble:hover .dot-idle { opacity:0; }
+.dot-bubble:hover .dot-hover { opacity:1; }
+/* idle 黑色指针在深墙上加白色光晕，呼吸 = 缩放 + 光晕起伏，锚点为三个黑点(49.6%,71.5%) */
+.dot-bubble .dot-idle {
+    transform-origin:49.6% 71.5%;
+    animation:dotBreathe 2.2s ease-in-out infinite;
+    will-change:transform,filter;
+}
+@keyframes dotBreathe {
+    0%,100% { transform:scale(1);     filter:drop-shadow(0 0 1px rgba(255,255,255,.65)); }
+    50%     { transform:scale(1.13);  filter:drop-shadow(0 0 4px rgba(255,255,255,.95)); }
+}
+#dotRight .dot-idle { animation-duration:2.7s; }
+
 </style>
 </head>
 <body>
-<h1>CELESTE RESORT</h1>
 <div id="shopMemo">
     <img src="Atlases/Memo/memo.png" alt="memo" loading="lazy" decoding="async">
     <div class="memo-tip">点击继续</div>
 </div>
-<div class="topbar"><a href="diary.html">← 返回大堂</a></div>
+<button id="homePosterBtn" title="回到主页 · My Mountain" onclick="location.href='index.html'">
+    <img src="celeste-gui/mymountain_icon.png" alt="My Mountain" loading="lazy" decoding="async">
+</button>
 
 <audio id="bgmPlayer"></audio>
 
-<img id="pixelOshiro" src="celeste-gui/oshiro-appear.gif" alt="Oshiro" title="Oshiro" loading="lazy" decoding="async">
+<img id="pixelOshiro" src="celeste-gui/oshiro-appear.gif" alt="Oshiro" title="Oshiro" loading="lazy" decoding="async" style="display:none">
+
+<!-- 白色省略号互动按钮：中 = 召唤 Oshiro，右 = 开场动画 -->
+<button class="dot-bubble" id="dotMid" aria-label="召唤 Oshiro" title="召唤 Oshiro">
+    <img class="dot-layer dot-idle" src="Atlases/Gui/hover/idle.png" alt="">
+    <img class="dot-layer dot-hover" src="Atlases/Gui/hover/resort.png" alt="">
+</button>
+<button class="dot-bubble" id="dotRight" aria-label="开场动画" title="开场动画">
+    <img class="dot-layer dot-idle" src="Atlases/Gui/hover/idle.png" alt="">
+    <img class="dot-layer dot-hover" src="Atlases/Gui/hover/highlight.png" alt="">
+</button>
 
 <!-- 煤球精灵：图层由 JS 动态叠加 -->
 <div id="dustSprite"><div class="dust-inner"></div></div>
+
+<!-- 两侧烟囱烟雾粒子层 -->
+<div id="chimneySmoke"></div>
 
 <div id="gameDialog">
     <img id="gameDialogOverlay" src="Atlases/Portraits/textbox/oshiro_overlay.png" alt="" loading="lazy" decoding="async">
@@ -286,16 +344,8 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     </div>
 </div>
 
-<div class="wrap">
-    <div class="oshiro-wrap"><img id="oshiroPortrait" src="Atlases/Portraits/oshiro/normal00.png" alt="Oshiro" loading="lazy" decoding="async"></div>
-    <div class="balance">
-        <img src="celeste-collectables/strawberry.png" alt="strawberry" loading="lazy" decoding="async">
-        <span class="num" id="balNum">0</span>
-        <span class="tip">每写一篇日记收一颗草莓</span>
-    </div>
-    <div class="items" id="items"></div>
-    <div class="oshiro-say" id="mSay"></div>
-</div>
+<!-- 商品展示区已预留：后续商品销售方案优化时在此启用 -->
+<div class="wrap" id="shopStage"></div>
 
 <!-- 心之水晶获取仪式：暗场 + 放射光 + 破心音效 + 命名牌 -->
 <div id="heartGet">
@@ -338,21 +388,19 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     document.addEventListener('click', tryPlayBGM);
     document.addEventListener('keydown', tryPlayBGM);
 
-    // ===== 开场备忘录：仅首次进入播放 =====
-    (function () {
-        var memo = document.getElementById('shopMemo');
-        if (localStorage.getItem('shopMemoSeenV2') === '1') { memo.remove(); return; }
-        localStorage.setItem('shopMemoSeenV2', '1');
-        requestAnimationFrame(function(){ requestAnimationFrame(function(){ memo.classList.add('show'); }); });
-        var hide = function() {
-            if (memo.classList.contains('gone')) return;
-            memo.classList.add('gone');
-            memo.classList.remove('show');
-            setTimeout(function(){ memo.remove(); }, 650);
-        };
-        memo.addEventListener('click', hide);
-        setTimeout(hide, 5000);
-    })();
+    // ===== 开场备忘录：由右侧省略号按钮触发 =====
+    var memoEl = document.getElementById('shopMemo');
+    var memoTimer = null;
+    function hideOpeningMemo() {
+        memoEl.classList.remove('show');
+        if (memoTimer) { clearTimeout(memoTimer); memoTimer = null; }
+    }
+    function playOpeningMemo() {
+        hideOpeningMemo();
+        requestAnimationFrame(function(){ requestAnimationFrame(function(){ memoEl.classList.add('show'); }); });
+        memoTimer = setTimeout(hideOpeningMemo, 5000);
+    }
+    memoEl.addEventListener('click', hideOpeningMemo);
 
     if (localStorage.getItem('berryFix20260822') !== '1') {
         localStorage.setItem('berryFix20260822', '1');
@@ -383,7 +431,7 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
         frameTimer = setInterval(function() {
             frameIdx = (frameIdx + 1) % count;
             var src = 'Atlases/Portraits/oshiro/' + currentEmotion + String(frameIdx).padStart(2, '0') + '.png';
-            oshiroPortrait.src = src;
+            if (oshiroPortrait) oshiroPortrait.src = src;
             dialogPortraitImg.src = src;
         }, 120);
     }
@@ -482,15 +530,188 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     function osSetSrc(name) {
         if (pixelOshiro.src.indexOf(name) === -1) pixelOshiro.src = name;
     }
-    // ===== 全屏二维游走：随机选点 + 避开弹框 =====
+    // ===== 房间约束：内部轮廓（图源 resort-room.png 2560×1600 的归一化坐标，顺时针） =====
+    var ROOM_POLY_N = [
+        [0.104,0.803], [0.104,0.700], [0.149,0.700], [0.149,0.500],
+        [0.235,0.500], [0.235,0.166], [0.352,0.166], [0.375,0.125],
+        [0.410,0.125], [0.410,0.097], [0.566,0.097], [0.605,0.125],
+        [0.633,0.125], [0.633,0.166], [0.742,0.166], [0.742,0.494],
+        [0.852,0.494], [0.852,0.631], [1.000,0.631], [1.000,0.803]
+    ];
+    var ROOM_FLOOR_NY = 0.803;
+    // cover 自然缩放（与 body 背景的 center/cover 一致）
+    var roomGeo = { scale:1, ox:0, oy:0 };
+    function recalcRoomGeo() {
+        var vw = window.innerWidth, vh = window.innerHeight;
+        var s = Math.max(vw / 320, vh / 200);
+        roomGeo.scale = s / 8;   // 相对 2560x1600 图源
+        roomGeo.ox = (vw - s * 320) / 2;
+        roomGeo.oy = (vh - s * 200) / 2;
+    }
+    function nToXY(nx, ny) {
+        return { x: nx * 2560 * roomGeo.scale + roomGeo.ox,
+                 y: ny * 1600 * roomGeo.scale + roomGeo.oy };
+    }
+    function roomScreenPoly() {
+        recalcRoomGeo();
+        return ROOM_POLY_N.map(function (p) { return nToXY(p[0], p[1]); });
+    }
+    function pointInPoly(x, y, poly) {
+        var inside = false;
+        for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+            var xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y;
+            if (((yi > y) !== (yj > y)) &&
+                (x < (xj - xi) * (y - yi) / ((yj - yi) || 1e-9) + xi)) inside = !inside;
+        }
+        return inside;
+    }
+    // sprite 整个盒子（四角）都要在房间内
+    function boxInRoom(x, y, w, h, poly) {
+        return pointInPoly(x, y, poly) && pointInPoly(x + w, y, poly) &&
+               pointInPoly(x, y + h, poly) && pointInPoly(x + w, y + h, poly);
+    }
+    // 初始位置：房间中央地板
+    function osPlaceInside() {
+        var poly = roomScreenPoly();
+        var w = pixelOshiro.offsetWidth || 512, h = pixelOshiro.offsetHeight || 512;
+        var gy = osGroundY();
+        var x = Math.max(0, window.innerWidth / 2 - w / 2);
+        if (!boxInRoom(x, gy, w, h, poly)) { var p = nToXY(0.50, 0.55); x = p.x - w / 2; gy = p.y - h / 2; }
+        pixelOshiro.style.left = x + 'px';
+        pixelOshiro.style.top = gy + 'px';
+    }
+    window.addEventListener('resize', function () { recalcRoomGeo(); });
+
+    // ===== 悬停提示按钮：跟随房间 cover 定位 =====
+    // anchor = 原省略号中心（320×200 原生空间）；每层 size=画布边长(原生px)，
+    // ox/oy = 该图锚点在画布中的比例（idle 黑点中心、resort 挂环中心）
+    var IDLE_ANCHOR = { ox:63.5/128, oy:91.5/128 };
+    var DOT_ZOOM = 0.6;   // 图标整体缩放（0.6 = 在原尺寸上缩小 40%）
+    var DOTS_CFG = {
+        dotMid: { anchor:{ x:172, y:128.5 }, layers:[
+            { cls:'dot-idle',  size:36*DOT_ZOOM, ox:IDLE_ANCHOR.ox, oy:IDLE_ANCHOR.oy },
+            { cls:'dot-hover', size:96*DOT_ZOOM, ox:0.5, oy:256/320 }
+        ]},
+        dotRight: { anchor:{ x:243.5, y:136.5 }, layers:[
+            { cls:'dot-idle',  size:36*DOT_ZOOM, ox:IDLE_ANCHOR.ox, oy:IDLE_ANCHOR.oy },
+            { cls:'dot-hover', size:36*DOT_ZOOM, ox:IDLE_ANCHOR.ox, oy:IDLE_ANCHOR.oy }
+        ]}
+    };
+    function layoutDots() {
+        recalcRoomGeo();
+        var s = 8 * roomGeo.scale;   // 320x200 原生像素 → 屏幕像素
+        Object.keys(DOTS_CFG).forEach(function(id) {
+            var cfg = DOTS_CFG[id], el = document.getElementById(id);
+            var a = nToXY(cfg.anchor.x / 320, cfg.anchor.y / 200);
+            var boxes = cfg.layers.map(function(L) {
+                var w = L.size * s;
+                return { L:L, w:w, l:a.x - w * L.ox, t:a.y - w * L.oy };
+            });
+            var minL = Math.min.apply(null, boxes.map(function(b){return b.l;}));
+            var minT = Math.min.apply(null, boxes.map(function(b){return b.t;}));
+            var maxR = Math.max.apply(null, boxes.map(function(b){return b.l + b.w;}));
+            var maxB = Math.max.apply(null, boxes.map(function(b){return b.t + b.w;}));
+            boxes.forEach(function(bx) {
+                var im = el.querySelector('.' + bx.L.cls);
+                im.style.left = (bx.l - minL) + 'px';   // 相对按钮盒子
+                im.style.top = (bx.t - minT) + 'px';
+                im.style.width = bx.w + 'px';
+                im.style.height = bx.w + 'px';
+            });
+            el.style.left = minL + 'px';
+            el.style.top = minT + 'px';
+            el.style.width = (maxR - minL) + 'px';
+            el.style.height = (maxB - minT) + 'px';
+        });
+    }
+    layoutDots();
+    window.addEventListener('resize', layoutDots);
+    document.getElementById('dotMid').addEventListener('click', summonOshiro);
+    document.getElementById('dotRight').addEventListener('click', playOpeningMemo);
+
+    // ===== 两侧烟囱烟雾：规律间隔冒出 → 上升摆动变大 → 淡出消散 =====
+    var SMOKE_U = 'celeste-gui/smoke-puff.png';   // 11×12 浓白烟团
+    var SMOKE_W = 'celeste-gui/smoke-wisp.png';   // 18×9 横向散烟
+    // 发射源（320×200 原生空间）：火盆栏杆框内（L框 x58..80，R框 x239..262）
+    var SMOKE_VENTS = [ { nx:62/320, ny:79/200 }, { nx:250/320, ny:79/200 } ];
+    var SMOKE_INTERVAL = 950;   // 每侧发射间隔 ms
+    var smokeLayer = document.getElementById('chimneySmoke');
+    var smokeParts = [];        // 活动粒子
+    var smokePool = [];         // 空闲 img 节点
+    var smokeNext = [0, SMOKE_INTERVAL / 2];   // 两侧下次发射倒计时（错相半拍）
+
+    function smokeSpawn(vi) {
+        var kind = Math.random() < 0.4 ? 1 : 0;
+        var el = smokePool.pop();
+        if (!el) el = document.createElement('img');
+        el.src = kind ? SMOKE_W : SMOKE_U;
+        var v = SMOKE_VENTS[vi];
+        smokeParts.push({
+            el: el, w: kind ? 18 : 11, h: kind ? 9 : 12,
+            nx: v.nx + (Math.random() - 0.5) * 5 / 320,
+            ny: v.ny + Math.random() * 2 / 200,
+            age: 0, ttl: 2.4 + Math.random() * 0.5,
+            rise: (24 + Math.random() * 14) / 200,         // 上升高度（归一化）
+            sway: (2 + Math.random() * 1.5) / 320,         // 横向摆动幅度
+            swayPh: Math.random() * Math.PI * 2,
+            drift: -(vi === 0 ? 4 + Math.random() * 4
+                             : 6 + Math.random() * 5) / 320 // 烟整体向左飘散
+        });
+        smokeLayer.appendChild(el);
+    }
+
+    var smokeLast = performance.now();
+    function smokeTick(now) {
+        var dt = Math.min(0.05, (now - smokeLast) / 1000);
+        smokeLast = now;
+        recalcRoomGeo();
+        var s = 8 * roomGeo.scale;   // 原生像素 → 屏幕像素
+        for (var i = 0; i < 2; i++) {
+            smokeNext[i] -= dt * 1000;
+            if (smokeNext[i] <= 0) { smokeSpawn(i); smokeNext[i] = SMOKE_INTERVAL; }
+        }
+        for (var j = smokeParts.length - 1; j >= 0; j--) {
+            var p = smokeParts[j];
+            p.age += dt;
+            var t = p.age / p.ttl;
+            if (t >= 1) {   // 寿终回收
+                smokeLayer.removeChild(p.el);
+                smokePool.push(p.el);
+                smokeParts.splice(j, 1);
+                continue;
+            }
+            var up = 1 - Math.pow(1 - t, 3);   // easeOutCubic：初快后慢
+            var cnx = p.nx + p.drift * t + Math.sin(t * Math.PI * 2 + p.swayPh) * p.sway;
+            var cny = p.ny - p.rise * up;
+            var xy = nToXY(cnx, cny);
+            var sc = 0.7 + t * 1.15;            // 0.7 → 1.85 逐渐变大
+            // 前 12% 淡入，55% 后开始淡出
+            var al = t < 0.12 ? t / 0.12 * 0.75
+                 : t > 0.55 ? 0.75 * (1 - (t - 0.55) / 0.45) : 0.75;
+            var w = p.w * s, h = p.h * s;
+            p.el.style.width = w + 'px';
+            p.el.style.height = h + 'px';
+            p.el.style.left = (xy.x - w / 2) + 'px';
+            p.el.style.top = (xy.y - h / 2) + 'px';
+            p.el.style.opacity = al.toFixed(3);
+            p.el.style.transform = 'scale(' + sc.toFixed(3) + ')';
+        }
+        requestAnimationFrame(smokeTick);
+    }
+    requestAnimationFrame(smokeTick);
+
+    // ===== 房间内二维游走：随机选点（必须在轮廓内）+ 避开弹框 =====
     function osCurXY() {
         return {
             x: parseFloat(pixelOshiro.style.left || '40'),
             y: parseFloat(pixelOshiro.style.top || '60')
         };
     }
+    // 地面线：房间地板表面（屏幕坐标），返回 sprite 顶边 y
     function osGroundY() {
-        return Math.max(56, window.innerHeight - (pixelOshiro.offsetHeight || 320) - 8);
+        recalcRoomGeo();
+        var floorScreen = ROOM_FLOOR_NY * 1600 * roomGeo.scale + roomGeo.oy;
+        return Math.max(0, floorScreen - (pixelOshiro.offsetHeight || 512) + 6);
     }
     function osBlockedAt(tx, ty) {
         var zones = [];
@@ -498,7 +719,7 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
         if (dlg && dlg.classList.contains('show')) zones.push(dlg.getBoundingClientRect());
         var chat = document.getElementById('oshiroChatDialog');
         if (chat && chat.classList.contains('show')) zones.push(chat.getBoundingClientRect());
-        var w = pixelOshiro.offsetWidth || 320, h = pixelOshiro.offsetHeight || 320;
+        var w = pixelOshiro.offsetWidth || 512, h = pixelOshiro.offsetHeight || 512;
         for (var i = 0; i < zones.length; i++) {
             var r = zones[i], m = 16;
             if (!r || (r.width === 0 && r.height === 0)) continue;
@@ -507,15 +728,22 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
         return false;
     }
     function osPickTarget() {
-        var spriteW = pixelOshiro.offsetWidth || 320;
-        var maxX = Math.max(60, window.innerWidth - spriteW - 10);
-        var minY = 56, maxY = osGroundY();
-        for (var t = 0; t < 8; t++) {
-            var cx = 10 + Math.random() * (maxX - 10);
+        var poly = roomScreenPoly();
+        var w = pixelOshiro.offsetWidth || 512, h = pixelOshiro.offsetHeight || 512;
+        var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        poly.forEach(function (p) {
+            minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
+            maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
+        });
+        for (var t = 0; t < 80; t++) {
+            var cx = minX + Math.random() * (maxX - minX);
             var cy = minY + Math.random() * (maxY - minY);
+            if (!boxInRoom(cx, cy, w, h, poly)) continue;
             if (!osBlockedAt(cx, cy)) return { x: cx, y: cy };
         }
-        return { x: 10, y: maxY };
+        // 兜底：房间中部已知安全点
+        var p = nToXY(0.50, 0.55);
+        return { x: p.x - w / 2, y: p.y - h / 2 };
     }
     function osWander() {
         if (osMode === 'sit' || osMode === 'greet' || osMode === 'trip') {
@@ -638,9 +866,22 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
         setTimeout(function() { if (osMode === 'greet') osMode = ''; }, 3000);
     }
 
-    // 进场：appear → 开始游逛
-    osSetSrc(OS_SRC.appear);
-    setTimeout(function() { osWander(); }, 2200);
+    // 召唤 Oshiro：由中间省略号按钮触发（原开场自动出现逻辑已改为点击触发）
+    var osSummoned = false;
+    function summonOshiro() {
+        if (osSummoned) return;
+        osSummoned = true;
+        pixelOshiro.style.display = 'block';
+        recalcRoomGeo();
+        osPlaceInside();
+        osSetSrc(OS_SRC.appear);
+        setTimeout(function() { osWander(); }, 2200);
+        setTimeout(function() {
+            var welcome = '欢迎来到 Celeste 山庄！我是 Oshiro，这里的每一间房都留着故事呢～想聊点什么吗？';
+            appendOchMsg('assistant', welcome);
+            showOshiroDialog(welcome, '可爱');
+        }, 2500);
+    }
 
     // ===== 点击 / 双击（参照 pixelMadeline） =====
     var osClickTimer = null;
@@ -734,9 +975,10 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     function owned() {
         try { return JSON.parse(localStorage.getItem('berryOwned') || '[]'); } catch (e) { return []; }
     }
-    function say(txt) { document.getElementById('mSay').textContent = '「' + txt + '」—— Oshiro'; }
+    function say(txt) { var el = document.getElementById('mSay'); if (el) el.textContent = '「' + txt + '」—— Oshiro'; }
 
     function render() {
+        if (!document.getElementById('items')) return;
         var bal = balance(), own = owned(), ch = getCrystal();
         var hearts = getHearts();
         document.getElementById('balNum').textContent = bal;
@@ -1057,11 +1299,6 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
             showOshiroDialog(fallback, '不安');
         });
     }
-    setTimeout(function() {
-        var welcome = '欢迎来到 Celeste 山庄！我是 Oshiro，这里的每一间房都留着故事呢～想聊点什么吗？';
-        appendOchMsg('assistant', welcome);
-        showOshiroDialog(welcome, '可爱');
-    }, 2500);
 
     // ===== 煤球精灵：图层叠加 + 四处游逛 =====
     (function() {

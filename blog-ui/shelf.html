@@ -23,30 +23,31 @@ html, body { overflow-x:hidden; overflow-x:clip; }
 .topbar a.nav-diary-btn img { height:56px; width:auto; display:block; filter:drop-shadow(0 0 10px rgba(255,235,59,.7)); }
 h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family:'Press Start 2P',monospace; font-size:15px; color:#ffe36d; text-shadow:0 2px 0 rgba(0,0,0,.6); letter-spacing:2px; z-index:20; }
 .wrap { max-width:1000px; margin:0 auto; padding:76px 20px 40px; }
-/* ===== 日记列表：memo 纸页完整展示 ===== */
+/* ===== 日记列表：旧折痕毛边纸 cover 铺满整个文字框 ===== */
 .cards {
     display:flex; flex-direction:column; gap:0;
     width:min(680px, 92vw);
     margin:0 auto;
-    background:#e9dfcd url('celeste-journal/memo.png') center top / 100% auto no-repeat;
-    border-radius:4px; padding:84px 52px 44px;
-    filter:drop-shadow(0 12px 32px rgba(0,0,0,.4));
+    /* 无兜底色（透明）：纸张破洞/毛边处直接透出后面的雪夜场景，看不出纸下还垫着框；
+       纸张 PNG cover 放大铺满整个文字框，缺口保留才真实 */
+    background:transparent url('celeste-journal/shelf-paper.png') center center / cover no-repeat;
+    padding:172px 52px 60px;
+    /* drop-shadow 跟随纸张的不规则 alpha 边缘：紫金光晕 + 底部投影 */
+    filter:drop-shadow(0 0 26px rgba(167,139,250,.22)) drop-shadow(0 0 48px rgba(255,230,109,.10)) drop-shadow(0 14px 30px rgba(0,0,0,.50));
     position:relative;
     min-height:640px;
     transition:opacity .4s ease;
 }
-/* 纸页边缘做旧：左右两侧细微暗角 */
-.cards::after {
-    content:''; position:absolute; inset:0; border-radius:4px; pointer-events:none; z-index:3;
-    box-shadow:inset 0 0 60px rgba(120,90,40,.08), inset 0 2px 0 rgba(255,255,255,.4);
+/* 内容超长（.cards.tall，由 fitPaper() 判定）：纸头 + 无限平铺纸身 + 纸尾三段拼接，
+   像卷轴一样往下接长；纸身 paper-mid 已做首尾无缝处理 */
+.cards.tall {
+    background:
+        url('celeste-journal/paper-bottom.png') center bottom / 100% auto no-repeat,
+        url('celeste-journal/paper-top.png')    center top    / 100% auto no-repeat,
+        url('celeste-journal/paper-mid.png')    center top    / 100% auto repeat-y;
 }
-/* 盖掉左上角 logo：纯色，和纸页底色一致 */
-.cards::before {
-    content:''; position:absolute; left:0; top:0;
-    width:26%; height:9%;
-    background:#e9dfcd;
-    z-index:1; pointer-events:none;
-}
+/* 纸页暗角已删：纸张自带折痕阴影，矩形 inset 阴影会与不规则毛边冲突 */
+/* 旧的盖 logo 补丁与卡片暗角均已删：新纸张自带透明毛边与折痕阴影 */
 .shelf-row {
     position:relative; display:flex; align-items:center; gap:14px;
     background:transparent; border:none; border-bottom:1px dashed rgba(163,129,47,.18);
@@ -66,13 +67,38 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 .shelf-row:hover .row-icon { transform:scale(1.12) rotate(-4deg); }
 .shelf-row .row-main { flex:1; min-width:0; display:flex; flex-direction:column; gap:4px; }
 .shelf-row .row-title { font-family:'Renogare','CelesteZH',sans-serif; font-size:15px; color:#3d2f1a; font-weight:700; letter-spacing:.3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-shadow:0 1px 0 rgba(255,255,255,.5); }
-.shelf-row .row-snip { font-size:12px; color:rgba(58,46,42,.6); line-height:1.6; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.shelf-row .row-date { font-family:'Renogare','CelesteZH',sans-serif; font-size:12px; color:#9a8560; letter-spacing:.5px; flex-shrink:0; display:flex; align-items:center; gap:6px; transition:color .2s ease; }
+.shelf-row .row-snip { font-size:12px; color:rgba(58,46,42,.6); line-height:1.65; white-space:normal; overflow:hidden; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
+.shelf-row .row-date { font-family:'Renogare','CelesteZH',sans-serif; font-size:12px; color:#9a8560; letter-spacing:.5px; flex-shrink:0; display:flex; align-items:center; gap:6px; transition:color .2s ease; font-variant-numeric:tabular-nums; }
 .shelf-row:hover .row-date { color:#6a5326; }
-.shelf-row .row-count { display:inline-block; padding:2px 8px; background:rgba(163,129,47,.18); color:#6a5326; border-radius:10px; font-size:11px; font-weight:700; }
+.shelf-row .row-count { display:inline-block; padding:1px 6px; border:2px solid rgba(163,129,47,.42); background:rgba(163,129,47,.16); color:#6a5326; font-size:10px; font-weight:700; border-radius:0; font-variant-numeric:tabular-nums; line-height:1.4; }
 .shelf-row.snapshot { border-bottom-color:rgba(163,129,47,.35); }
 .shelf-row.snapshot .row-title { color:#8a5a2b; }
 .shelf-row.snapshot:hover { background:rgba(200,140,60,.1); }
+/* ===== 纸顶抬头：标题文字直接落在纸面上（新纸无印刷抬头，不再需要遮盖贴纸） ===== */
+.cards-head { position:absolute; top:0; left:0; right:0; height:172px; z-index:4; box-sizing:border-box; padding:0 52px; background:transparent; display:flex; align-items:center; justify-content:space-between; gap:12px; pointer-events:none; }
+.cards-head .ch-title { display:flex; flex-direction:column; gap:3px; }
+.cards-head .ch-en { font-size:9px; letter-spacing:.34em; color:#9a8560; text-transform:uppercase; padding-left:14px; }
+.cards-head .ch-cn { font-size:18px; font-weight:700; color:#3d2f1a; letter-spacing:4px; line-height:1.1; }
+.cards-head .ch-cn::before { content:''; display:inline-block; width:7px; height:7px; background:#d8a93a; margin-right:9px; vertical-align:1px; box-shadow:0 0 0 1px rgba(163,129,47,.4); }
+.cards-head .ch-stat { font-size:11px; color:#6a5326; border:2px solid rgba(163,129,47,.4); padding:4px 10px; background:rgba(233,223,205,.72); letter-spacing:.5px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.cards-head .ch-stat b { color:#8a5a2b; font-weight:700; }
+/* ===== 月份分隔条：长列表的视觉节奏 ===== */
+.month-divider { position:relative; z-index:2; display:flex; align-items:center; gap:10px; padding:24px 4px 8px; opacity:0; animation:monthFade .45s ease forwards; }
+.cards > .month-divider:first-of-type { padding-top:8px; }
+@keyframes monthFade { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
+.month-divider .md-name { font-size:12px; font-weight:700; letter-spacing:.22em; color:#8a5a2b; text-transform:uppercase; white-space:nowrap; }
+.month-divider .md-cn { font-size:10px; color:#9a8560; letter-spacing:2px; white-space:nowrap; }
+.month-divider .md-line { flex:1; border-top:2px solid rgba(163,129,47,.28); transform:translateY(1px); }
+.month-divider .md-cnt { font-size:10px; color:#6a5326; border:2px solid rgba(163,129,47,.38); padding:2px 8px; background:rgba(163,129,47,.08); white-space:nowrap; font-variant-numeric:tabular-nums; }
+/* ===== 情绪角标：磁带上的 8×8 像素情绪点 ===== */
+.row-icowrap { position:relative; width:28px; height:28px; flex-shrink:0; }
+.row-icowrap .row-icon { flex-shrink:0; }
+.row-mood { position:absolute; right:-3px; bottom:-3px; width:8px; height:8px; background:#b08d3f; box-shadow:0 0 0 1px rgba(61,47,26,.45), 0 1px 1px rgba(0,0,0,.2); z-index:2; }
+/* ===== hover 金色书签竖条 ===== */
+.shelf-row::before { content:''; position:absolute; left:0; top:24%; width:3px; height:52%; background:linear-gradient(#e8c15a,#c8932c); box-shadow:0 0 5px rgba(216,169,58,.55); transform:scaleY(0); transform-origin:center; transition:transform .22s ease; z-index:1; }
+.shelf-row:hover::before { transform:scaleY(1); }
+/* ===== 空态像素山插画 ===== */
+.empty-pix { width:84px; height:63px; image-rendering:pixelated; display:block; margin:0 auto 14px; opacity:.95; filter:drop-shadow(0 4px 10px rgba(0,0,0,.4)); }
 .detail.anim-up { animation:slideUpIn .45s cubic-bezier(.22,1,.36,1); }
 .detail.anim-down { animation:slideDownIn .45s cubic-bezier(.22,1,.36,1); }
 @keyframes slideUpIn { from { opacity:0; transform:translateY(46px); } to { opacity:1; transform:translateY(0); } }
@@ -134,7 +160,7 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 /* 磁带选曲 CSS 已删 */
 /* ===== 篝火（从 diary 迁来） ===== */
 /* ===== 快照明信片行（列表里的一条） ===== */
-.shelf-row.snapshot { background:url('celeste-journal/memo.png') center/100% 100% no-repeat; border:none; }
+.shelf-row.snapshot { background:url('celeste-journal/shelf-paper.png') center/cover no-repeat; border:none; }
 /* ===== 快照详情：翻开的 Journal 跨页 ===== */
 #snapJournalModal { position:fixed; inset:0; z-index:1200; display:none; align-items:center; justify-content:center; background:rgba(4,6,14,.82); backdrop-filter:blur(3px); }
 #snapJournalModal.show { display:flex; }
@@ -156,8 +182,9 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 
 /* ===== 镜子：镜之房间正中偏上 · 图层叠加 · 点击破碎召唤 Badeline ===== */
 #shelfMirror {
-    position: relative;
-    margin: -32px auto 0;                /* 整体上移 32px，让镜框更贴合紫色空间视觉重心 */
+    position: absolute;                  /* JS 按 cover 换算，对齐截图镜框中心 */
+    left: 50%;
+    top: 50%;
     width: 0;
     height: 0;
     cursor: pointer;
@@ -175,9 +202,9 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 }
 #shelfMirror .m-mask { animation: maskDrift 5s ease-in-out infinite; }
 @keyframes maskDrift {
-    0%,100% { transform: translate(-50%,-50%) translate(0,0); }
-    30% { transform: translate(-50%,-50%) translate(5px,-6px); }
-    65% { transform: translate(-50%,-50%) translate(-5px,4px); }
+    0%,100% { transform: translate(-50%,-50%) scale(var(--glass-scale)) translate(0,0); }
+    30% { transform: translate(-50%,-50%) scale(var(--glass-scale)) translate(5px,-6px); }
+    65% { transform: translate(-50%,-50%) scale(var(--glass-scale)) translate(-5px,4px); }
 }
 #shelfMirror.mirror-shake { animation: mirrorShake .28s linear 2; }
 @keyframes mirrorShake {
@@ -208,18 +235,20 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     animation: badelineRise .9s cubic-bezier(0.34,1.56,0.64,1);   /* 无 forwards：.done 类接管驻留态 */
     opacity: 1;                                                    /* 动画结束后立即可见，不闪 0 */
 }
-/* 驻留态：animationend 后加 .done，由静态 CSS 接管 transform（含 --glass-scale），绕过 forwards+var() Safari 风险 */
+/* 驻留态：animationend 后加 .done，由静态 CSS 接管 transform（含 --glass-scale），绕过 forwards+var() Safari 风险
+   动画位置跟随静态镜面偏移（--glass-top/--glass-left）+ 用户额外微调（--anim-top/--anim-left）
+   末尾 scale(--anim-scale) 只缩 Badeline 本体尺寸，不影响位置 */
 #shelfMirror.summoned .badeline-wrap.done {
-    transform: translate(-50%, -78%) scale(var(--glass-scale));
+    transform: translate(-50%, -50%) scale(var(--glass-scale)) translateY(var(--glass-top)) translateX(var(--glass-left)) translateY(calc(-78% + var(--anim-top))) translateX(var(--anim-left)) scale(var(--anim-scale));
 }
 @keyframes badelineRise {
-    from { opacity: 0; transform: translate(-50%,10%) scale(calc(var(--glass-scale) * .3)); }
-    to   { opacity: 1; transform: translate(-50%,-78%) scale(var(--glass-scale)); }
+    from { opacity: 0; transform: translate(-50%, -50%) scale(calc(var(--glass-scale) * .3)) translateY(var(--glass-top)) translateX(var(--glass-left)) translateY(calc(10% + var(--anim-top))) translateX(var(--anim-left)) scale(var(--anim-scale)); }
+    to   { opacity: 1; transform: translate(-50%, -50%) scale(var(--glass-scale)) translateY(var(--glass-top)) translateX(var(--glass-left)) translateY(calc(-78% + var(--anim-top))) translateX(var(--anim-left)) scale(var(--anim-scale)); }
 }
 #shelfMirror.summoned.bye .badeline-wrap { animation: badelineBye .7s ease forwards; }
 @keyframes badelineBye {
-    from { opacity: 1; transform: translate(-50%,-78%) scale(var(--glass-scale)); }
-    to   { opacity: 0; transform: translate(-50%,-120%) scale(calc(var(--glass-scale) * .7)); }
+    from { opacity: 1; transform: translate(-50%, -50%) scale(var(--glass-scale)) translateY(var(--glass-top)) translateX(var(--glass-left)) translateY(calc(-78% + var(--anim-top))) translateX(var(--anim-left)) scale(var(--anim-scale)); }
+    to   { opacity: 0; transform: translate(-50%, -50%) scale(calc(var(--glass-scale) * .7)) translateY(var(--glass-top)) translateX(var(--glass-left)) translateY(calc(-120% + var(--anim-top))) translateX(var(--anim-left)) scale(var(--anim-scale)); }
 }
 .badeline-inner {
     width: 96px; height: 96px;             /* 固定尺寸：img 绝对定位居中，不撑大父级（不限父容器） */
@@ -448,63 +477,26 @@ html, body { overflow-x: hidden; }
 
 /* ===== 镜之房间（心门后） ===== */
 #mirrorRoom {
-    /* 极暗紫渐变 + Badeline 专属背景图叠加，图片 cover 铺满 */
-    background:
-        radial-gradient(120% 95% at 50% 42%, #221736 0%, #120d22 52%, #060410 100%),
-        url('celeste-areas/bg-badeline/00.png') center / cover no-repeat;
-    background-blend-mode: multiply;    /* 渐变乘上图片，暗部压黑、亮部保留 */
+    /* 游戏截图（镜之房间：已抹人物与粒子），cover 铺满 */
+    background: url('celeste-gui/dream/mirror-room.png') center / cover no-repeat;
     display:flex; align-items:center; justify-content:center;
     isolation:isolate;
 }
 
-/* ===== dream 模式边框调节面板（开发者工具） ===== */
-.adjust-btn {
-    position: fixed; top: 14px; right: 14px;
-    width: 30px; height: 30px; border-radius: 50%;
-    background: rgba(138, 43, 226, 0.3);
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    color: #fff; font-size: 14px; font-weight: 700;
-    display: flex; align-items: center; justify-content: center;
-    cursor: pointer; z-index: 9999; backdrop-filter: blur(6px);
-    transition: transform .15s ease, background .15s ease;
-    box-shadow: 0 2px 10px rgba(0,0,0,.4);
-}
-.adjust-btn:hover { background: rgba(138, 43, 226, 0.6); transform: scale(1.1); }
-.adjust-panel {
-    position: fixed; top: 52px; right: 14px;
-    width: 260px; padding: 16px 18px;
-    background: rgba(20, 14, 40, 0.95);
-    border: 1px solid rgba(138, 43, 226, 0.5);
-    border-radius: 10px; z-index: 9999;
-    color: #e8e8f0; font-size: 13px;
-    backdrop-filter: blur(12px);
-    box-shadow: 0 8px 28px rgba(0,0,0,.6);
-    opacity: 0; transform: translateY(-8px) scale(.95);
-    pointer-events: none;
-    transition: opacity .18s ease, transform .18s ease;
-}
-.adjust-panel.show { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
-.adjust-panel h4 { margin: 0 0 10px; font-size: 12px; color: #a78bfa; letter-spacing: .08em; text-transform: uppercase; }
-.adjust-group { margin-bottom: 12px; }
-.adjust-group:last-child { margin-bottom: 0; }
-.adjust-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
-.adjust-row label { flex: 0 0 52px; color: #c8c8dc; font-size: 12px; }
-.adjust-row input[type=range] { flex: 1; accent-color: #a78bfa; }
-.adjust-row .val { flex: 0 0 44px; text-align: right; font-variant-numeric: tabular-nums; color: #a78bfa; font-size: 12px; }
-.adjust-reset { margin-top: 8px; width: 100%; padding: 6px;
-    background: transparent; border: 1px solid rgba(255,255,255,.2);
-    color: #c8c8dc; border-radius: 6px; cursor: pointer; font-size: 12px; }
-.adjust-reset:hover { background: rgba(255,255,255,.1); border-color: rgba(138,43,226,.6); }
-
 /* 心门 + 镜之房间默认隐藏，dream 激活时才出现 ===== */
-/* 调节面板用的 CSS 变量 —— 可动态覆盖 localStorage 持久化的值 */
 :root {
     /* 镜框（frame.png雕花边框）独立 */
-    --frame-top:     -32px;    /* 镜框 上/下 偏移（正=下，负=上） */
-    --frame-scale:   1;       /* 镜框 缩放 */
+    --frame-top:     -20px;
+    --frame-left:    0px;
+    --frame-scale:   0.74;
     /* 镜面（玻璃+反射+破碎+Badeline角色）独立 */
-    --glass-top:     0px;     /* 镜面 上/下 偏移 */
-    --glass-scale:   1;       /* 镜面 缩放 */
+    --glass-top:     12px;
+    --glass-left:    0px;
+    --glass-scale:   0.70;
+    /* Badeline 召唤/驻留/离场动画 */
+    --anim-top:      22px;
+    --anim-left:     0px;
+    --anim-scale:    1.50;
     /* 心门 */
     --door-top:      0px;
     --door-scale:    1;
@@ -516,16 +508,16 @@ body.dream-active #heartDoor {
     transform-origin: top right;
 }
 body.dream-active #mirrorRoom { display: flex !important; }
-/* 镜框独立变换 —— frame.png (.m-frame) */
+/* 镜框独立变换 —— frame.png (.m-frame)。scale 在 translateY/translateX 左：偏移随缩放联动 */
 body.dream-active #shelfMirror .m-frame {
-    transform: translate(-50%, -50%) translateY(var(--frame-top)) scale(var(--frame-scale));
+    transform: translate(-50%, -50%) scale(var(--frame-scale)) translateY(var(--frame-top)) translateX(var(--frame-left));
     transform-origin: center center;
 }
 /* 镜面系独立变换 —— .m-glass + .badeline-wrap（Badeline 在玻璃层上） */
 body.dream-active #shelfMirror .m-glass,
 body.dream-active #shelfMirror .badeline-wrap {
     transform-origin: center center;
-    transform: translate(-50%, -50%) translateY(var(--glass-top)) scale(var(--glass-scale));
+    transform: translate(-50%, -50%) scale(var(--glass-scale)) translateY(var(--glass-top)) translateX(var(--glass-left));
 }
 
 /* ===== 紫色空间粒子：3 类星点 PNG 纯竖直下落 + 蓝色拖尾（取素材 stars 实际色） ===== */
@@ -535,6 +527,8 @@ body.dream-active #shelfMirror .badeline-wrap {
 body:has(.ds-world.panned) #shelfSnow { opacity:0; }
 body:has(.ds-world.panned) #strawberryBonfire { opacity:0; pointer-events:none; transition:opacity .5s ease; }
 .star {
+    --x: 0%;            /* JS 动态覆盖（横向位置），静态初值供 IDE 解析 */
+    --dist: 100vh;      /* JS 动态覆盖（下落距离） */
     position:absolute; top:-56px; left:var(--x);
     image-rendering:pixelated; opacity:0;
     animation:starFall linear forwards;
@@ -587,6 +581,7 @@ body:has(.ds-world.panned) #strawberryBonfire { opacity:0; pointer-events:none; 
 /* 极光色像素星点：天空与桥底下随机闪烁（JS 生成，蓝 #6fd8ff / 绿 #7dffc8，每点独立节奏） */
 .ds-astars { position:absolute; inset:0; z-index:1; pointer-events:none; }
 .ds-astars i { position:absolute; width:3px; height:3px; opacity:0;
+    --dur: 3s; --del: 0s;   /* JS 动态覆盖（闪烁时长/延迟），静态初值供 IDE 解析 */
     animation:dsAuroraTw var(--dur,3s) ease-in-out var(--del,0s) infinite; }
 @keyframes dsAuroraTw { 0%,100% { opacity:0; } 50% { opacity:.95; } }
 /* dream 左屏：整幅游戏截图铺底（celeste-gui/dream/scene.png，2540x1429=16:9，
@@ -653,6 +648,7 @@ body:has(.ds-world.panned) #strawberryBonfire { opacity:0; pointer-events:none; 
 .dream-panel.show { opacity:1; visibility:visible; transition:opacity .35s ease; }
 .dp-motes { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
 .dp-motes i {
+    --drift: 24px;  /* JS 动态覆盖（横向漂移），静态初值供 IDE 解析 */
     position:absolute; bottom:-10px; width:3px; height:3px;
     background:rgba(190,220,255,.85); box-shadow:0 0 6px 1px rgba(150,200,255,.7);
     animation:dpMote linear infinite;
@@ -1202,6 +1198,34 @@ function stopPeSnow() {
         return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     }
     const MONTHS_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const CN_MONTHS = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+    /** 时间戳（数字/纯数字字符串）或日期字符串 → Date，无效返回 Invalid Date */
+    function toDateObj(v) {
+        return new Date(typeof v === 'number' || /^\d+$/.test(String(v)) ? Number(v) : v);
+    }
+    /* ===== 日记情绪 → 像素色点颜色（每篇保存时后端 AI 已分析，落在 emotionDetail） ===== */
+    const MOOD_COLORS = [
+        [['开心','高兴','快乐','幸福','喜悦','兴奋','欢喜'], '#f4b740'],
+        [['感动','温暖','感激','温馨'], '#f2994a'],
+        [['平静','放松','安心','安宁','宁静','舒缓'], '#56c2ef'],
+        [['低落','难过','悲伤','伤心','沮丧','失落','抑郁','哀伤'], '#6f83f0'],
+        [['焦虑','紧张','不安','担心','害怕','恐惧','迷茫','慌乱','担忧'], '#b579e8'],
+        [['愤怒','恼火','生气','暴躁','气愤','气'], '#ef5f5f'],
+        [['孤独','寂寞'], '#8aa0b8'],
+        [['期待','希望','憧憬'], '#e58fe0'],
+        [['疲惫','疲倦','劳累','累'], '#a78bfa']
+    ];
+    function moodOf(d) {
+        if (!d || !d.emotionDetail) return null;
+        let det;
+        try { det = JSON.parse(d.emotionDetail); } catch (e) { return null; }
+        const name = det.emotions && det.emotions[0] ? det.emotions[0].name : null;
+        if (!name) return null;
+        for (const pair of MOOD_COLORS) {
+            if (pair[0].some(k => name.indexOf(k) >= 0)) return { name: name, color: pair[1] };
+        }
+        return { name: name, color: '#b08d3f' };
+    }
     function fmtEn(v) {
         if (!v) return '';
         const d = new Date(typeof v === 'number' || /^\d+$/.test(String(v)) ? Number(v) : v);
@@ -1283,31 +1307,68 @@ function stopPeSnow() {
         if (e.key === 'ArrowLeft') detail.querySelector('.prev-e').click();
         if (e.key === 'ArrowRight') detail.querySelector('.next-e').click();
     });
+    // 纸张自适应：内容高度超过单张纸按宽度铺满的自然高度时，
+    // 加 .tall 走「纸头+纸身无限拼接+纸尾」卷轴模式，否则保持单张纸
+    function fitPaper() {
+        var natH = cards.clientWidth * 901 / 603; // 素材 603×901
+        cards.classList.toggle('tall', cards.scrollHeight > natH + 16);
+    }
+    var _fitT;
+    window.addEventListener('resize', function () {
+        clearTimeout(_fitT);
+        _fitT = setTimeout(fitPaper, 150);
+    });
     async function load() {
         cards.innerHTML = '<div class="empty"><span class="em">📖</span>正在搬书……</div>';
         const res = await api('/diary/list?type=day', 'GET');
         if (res.success && Array.isArray(res.data)) {
             data = res.data;
             if (window.__setDoorProgress) window.__setDoorProgress(data.length);
-            if (!data.length) { cards.innerHTML = '<div class="empty"><span class="em">🗻</span>书架还空着。<br>写下第一篇，它就有了位置。</div>'; return; }
+            if (!data.length) { cards.innerHTML = '<div class="empty"><svg class="empty-pix" viewBox="0 0 32 24" shape-rendering="crispEdges" aria-hidden="true">' +
+                '<rect x="5" y="3" width="1" height="1" fill="#ffe66d"/><rect x="16" y="4" width="1" height="1" fill="#a78bfa"/><rect x="27" y="5" width="1" height="1" fill="#ffe66d"/><rect x="3" y="7" width="1" height="1" fill="#ffffff"/>' +
+                '<rect x="10" y="6" width="1" height="1" fill="#ffffff"/><rect x="9" y="7" width="3" height="1" fill="#ffffff"/>' +
+                '<rect x="8" y="8" width="1" height="1" fill="#e8ecff"/><rect x="9" y="8" width="3" height="1" fill="#56508f"/><rect x="12" y="8" width="1" height="1" fill="#e8ecff"/>' +
+                '<rect x="8" y="9" width="5" height="1" fill="#56508f"/><rect x="7" y="10" width="7" height="1" fill="#4a4580"/><rect x="6" y="11" width="9" height="1" fill="#413c72"/><rect x="5" y="12" width="11" height="1" fill="#3a3665"/>' +
+                '<rect x="22" y="9" width="1" height="1" fill="#ffffff"/><rect x="21" y="10" width="3" height="1" fill="#dfe6ff"/><rect x="20" y="11" width="5" height="1" fill="#4a4580"/><rect x="19" y="12" width="7" height="1" fill="#3a3665"/><rect x="18" y="13" width="9" height="1" fill="#322f58"/>' +
+                '<rect x="2" y="14" width="28" height="1" fill="#2a2848"/><rect x="2" y="15" width="28" height="1" fill="#232242"/><rect x="2" y="16" width="28" height="6" fill="#1b1c38"/>' +
+                '</svg>书架还空着。<br>写下第一篇，它就有了位置。</div>'; return; }
             buildGroups();
-            cards.innerHTML = groups.map((g, i) => {
+            // 每月篇数统计（月份分隔条用）
+            const monthCountMap = new Map();
+            for (const g of groups) {
+                const d = toDateObj(g.date);
+                const mk = d.getFullYear() + '-' + d.getMonth();
+                monthCountMap.set(mk, (monthCountMap.get(mk) || 0) + g.entries.length);
+            }
+            let html = '<div class="cards-head"><div class="ch-title"><span class="ch-en">Memory Index</span><span class="ch-cn">记忆目录</span></div><span class="ch-stat">共 <b>' + data.length + '</b> 篇 · <b>' + groups.length + '</b> 天</span></div>';
+            let lastMonth = null;
+            groups.forEach((g, i) => {
+                const d = toDateObj(g.date);
+                const mk = d.getFullYear() + '-' + d.getMonth();
+                if (mk !== lastMonth) {
+                    html += '<div class="month-divider"><span class="md-name">' + MONTHS_EN[d.getMonth()].toUpperCase() + ' ' + d.getFullYear() + '</span><span class="md-cn">' + CN_MONTHS[d.getMonth()] + '</span><span class="md-line"></span><span class="md-cnt">' + monthCountMap.get(mk) + ' 篇</span></div>';
+                    lastMonth = mk;
+                }
                 const first = g.entries[0];
                 const title = (first.title && first.title.trim()) ? first.title.trim()
                     : (g.entries.length > 1 ? g.entries.length + ' 篇日记' : '无题');
-                const snip = String(first.content || '').replace(/\s+/g, ' ').trim().slice(0, 48);
+                const snip = String(first.content || '').replace(/\s+/g, ' ').trim().slice(0, 96);
                 const cnt = g.entries.length > 1 ? '<span class="row-count">×' + g.entries.length + '</span>' : '';
-                return '<div class="shelf-row" data-i="' + i + '">' +
-                    '<img class="row-icon" src="namespace/cassette.png" alt="" loading="lazy" decoding="async">' +
+                const mood = moodOf(first);
+                const moodHtml = mood ? '<i class="row-mood" style="background:' + mood.color + '" title="' + escHtml(mood.name) + '"></i>' : '';
+                html += '<div class="shelf-row" data-i="' + i + '">' +
+                    '<span class="row-icowrap"><img class="row-icon" src="namespace/cassette.png" alt="" loading="lazy" decoding="async">' + moodHtml + '</span>' +
                     '<div class="row-main"><div class="row-title">' + escHtml(title) + '</div>' +
                     (snip ? '<div class="row-snip">' + escHtml(snip) + '</div>' : '') + '</div>' +
                     '<div class="row-date">' + fmtEn(g.date) + cnt + '</div>' +
                     '</div>';
-            }).join('');
+            });
+            cards.innerHTML = html;
         } else {
             cards.innerHTML = '<div class="empty"><span class="em">🌫️</span>书架暂时打不开（' + escHtml(res.msg || '未知错误') + '）</div>';
         }
         observeShelfRows();
+        fitPaper();
     }
     cards.addEventListener('click', ev => {
         const c = ev.target.closest('.shelf-row');
@@ -1647,7 +1708,8 @@ function stopPeSnow() {
     // ===== 镜子：图层叠加 + 点击破碎召唤 Badeline =====
     (function () {
         var M_DIR = 'celeste-journal/mirror/';
-        var M_SCALE = 6;
+        var M_SCALE = 7;
+        var GLASS_HK = 1.19;   // 玻璃层纵向系数：原始尺度对齐 cropped 玻璃高（241/29/7）
         var mirror = document.getElementById('shelfMirror');
         if (!mirror) return;
         var badelineWrap = mirror.querySelector('.badeline-wrap');
@@ -1660,7 +1722,7 @@ function stopPeSnow() {
             im.addEventListener('load', function () {
                 if (src === 'glassfg.png') {
                     im.style.width = 54 * M_SCALE + 'px';
-                    im.style.height = 29 * M_SCALE + 'px';
+                    im.style.height = 29 * M_SCALE * GLASS_HK + 'px';
                     return;
                 }
                 if (src === 'frame.png') {
@@ -1669,7 +1731,7 @@ function stopPeSnow() {
                     return;
                 }
                 im.style.width = im.naturalWidth * M_SCALE * 1.05 + 'px';
-                im.style.height = im.naturalHeight * M_SCALE * 1.05 + 'px';
+                im.style.height = im.naturalHeight * M_SCALE * GLASS_HK + 'px';
             });
             mirror.insertBefore(im, badelineWrap);
             return im;
@@ -1693,10 +1755,40 @@ function stopPeSnow() {
             breakImgs.push(bk);
         }
         var frameImg = addLayer('frame.png', 5, '', 'm-frame');
+
+        // 截图镜框中心（cropped 2453×1429 中的分数坐标）
+        var MR_FX = 1269 / 2453, MR_FY = 936 / 1429;
+        // 清除旧调节面板持久化的值，让 CSS 默认值生效
+        try { localStorage.removeItem('shelfAdj'); } catch (e) {}
+        function positionMirror() {
+            var room = document.getElementById('mirrorRoom');
+            var rw = room.clientWidth, rh = room.clientHeight;
+            if (!rw || !rh) return;
+            // cover 映射换算（只算位置，不再覆盖 --frame-scale / --glass-scale，用 CSS 默认值）
+            var scale, ox = 0, oy = 0;
+            if (rw / rh > 2453 / 1429) { scale = rw / 2453; oy = (rh - 1429 * scale) / 2; }
+            else { scale = rh / 1429; ox = (rw - 2453 * scale) / 2; }
+            var cx = ox + MR_FX * 2453 * scale;
+            var cy = oy + MR_FY * 1429 * scale;
+            mirror.style.left = (cx - 64 * M_SCALE / 2) + 'px';
+            mirror.style.top = (cy - 39 * M_SCALE / 2) + 'px';
+        }
         frameImg.addEventListener('load', function () {
             mirror.style.width = frameImg.naturalWidth * M_SCALE + 'px';
             mirror.style.height = frameImg.naturalHeight * M_SCALE + 'px';
+            positionMirror();
         });
+        window.addEventListener('resize', positionMirror);
+        // 监听 #mirrorRoom 尺寸变化（display:none → flex 切换、首次进入 dream 时）自动对齐
+        if (window.ResizeObserver) {
+            new ResizeObserver(function () { positionMirror(); }).observe(document.getElementById('mirrorRoom'));
+        }
+        // 进入/离开 dream 时主动对齐一次（dream-active 切换后 #mirrorRoom 才有尺寸）
+        new MutationObserver(function (muts) {
+            muts.forEach(function (m) {
+                if (m.attributeName === 'class') positionMirror();
+            });
+        }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
 
         function showFrame(list, idx) {
             list.forEach(function (im, i) { im.style.display = i === idx ? 'block' : 'none'; });
@@ -2510,13 +2602,75 @@ function stopPeSnow() {
             hint.textContent = '方向键 / WASD 控制 · Esc 让羽毛回来';
             document.body.appendChild(hint);
 
-            // 3) 大球初始位置 = 羽毛中心；尺寸对齐 Madeline 约 80px（半径 40）
+            // 3) 像素球初始位置 = 羽毛中心；尺寸 = 24px 直径（原 68px，缩小 65%）
             var rect = srcEl.getBoundingClientRect();
             var cx0 = rect.left + rect.width / 2;
             var cy0 = rect.top + rect.height / 2;
-            var ORB_R = 40;
-            var TRAIL_LEN = 12;
-            var orb = { x: cx0, y: cy0, vx: 0, vy: 0, trail: [] };
+            var ORB_D = 24;                    // 球直径（缩小 65% 后）
+            var ORB_R = ORB_D / 2;             // 12
+            var PX = 3;                        // 球内一颗"像素"的屏幕边长
+            var TRAIL_PX_LEN = Math.round(ORB_D * 0.7);  // 拖尾长度 = 球直径 70% ≈ 48px（沿路径实际长度）
+            var orb = { x: cx0, y: cy0, vx: 0, vy: 0, trail: [], trailLen: 0 };
+
+            // 3.5) 像素球图案（确定性 hash → 不逐帧闪烁；每颗像素金色仅差"一小度"）
+            function ph(a, b) { var v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return v - Math.floor(v); }
+            function makeOrbPixels() {
+                var cells = [], n = Math.floor(ORB_R / PX);
+                for (var gy = -n; gy <= n; gy++) {
+                    for (var gx = -n; gx <= n; gx++) {
+                        var dx = gx * PX, dy = gy * PX;
+                        var d = Math.sqrt(dx * dx + dy * dy);
+                        if (d > ORB_R - 0.5) continue;          // 圆形点阵
+                        var t = d / ORB_R;                      // 0=中心光源 → 1=边缘
+                        var l;
+                        if (t < 0.14) l = 97;                   // 中心：近白金像素光源
+                        else if (t < 0.45) l = 92 - (t - 0.14) * 39;
+                        else if (t < 0.8) l = 80 - (t - 0.45) * 40;
+                        else l = 66 - (t - 0.8) * 60;
+                        l += (ph(gx, gy) - 0.5) * 8;            // 每颗亮度微差（差一小度）
+                        var h = 46 + (ph(gx + 3, gy - 5) - 0.5) * 5;
+                        var s = 84 + (ph(gx - 7, gy + 2) - 0.5) * 12;
+                        cells.push({ dx: dx, dy: dy, c: 'hsl(' + h + ',' + s + '%,' + l + '%)' });
+                    }
+                }
+                return cells;
+            }
+            // 球外像素金光：稀疏硬边颗粒 + 十字光芒（光源"一颗颗像素"地向外发散）
+            function makeRayPixels() {
+                var out = [], n = Math.ceil((ORB_R + 7) / PX);
+                for (var gy = -n; gy <= n; gy++) {
+                    for (var gx = -n; gx <= n; gx++) {
+                        var dx = gx * PX, dy = gy * PX;
+                        var d = Math.sqrt(dx * dx + dy * dy);
+                        if (d <= ORB_R || d > ORB_R + 7) continue;
+                        var q = (d - ORB_R) / 7;                // 0 近 → 1 远
+                        var p = 0.5 - q * 0.42;                 // 近密远疏
+                        if (gx === 0 || gy === 0) p = Math.max(p, 0.85 - q * 0.3);  // 十字光芒
+                        if (ph(gx + 11, gy - 4) > p) continue;
+                        var l = 88 - q * 22 + (ph(gx, gy + 9) - 0.5) * 6;
+                        out.push({ dx: dx, dy: dy, sz: q < 0.5 ? PX : 2,
+                                   c: 'hsla(47,92%,' + l + '%,' + (0.5 - q * 0.45) + ')' });
+                    }
+                }
+                return out;
+            }
+            // 柔光晕精灵（离屏生成一次）：让中心像素光源整体发光，本体颗粒仍保持硬边
+            function makeGlowSprite() {
+                var gs = document.createElement('canvas');
+                gs.width = gs.height = (ORB_R + 9) * 2;
+                var g2 = gs.getContext('2d');
+                var g = g2.createRadialGradient(gs.width / 2, gs.height / 2, 2,
+                                                gs.width / 2, gs.height / 2, gs.width / 2);
+                g.addColorStop(0, 'rgba(255,240,170,.6)');
+                g.addColorStop(0.35, 'rgba(255,218,120,.32)');
+                g.addColorStop(1, 'rgba(255,200,90,0)');
+                g2.fillStyle = g;
+                g2.fillRect(0, 0, gs.width, gs.height);
+                return gs;
+            }
+            var orbCells = makeOrbPixels();
+            var rayCells = makeRayPixels();
+            var glowSprite = makeGlowSprite();
 
             // 4) 键盘
             var keys = {};
@@ -2553,11 +2707,11 @@ function stopPeSnow() {
                 // flash 白闪（6 帧淡出）
                 if (frame <= FLASH_FRAMES) {
                     var a = 0.85 * (1 - frame / FLASH_FRAMES);
-                    var g = ctx.createRadialGradient(cx0, cy0, 4, cx0, cy0, 140);
+                    var g = ctx.createRadialGradient(cx0, cy0, 2, cx0, cy0, 50);
                     g.addColorStop(0, 'rgba(255,255,240,' + a + ')');
                     g.addColorStop(1, 'rgba(255,255,240,0)');
                     ctx.fillStyle = g;
-                    ctx.fillRect(cx0 - 140, cy0 - 140, 280, 280);
+                    ctx.fillRect(cx0 - 50, cy0 - 50, 100, 100);
                     srcEl.style.filter = 'brightness(3) saturate(0)';
                 } else if (srcEl.style.opacity !== '0') {
                     srcEl.style.filter = '';
@@ -2584,37 +2738,47 @@ function stopPeSnow() {
                     orb.x += orb.vx;
                     orb.y += orb.vy;
 
-                    // 拖尾（短 + 小 + 发光）
+                    // 拖尾：记录路径，按"沿路径实际长度"截断到球直径的 70%（≈48px）
+                    var lastP = orb.trail[orb.trail.length - 1];
+                    var moved = lastP ? Math.hypot(orb.x - lastP.x, orb.y - lastP.y) : 0;
                     orb.trail.push({ x: orb.x, y: orb.y });
-                    if (orb.trail.length > TRAIL_LEN) orb.trail.shift();
+                    orb.trailLen += moved;
+                    while (orb.trailLen > TRAIL_PX_LEN && orb.trail.length > 1) {
+                        var o0 = orb.trail[0], o1 = orb.trail[1];
+                        orb.trailLen -= Math.hypot(o1.x - o0.x, o1.y - o0.y);
+                        orb.trail.shift();
+                    }
+
+                    // —— 像素拖尾：一颗颗金色像素方块，颜色彼此仅差一小度 ——
                     for (var i = 0; i < orb.trail.length; i++) {
                         var tp = orb.trail[i];
-                        var tk = i / orb.trail.length;  // 0(旧) → 1(新)
-                        var ta = tk * 0.8;
-                        var tr = 1.5 + tk * 2;          // 半径 1.5 → 3.5px
-                        // glow halo
-                        ctx.shadowBlur = 10;
-                        ctx.shadowColor = 'rgba(195,196,162,' + (ta * 0.8) + ')';
-                        // 圆形拖尾粒子（非方块）
-                        ctx.fillStyle = 'rgba(195,196,162,' + ta + ')';
-                        ctx.beginPath();
-                        ctx.arc(tp.x, tp.y, tr, 0, Math.PI * 2);
-                        ctx.fill();
+                        var tk = i / (orb.trail.length - 1 || 1);  // 0(旧·远) → 1(新·贴球)
+                        var sz = tk > 0.55 ? PX : 2;               // 近处颗粒与球同粒度
+                        var l = 62 + tk * 24 + (ph(i, 3) - 0.5) * 8;   // 暗金 → 亮金，微差
+                        var h = 46 + (ph(i, 7) - 0.5) * 5;
+                        ctx.fillStyle = 'hsla(' + h + ',90%,' + l + '%,' + (0.18 + tk * 0.62) + ')';
+                        ctx.fillRect(Math.round(tp.x - sz / 2), Math.round(tp.y - sz / 2), sz, sz);
                     }
-                    ctx.shadowBlur = 0;
 
-                    // 大球本体（圆形，#fefab2 → 稍暗，外发光）
-                    ctx.shadowBlur = 30;
-                    ctx.shadowColor = '#fefab2';
-                    var coreGrad = ctx.createRadialGradient(orb.x - ORB_R * 0.3, orb.y - ORB_R * 0.3, 2, orb.x, orb.y, ORB_R);
-                    coreGrad.addColorStop(0, '#fffde0');
-                    coreGrad.addColorStop(0.5, '#fefab2');
-                    coreGrad.addColorStop(1, '#e8d97a');
-                    ctx.fillStyle = coreGrad;
-                    ctx.beginPath();
-                    ctx.arc(orb.x, orb.y, ORB_R, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.shadowBlur = 0;
+                    // —— 中心光源发光：柔光晕精灵（1 次 drawImage） ——
+                    ctx.drawImage(glowSprite,
+                        Math.round(orb.x - glowSprite.width / 2),
+                        Math.round(orb.y - glowSprite.height / 2));
+
+                    // —— 球外像素金光：硬边颗粒 + 十字光芒 ——
+                    var rx0 = Math.round(orb.x), ry0 = Math.round(orb.y);
+                    for (var ri = 0; ri < rayCells.length; ri++) {
+                        var rc = rayCells[ri];
+                        ctx.fillStyle = rc.c;
+                        ctx.fillRect(rx0 + rc.dx, ry0 + rc.dy, rc.sz, rc.sz);
+                    }
+
+                    // —— 像素球本体：颗颜色微差的金色像素混合（无 shadow，硬边） ——
+                    for (var ci2 = 0; ci2 < orbCells.length; ci2++) {
+                        var cell = orbCells[ci2];
+                        ctx.fillStyle = cell.c;
+                        ctx.fillRect(rx0 + cell.dx, ry0 + cell.dy, PX, PX);
+                    }
 
                     // 飞出屏幕 + 余量 → 结束
                     if (orb.x < -ORB_R || orb.x > cv.width + ORB_R
@@ -3413,113 +3577,6 @@ function stopPeSnow() {
                 };
             }
         };
-    })();
-
-    // ===== dream 模式边框调节面板（右上角按钮，仅开发者/调参用） =====
-    (function () {
-        var DEFAULTS = {
-            'frame-top':    '0px',
-            'frame-scale':  '1',
-            'glass-top':    '0px',
-            'glass-scale':  '1',
-            'door-top':     '0px',
-            'door-scale':   '1'
-        };
-        var GROUPS = [
-            { name: '镜框', sliders: [
-                { key: 'frame-top',   label: '上/下', min: -100, max: 100, step: 2,    unit: 'px' },
-                { key: 'frame-scale', label: '缩放',  min: 0.6,  max: 1.4,  step: 0.02, unit: ''   }
-            ]},
-            { name: '镜面', sliders: [
-                { key: 'glass-top',   label: '上/下', min: -100, max: 100, step: 2,    unit: 'px' },
-                { key: 'glass-scale', label: '缩放',  min: 0.6,  max: 1.4,  step: 0.02, unit: ''   }
-            ]},
-            { name: '心门', sliders: [
-                { key: 'door-top',   label: '上/下', min: -80,  max: 80,  step: 2,    unit: 'px' },
-                { key: 'door-scale', label: '缩放',  min: 0.7,  max: 1.4,  step: 0.02, unit: ''   }
-            ]}
-        ];
-        var LS_KEY = 'shelfAdj';
-        var ALL_SLIDERS = [];
-        GROUPS.forEach(function (g) { g.sliders.forEach(function (s) { ALL_SLIDERS.push(s); }); });
-        // 清理旧 key（mirror-top/mirror-scale → frame/glass）
-        try {
-            var old = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
-            if (old['mirror-top'] != null || old['mirror-scale'] != null) {
-                delete old['mirror-top']; delete old['mirror-scale'];
-                localStorage.setItem(LS_KEY, JSON.stringify(old));
-            }
-        } catch (e) {}
-        // 读 localStorage 初始化
-        var saved = {};
-        try { saved = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch (e) {}
-        Object.keys(DEFAULTS).forEach(function (k) {
-            if (saved[k] != null) document.documentElement.style.setProperty('--' + k, saved[k]);
-            else document.documentElement.style.setProperty('--' + k, DEFAULTS[k]);
-        });
-        // 造按钮
-        var btn = document.createElement('div');
-        btn.className = 'adjust-btn'; btn.textContent = '⚙'; btn.title = '调节镜框/镜面/心门（进 dream 后可见）';
-        document.body.appendChild(btn);
-        // 造面板
-        var panel = document.createElement('div');
-        panel.className = 'adjust-panel';
-        var html = '<h4>Dream 调节</h4>';
-        GROUPS.forEach(function (g) {
-            html += '<div class="adjust-group">';
-            html += '<div class="adjust-row"><span style="flex:0 0 60px;color:#a78bfa;font-size:11px;letter-spacing:.12em;">' + g.name.toUpperCase() + '</span></div>';
-            g.sliders.forEach(function (s) { html += sliderRow(s); });
-            html += '</div>';
-        });
-        html += '<button class="adjust-reset">恢复默认</button>';
-        panel.innerHTML = html;
-        document.body.appendChild(panel);
-
-        function sliderRow(s) {
-            var cur = getVar(s.key);
-            return '<div class="adjust-row">'
-                + '<label>' + s.label + '</label>'
-                + '<input type="range" data-key="' + s.key + '" min="' + s.min + '" max="' + s.max + '" step="' + s.step + '" value="' + stripUnit(cur, s.unit) + '">'
-                + '<span class="val" data-v="' + s.key + '">' + cur + '</span>'
-                + '</div>';
-        }
-        function getVar(k) {
-            var v = getComputedStyle(document.documentElement).getPropertyValue('--' + k).trim();
-            return v || DEFAULTS[k];
-        }
-        function stripUnit(v, unit) { return parseFloat(v); }
-        function fmtVal(key, raw, unit) {
-            return unit ? (raw + unit) : Number(raw).toFixed(2);
-        }
-
-        btn.addEventListener('click', function () { panel.classList.toggle('show'); });
-        document.addEventListener('click', function (e) {
-            if (!panel.classList.contains('show')) return;
-            if (panel.contains(e.target) || btn.contains(e.target)) return;
-            panel.classList.remove('show');
-        });
-        panel.querySelectorAll('input[type=range]').forEach(function (sl) {
-            var key = sl.dataset.key;
-            var unit = ALL_SLIDERS.find(function (x) { return x.key === key; }).unit;
-            sl.addEventListener('input', function () {
-                var v = fmtVal(key, sl.value, unit);
-                document.documentElement.style.setProperty('--' + key, v);
-                panel.querySelector('[data-v="' + key + '"]').textContent = v;
-                saved[key] = v;
-                try { localStorage.setItem(LS_KEY, JSON.stringify(saved)); } catch (e) {}
-            });
-        });
-        panel.querySelector('.adjust-reset').addEventListener('click', function () {
-            ALL_SLIDERS.forEach(function (s) {
-                document.documentElement.style.setProperty('--' + s.key, DEFAULTS[s.key]);
-                var v = DEFAULTS[s.key];
-                panel.querySelector('[data-v="' + s.key + '"]').textContent = v;
-                var sl = panel.querySelector('input[data-key="' + s.key + '"]');
-                sl.value = stripUnit(v, s.unit);
-                saved[s.key] = v;
-            });
-            try { localStorage.setItem(LS_KEY, JSON.stringify(saved)); } catch (e) {}
-        });
     })();
 </script>
 </body>

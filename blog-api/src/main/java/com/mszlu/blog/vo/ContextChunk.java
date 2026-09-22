@@ -18,6 +18,8 @@ public class ContextChunk {
     private double score;
 
     public String sourceLabel() {
-        return "diary".equals(source) ? "她的日记" : "你记得的事";
+        if ("diary".equals(source)) return "她的日记";
+        if ("lore".equals(source)) return "Celeste设定";
+        return "你记得的事";
     }
 }

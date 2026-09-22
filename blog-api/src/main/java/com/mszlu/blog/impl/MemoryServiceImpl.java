@@ -313,6 +313,21 @@ public class MemoryServiceImpl implements MemoryService {
             }
         }
 
+        // 源3：Celeste 公共设定知识库（userId 为空，source=lore）
+        LambdaQueryWrapper<DocumentChunk> lp = new LambdaQueryWrapper<>();
+        lp.isNull(DocumentChunk::getUserId)
+          .eq(DocumentChunk::getSource, "lore")
+          .isNotNull(DocumentChunk::getEmbedding)
+          .last("limit 500");
+        for (DocumentChunk c : chunkMapper.selectList(lp)) {
+            double sim = cosine(qv, parseVec(c.getEmbedding()));
+            if (sim > 0.3) {
+                scored.add(new AbstractMap.SimpleEntry<>(
+                        new ContextChunk("lore", c.getContent(),
+                                c.getTitle() != null ? "Celeste设定·" + c.getTitle() : "Celeste设定", sim), sim));
+            }
+        }
+
         scored.sort((a, b) -> Double.compare(b.getValue(), a.getValue()));
         List<ContextChunk> out = new ArrayList<>();
         for (int i = 0; i < Math.min(limit, scored.size()); i++) out.add(scored.get(i).getKey());

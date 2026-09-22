@@ -137,6 +137,14 @@ A character-themed profile dashboard against Celeste's rocky backdrop — ticket
 
 A full Markdown editor under a dreamy purple twilight sky — toolbar supports rich formatting plus **Madeline** refs, **润色/Polish** (AI refinement), and **生成文章/Generate**.
 
+### 🏪 Shop — *Oshiro's Strawberry Inn — the tsundere innkeeper awaits.*
+
+<p align="center">
+  <img src="docs/screenshots/shop.png" alt="Oshiro Shop" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
+</p>
+
+Oshiro's cozy inn — pixel-perfect Celeste interior with purple curtains, campfire chimneys curling smoke, and the sharp-tongued innkeeper herself. Spend your 🍓 strawberries on decorations, chat with Oshiro, and explore the resort.
+
 ---
 
 ## 🪶 Golden Feather System
@@ -158,11 +166,25 @@ A dual-core healing module inspired by *Celeste*: **Reflective Journaling** + **
 
 ---
 
-## 🪞 Dream Mirror & Badeline
+### 🌙 Dream Scene — *Behind the bookshelf — snow night, aurora, and a sleeping Madeline.*
 
 <p align="center">
-  <img src="blog-ui/celeste-gui/dream/scene.png" alt="Dream World" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
+  <img src="docs/screenshots/dream.png" alt="Dream Snow Night" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
 </p>
+
+Enter the dream world by clicking the campfire behind the bookshelf. Madeline sleeps by the flickering flames while the **aurora** dances above — golden feather transformation balls float in the sky for reflective journaling. A cinematic camera pan carries you into the mirror room.
+
+### 🪞 Mirror Room — *Purple space, shattered glass, and the shadow within.*
+
+<p align="center">
+  <img src="docs/screenshots/mirror.png" alt="Mirror Room" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
+</p>
+
+The camera slides into a purple-brick mirror room. A **framed mirror** stands at the center — click it to shatter the glass, summon **Badeline**, and start your night talk. Crystalline particles drift through the void; a crystal **Heart Door** awaits behind you.
+
+---
+
+## 🪞 Dream Mirror & Badeline
 
 Behind the bookshelf lies a **two-part dream world** — a snow-night campfire on the left and a purple mirror room on the right, joined by a cinematic one-viewport camera pan. Click the mirror to **shatter it** and summon **Badeline**, the part of you that is sharp, honest, and over-protective.
 
