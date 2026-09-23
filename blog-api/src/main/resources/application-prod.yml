@@ -11,8 +11,8 @@ server:
 spring:
   application:
     name: mszlu_blog
-  profiles:
-    active: prod
+  # 注意：profile 专属文件（application-prod.yml）里禁止声明 spring.profiles.active，
+  # 否则启动抛 InvalidConfigDataPropertyException；prod 由环境变量 SPRING_PROFILES_ACTIVE 激活
   datasource:
     url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/blog?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true
     username: ${MYSQL_USERNAME:root}
