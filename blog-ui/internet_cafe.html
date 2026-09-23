@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Celeste · Internet Cafe</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+
+  /* === neon 位置/大小：调这 4 个变量即可贴合背景 ===
+     也可以用 URL 参数：?nx=50.5&ny=42.5&nw=13.5&nh=16
+     或按 D 进入调试模式（拖拽移动 / 滚轮缩放 / P 导出数值） */
+  :root {
+    --neon-x: 50.5%;   /* 左偏移（招牌中心 X） */
+    --neon-y: 42.5%;   /* 顶部偏移（招牌顶部 Y） */
+    --neon-w: 13.5%;   /* 宽度（占视口宽度） */
+    --neon-h: 16%;     /* 高度（占视口高度） */
+    --neon-bright: 1.35; /* 亮度 */
+  }
+
+  /* === 背景截图充满全屏 === */
+  #sky {
+    position: fixed; inset: 0;
+    background: url('Atlases/Gameplay/scenery/internet_cafe_bg.png') center/cover no-repeat;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+  }
+
+  /* === 招牌周围漂浮粒子 === */
+  #sparkleCanvas {
+    position: absolute; inset: 0;
+    z-index: 8;
+    pointer-events: none;
+  }
+
+  /* === 霓虹招牌逐帧动画 === */
+  #neonSign {
+    position: absolute;
+    left: var(--neon-x);
+    top: var(--neon-y);
+    width: var(--neon-w);
+    height: var(--neon-h);
+    transform: translateX(-50%);
+    z-index: 10;
+    pointer-events: none;
+  }
+  #neonSign canvas {
+    display: block; width: 100%; height: 100%;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    /* 调亮 + 饱和 + 霓虹辉光（双层光晕：青+品红） */
+    filter:
+      brightness(var(--neon-bright))
+      saturate(1.25)
+      drop-shadow(0 0 3px rgba(80,255,225,.55))
+      drop-shadow(0 0 7px rgba(255,80,210,.30));
+  }
+
+  /* 调试模式：显示边框 + 允许鼠标操作 */
+  body.debug #neonSign {
+    pointer-events: auto;
+    cursor: move;
+    outline: 1px dashed #66ffdd;
+    outline-offset: 2px;
+  }
+  body.debug #neonSign canvas { pointer-events: none; }
+
+  /* 调试控制面板（按 D 显示） */
+  #debugPanel {
+    position: fixed; right: 12px; top: 12px;
+    z-index: 9998;
+    display: none;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: #aaffee;
+    background: rgba(0,12,22,.88);
+    border: 1px solid rgba(102,255,221,.45);
+    border-radius: 6px;
+    padding: 10px 12px;
+    width: 226px;
+    box-shadow: 0 4px 24px rgba(0,0,0,.6);
+    user-select: none;
+  }
+  body.debug #debugPanel { display: block; }
+  #debugPanel h4 {
+    font-size: 12px; color: #fff; letter-spacing: 1px;
+    margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;
+  }
+  #debugPanel h4 span { color: #6a8; font-size: 10px; font-weight: normal; }
+  .dp-row { display: flex; align-items: center; gap: 6px; margin: 5px 0; }
+  .dp-row label { width: 34px; color: #7fc; font-size: 11px; }
+  .dp-row .val {
+    flex: 1; min-width: 0;
+    background: rgba(0,40,40,.6);
+    border: 1px solid rgba(102,255,221,.3);
+    color: #eafffb; font-family: inherit; font-size: 12px;
+    text-align: center;
+    padding: 3px 2px; border-radius: 3px;
+  }
+  .dp-row button {
+    width: 26px; height: 24px;
+    background: rgba(102,255,221,.12);
+    border: 1px solid rgba(102,255,221,.4);
+    color: #cffff5; font-size: 14px; font-weight: bold;
+    border-radius: 3px; cursor: pointer; line-height: 1;
+  }
+  .dp-row button:hover { background: rgba(102,255,221,.3); }
+  .dp-row button:active { background: rgba(102,255,221,.5); }
+  .dp-pad { display: grid; grid-template-columns: repeat(3, 30px); gap: 4px; justify-content: center; margin: 8px 0; }
+  .dp-pad button { padding: 0; width: 30px; height: 26px; }
+  .dp-pad .blank { visibility: hidden; }
+  .dp-actions { display: flex; gap: 6px; margin-top: 9px; }
+  .dp-actions button {
+    flex: 1; height: 28px; width: auto;
+    font-size: 11px; font-family: inherit;
+    background: rgba(102,255,221,.15);
+  }
+  .dp-actions button.danger { border-color: rgba(255,120,120,.5); color: #ffc9c9; background: rgba(255,80,80,.12); }
+  .dp-tip { color: #789; font-size: 10px; line-height: 1.5; margin-top: 8px; border-top: 1px solid rgba(102,255,221,.2); padding-top: 6px; }
+
+  /* === TV 热区（点击跳转 berryos） === */
+  #tvHotspot {
+    position: absolute;
+    left: 39%; top: 28%;
+    width: 22%; height: 20%;
+    z-index: 10;
+    cursor: pointer;
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 0 0 0 2px rgba(150,200,255,0);
+    transition: box-shadow .2s, filter .2s;
+  }
+  #tvHotspot:hover {
+    box-shadow: 0 0 0 2px rgba(150,220,255,.6), 0 0 20px rgba(100,180,255,.5);
+    filter: brightness(1.1);
+  }
+  #tvHotspot::after {
+    content: '点击进入 BerryOS';
+    position: absolute; bottom: -22px; left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Courier New', monospace;
+    font-size: 11px; letter-spacing: 1px;
+    color: rgba(200,230,255,.8);
+    background: rgba(0,0,0,.6);
+    padding: 2px 8px; border-radius: 3px;
+    opacity: 0; transition: opacity .2s;
+    pointer-events: none; white-space: nowrap;
+  }
+  #tvHotspot:hover::after { opacity: 1; }
+
+  /* === 全屏过渡层（点击 TV 后黑屏 → 跳转） === */
+  #transition {
+    position: fixed; inset: 0;
+    z-index: 9999;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .4s ease-in;
+  }
+  #transition.active { opacity: 1; }
+</style>
+</head>
+<body>
+  <!-- 背景：Celeste 游戏截图充满全屏 -->
+  <div id="sky"></div>
+
+  <!-- 招牌周围漂浮小粒子 -->
+  <canvas id="sparkleCanvas"></canvas>
+
+  <!-- 霓虹招牌逐帧动画（15 帧 neon_00~14 循环） -->
+  <div id="neonSign"><canvas></canvas></div>
+
+  <!-- TV 热区 -->
+  <div id="tvHotspot"></div>
+
+  <!-- 调试控制面板（按 D 开关） -->
+  <div id="debugPanel">
+    <h4>neon 对齐 <span id="dpClose" style="cursor:pointer">✕</span></h4>
+
+    <!-- 位置方向键 -->
+    <div class="dp-pad">
+      <span class="blank"></span>
+      <button data-act="up">↑</button>
+      <span class="blank"></span>
+      <button data-act="left">←</button>
+      <button data-act="reset" title="复位">●</button>
+      <button data-act="right">→</button>
+      <span class="blank"></span>
+      <button data-act="down">↓</button>
+      <span class="blank"></span>
+    </div>
+
+    <!-- 整体大小（等比缩放） -->
+    <div class="dp-row">
+      <label>大小</label>
+      <button id="btnSizeM">−</button>
+      <input class="val" id="inpSize" type="number" step="5" title="相对默认尺寸的百分比">
+      <button id="btnSizeP">+</button>
+    </div>
+    <!-- 宽 -->
+    <div class="dp-row">
+      <label>宽 W</label>
+      <button data-key="w" data-step="-0.5">−</button>
+      <input class="val" id="inpW" type="number" step="0.1">
+      <button data-key="w" data-step="0.5">+</button>
+    </div>
+    <!-- 高 -->
+    <div class="dp-row">
+      <label>高 H</label>
+      <button data-key="h" data-step="-0.5">−</button>
+      <input class="val" id="inpH" type="number" step="0.1">
+      <button data-key="h" data-step="0.5">+</button>
+    </div>
+    <!-- 左偏移 -->
+    <div class="dp-row">
+      <label>X 位</label>
+      <button data-key="x" data-step="-0.3">−</button>
+      <input class="val" id="inpX" type="number" step="0.1">
+      <button data-key="x" data-step="0.3">+</button>
+    </div>
+    <!-- 顶偏移 -->
+    <div class="dp-row">
+      <label>Y 位</label>
+      <button data-key="y" data-step="-0.3">−</button>
+      <input class="val" id="inpY" type="number" step="0.1">
+      <button data-key="y" data-step="0.3">+</button>
+    </div>
+    <!-- 亮度 -->
+    <div class="dp-row">
+      <label>亮度</label>
+      <button data-key="b" data-step="-0.1">−</button>
+      <input class="val" id="inpB" type="number" step="0.05">
+      <button data-key="b" data-step="0.1">+</button>
+    </div>
+
+    <div class="dp-actions">
+      <button id="dpCopy">复制数值</button>
+      <button id="dpExit" class="danger">完成</button>
+    </div>
+    <div class="dp-tip">大小=等比缩放 · 宽/高=单独微调<br>数字可直接输入，回车生效 · Esc 退出</div>
+  </div>
+
+  <!-- 全屏过渡层 -->
+  <div id="transition"></div>
+
+<script>
+/* ============================================================
+   0. 读取 URL 参数 → CSS 变量（?nx=&ny=&nw=&nh=&bright=）
+   ============================================================ */
+(function applyUrlVars() {
+  var p = new URLSearchParams(location.search);
+  var root = document.documentElement.style;
+  if (p.has('nx')) root.setProperty('--neon-x', p.get('nx') + '%');
+  if (p.has('ny')) root.setProperty('--neon-y', p.get('ny') + '%');
+  if (p.has('nw')) root.setProperty('--neon-w', p.get('nw') + '%');
+  if (p.has('nh')) root.setProperty('--neon-h', p.get('nh') + '%');
+  if (p.has('bright')) root.setProperty('--neon-bright', p.get('bright'));
+})();
+
+/* ============================================================
+   1. neon 15 帧逐帧动画（contain 完整显示，不裁切）
+   ============================================================ */
+(function () {
+  var canvas = document.querySelector('#neonSign canvas');
+  var ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  var FRAME_COUNT = 15;
+  var basePath = 'Atlases/Gameplay/objects/wavedashtutorial/';
+  var frames = [];
+  var loaded = 0;
+
+  for (var i = 0; i < FRAME_COUNT; i++) {
+    var img = new Image();
+    img.onload = function () { loaded++; if (loaded === FRAME_COUNT) startAnim(); };
+    img.src = basePath + 'neon_' + String(i).padStart(2, '0') + '.png';
+    frames.push(img);
+  }
+
+  function resizeCanvas() {
+    canvas.width = canvas.clientWidth;
+    canvas.height = canvas.clientHeight;
+    ctx.imageSmoothingEnabled = false;
+  }
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  var frameIdx = 0, lastTime = 0, rafId;
+  var FPS = 12;
+  var interval = 1000 / FPS;
+
+  function draw(t) {
+    rafId = requestAnimationFrame(draw);
+    if (t - lastTime < interval) return;
+    lastTime = t;
+
+    var img = frames[frameIdx];
+    if (img && img.complete && img.naturalWidth > 0) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // contain：完整显示整帧（素材透明底，留白无影响）
+      var w = img.naturalWidth, h = img.naturalHeight;
+      var cw = canvas.width, ch = canvas.height;
+      var scale = Math.min(cw / w, ch / h);
+      var dw = w * scale, dh = h * scale;
+      var dx = (cw - dw) / 2, dy = (ch - dh) / 2;
+      ctx.drawImage(img, dx | 0, dy | 0, dw | 0, dh | 0);
+    }
+    frameIdx = (frameIdx + 1) % FRAME_COUNT;
+  }
+  function startAnim() { rafId = requestAnimationFrame(draw); }
+})();
+
+/* ============================================================
+   2. 招牌周围漂浮粒子（十几颗小星点，缓慢漂浮 + 闪烁）
+   ============================================================ */
+(function () {
+  var canvas = document.getElementById('sparkleCanvas');
+  var ctx = canvas.getContext('2d');
+  var W, H;
+  function resize() { W = canvas.width = canvas.clientWidth; H = canvas.height = canvas.clientHeight; }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // 粒子活动范围：以背景截图招牌为中心的一圈（穹顶上方+周围）
+  // 百分比坐标，和 --neon-* 同区域并向外扩
+  var ZONE = { x: 0.30, y: 0.20, w: 0.40, h: 0.45 };
+  var COLORS = ['#ffffff', '#7affe0', '#ff7ad9', '#b98cff', '#8fd4ff', '#fff3a3'];
+  var COUNT = 16;
+  var parts = [];
+  for (var i = 0; i < COUNT; i++) {
+    parts.push({
+      // 百分比基准位置（在 zone 内）
+      bx: ZONE.x + Math.random() * ZONE.w,
+      by: ZONE.y + Math.random() * ZONE.h,
+      // 漂浮幅度（百分比）
+      ampX: (Math.random() * 1.2 + .4) / 100,
+      ampY: (Math.random() * 1.0 + .3) / 100,
+      spd: Math.random() * .0006 + .0003,   // 漂浮速度
+      phase: Math.random() * Math.PI * 2,
+      size: Math.random() < .25 ? 3 : 2,    // 少数几颗大星芒
+      color: COLORS[Math.random() * COLORS.length | 0],
+      tw: Math.random() * .003 + .001,      // 闪烁速度
+      twPhase: Math.random() * Math.PI * 2
+    });
+  }
+
+  function frame(t) {
+    ctx.clearRect(0, 0, W, H);
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i];
+      var x = (p.bx + Math.sin(t * p.spd + p.phase) * p.ampX) * W;
+      var y = (p.by + Math.cos(t * p.spd * .8 + p.phase) * p.ampY) * H;
+      var a = .35 + .55 * (0.5 + 0.5 * Math.sin(t * p.tw + p.twPhase));
+      ctx.globalAlpha = a;
+      ctx.fillStyle = p.color;
+      var s = p.size;
+      // 小十字星芒（像素风：中心方块 + 横竖各延 1px）
+      ctx.fillRect(x | 0, y | 0, s, s);
+      ctx.fillRect((x - 1) | 0, y | 0, 1, s);
+      ctx.fillRect((x + s) | 0, y | 0, 1, s);
+      ctx.fillRect(x | 0, (y - 1) | 0, s, 1);
+      ctx.fillRect(x | 0, (y + s) | 0, s, 1);
+    }
+    ctx.globalAlpha = 1;
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+
+/* ============================================================
+   3. 调试模式：按 D 开关
+      面板按钮：方向键移动 / 宽高亮± / 直接输数值
+      画布：拖拽移动、滚轮缩放（Shift宽 / Alt高）
+      P 复制数值 · Esc 退出
+   ============================================================ */
+(function () {
+  var root = document.documentElement;
+  var neon = document.getElementById('neonSign');
+  var panel = document.getElementById('debugPanel');
+
+  // 默认值（复位用；若 URL 带了参数，以 URL 值为默认）
+  var DEFAULTS = { x: 50.5, y: 42.5, w: 13.5, h: 16, b: 1.35 };
+  (function () {
+    var p = new URLSearchParams(location.search);
+    ['x','y','w','h','b'].forEach(function (k, i) {
+      var qk = ['nx','ny','nw','nh','bright'][i];
+      if (p.has(qk)) DEFAULTS[k] = parseFloat(p.get(qk));
+    });
+  })();
+
+  // 变量名 → CSS 变量名 / input id / 单位
+  var META = {
+    x: { css: '--neon-x', inp: 'inpX', unit: '%' },
+    y: { css: '--neon-y', inp: 'inpY', unit: '%' },
+    w: { css: '--neon-w', inp: 'inpW', unit: '%' },
+    h: { css: '--neon-h', inp: 'inpH', unit: '%' },
+    b: { css: '--neon-bright', inp: 'inpB', unit: '' }
+  };
+
+  function getVars() {
+    var cs = getComputedStyle(root);
+    return {
+      x: parseFloat(cs.getPropertyValue('--neon-x')) || 0,
+      y: parseFloat(cs.getPropertyValue('--neon-y')) || 0,
+      w: parseFloat(cs.getPropertyValue('--neon-w')) || 0,
+      h: parseFloat(cs.getPropertyValue('--neon-h')) || 0,
+      b: parseFloat(cs.getPropertyValue('--neon-bright')) || 1
+    };
+  }
+  function setVars(v) {
+    v.x = Math.max(0, Math.min(100, v.x));
+    v.y = Math.max(0, Math.min(100, v.y));
+    v.w = Math.max(2, Math.min(80, v.w));
+    v.h = Math.max(2, Math.min(80, v.h));
+    v.b = Math.max(.5, Math.min(3, v.b));
+    root.style.setProperty('--neon-x', v.x.toFixed(2) + '%');
+    root.style.setProperty('--neon-y', v.y.toFixed(2) + '%');
+    root.style.setProperty('--neon-w', v.w.toFixed(2) + '%');
+    root.style.setProperty('--neon-h', v.h.toFixed(2) + '%');
+    root.style.setProperty('--neon-bright', v.b);
+    refreshInputs();
+  }
+  function nudge(key, delta) {
+    var v = getVars();
+    v[key] += delta;
+    setVars(v);
+  }
+  function refreshInputs() {
+    var v = getVars();
+    for (var k in META) {
+      var el = document.getElementById(META[k].inp);
+      if (document.activeElement !== el) el.value = v[k].toFixed(2).replace(/\.?0+$/, '');
+    }
+    // 大小百分比（相对默认宽度）
+    var sizeEl = document.getElementById('inpSize');
+    if (document.activeElement !== sizeEl) {
+      sizeEl.value = Math.round(v.w / DEFAULTS.w * 100);
+    }
+  }
+
+  // ---- 整体大小：等比缩放（宽高同乘系数，保持招牌不变形） ----
+  function scaleBy(ratio) {
+    var v = getVars();
+    v.w *= ratio;
+    v.h *= ratio;
+    setVars(v);
+  }
+  document.getElementById('btnSizeP').addEventListener('click', function () { scaleBy(1.05); });  // +5%
+  document.getElementById('btnSizeM').addEventListener('click', function () { scaleBy(1 / 1.05); }); // -5%
+  // 直接输入百分比（相对默认尺寸，按默认比例等比设置）
+  document.getElementById('inpSize').addEventListener('change', function () {
+    var pct = parseFloat(this.value);
+    if (isNaN(pct) || pct <= 0) return;
+    var v = getVars();
+    var r = pct / 100;
+    v.w = DEFAULTS.w * r;
+    v.h = DEFAULTS.h * r;
+    setVars(v);
+  });
+  document.getElementById('inpSize').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') this.blur();
+    e.stopPropagation();
+  });
+
+  // ---- ± 按钮 ----
+  panel.querySelectorAll('button[data-key]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      nudge(btn.dataset.key, parseFloat(btn.dataset.step));
+    });
+  });
+
+  // ---- 方向 pad ----
+  panel.querySelectorAll('button[data-act]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var v = getVars();
+      var s = 0.4;
+      switch (btn.dataset.act) {
+        case 'up':    v.y -= s; break;
+        case 'down':  v.y += s; break;
+        case 'left':  v.x -= s; break;
+        case 'right': v.x += s; break;
+        case 'reset': v.x = DEFAULTS.x; v.y = DEFAULTS.y; v.w = DEFAULTS.w; v.h = DEFAULTS.h; v.b = DEFAULTS.b; break;
+      }
+      setVars(v);
+    });
+  });
+
+  // ---- 数字输入框：输入即生效 ----
+  Object.keys(META).forEach(function (key) {
+    var el = document.getElementById(META[key].inp);
+    el.addEventListener('change', function () {
+      var val = parseFloat(el.value);
+      if (!isNaN(val)) nudge(key, val - getVars()[key]);
+    });
+    el.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') el.blur();
+      e.stopPropagation();   // 防止触发全局方向键快捷键
+    });
+  });
+
+  // ---- 复制数值 / 关闭 ----
+  function buildUrl() {
+    var v = getVars();
+    return location.pathname.split('/').pop() +
+      '?nx=' + v.x.toFixed(2) + '&ny=' + v.y.toFixed(2) +
+      '&nw=' + v.w.toFixed(2) + '&nh=' + v.h.toFixed(2) + '&bright=' + v.b;
+  }
+  function copyValues() {
+    var v = getVars();
+    var s = 'nx=' + v.x.toFixed(2) + ' ny=' + v.y.toFixed(2) +
+            ' nw=' + v.w.toFixed(2) + ' nh=' + v.h.toFixed(2) + ' bright=' + v.b;
+    var done = function () { alert('已复制链接！\n\n' + s + '\n\n' + buildUrl()); };
+    if (navigator.clipboard) navigator.clipboard.writeText(buildUrl()).then(done, done); else done();
+  }
+  document.getElementById('dpCopy').addEventListener('click', copyValues);
+  function exitDebug() { document.body.classList.remove('debug'); }
+  document.getElementById('dpExit').addEventListener('click', exitDebug);
+  document.getElementById('dpClose').addEventListener('click', exitDebug);
+
+  // ---- 拖拽移动 ----
+  var dragging = false, sx = 0, sy = 0, start = null;
+  neon.addEventListener('mousedown', function (e) {
+    if (!document.body.classList.contains('debug')) return;
+    dragging = true;
+    sx = e.clientX; sy = e.clientY;
+    start = getVars();
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', function (e) {
+    if (!dragging) return;
+    var v = getVars();
+    v.x = start.x + (e.clientX - sx) / window.innerWidth * 100;
+    v.y = start.y + (e.clientY - sy) / window.innerHeight * 100;
+    setVars(v);
+  });
+  window.addEventListener('mouseup', function () { dragging = false; });
+
+  // ---- 滚轮缩放（Shift宽 / Alt高 / 默认整体） ----
+  neon.addEventListener('wheel', function (e) {
+    if (!document.body.classList.contains('debug')) return;
+    e.preventDefault();
+    var v = getVars();
+    var d = e.deltaY < 0 ? 1.08 : 1 / 1.08;
+    if (e.shiftKey) v.w *= d;
+    else if (e.altKey) v.h *= d;
+    else { v.w *= d; v.h *= d; }
+    setVars(v);
+  }, { passive: false });
+
+  // ---- 键盘：D 开关，方向键微调，P 复制，Esc 退出 ----
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'd' || e.key === 'D') {
+      var on = document.body.classList.toggle('debug');
+      if (on) refreshInputs();
+      return;
+    }
+    if (!document.body.classList.contains('debug')) return;
+    if (/^[0-9.\-]$/.test(e.key) && document.activeElement.tagName === 'INPUT') return;
+    var v = getVars();
+    var step = e.shiftKey ? 1 : .2;
+    switch (e.key) {
+      case 'ArrowLeft':  v.x -= step; break;
+      case 'ArrowRight': v.x += step; break;
+      case 'ArrowUp':    v.y -= step; break;
+      case 'ArrowDown':  v.y += step; break;
+      case 'p': case 'P': copyValues(); return;
+      case 'Escape': exitDebug(); return;
+      default: return;
+    }
+    setVars(v);
+    e.preventDefault();
+  });
+})();
+
+/* ============================================================
+   4. 点击 TV → 黑屏过渡 → 进 berryos.html
+   ============================================================ */
+(function () {
+  var tv = document.getElementById('tvHotspot');
+  var trans = document.getElementById('transition');
+
+  tv.addEventListener('click', function () {
+    trans.classList.add('active');
+    setTimeout(function () { location.href = 'berryos.html'; }, 400);
+  });
+  tv.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') tv.click();
+  });
+})();
+</script>
+<script src="js/seed.js"></script>
+</body>
+</html>

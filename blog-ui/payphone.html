@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Celeste · Madeline Singing</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0b1026; font-family: 'Courier New', monospace; }
+
+  /* 像素艺术缩放：保留硬边 */
+  .px {
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+  }
+
+  /* === Celeste 视频当背景（Madeline + 雪夜 + 信息亭，从 4s 开始循环） === */
+  #skyVideo {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    object-position: center;
+    z-index: 1;
+    /* 像素艺术保留硬边（视频本身不是像素的，但保持锐利不模糊） */
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+  }
+
+  /* === 镜子房间同款星点层：停留 + 闪烁（不下坠） === */
+  #starLayer {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    z-index: 2;
+    overflow: hidden;
+  }
+  #starLayer i {
+    position: absolute;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    opacity: 0;
+    --dur: 3s; --del: 0s;            /* JS 动态覆盖（闪烁时长/延迟） */
+    animation: starTwinkle var(--dur,3s) ease-in-out var(--del,0s) infinite;
+    filter: drop-shadow(0 0 6px rgba(95,205,228,.6))
+            drop-shadow(0 0 12px rgba(48,96,130,.4));
+  }
+  @keyframes starTwinkle { 0%,100% { opacity: 0; } 50% { opacity: .95; } }
+
+  /* === 可点击的 payphone 精灵 ===
+     payphone.png 原始 45×64，放大 4 倍 = 180×256
+     定位在画面中下偏左前景处（避开信息亭和 Madeline） */
+  #payphoneHotspot {
+    position: absolute;
+    left: 18%; bottom: 8%;
+    width: 180px; height: 256px;
+    z-index: 10;
+    cursor: pointer;
+    transition: transform .15s, filter .15s;
+  }
+  #payphoneHotspot .receiver {
+    position: absolute; inset: 0;
+    background: url('Atlases/Gameplay/scenery/payphone.png') center/contain no-repeat;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    transform-origin: 50% 100%;
+    transition: transform .25s ease-in-out;
+  }
+  #payphoneHotspot:hover { filter: brightness(1.15) drop-shadow(0 0 8px rgba(255,220,120,.55)); }
+  #payphoneHotspot:hover .receiver { transform: translateY(-4px) rotate(-2deg); }
+  #payphoneHotspot:active .receiver { transform: translateY(0) rotate(1deg); }
+  #payphoneHotspot::after {
+    content: '点击电话 · listen to Madeline sing';
+    position: absolute; bottom: -28px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px; letter-spacing: 1px;
+    color: rgba(255,235,200,.85);
+    background: rgba(0,0,0,.65);
+    padding: 3px 9px; border-radius: 3px;
+    opacity: 0; transition: opacity .2s;
+    pointer-events: none; white-space: nowrap;
+  }
+  #payphoneHotspot:hover::after { opacity: 1; }
+
+  /* === 标题文字 === */
+  #pageTitle {
+    position: absolute; top: 20px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 14px; letter-spacing: 4px;
+    color: rgba(255,220,200,.65);
+    text-shadow: 0 0 8px rgba(255,180,120,.45), 0 0 2px rgba(0,0,0,.9);
+    z-index: 20; pointer-events: none; text-align: center;
+  }
+  #pageTitle .sub { font-size: 10px; letter-spacing: 2px; opacity: .65; margin-top: 4px; }
+
+  /* === 全屏逐帧动画层（点击 payphone 后铺满播放 phone00~25） === */
+  #cutscene {
+    position: fixed; inset: 0;
+    background: #000;
+    z-index: 9998;
+    display: none;
+    opacity: 0;
+    transition: opacity .25s linear;
+  }
+  #cutscene.active { display: block; opacity: 1; }
+  #cutsceneCanvas {
+    display: block;
+    width: 100%; height: 100%;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+  }
+  #cutsceneHint {
+    position: absolute; bottom: 18px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px; letter-spacing: 2px;
+    color: rgba(220,230,255,.7);
+    text-shadow: 0 0 4px rgba(0,0,0,.9);
+    pointer-events: none;
+    opacity: 0; transition: opacity .3s;
+  }
+  #cutscene.active #cutsceneHint { opacity: 1; }
+
+  /* === 全屏雪花过渡层（动画结束后回到背景） === */
+  #fullSnow {
+    position: fixed; inset: 0;
+    z-index: 9999;
+    background: #000;
+    display: none;
+    opacity: 0;
+    transition: opacity .25s linear;
+  }
+  #fullSnow.active { display: block; opacity: 1; }
+  #fullSnowCanvas { display: block; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+  <!-- Celeste 视频当背景（已裁剪从 4s 起，1920×1200 web-friendly） -->
+  <video id="skyVideo" muted loop playsinline preload="auto"></video>
+
+  <!-- 镜子房间同款星点（停留闪烁，铺满屏幕） -->
+  <div id="starLayer"></div>
+
+  <!-- 标题 -->
+  <div id="pageTitle">
+    MADELINE SINGING · PAYPHONE
+    <div class="sub">celeste · click the payphone to hear her sing</div>
+  </div>
+
+  <!-- 可点击的 payphone 精灵 -->
+  <div id="payphoneHotspot" class="px" tabindex="0" role="button" aria-label="Play payphone cutscene">
+    <div class="receiver"></div>
+  </div>
+
+  <!-- 全屏逐帧动画层（点击 payphone 后播放 phone00~25） -->
+  <div id="cutscene">
+    <canvas id="cutsceneCanvas"></canvas>
+    <div id="cutsceneHint">click / Esc to skip</div>
+  </div>
+
+  <!-- 全屏雪花过渡层 -->
+  <div id="fullSnow"><canvas id="fullSnowCanvas"></canvas></div>
+
+<script>
+/* ============================================================
+   1. 镜子房间同款星点：停留 + 闪烁（铺满屏幕，不下坠）
+      素材：Atlases/Gameplay/bgs/02/stars/ 的 a/b/c × 4 帧
+   ============================================================ */
+(function bgStars() {
+  var layer = document.getElementById('starLayer');
+  if (!layer) return;
+
+  var DIR = 'Atlases/Gameplay/bgs/02/stars/';
+  var TYPES = ['a', 'b', 'c'];
+  var FRAMES = 4;
+  // 预加载 12 张 PNG + 缓存 background url 字符串
+  var cache = {};
+  TYPES.forEach(function (t) {
+    cache[t] = [];
+    for (var i = 0; i < FRAMES; i++) {
+      var src = DIR + t + String(i).padStart(2, '0') + '.png';
+      cache[t].push('url("' + src + '") center / 100% 100% no-repeat');
+      var im = new Image(); im.src = src;
+    }
+  });
+
+  var STAR_COUNT = 70;            // 铺满屏幕
+  var SIZE_MIN = 20, SIZE_MAX = 56;
+
+  function makeStar() {
+    var t = TYPES[Math.floor(Math.random() * TYPES.length)];
+    var el = document.createElement('i');
+    var size = SIZE_MIN + Math.random() * (SIZE_MAX - SIZE_MIN);
+    el.style.width = el.style.height = size + 'px';
+    el.style.left = (Math.random() * 100).toFixed(2) + '%';
+    el.style.top = (Math.random() * 100).toFixed(2) + '%';
+    el.style.background = cache[t][Math.floor(Math.random() * FRAMES)];
+    // 闪烁节奏：2.5–6.5s，负 delay 让各点处于随机相位（入场即遍布全屏）
+    var dur = 2.5 + Math.random() * 4;
+    el.style.setProperty('--dur', dur.toFixed(2) + 's');
+    el.style.setProperty('--del', (-Math.random() * dur).toFixed(2) + 's');
+    // 逐帧切图（和镜子房间同款：160–320ms 循环切 4 帧）
+    var frameIdx = Math.floor(Math.random() * FRAMES);
+    var interval = setInterval(function () {
+      if (!el.parentNode) { clearInterval(interval); return; }
+      frameIdx = (frameIdx + 1) % FRAMES;
+      el.style.background = cache[t][frameIdx];
+    }, 160 + Math.random() * 160);
+    layer.appendChild(el);
+  }
+
+  for (var i = 0; i < STAR_COUNT; i++) makeStar();
+})();
+
+/* ============================================================
+   1b. 视频背景：fetch→blob URL 绕过 Python SimpleHTTP 不支持 Range
+      （直连 src 会 ERR_ABORTED，和 BGM 同款处理）
+      视频已用 ffmpeg 裁剪从 4s 起 + 缩到 1920×1200，loop 属性原生循环
+   ============================================================ */
+(function videoBg() {
+  var v = document.getElementById('skyVideo');
+  if (!v) return;
+  var SRC = 'Atlases/Gameplay/scenery/payphone_bg.mp4';
+
+  v.addEventListener('canplaythrough', function () {
+    var p = v.play();
+    if (p && p.catch) p.catch(function (e) { console.warn('[videoBg] play() rejected:', e && e.name); });
+  });
+
+  // fetch 整段视频成 blob 再交给 video（Python SimpleHTTP 不发 206，直连会 ABORTED）
+  fetch(SRC).then(function (r) { return r.blob(); }).then(function (blob) {
+    v.src = URL.createObjectURL(blob);  // 设 src 自动 load
+  }).catch(function () {
+    v.src = SRC;  // 回退：直连（正式服务器支持 Range 时能用）
+  });
+})();
+
+/* ============================================================
+   2. 逐帧素材动画工具
+   ============================================================ */
+function loadFrames(prefix, from, to, basePath) {
+  var arr = [];
+  for (var i = from; i <= to; i++) {
+    var img = new Image();
+    img.src = basePath + '/' + prefix + String(i).padStart(2, '0') + '.png';
+    arr.push(img);
+  }
+  return arr;
+}
+
+/* 在 canvas 上按 FPS 播放一串帧，铺满并保持比例；播完回调。
+   loop=true 时循环播放，直到外部调用 stop() */
+function playFrames(canvas, frames, fps, onDone, loop) {
+  var ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  var rafId, frameIdx = 0, lastTime = 0;
+  var interval = 1000 / fps;
+  var stopped = false;
+
+  function resize() { canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; }
+  resize();
+  window.addEventListener('resize', resize);
+
+  function drawFrame(i) {
+    var img = frames[i];
+    if (!img || !img.complete || img.naturalWidth === 0) return false;
+    var w = img.naturalWidth, h = img.naturalHeight;
+    var cw = canvas.width, ch = canvas.height;
+    // 铺满 canvas，保持比例，居中
+    var ratio = Math.min(cw / w, ch / h);
+    var dw = w * ratio, dh = h * ratio;
+    var dx = (cw - dw) / 2, dy = (ch - dh) / 2;
+    ctx.clearRect(0, 0, cw, ch);
+    ctx.drawImage(img, dx | 0, dy | 0, dw | 0, dh | 0);
+    return true;
+  }
+
+  function step(t) {
+    if (stopped) return;
+    rafId = requestAnimationFrame(step);
+    if (t - lastTime < interval) return;
+    lastTime = t;
+    // 帧未加载完则等一下，不前进
+    if (!drawFrame(frameIdx)) return;
+    frameIdx++;
+    if (frameIdx >= frames.length) {
+      if (loop) {
+        frameIdx = 0;
+      } else {
+        stopped = true;
+        if (onDone) onDone();
+        return;
+      }
+    }
+  }
+  rafId = requestAnimationFrame(step);
+  return {
+    stop: function () {
+      stopped = true;
+      cancelAnimationFrame(rafId);
+    }
+  };
+}
+
+/* ============================================================
+   3. payphone 点击 → phone00~25 逐帧 cutscene
+   ============================================================ */
+var PHONE_FRAMES = loadFrames('phone', 0, 25, 'Atlases/Gameplay/cutscenes/payphone');
+
+(function wirePayphone() {
+  var pp = document.getElementById('payphoneHotspot');
+  var cs = document.getElementById('cutscene');
+  var csCanvas = document.getElementById('cutsceneCanvas');
+  var hint = document.getElementById('cutsceneHint');
+  var full = document.getElementById('fullSnow');
+  var fcanv = document.getElementById('fullSnowCanvas');
+  var currentPlay = null;
+  var snowPlay = null;
+
+  function stopEverything() {
+    if (currentPlay) { currentPlay.stop(); currentPlay = null; }
+    cs.classList.remove('active');
+    if (snowPlay) { snowPlay.stop(); snowPlay = null; }
+    full.classList.remove('active');
+  }
+
+  function playCutscene() {
+    if (cs.classList.contains('active')) return; // 防重复
+    cs.classList.add('active');
+    hint.textContent = 'Madeline singing... · click / Esc to skip';
+    // 等帧加载计数（如果还没加载完）
+    var ready = PHONE_FRAMES.every(function (f) { return f.complete && f.naturalWidth > 0; });
+    if (!ready) {
+      hint.textContent = 'loading frames... · please wait';
+      // 轮询等加载
+      var wait = setInterval(function () {
+        if (PHONE_FRAMES.every(function (f) { return f.complete && f.naturalWidth > 0; })) {
+          clearInterval(wait);
+          hint.textContent = 'Madeline singing... · click / Esc to skip';
+          startPlayback();
+        }
+      }, 100);
+    } else {
+      startPlayback();
+    }
+  }
+
+  function startPlayback() {
+    // 8 fps × 26 帧 ≈ 3.25 秒
+    currentPlay = playFrames(csCanvas, PHONE_FRAMES, 8, function () {
+      // 播完后：雪花过渡 → 回背景
+      hint.textContent = '...';
+      full.classList.add('active');
+      // 用 noise 素材做循环雪花
+      snowPlay = startFullSnow(fcanv);
+      setTimeout(function () {
+        stopEverything();
+      }, 700);
+    });
+  }
+
+  // 用 wavedashtutorial 的 noise 素材当雪花过渡（循环播放直到 stop）
+  var NOISE_FRAMES = loadFrames('noise', 0, 2, 'Atlases/Gameplay/objects/wavedashtutorial');
+  function startFullSnow(canvas) {
+    return playFrames(canvas, NOISE_FRAMES, 24, null, true);
+  }
+
+  pp.addEventListener('click', playCutscene);
+  pp.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); playCutscene(); }
+  });
+
+  // Esc / 点击 cutscene 跳过
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && cs.classList.contains('active')) {
+      stopEverything();
+    }
+  });
+  cs.addEventListener('click', stopEverything);
+})();
+</script>
+<script src="js/seed.js"></script>
+</body>
+</html>

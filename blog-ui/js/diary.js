@@ -1493,6 +1493,17 @@ function inferReplyEmotion(text) {
                 }
 
                 showToast(editingDiaryId ? '更新成功！' : '保存成功！', 'success');
+
+                // ---- 困境检测 → 自动生成 PPT ----
+                // 节流：同一次保存只触发一次；且 BerryPPT 已打开时不抢
+                if (window.BerryDetect && window.BerryPPTGen && !window._pptTriggeredThisSession) {
+                    window._pptTriggeredThisSession = true;
+                    setTimeout(async function () {
+                        try {
+                            await window.BerryPPTGen.triggerAndOpen();
+                        } catch (e) { /* 失败不打断保存流程 */ }
+                    }, 4000);  // 等 Madeline 反馈 + 金羽毛流程跑完，再异步检查
+                }
                 pmCelebrate();
                 pmSummarize();
                 if (!editingDiaryId) {

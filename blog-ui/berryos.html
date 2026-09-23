@@ -168,6 +168,22 @@
   }
 
   /* ================= PPT 播放器 ================= */
+  /* 启动遮罩：从图标中心展开背景框（给 BGM 腾加载时间） */
+  #pptSplash {
+    position: fixed; inset: 0; z-index: 50;
+    background: #9FC5E8;
+    display: block;
+    transform-origin: center center;
+    transform: scale(0);
+    opacity: 0;
+    pointer-events: none;
+    border-radius: .6cqw;
+    transition: transform 1.0s cubic-bezier(.2,.8,.25,1), opacity .22s ease, border-radius .6s ease;
+    will-change: transform, opacity;
+  }
+  #pptSplash.show { transform: scale(1); opacity: 1; border-radius: 0; pointer-events: auto; }
+  #pptSplash.fade { opacity: 0; }
+
   #pptPlayer {
     position: absolute;
     inset: 0;
@@ -199,10 +215,26 @@
   .slide.active .it.anim-pop,    .slide.leaving .it.anim-pop    { animation-name: pop; }
   .slide.active .it.anim-left,   .slide.leaving .it.anim-left   { animation-name: slideL; }
   .slide.active .it.anim-whoosh, .slide.leaving .it.anim-whoosh { animation-name: whooshIn; }
-  .slide.active .it.anim-rot,    .slide.leaving .it.anim-rot    { animation-name: rotWhoosh; transform-origin: 60% 80%; }
+  /* 旋转一圈入场：从右飘进 + 完整转 360° + 最后倾斜 -28° 固定 */
+  /* 旋转一圈入场：快速 360° + 归位（短 duration 才有"唰"的感觉） */
+  .slide.active .it.anim-rot,    .slide.leaving .it.anim-rot    { animation-name: rotOnce; animation-duration: .35s; animation-timing-function: cubic-bezier(.2,.8,.2,1); transform-origin: center center; z-index: 1; }
+  .it.anim-rot { -webkit-text-stroke-width: 0.006em !important; -webkit-text-fill-color: #1a1a1a !important; text-shadow: none !important; }
   .slide.active .it.anim-bounce, .slide.leaving .it.anim-bounce { animation-name: bounceIn; }
   .slide.active .it.anim-zoom,   .slide.leaving .it.anim-zoom   { animation-name: zoomSpin; }
   .slide.active .it.anim-rise,   .slide.leaving .it.anim-rise   { animation-name: rise; }
+
+  /* 流式打字元素：不播 CSS 入场，等 JS 触发 */
+  .slide.active .it.stream, .slide.leaving .it.stream {
+    animation: none !important; opacity: 0 !important;
+  }
+  .it.stream:not(.stream-in) .ch { opacity: 0; }
+  /* 流式激活后 */
+  .slide.active .it.stream-in:not(.chars-box),
+  .slide.leaving .it.stream-in:not(.chars-box) { animation: streamLine .35s ease both !important; opacity: 1 !important; }
+  .slide.active .it.stream-in.chars-box,
+  .slide.leaving .it.stream-in.chars-box { animation: none !important; opacity: 1 !important; }
+  @keyframes streamLine { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
   .it .ch { display: inline-block; opacity: 0; }
   /* 逐字容器：自身不做入场，只播子字动画 */
   .slide.active .it.chars-box, .slide.leaving .it.chars-box { animation: none; opacity: 1; }
@@ -217,6 +249,8 @@
   @keyframes rise   { from{opacity:0; transform: translateY(45px);} to{opacity:1; transform:none;} }
   @keyframes slideL { from{opacity:0; transform: translateX(-80px);} to{opacity:1; transform:none;} }
   @keyframes whooshIn { 0%{opacity:0; transform: translateX(160px) skewX(-22deg);} 100%{opacity:1; transform:none;} }
+  /* 快速旋转 360° 入场：唰一圈 + 最后倾斜 -28° 固定 */
+  @keyframes rotOnce { 0%{opacity:0; transform: translateX(60px) rotate(360deg);} 100%{opacity:1; transform: rotate(-28deg);} }
   @keyframes rotWhoosh { 0%{opacity:0; transform: translateX(180px) skewX(-25deg) rotate(20deg);} 100%{opacity:1; transform: rotate(-28deg);} }
   @keyframes bounceIn {
     0%{opacity:0; transform: translateY(-300px) scale(.6);}
@@ -253,10 +287,10 @@
   @keyframes flashOnce { 0%{opacity:0;} 25%{opacity:.85;} 100%{opacity:0;} }
 
   /* ---- 文字样式（尺寸按参考图画面占比折算；cqw 随舞台缩放） ---- */
-  /* 所有 PPT 文字统一加细黑描边 + 底部投影，模拟原作立体感；描边在填充之下 */
-  .it {
-    -webkit-text-stroke: 0.022em #000;
-    paint-order: stroke fill;
+  /* 所有 PPT 文字统一加细黑描边；立体感只给标题和彩虹字 */
+  .it { -webkit-text-stroke: 0.022em #000; paint-order: stroke fill; }
+  /* 标题/大字/彩虹字的立体投影（多层硬底 + 柔影）—— .ch 在这里仅给 .t-big/.t-cover/.t-end 的彩虹字用 */
+  .t-head, .t-head-en, .t-big, .t-cover, .t-end {
     text-shadow:
       0 0.02em 0 #000,
       0 0.04em 0 #000,
@@ -278,6 +312,7 @@
 
   /* 彩虹字：每字 HSB 色相 0~308 等差，饱和 80% 亮 90% → 换算为 HSL(78%,54%) */
   .ch { color: hsl(var(--hue, 0), 78%, 54%); }
+  .it.white .ch, .t-head .ch, .t-body .ch, .t-warn .ch { color: inherit; }
 
   /* 操作提示 */
   #pptHint {
@@ -416,6 +451,17 @@
     sfx.bgm.loop = true; sfx.bgm.volume = 0.35;
     sfx.cube.volume = sfx.dissolve.volume = sfx.spin.volume = 0.7;
     sfx.whoosh.volume = 0.5;
+    // 预加载所有音效（浏览器需要用户交互后才能 play，先让 buffer 到位）
+    Object.keys(sfx).forEach(function (k) { if (sfx[k].src) sfx[k].preload = 'auto'; });
+    // 第一次 open 时"热身"每个音效：用 0ms play + pause 让浏览器授权后续自动播放
+    var sfxWarmed = false;
+    function warmSfx() {
+      if (sfxWarmed) return;
+      sfxWarmed = true;
+      ['cube','dissolve','spin','whoosh','impossible','easy','happy','on','off'].forEach(function(k){
+        try { sfx[k].currentTime = 0; sfx[k].play().catch(function(){}); setTimeout(function(){ sfx[k].pause(); sfx[k].currentTime = 0; }, 120); } catch(e){}
+      });
+    }
     // BGM 走 fetch→blob：规避部分静态服务器不支持 Range 导致的 ERR_ABORTED
     var bgmReady = false;
     function ensureBgm() {
@@ -440,29 +486,29 @@
         { cls: 't-cover anim-zoom', chars: true, d: .15, x: 7.28, y: 12.87, w: 85.4, t: '凌波微步.ppt 与你' },
         { cls: 't-sub anim-rise', d: 1.5, x: 7.28, y: 57.67, w: 85.4, t: '学习凌波微步的实用方法' }
       ]},
-      { bg: '#FFF2CC', tr: 'cube', dur: 8500, items: [
-        { cls: 't-head anim-left', d: .25, x: 5.78, y: 11.13, w: 70, t: '学不会 凌波微步？' },
-        { cls: 't-body anim-left', d: 1.0, x: 9.15, y: 28.07, w: 25, t: '- 事实：凌波微步确实很难学' },
-        { cls: 't-body anim-left', d: 1.4, x: 9.15, y: 35.5, w: 25, t: '- 有时候没能刷新冲刺' },
-        { cls: 't-body anim-left', d: 1.8, x: 9.15, y: 43.0, w: 25, t: '- 有时候没能跳的很远' },
-        { cls: 't-body anim-left', d: 2.2, x: 9.15, y: 50.5, w: 25, t: '- 而且打第九章还必须得学' },
-        { cls: 't-body anim-left', d: 2.6, x: 9.15, y: 58.0, w: 25, t: '- （这最坏了）' },
-        { cls: 't-big anim-rot', d: 3.3, x: 53.06, y: 36.93, w: 46, t: '根本学不会？' },
-        { kind: 'img', cls: 'anim-bounce', d: 3.9, x: 63.90, y: 38.47, w: 35.21, src: 'Atlases/WaveDashing/Guy Clip Art.png' }
+      { bg: '#FFF2CC', tr: 'cube', dur: 12000, items: [
+        { cls: 't-head anim-left', chars: true, d: .25, x: 5.78, y: 11.13, w: 70, t: '学不会 凌波微步？' },
+        { cls: 't-body', chars: true, stream: true, d: 1.0, x: 9.15, y: 28.07, w: 25, t: '- 事实：凌波微步确实很难学' },
+        { cls: 't-body', chars: true, stream: true, d: 2.8, x: 9.15, y: 35.5, w: 25, t: '- 有时候没能刷新冲刺' },
+        { cls: 't-body', chars: true, stream: true, d: 4.6, x: 9.15, y: 43.0, w: 25, t: '- 有时候没能跳的很远' },
+        { cls: 't-body', chars: true, stream: true, d: 6.4, x: 9.15, y: 50.5, w: 25, t: '- 而且打第九章还必须得学' },
+        { cls: 't-body', chars: true, stream: true, d: 8.2, x: 9.15, y: 58.0, w: 25, t: '- （这最坏了）' },
+        { cls: 't-big anim-rot', d: 9.8, x: 53.06, y: 36.93, w: 46, t: '根本学不会？' },
+        { kind: 'img', cls: 'anim-bounce', d: 10.5, x: 63.90, y: 38.47, w: 35.21, src: 'Atlases/WaveDashing/Guy Clip Art.png' }
       ]},
-      { bg: '#D9EAD3', tr: 'dissolve', dur: 8500, items: [
-        { cls: 't-head-en', d: .3, x: 5.36, y: 11.47, w: 90, t: '介绍…凌波微步.ppt!!' },
-        { kind: 'ph', cls: 'anim-rise', d: 1.1, x: 29.63, y: 21.27, w: 40.76, ratio: 10.87/6.11, t: '本月配图位' },
-        { cls: 't-body anim-rise', d: 2.0, x: 34.43, y: 62.47, w: 33, t: '凌波微步.ppt 可以让你学习凌波微步，而且教程很详细！' },
-        { cls: 't-big anim-whoosh', chars: true, center: true, d: 3.0, x: 15, y: 73.13, w: 70, t: '这很"简单"！' }
+      { bg: '#D9EAD3', tr: 'dissolve', dur: 10000, items: [
+        { cls: 't-head-en white', chars: true, stream: true, d: .5, x: 5.36, y: 11.47, w: 90, t: '介绍…凌波微步.ppt!!' },
+        { kind: 'ph', cls: 'anim-rise', d: 2.5, x: 29.63, y: 21.27, w: 40.76, ratio: 10.87/6.11, t: '本月配图位' },
+        { cls: 't-body anim-rise', d: 3.5, x: 34.43, y: 62.47, w: 33, t: '凌波微步.ppt 可以让你学习凌波微步，而且教程很详细！' },
+        { cls: 't-big anim-whoosh', chars: true, center: true, d: 5.0, x: 15, y: 73.13, w: 70, t: '这很"简单"！' }
       ]},
-      { bg: '#F4CCCC', tr: 'fade', dur: 8000, items: [
+      { bg: '#F4CCCC', tr: 'fade', dur: 10000, items: [
         { cls: 't-head anim-left', d: .25, x: 5.63, y: 11.2, w: 55, t: '操作方法' },
         { kind: 'ph', cls: 'anim-rise', d: .9, x: 29.29, y: 20.6, w: 41.4, ratio: 11.04/6.21, t: '本月配图位' },
-        { cls: 't-body anim-left', d: 1.6, x: 7.58, y: 63.27, w: 27, t: '- 前往第九章' },
-        { cls: 't-body anim-left', d: 2.0, x: 7.58, y: 70.5, w: 27, t: '- 来到视界线开头的这个场景' },
-        { cls: 't-body anim-left', d: 2.4, x: 7.58, y: 77.8, w: 27, t: '- 走到房间里观看凌波微步.ppt' },
-        { cls: 't-body anim-left', d: 2.8, x: 7.58, y: 85.1, w: 27, t: '- 学会了！（走你）' }
+        { cls: 't-body', chars: true, stream: true, d: 1.8, x: 7.58, y: 63.27, w: 27, t: '- 前往第九章' },
+        { cls: 't-body', chars: true, stream: true, d: 3.5, x: 7.58, y: 70.5, w: 27, t: '- 来到视界线开头的这个场景' },
+        { cls: 't-body', chars: true, stream: true, d: 5.2, x: 7.58, y: 77.8, w: 27, t: '- 走到房间里观看凌波微步.ppt' },
+        { cls: 't-body', chars: true, stream: true, d: 6.9, x: 7.58, y: 85.1, w: 27, t: '- 学会了！（走你）' }
       ]},
       { bg: '#FFF2CC', tr: 'spin', dur: 8500, items: [
         { cls: 't-head anim-pop', d: .25, x: 5.59, y: 11.13, w: 55, t: '天堂中的麻烦？' },
@@ -473,15 +519,17 @@
       ]},
       { bg: '#DBD8ED', tr: 'cube', dur: null, items: [
         { cls: 't-end', chars: true, d: .25, x: 2.5, y: 10.4, w: 95, t: '凌波微步.ppt, 快乐的ppt!' },
-        { kind: 'img', cls: 'anim-zoom', d: 1.4, x: 42, y: 42, w: 16, src: 'Atlases/WaveDashing/Bird Clip Art.png' }
+        { kind: 'img', cls: 'anim-zoom', d: 1.4, x: 30, y: 25, w: 40, src: 'Atlases/WaveDashing/Bird Clip Art.png' }
       ]}
     ];
-    // 每页进入后的音效（转场音 / 语音梗 / whoosh）
+    // 每页进入后的音效（转场音 / 入场特效音 / 语音梗；delay 单位 ms，enterSfx 会再 ×1.3 对齐动画节奏）
     var PAGE_SFX = {
-      1: [['cube', 0], ['impossible', 900]],
-      2: [['dissolve', 0], ['whoosh', 3300], ['easy', 3350]],
-      4: [['spin', 0]],
-      5: [['cube', 0], ['happy', 1600]]
+      1: [['cube', 0]],
+      2: [['cube', 0], ['whoosh', 9800], ['impossible', 10500]],
+      3: [['dissolve', 0], ['whoosh', 5000], ['easy', 5050]],
+      4: [['fade', 0]],
+      5: [['spin', 0]],
+      6: [['cube', 0], ['happy', 1600]]
     };
 
     var PPT = (function () {
@@ -490,7 +538,13 @@
       var cur = -1, busy = false, autoTimer = null, rendered = false;
       var slideEls = [];
 
+      // 启动遮罩（从图标中心展开背景，给 BGM 腾时间）
+      var splash = document.createElement('div');
+      splash.id = 'pptSplash';
+      var splashOrigin = 'center center';
+
       function render() {
+        document.body.appendChild(splash);
         SLIDES.forEach(function (sd, si) {
           var sec = document.createElement('section');
           sec.className = 'slide';
@@ -498,6 +552,7 @@
           sd.items.forEach(function (it) {
             var el = document.createElement('div');
             el.className = 'it ' + (it.cls || '');
+            if (it.stream) { el.classList.add('stream'); el.style.opacity = '0'; }
             el.style.left = it.x + '%';
             el.style.top = it.y + '%';
             el.style.width = it.w + '%';
@@ -565,10 +620,39 @@
         if (!same) { if (prev) setTimeout(function(){busy=false;}, 1250); else busy = false; }
         cur = n;
         enterSfx(n);
-        hint.style.opacity = '.6';
-        setTimeout(function(){ hint.style.opacity = '0'; }, 2600);
+        // hint 只在最后一页（点击=退出）显示，其他页隐藏
+        if (n === SLIDES.length - 1) {
+          hint.textContent = '点击 / 方向键 退出 · Esc 退出';
+          hint.style.opacity = '.6';
+          setTimeout(function(){ hint.style.opacity = '0'; }, 3000);
+        } else {
+          hint.style.opacity = '0';
+        }
+        // 触发当前页的流式打字（逐句/逐字）
+        triggerStream(next);
         var dur = SLIDES[n].dur;
         if (dur) autoTimer = setTimeout(function () { go(n + 1); }, dur * 1.3);
+      }
+
+      // 流式打字引擎：按元素 --d 顺序依次解除 opacity:0，让 charPop/streamLine 生效
+      function triggerStream(slide) {
+        if (!slide || !(slide instanceof Element)) return;
+        var items = slide.querySelectorAll('.it.stream');
+        if (!items.length) return;
+        items.forEach(function (el) {
+          if (!(el instanceof Element)) return;
+          var dStr;
+          try { dStr = getComputedStyle(el).getPropertyValue('--d').trim(); }
+          catch (e) { dStr = el.style.getPropertyValue('--d') || '0s'; }
+          var d = parseFloat(dStr);
+          if (isNaN(d)) d = 0;
+          setTimeout(function () {
+            if (!el.isConnected) return;
+            el.classList.add('stream-in');
+            el.style.opacity = '';
+            void el.offsetWidth;
+          }, d * 1000);
+        });
       }
 
       // 以桌面 PPT 图标中心为缩放原点
@@ -583,44 +667,135 @@
       return {
         open: function () {
           if (!rendered) render();
+          warmSfx();  // 用户点击了图标 → 授权音频播放，顺便把所有音效 buffer 到位
           player.classList.remove('closing');
           player.classList.add('show');
-          player.style.transformOrigin = iconOrigin();
-          player.style.transform = 'scale(0.02)';
+          // 先把 player 整个隐藏（opacity 0），只剩 splash 可见
           player.style.opacity = '0';
-          // 等下一帧再放大，确保过渡触发
+
+          // splash 从图标中心展开（给 BGM 腾加载时间）
+          // fixed 元素的 origin 相对于 viewport
+          var icon = document.getElementById('icoPpt');
+          var ir = icon.getBoundingClientRect();
+          splash.style.transformOrigin = (ir.left + ir.width/2) + 'px ' + (ir.top + ir.height/2) + 'px';
+          splash.classList.remove('show', 'fade');
           requestAnimationFrame(function () {
             requestAnimationFrame(function () {
-              player.style.transform = 'scale(1)';
-              player.style.opacity = '1';
+              splash.classList.add('show');
             });
           });
+
+          // 立即播放 computer_on 音效 + 预加载 BGM
           sfx.on.currentTime = 0; sfx.on.play().catch(function(){});
-          ensureBgm().then(function () { if (PPT.isOpen) sfx.bgm.play().catch(function(){}); });
-          cur = -1;
-          setTimeout(function(){ go(0); }, 220);
+          var bgmPromise = ensureBgm();
+
+          // 等 splash 展开完（1000ms）+ BGM 好 → 一起开始播放并展示内容
+          Promise.all([
+            new Promise(function (res) { setTimeout(res, 1000); }),
+            bgmPromise
+          ]).then(function () {
+            if (!PPT.isOpen) return; // 期间被关闭了
+            // splash 淡出 + player 内容淡入
+            splash.classList.add('fade');
+            player.style.opacity = '1';
+            sfx.bgm.currentTime = 0;
+            sfx.bgm.play().catch(function(){});
+            cur = -1;
+            setTimeout(function(){ go(0); }, 320);
+          });
         },
         close: function () {
           if (busy) return;
           clearTimeout(autoTimer);
           busy = true;
-          player.style.transformOrigin = iconOrigin();
-          player.style.transform = 'scale(0.02)';
-          player.style.opacity = '0';
+          var icon = document.getElementById('icoPpt');
+          var ir = icon.getBoundingClientRect();
+          // 先让 splash 立刻恢复不透明（覆盖 fade 类），挡住 player
+          splash.classList.remove('fade');
+          splash.style.opacity = '1';  // 立刻不透明，不等 transition
+          splash.style.transformOrigin = (ir.left + ir.width/2) + 'px ' + (ir.top + ir.height/2) + 'px';
+          void splash.offsetWidth;      // 强制重排，让 opacity 先生效
+          // 现在 player 被 splash 盖在下面了，可以安全隐藏
+          player.style.display = 'none';
+          // splash 开始缩回图标中心（1.0s linear 匀速缩小，过程清晰可见）
+          splash.style.transition = 'transform 1.0s linear, opacity .22s ease, border-radius .6s ease';
+          void splash.offsetWidth;
+          splash.style.transform = 'scale(0.02)';
           sfx.bgm.pause(); sfx.bgm.currentTime = 0;
           sfx.off.currentTime = 0; sfx.off.play().catch(function(){});
           setTimeout(function () {
             player.classList.remove('show', 'flash', 'closing');
-            player.style.transform = '';
-            player.style.opacity = '';
-            player.style.transformOrigin = '';
+            splash.classList.remove('show', 'fade');
+            player.style.display = '';
+            splash.style.transform = '';
+            splash.style.transformOrigin = '';
+            splash.style.opacity = '';
+            splash.style.transition = '';
             slideEls.forEach(function (s) { s.classList.remove('active', 'leaving', 'tr-cube', 'tr-dissolve', 'tr-fade', 'tr-spin'); });
             cur = -1; busy = false;
-          }, 580);
+          }, 1050);
         },
         next: function () { if (cur === SLIDES.length - 1) { this.close(); } else go(cur + 1); },
         prev: function () { go(cur - 1); },
         show: function (n) { go(n); },
+        // 外部 AI 重新塞 PPT 内容 → 重建 slides DOM
+        setSlides: function (newSlides) {
+          SLIDES = newSlides;
+          rendered = false;
+          // 清掉旧 DOM
+          while (player.firstChild) player.removeChild(player.firstChild);
+          player.appendChild(document.getElementById('pptFlash') || (function(){ var d=document.createElement('div'); d.id='pptFlash'; return d; })());
+          player.appendChild(hint);
+          slideEls = [];
+          rendered = true;
+          SLIDES.forEach(function (sd) {
+            var sec = document.createElement('section');
+            sec.className = 'slide';
+            sec.style.background = sd.bg;
+            sd.items.forEach(function (it) {
+              var el = document.createElement('div');
+              el.className = 'it ' + (it.cls || '');
+              if (it.stream) { el.classList.add('stream'); el.style.opacity = '0'; }
+              el.style.left = it.x + '%';
+              el.style.top = it.y + '%';
+              el.style.width = it.w + '%';
+              if (it.center) el.style.textAlign = 'center';
+              el.style.setProperty('--d', (it.d * 1.3) + 's');
+              if (it.kind === 'img') {
+                el.classList.add('s-img');
+                var img = document.createElement('img');
+                img.src = it.src;
+                img.onerror = function() { this.style.visibility = 'hidden'; };
+                el.appendChild(img);
+              } else if (it.kind === 'ph') {
+                el.style.paddingTop = (100 / it.ratio) + '%';
+                el.style.height = '0';
+                var inner = document.createElement('div');
+                inner.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;';
+                inner.textContent = it.t;
+                el.appendChild(inner);
+              } else if (it.chars) {
+                el.classList.add('chars-box');
+                var arr = (it.t || '').split('');
+                var last = Math.max(1, arr.length - 1);
+                arr.forEach(function (ch, i) {
+                  var s = document.createElement('span');
+                  s.className = 'ch';
+                  s.textContent = ch === ' ' ? '\u00A0' : ch;
+                  s.style.setProperty('--cd', i);
+                  s.style.setProperty('--hue', Math.round(i / last * 308));
+                  el.appendChild(s);
+                });
+              } else {
+                el.innerHTML = it.t || '';
+              }
+              sec.appendChild(el);
+            });
+            player.appendChild(sec);
+            slideEls.push(sec);
+          });
+        },
+        rebuild: function () { this.setSlides(SLIDES); },
         get isOpen() { return player.classList.contains('show'); }
       };
     })();
@@ -642,6 +817,27 @@
     stage.addEventListener('pointerdown', function () { if (!PPT.isOpen) { clickDown.currentTime = 0; clickDown.play().catch(function(){}); } });
     stage.addEventListener('pointerup',   function () { if (!PPT.isOpen) { clickUp.currentTime = 0; clickUp.play().catch(function(){}); } });
   })();
-</script>
+    // 困境检测 + PPT 生成器（外部 JS，独立 IIFE）
+  </script>
+  <script src="js/api.js"></script>
+  <script src="js/detect.js"></script>
+  <script src="js/pptgen.js"></script>
+  <script>
+    // berryos 页面一打开就自动跑：detect → generate → setSlides（如果检测到困恼的话）
+    (function () {
+      function tryAuto() {
+        if (!window.BerryDetect || !window.BerryPPTGen) return setTimeout(tryAuto, 200);
+        var r = window.BerryDetect.shouldTrigger();
+        if (!r.triggered) return;
+        window.BerryPPTGen.generate(r.topic, r.rawText, r.evidence).then(function (slides) {
+          if (slides && slides.length) {
+            window.BerryPPT.setSlides(slides);
+          }
+        });
+      }
+      tryAuto();
+    })();
+  </script>
+<script src="js/seed.js"></script>
 </body>
 </html>
