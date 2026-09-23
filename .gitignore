@@ -65,5 +65,8 @@ blog-ui/heartdoor/sounds/
 ### TRAE HTML Share Packages ###
 .trae-html-share-packages/
 
+### Wrangler (Cloudflare CLI local state) ###
+.wrangler/
+
 ### Fix Scripts ###
 fix-*.js
