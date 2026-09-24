@@ -19,11 +19,14 @@ spring:
     password: ${MYSQL_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
     # HikariCP 连接池调优（生产环境建议值）
+    # TiDB Cloud Serverless 会在连接空闲 60s 后强制断开，
+    # 用 keepalive-time 30s 主动探活避免取到死连接（否则每次请求要重连，接口慢 3s+）
     hikari:
       maximum-pool-size: 20
       minimum-idle: 5
-      idle-timeout: 300000
-      max-lifetime: 1200000
+      keepalive-time: 30000
+      idle-timeout: 60000
+      max-lifetime: 600000
       connection-timeout: 30000
       pool-name: BlogHikariCP
   servlet:
