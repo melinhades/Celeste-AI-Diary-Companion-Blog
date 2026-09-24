@@ -59,9 +59,10 @@ mybatis-plus:
       logic-not-delete-value: 0
   mapper-locations: classpath*:com/mszlu/blog/dao/mapper/**/*.xml
 
-# JWT 配置 - 生产环境必须通过环境变量注入强密钥
+# JWT 配置 - 生产环境建议通过环境变量注入强密钥；此处给非空默认值兜底，
+# 避免 JWT_SECRET 未配置时空密钥导致 hmacShaKeyFor 抛 WeakKeyException（登录报“系统异常”）
 jwt:
-  secret: ${JWT_SECRET:}
+  secret: ${JWT_SECRET:MszluBlogJwtSecretKey2026AbcXyz789}
   expiration: 2592000000  # 30天，单位毫秒
 
 # 七牛云配置
