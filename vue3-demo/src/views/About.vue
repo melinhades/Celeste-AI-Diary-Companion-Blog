@@ -1,0 +1,39 @@
+<script setup>
+// 关于页面
+</script>
+
+<template>
+  <div>
+    <h1 class="page-title">关于本项目</h1>
+    <p class="page-desc">一个用于学习 Vue3 基础知识的独立小网站。</p>
+
+    <div class="card">
+      <h3>技术栈</h3>
+      <ul class="list">
+        <li>框架 <span class="tag">Vue 3.4</span></li>
+        <li>路由 <span class="tag">Vue Router 4</span></li>
+        <li>构建工具 <span class="tag">Vite 5</span></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3>涵盖知识点</h3>
+      <ul class="list">
+        <li>响应式基础 <span class="tag">ref / reactive</span></li>
+        <li>计算属性与侦听器 <span class="tag">computed / watch</span></li>
+        <li>生命周期钩子 <span class="tag">onMounted / onUnmounted</span></li>
+        <li>组件通信 <span class="tag">props / emit / slot</span></li>
+        <li>表单双向绑定 <span class="tag">v-model / 修饰符</span></li>
+        <li>路由配置 <span class="tag">vue-router</span></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3>运行命令</h3>
+      <pre class="code">cd vue3-demo
+npm install      # 安装依赖
+npm run dev      # 启动开发服务器
+npm run build    # 打包生产版本</pre>
+    </div>
+  </div>
+</template>
