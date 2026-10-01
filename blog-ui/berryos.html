@@ -483,7 +483,7 @@
     // 坐标均为模板 26.667in×15in 画幅实测的百分比；tr=转场，dur=自动停留毫秒
     var SLIDES = [
       { bg: '#9FC5E8', tr: '', dur: 6000, items: [
-        { cls: 't-cover anim-zoom', chars: true, d: .15, x: 7.28, y: 12.87, w: 85.4, t: '凌波微步.ppt 与你' },
+        { cls: 't-cover anim-zoom', chars: true, d: .15, x: 7.28, y: 12.87, w: 85.4, t: '凌波微步与我' },
         { cls: 't-sub anim-rise', d: 1.5, x: 7.28, y: 57.67, w: 85.4, t: '学习凌波微步的实用方法' }
       ]},
       { bg: '#FFF2CC', tr: 'cube', dur: 12000, items: [
@@ -523,11 +523,12 @@
       ]}
     ];
     // 每页进入后的音效（转场音 / 入场特效音 / 语音梗；delay 单位 ms，enterSfx 会再 ×1.3 对齐动画节奏）
+    // 注意：键名必须是 sfx 表里存在的音效，否则 playSfx 会抛错
     var PAGE_SFX = {
       1: [['cube', 0]],
       2: [['cube', 0], ['whoosh', 9800], ['impossible', 10500]],
       3: [['dissolve', 0], ['whoosh', 5000], ['easy', 5050]],
-      4: [['fade', 0]],
+      4: [], // fade 转场无专属音效
       5: [['spin', 0]],
       6: [['cube', 0], ['happy', 1600]]
     };
@@ -819,9 +820,9 @@
   })();
     // 困境检测 + PPT 生成器（外部 JS，独立 IIFE）
   </script>
-  <script src="js/api.js"></script>
+  <script src="js/api.js?v=20260925"></script>
   <script src="js/detect.js"></script>
-  <script src="js/pptgen.js"></script>
+  <script src="js/pptgen.js?v=20261004"></script>
   <script>
     // berryos 页面一打开就自动跑：detect → generate → setSlides（如果检测到困恼的话）
     (function () {

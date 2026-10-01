@@ -1,0 +1,847 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="icon/OIP.webp" type="image/webp">
+    <title>AI 圆桌会议 · Celeste Blog</title>
+    <link rel="stylesheet" href="css/common.css">
+    <style>
+    body::after {
+        content:''; position:fixed; left:0; right:0; top:0; bottom:-12%;
+        background:url('celeste-areas/ForsakenCity01.webp') center/cover no-repeat;
+        opacity:0.25; pointer-events:none; z-index:0;
+    }
+    .rt-wrap { position:relative; z-index:3; max-width:880px; margin:0 auto; padding:24px 20px 60px; color:#e8e8f0; }
+    .rt-title { font-size:22px; font-weight:700; margin-bottom:4px; }
+    .rt-sub { font-size:13px; color:rgba(200,210,255,.5); margin-bottom:20px; }
+
+    /* ===== 通用面板 ===== */
+    .rt-panel {
+        background:rgba(22,34,60,.72); border:1px solid rgba(120,200,255,.15);
+        border-radius:12px; padding:18px; backdrop-filter:blur(8px); margin-bottom:16px;
+    }
+    textarea#topicInput {
+        width:100%; box-sizing:border-box; min-height:74px; resize:vertical;
+        background:rgba(12,20,40,.8); border:1px solid rgba(120,200,255,.25); border-radius:8px;
+        padding:12px; color:#e8e8f0; font-size:14px; outline:none; font-family:inherit;
+    }
+    textarea#topicInput:focus { border-color:#ffe36d; }
+    .rt-row { display:flex; align-items:center; gap:12px; margin-top:12px; flex-wrap:wrap; }
+    .rt-label { font-size:13px; color:rgba(200,210,255,.65); }
+    .seg { display:inline-flex; border:1px solid rgba(120,200,255,.25); border-radius:8px; overflow:hidden; }
+    .seg button {
+        background:transparent; border:0; color:rgba(200,210,255,.7); padding:7px 16px;
+        font-size:13px; cursor:pointer; border-right:1px solid rgba(120,200,255,.25);
+    }
+    .seg button:last-child { border-right:0; }
+    .seg button.on { background:#ffe36d; color:#222; font-weight:700; }
+    .btn-primary {
+        background:#ffe36d; color:#222; border:0; border-radius:8px; padding:10px 26px;
+        font-size:14px; font-weight:700; cursor:pointer;
+    }
+    .btn-primary:disabled { opacity:.5; cursor:not-allowed; }
+    .btn-ghost {
+        background:transparent; color:rgba(200,210,255,.8); border:1px solid rgba(120,200,255,.3);
+        border-radius:8px; padding:9px 18px; font-size:13px; cursor:pointer;
+    }
+    .btn-ghost:hover { border-color:#ffe36d; color:#ffe36d; }
+
+    /* ===== 席位卡片 ===== */
+    .seats { display:grid; grid-template-columns:repeat(6,1fr); gap:10px; margin-bottom:16px; }
+    .seat {
+        background:rgba(22,34,60,.72); border:1px solid rgba(120,200,255,.15); border-radius:10px;
+        padding:12px 8px; text-align:center; transition:border-color .25s, box-shadow .25s, transform .25s;
+    }
+    .seat .avatar {
+        width:44px; height:44px; border-radius:50%; margin:0 auto 8px;
+        display:flex; align-items:center; justify-content:center;
+        font-size:18px; font-weight:700; color:#101525; opacity:.85;
+        overflow:hidden;
+    }
+    .seat .avatar img.avatar-img {
+        width:100%; height:100%; object-fit:cover; border-radius:50%;
+        image-rendering:pixelated; image-rendering:crisp-edges; display:block;
+    }
+    .seat .s-name { font-size:13px; font-weight:700; }
+    .seat .s-title { font-size:10px; color:rgba(200,210,255,.45); margin-top:2px; min-height:14px; }
+    .seat .s-state { font-size:10px; margin-top:6px; color:rgba(200,210,255,.4); }
+    .seat.prepare { border-color:rgba(255,227,109,.55); }
+    .seat.prepare .s-state { color:#ffe36d; }
+    .seat.speaking { border-color:var(--c); box-shadow:0 0 16px var(--glow); transform:translateY(-3px); }
+    .seat.speaking .s-state { color:var(--c); }
+    .seat.done .avatar { opacity:1; }
+    @keyframes pulse { 0%,100%{opacity:.55} 50%{opacity:1} }
+    .seat.speaking .avatar { animation:pulse 1.1s ease-in-out infinite; }
+
+    /* ===== 逐字稿 ===== */
+    .stage-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; }
+    .stage-head .t-topic { font-size:15px; font-weight:700; }
+    .stage-head .t-meta { font-size:12px; color:rgba(200,210,255,.5); margin-top:2px; }
+    #transcript {
+        height:46vh; min-height:280px; overflow-y:auto; padding:6px 4px;
+    }
+    .sp { display:flex; gap:10px; margin-bottom:14px; animation:spIn .3s ease both; }
+    @keyframes spIn { from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:none;} }
+    .sp .b-avatar {
+        flex:0 0 34px; width:34px; height:34px; border-radius:50%; display:flex;
+        align-items:center; justify-content:center; font-weight:700; color:#101525; font-size:14px;
+        overflow:hidden;
+    }
+    .sp .b-avatar img.b-avatar-img {
+        width:100%; height:100%; object-fit:cover; border-radius:50%;
+        image-rendering:pixelated; image-rendering:crisp-edges; display:block;
+    }
+    .sp .b-main { min-width:0; }
+    .sp .b-meta { font-size:11px; color:rgba(200,210,255,.45); margin-bottom:3px; }
+    .sp .b-bubble {
+        padding:9px 13px; border-radius:4px 12px 12px 12px; font-size:14px; line-height:1.65;
+        word-break:break-word; border-left:3px solid var(--c); background:rgba(12,20,40,.66);
+    }
+    .sp.host { flex-direction:column; align-items:center; }
+    .sp.host .b-bubble {
+        border-left:0; border-radius:10px; background:rgba(120,140,180,.14);
+        color:rgba(220,226,245,.85); font-size:13px; max-width:88%; text-align:center;
+    }
+    /* 主持人形象 = Celeste 小鸟：透明底、不署名 */
+    .sp.host .b-avatar.b-avatar-bird {
+        background:transparent; overflow:visible; border-radius:0;
+        width:46px; height:34px; flex:none; margin-bottom:2px;
+    }
+    .sp.host .b-avatar.b-avatar-bird img {
+        width:100%; height:100%; object-fit:contain; display:block;
+        image-rendering:pixelated; image-rendering:crisp-edges;
+    }
+
+    /* ===== 主持鸟（在会议卡片上方盘旋） ===== */
+    #stageView .rt-panel { position:relative; }
+    .bird-sprite {
+        position:absolute; left:0; top:0; width:96px; height:72px;
+        image-rendering:pixelated; image-rendering:crisp-edges;
+        pointer-events:none; z-index:6; display:none;
+    }
+    .sp.host .b-meta { text-align:center; }
+    .sp.user { flex-direction:row-reverse; }
+    .sp.user .b-main { text-align:right; }
+    .sp.user .b-bubble { border-left:0; border-right:3px solid var(--c); border-radius:12px 4px 12px 12px; }
+    .sp.typing .b-bubble::after { content:'▍'; animation:pulse 1s steps(1) infinite; color:var(--c); }
+    .sys-line { text-align:center; font-size:12px; color:rgba(200,210,255,.4); margin:10px 0; }
+    .round-banner {
+        text-align:center; font-size:12px; color:#ffe36d; letter-spacing:2px;
+        margin:14px 0; position:relative;
+    }
+    .round-banner::before, .round-banner::after {
+        content:''; display:inline-block; width:46px; height:1px;
+        background:rgba(255,227,109,.4); vertical-align:middle; margin:0 10px;
+    }
+
+    /* ===== 人类插话 ===== */
+    .interject-row { display:flex; gap:8px; margin-top:10px; }
+    #interjectInput {
+        flex:1; background:rgba(12,20,40,.8); border:1px solid rgba(120,200,255,.25);
+        border-radius:8px; padding:10px 12px; color:#e8e8f0; font-size:14px; outline:none;
+    }
+    #interjectInput:focus { border-color:#ffe36d; }
+    #interjectInput:disabled { opacity:.5; }
+
+    /* ===== 讨论结果场景图（评分系统已隐藏，仅以聚餐插画呈现讨论成色） ===== */
+    .result-card { margin-top:18px; border:1px solid var(--rc, rgba(255,227,109,.35)); border-radius:12px;
+        padding:16px 16px 20px; background:rgba(18,26,48,.92);
+        box-shadow:0 0 26px var(--rcglow, rgba(255,227,109,.12)); }
+    .result-scene { position:relative; border-radius:10px; overflow:hidden; aspect-ratio:16/9;
+        background:rgba(0,0,0,.35); }
+    .result-scene img {
+        width:100%; height:100%; object-fit:cover; display:block;
+        opacity:0; transform:scale(1.07);
+        animation:sceneIn 1s cubic-bezier(.2,.8,.2,1) forwards, sceneBreath 7s ease-in-out 1s infinite;
+    }
+    @keyframes sceneIn { to { opacity:1; transform:scale(1.015); } }
+    @keyframes sceneBreath {
+        0%,100% { transform:scale(1.015); }
+        50% { transform:scale(1.045); }
+    }
+    /* 光扫：好结果才有，越圆满扫得越亮 */
+    .result-scene::after {
+        content:''; position:absolute; inset:0; pointer-events:none;
+        background:linear-gradient(115deg, transparent 40%, var(--sheen, rgba(255,255,255,0)) 50%, transparent 60%);
+        background-size:250% 100%; background-position:120% 0;
+        animation:sheen 3.2s ease-out .5s 1;
+    }
+    @keyframes sheen { to { background-position:-60% 0; } }
+    .result-caption { text-align:center; margin:14px 2px 0; }
+    .result-caption .r-title {
+        font-size:17px; font-weight:800; letter-spacing:2px; color:var(--rc, #ffe36d);
+        opacity:0; animation:fadeUp .7s ease .55s forwards;
+    }
+    .result-caption .r-flavor {
+        font-size:13px; line-height:1.7; color:rgba(215,222,242,.78); margin-top:6px;
+        opacity:0; animation:fadeUp .7s ease .75s forwards;
+    }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+    .grade-comment { font-size:13px; line-height:1.7; color:rgba(220,226,245,.85);
+        margin:14px 2px 6px; padding-top:12px; border-top:1px dashed rgba(120,200,255,.15);
+        opacity:0; animation:fadeUp .7s ease .95s forwards; }
+    .todo-list { margin:6px 2px 0; padding-left:20px; font-size:13px; line-height:1.9; color:rgba(220,226,245,.8);
+        opacity:0; animation:fadeUp .7s ease 1.1s forwards; }
+    .grade-actions { display:flex; gap:10px; margin-top:16px; flex-wrap:wrap;
+        opacity:0; animation:fadeUp .7s ease 1.25s forwards; }
+
+    /* ===== 历史 ===== */
+    .hist-title { font-size:14px; font-weight:700; margin:22px 0 10px; color:rgba(200,210,255,.75); }
+    .hist-item {
+        display:flex; align-items:center; gap:12px; padding:11px 14px; margin-bottom:8px;
+        background:rgba(22,34,60,.6); border:1px solid rgba(120,200,255,.12); border-radius:8px; font-size:13px;
+    }
+    .hist-item .h-thumb { flex:0 0 52px; width:52px; height:30px; object-fit:cover; border-radius:5px;
+        border:1px solid rgba(120,200,255,.18); }
+    .hist-item .h-topic { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .hist-item .h-time { font-size:11px; color:rgba(200,210,255,.4); }
+    .hist-item button { background:transparent; border:1px solid rgba(120,200,255,.3); color:rgba(200,210,255,.75);
+        border-radius:6px; padding:4px 10px; font-size:12px; cursor:pointer; }
+    .hist-item button:hover { border-color:#ffe36d; color:#ffe36d; }
+    .hist-empty { font-size:12px; color:rgba(200,210,255,.35); padding:8px 2px; }
+    .rt-login-tip { text-align:center; color:rgba(200,210,255,.55); padding:90px 20px; font-size:14px; position:relative; z-index:3; }
+    .back-link { font-size:12px; color:rgba(200,210,255,.55); cursor:pointer; margin-bottom:14px; display:inline-block; }
+    .back-link:hover { color:#ffe36d; }
+    @media (max-width:680px) { .seats { grid-template-columns:repeat(3,1fr); } }
+    </style>
+</head>
+<body>
+    <canvas id="snowCanvas" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;"></canvas>
+
+    <header class="header">
+        <div class="container header-inner">
+            <a href="index.html" class="logo"><img src="celeste-gui/logo.webp" alt="Celeste" loading="lazy" decoding="async"></a>
+            <nav class="nav">
+                <a href="index.html" class="nav-link">Home</a>
+                <a href="archives.html" class="nav-link">Archives</a>
+                <a href="diary.html" class="nav-link" title="Diary with Madeline">Diary</a>
+                <a href="shop.html" class="nav-link" title="Celeste Resort · Oshiro">Shop</a>
+            </nav>
+            <div class="header-right" id="headerRight"></div>
+        </div>
+    </header>
+
+    <div class="rt-wrap">
+        <!-- 未登录 -->
+        <div class="rt-login-tip" id="loginTip" style="display:none;">
+            请先<a href="login.html" style="color:#ffe36d">登录</a>，才能召开 AI 圆桌会议。
+        </div>
+
+        <!-- 视图 1：创建会议 -->
+        <div id="setupView" style="display:none;">
+            <div class="rt-title">🪑 AI 圆桌会议 <span style="font-size:12px;color:rgba(200,210,255,.4);font-weight:400;">demo</span></div>
+            <div class="rt-sub">抛出一个议题，让 Madeline、Theo、Granny、Badeline 和 Oshiro 围坐讨论，你来插话——散场时，众人会按这场讨论的成色端出一盘「成果派」。</div>
+
+            <div class="rt-panel">
+                <div class="rt-label" style="margin-bottom:8px;">今天想讨论什么议题？</div>
+                <textarea id="topicInput" maxlength="200" placeholder="例如：我手里有两个 offer，一个稳定但无聊，一个有风险但成长快，该怎么选？"></textarea>
+                <div class="rt-row">
+                    <span class="rt-label" style="color:rgba(200,210,255,.55);font-size:12px;">自动讨论至众人形成共识，可随时结束</span>
+                    <span style="flex:1"></span>
+                    <button class="btn-primary" id="startBtn">召开会议</button>
+                </div>
+                <div style="margin-top:14px;">
+                    <span class="rt-label">出席席位：</span>
+                    <span id="seatPreview" style="font-size:12px;color:rgba(200,210,255,.6);"></span>
+                </div>
+            </div>
+
+            <div class="hist-title" id="histTitle">📜 历史会议（本机记录）</div>
+            <div id="histList"><div class="hist-empty">还没有会议记录。</div></div>
+        </div>
+
+        <!-- 视图 2：会议进行 / 回放 -->
+        <div id="stageView" style="display:none;">
+            <span class="back-link" id="backLink">‹ 返回创建会议</span>
+            <div class="rt-panel">
+                <div class="stage-head">
+                    <div>
+                        <div class="t-topic" id="stageTopic"></div>
+                        <div class="t-meta" id="stageMeta"></div>
+                    </div>
+                    <button class="btn-ghost" id="stopBtn" style="display:none;">结束会议</button>
+                </div>
+                <div class="seats" id="seats"></div>
+                <div id="transcript"></div>
+                <div class="interject-row" id="interjectRow" style="display:none;">
+                    <input type="text" id="interjectInput" maxlength="300" placeholder="以「你」的身份插一句话，下一个发言间隙插入…（Enter 发送）" autocomplete="off">
+                    <button class="btn-primary" id="interjectBtn" style="padding:0 18px;">插话</button>
+                </div>
+            </div>
+            <div id="resultArea"></div>
+        </div>
+    </div>
+
+<script src="js/api.js?v=20260930"></script>
+<script src="js/auth.js?v=20261002"></script>
+<script src="js/badeline-voice.js"></script>
+<script src="js/roundtable-voice.js"></script>
+<script src="js/roundtable-portraits.js"></script>
+<script src="js/roundtable-bird.js"></script>
+<script>
+initHeader();
+
+(function () {
+    // ===== 固定席位（与后端 RoundtablePersonas.seats() 对应；名字统一英文显示，颜色以后端 meta 为准覆盖） =====
+    const EN_NAME = {madeline:'Madeline', theo:'Theo', granny:'Granny', badeline:'Badeline', oshiro:'Oshiro'};
+    const FALLBACK_SEATS = [
+        {id:'madeline', name:'Madeline', title:'攀登者', color:'#ff6b6b'},
+        {id:'theo',     name:'Theo',     title:'摄影师', color:'#5fd38d'},
+        {id:'user',     name:'你',       title:'议题主人', color:'#ffe36d', human:true},
+        {id:'granny',   name:'Granny',   title:'山脚下的智者', color:'#b18cff'},
+        {id:'badeline', name:'Badeline', title:'玛德琳的暗面', color:'#e06bff'},
+        {id:'oshiro',   name:'Oshiro',   title:'山庄老板', color:'#7cb7ff'}
+    ];
+    const SCORE_DIMS = [
+        ['conclusion',  '结论达成度'],
+        ['evidence',    '论证充分度'],
+        ['diversity',   '视角多样性'],
+        ['focus',       '聚焦度'],
+        ['interaction', '互动性'],
+        ['practical',   '实用性']
+    ];
+    const HIST_KEY = 'roundtable_history_v1';
+
+    const token = localStorage.getItem('token');
+    const loginTip = document.getElementById('loginTip');
+    const setupView = document.getElementById('setupView');
+    const stageView = document.getElementById('stageView');
+    if (!token) { loginTip.style.display = ''; return; }
+    setupView.style.display = '';
+
+    let speakers = FALLBACK_SEATS;
+    let es = null;
+    let meeting = null;          // 当前会议数据（done 后落历史）
+    let activeBubble = null;     // 当前正在接收 delta 的气泡元素
+    let seatAnims = {};          // 席位头像动画器：speakerId → Animator
+    let replayMode = false;
+
+    const $ = id => document.getElementById(id);
+
+    // ===== 创建会议视图 =====
+    function renderSeatPreview() {
+        $('seatPreview').textContent = speakers.map(s => s.name).join(' · ');
+    }
+    renderSeatPreview();
+
+    $('startBtn').addEventListener('click', startMeeting);
+    $('topicInput').addEventListener('keydown', e => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) startMeeting();
+    });
+
+    function startMeeting() {
+        const topic = $('topicInput').value.trim();
+        if (!topic) { showToast('先写一个议题吧', 'info'); return; }
+        replayMode = false;
+        openStage({topic, speakers});
+        connectStream(topic);
+    }
+
+    // ===== 会议舞台 =====
+    function openStage({topic, speakers:sp}) {
+        setupView.style.display = 'none';
+        stageView.style.display = '';
+        $('resultArea').innerHTML = '';
+        $('transcript').innerHTML = '';
+        $('stageTopic').textContent = '议题：' + topic;
+        $('stageMeta').textContent = '';
+        $('stopBtn').style.display = '';
+        $('interjectRow').style.display = '';
+        $('interjectInput').disabled = false;
+        $('backLink').textContent = '‹ 放弃本场，返回';
+
+        // 席位卡
+        speakers = sp;
+        seatAnims = {};
+        const seats = $('seats');
+        seats.innerHTML = '';
+        sp.forEach(s => {
+            const el = document.createElement('div');
+            el.className = 'seat';
+            el.id = 'seat-' + s.id;
+            el.style.setProperty('--c', s.color);
+            el.style.setProperty('--glow', s.color + '55');
+            const charName = window.RoundtablePortraits && RoundtablePortraits.charOf(s.id);
+            const avatarHtml = charName
+                ? '<div class="avatar" style="background:' + s.color + '22"><img class="avatar-img" alt=""></div>'
+                : '<div class="avatar" style="background:' + s.color + '">' + escHtml(s.name.slice(0,1)) + '</div>';
+            el.innerHTML =
+                avatarHtml +
+                '<div class="s-name">' + escHtml(s.name) + '</div>' +
+                '<div class="s-title">' + escHtml(s.title || '') + '</div>' +
+                '<div class="s-state">' + (s.human ? '随时可插话' : '待机') + '</div>';
+            seats.appendChild(el);
+            if (charName) seatAnims[s.id] = RoundtablePortraits.attach(el.querySelector('img.avatar-img'), s.id);
+        });
+
+        meeting = {
+            id: null, topic, rounds: 0,
+            startedAt: Date.now(), finishedAt: null,
+            transcript: [], score: null
+        };
+        activeBubble = null;
+
+        // 主持鸟开场：crow 鸣叫 → 起飞 → 在席位卡上方盘旋
+        if (window.RoundtableBird) RoundtableBird.enter(stageView.querySelector('.rt-panel'));
+    }
+
+    function setSeatState(id, state) {
+        const el = $('seat-' + id);
+        if (!el) return;
+        el.classList.remove('prepare', 'speaking');
+        const stateEl = el.querySelector('.s-state');
+        if (state === 'prepare') { el.classList.add('prepare'); stateEl.textContent = '准备发言…'; }
+        else if (state === 'speaking') { el.classList.add('speaking'); stateEl.textContent = '发言中…'; }
+        else {
+            el.classList.add('done');
+            const sp = speakers.find(s => s.id === id);
+            stateEl.textContent = sp && sp.human ? '随时可插话' : '待机';
+        }
+    }
+
+    function stickBottom() {
+        const box = $('transcript');
+        box.scrollTop = box.scrollHeight;
+    }
+
+    function addSystemLine(text, cls) {
+        const d = document.createElement('div');
+        d.className = cls || 'sys-line';
+        d.textContent = text;
+        $('transcript').appendChild(d);
+        stickBottom();
+        return d;
+    }
+
+    // 取最新一句供情绪推断（标点切分，与语音引擎内部一致）
+    function lastSentence(text) {
+        const parts = String(text || '').split(/[。！？!?…\n；;]+/);
+        for (let i = parts.length - 1; i >= 0; i--) {
+            if (parts[i].trim()) return parts[i].slice(-40);
+        }
+        return String(text || '').slice(-40);
+    }
+
+    // 说话中：按最新一句切换气泡+席位的头像情绪
+    function updatePortraitEmotion(speakerId, fullText) {
+        if (!window.RoundtableVoice || !window.RoundtablePortraits) return;
+        const emo = RoundtableVoice.infer(speakerId, lastSentence(fullText));
+        if (!emo || !activeBubble || activeBubble._emotion === emo) return;
+        activeBubble._emotion = emo;
+        if (activeBubble._portrait) activeBubble._portrait.play(emo);
+        if (seatAnims[speakerId]) seatAnims[speakerId].play(emo);
+    }
+
+    function beginSpeech(ev) {
+        const sp = speakers.find(s => s.id === ev.speakerId)
+            || {name: EN_NAME[ev.speakerId] || ev.name, color:ev.color || '#9aa7c7', human: ev.role === 'user'};
+        const dispName = EN_NAME[ev.speakerId] || sp.name;   // 五名角色一律英文显示
+        const isHost = ev.role === 'host';
+        const d = document.createElement('div');
+        d.className = 'sp ' + (isHost ? 'host' : ev.role === 'user' ? 'user' : '') + ' typing';
+        const time = new Date(ev.ts || Date.now());
+        const hhmm = String(time.getHours()).padStart(2,'0') + ':' + String(time.getMinutes()).padStart(2,'0');
+        const charName = window.RoundtablePortraits && RoundtablePortraits.charOf(ev.speakerId);
+        // 主持人形象透明化替换为 Celeste 小鸟；其他角色用头像帧动画或首字母
+        const avatarHtml = isHost
+            ? '<div class="b-avatar b-avatar-bird"><img src="Atlases/Gameplay/characters/bird/hover00.png" alt=""></div>'
+            : charName
+                ? '<div class="b-avatar" style="background:' + sp.color + '22"><img class="b-avatar-img" alt=""></div>'
+                : '<div class="b-avatar" style="background:' + sp.color + '">' + escHtml(dispName.slice(0,1)) + '</div>';
+        d.innerHTML =
+            avatarHtml +
+            '<div class="b-main">' +
+                (isHost ? '' : '<div class="b-meta" style="color:' + sp.color + 'cc">' + escHtml(dispName) + ' · ' + hhmm + '</div>') +
+                '<div class="b-bubble" style="--c:' + sp.color + '"></div>' +
+            '</div>';
+        $('transcript').appendChild(d);
+        activeBubble = d.querySelector('.b-bubble');
+        activeBubble._fullText = '';
+        activeBubble._emotion = null;
+        activeBubble._portrait = null;
+        activeBubble._meta = {speakerId:ev.speakerId, name:dispName, color:sp.color, role:ev.role, ts:ev.ts};
+        if (charName) {
+            // 头像帧动画：实时会议循环播放，回放只定格 normal00
+            const anim = RoundtablePortraits.attach(d.querySelector('img.b-avatar-img'), ev.speakerId);
+            activeBubble._portrait = anim;
+            if (!replayMode) {
+                anim.play('normal');
+                if (seatAnims[ev.speakerId]) seatAnims[ev.speakerId].play('normal');
+            }
+        }
+        if (ev.speakerId !== 'host') setSeatState(ev.speakerId, 'speaking');
+        // 说话音效：把上一句全文交给引擎（奶奶 oneha 剧情触发判定用）；回放时引擎自动静音
+        const prev = meeting && meeting.transcript.length ? meeting.transcript[meeting.transcript.length - 1].content : '';
+        if (window.RoundtableVoice && !replayMode) RoundtableVoice.start(ev.speakerId, prev);
+        stickBottom();
+    }
+
+    function appendDelta(ev) {
+        if (!activeBubble) {
+            // 容错：丢了 turn_start 也能补一个气泡
+            beginSpeech({speakerId:ev.speakerId, role:ev.speakerId === 'host' ? 'host' : ev.speakerId === 'user' ? 'user' : 'ai'});
+        }
+        activeBubble._fullText += ev.text;
+        activeBubble.textContent = activeBubble._fullText;
+        if (window.RoundtableVoice) RoundtableVoice.pushText(ev.text);
+        updatePortraitEmotion(ev.speakerId, activeBubble._fullText);
+        stickBottom();
+    }
+
+    function endSpeech(ev) {
+        if (window.RoundtableVoice) RoundtableVoice.end();
+        if (!activeBubble) return;
+        const d = activeBubble.closest('.sp');
+        d.classList.remove('typing');
+        const m = activeBubble._meta;
+        // 气泡保留最后情绪的定格头像；席位卡恢复 normal00
+        if (activeBubble._portrait) activeBubble._portrait.freeze(activeBubble._emotion || 'normal');
+        if (seatAnims[m.speakerId]) seatAnims[m.speakerId].mount('normal');
+        meeting.transcript.push({
+            speakerId: m.speakerId, name: m.name, color: m.color, role: m.role,
+            content: activeBubble._fullText, ts: m.ts || (ev && ev.ts) || Date.now()
+        });
+        if (m.speakerId !== 'host') setSeatState(m.speakerId, 'idle');
+        activeBubble = null;
+    }
+
+    // ===== SSE =====
+    function connectStream(topic) {
+        $('stopBtn').disabled = false;
+        if (window.RoundtableVoice) RoundtableVoice.setLive(true);
+        addSystemLine('正在召集众人…');
+        es = new EventSource(BASE_URL + '/roundtable/stream?token=' + encodeURIComponent(token)
+            + '&topic=' + encodeURIComponent(topic));
+
+        es.addEventListener('meta', e => {
+            const d = JSON.parse(e.data);
+            meeting.id = d.sessionId;
+            if (Array.isArray(d.speakers) && d.speakers.length) {
+                // 后端给的是中文名，展示层统一替换为英文
+                d.speakers.forEach(s => { if (EN_NAME[s.id]) s.name = EN_NAME[s.id]; });
+                speakers = d.speakers;
+            }
+            $('stageMeta').textContent = '自动讨论中 · Madeline / Theo / You / Granny / Badeline / Oshiro';
+        });
+        es.addEventListener('round', e => {
+            const d = JSON.parse(e.data);
+            addSystemLine('第 ' + d.round + ' 轮', 'round-banner');
+            // 新一轮：AI 席状态复位
+            speakers.forEach(s => { if (!s.human) setSeatState(s.id, 'idle'); });
+        });
+        es.addEventListener('turn_prepare', e => {
+            const d = JSON.parse(e.data);
+            setSeatState(d.speakerId, 'prepare');
+            // 主持鸟飞到发言者席位上方凑近倾听
+            if (window.RoundtableBird) RoundtableBird.focusSeat(d.speakerId);
+        });
+        es.addEventListener('turn_start', e => beginSpeech(JSON.parse(e.data)));
+        es.addEventListener('delta', e => appendDelta(JSON.parse(e.data)));
+        es.addEventListener('turn_end', e => endSpeech(JSON.parse(e.data)));
+        es.addEventListener('notice', e => addSystemLine(JSON.parse(e.data).text));
+        es.addEventListener('score', e => {
+            const score = JSON.parse(e.data);
+            renderGradeCard(score);
+            // 散会彩蛋：西奥最后一次发言透着累 → yolo_solo + yolo 头像演一遍
+            if (window.RoundtableVoice) {
+                const yoloFired = RoundtableVoice.meetingEnd(meeting.transcript);
+                if (yoloFired && seatAnims.theo) seatAnims.theo.playOnce('yolo');
+            }
+        });
+        es.addEventListener('done', e => {
+            const d = JSON.parse(e.data);
+            meeting.finishedAt = Date.now();
+            meeting.score = d.score;
+            meeting.status = d.status;
+            meeting.rounds = d.rounds || 0;
+            finishUI();
+            saveHistory(meeting);
+            es.close();
+            // 散会：主持鸟向上飞走
+            if (window.RoundtableBird) RoundtableBird.leave();
+        });
+        es.addEventListener('error', () => {
+            // 注意：EventSource 默认会自动重连，但重连会带着同一 topic 重新触发一场新会议，
+            // 造成重复开会。因此任何 error 都直接关闭：正常结束的不提示，异常中断的给出说明。
+            es.close();
+            if (window.RoundtableVoice) RoundtableVoice.stopAll();
+            if (window.RoundtableBird) RoundtableBird.hide();
+            if (!meeting || !meeting.finishedAt) {
+                addSystemLine('连接中断，会议已停止（demo 不自动重连，避免重复开会）。可返回后重新召开。');
+                $('stopBtn').style.display = 'none';
+                $('interjectInput').disabled = true;
+            }
+        });
+    }
+
+    function finishUI() {
+        $('stopBtn').style.display = 'none';
+        $('interjectInput').disabled = true;
+        $('interjectBtn').disabled = true;
+        $('backLink').textContent = '‹ 返回创建会议';
+    }
+
+    // ===== 插话 / 收尾 =====
+    function doInterject() {
+        const inp = $('interjectInput');
+        const text = inp.value.trim();
+        if (!text || !meeting || !meeting.id) return;
+        $('interjectBtn').disabled = true;
+        api('/roundtable/' + meeting.id + '/interject', 'POST', {content:text}).then(res => {
+            if (res.success) { inp.value = ''; showToast('已加入发言队列', 'info'); }
+            else showToast(res.msg || '插话失败', 'info');
+        }).finally(() => { $('interjectBtn').disabled = false; inp.focus(); });
+    }
+    $('interjectBtn').addEventListener('click', doInterject);
+    $('interjectInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doInterject(); } });
+
+    $('stopBtn').addEventListener('click', () => {
+        if (!meeting || !meeting.id) return;
+        $('stopBtn').disabled = true;
+        api('/roundtable/' + meeting.id + '/stop', 'POST').then(res => {
+            if (res.success) showToast('将在当前发言结束后结束会议', 'info');
+            else { $('stopBtn').disabled = false; showToast(res.msg || '操作失败', 'info'); }
+        });
+    });
+
+    $('backLink').addEventListener('click', () => {
+        if (es) es.close();
+        if (window.RoundtableVoice) RoundtableVoice.stopAll();
+        if (window.RoundtableBird) RoundtableBird.hide();
+        stageView.style.display = 'none';
+        setupView.style.display = '';
+        renderHistory();
+    });
+
+    // ===== 讨论结果：聚餐场景图（评分仅作内部选图依据，界面不可见） =====
+    // final1 僵硬空派 → final5 冰淇淋狂欢，按全场综合均分自动对应
+    const RESULT_TIERS = [
+        {min:0,  img:1, title:'无人下筷的派',
+         flavor:'众人围坐却各怀心事，派原封不动地凉在桌上——这场讨论没能收口，这个议题还得再爬一次山。',
+         rc:'rgba(150,165,195,.45)', glow:'rgba(150,165,195,.10)', sheen:'rgba(255,255,255,0)'},
+        {min:60, img:2, title:'第一颗草莓',
+         flavor:'气氛缓和了些，派上多了一颗草莓。答案还没成形，但至少有人先伸出了手。',
+         rc:'rgba(124,192,255,.45)', glow:'rgba(124,192,255,.12)', sheen:'rgba(255,255,255,.10)'},
+        {min:70, img:3, title:'草莓派出炉',
+         flavor:'满满一炉草莓派端上桌，大家各取一块——观点落了地，这场讨论有了实实在在的收获。',
+         rc:'rgba(123,227,155,.45)', glow:'rgba(123,227,155,.14)', sheen:'rgba(255,255,255,.16)'},
+        {min:80, img:4, title:'全员点赞',
+         flavor:'格子派香气四溢，有人竖起了拇指。每个人都被说服了一点，也说服了别人一点。',
+         rc:'rgba(255,205,90,.5)', glow:'rgba(255,205,90,.18)', sheen:'rgba(255,255,255,.22)'},
+        {min:90, img:5, title:'派对时间！',
+         flavor:'冰淇淋、奶油和草莓堆成了山，全场起立比出手势——这是一场值得举杯的圆满讨论！',
+         rc:'rgba(255,157,77,.6)', glow:'rgba(255,157,77,.26)', sheen:'rgba(255,255,255,.32)'}
+    ];
+    function tierOfAvg(avg) {
+        let pick = RESULT_TIERS[0];
+        for (const t of RESULT_TIERS) { if ((avg || 0) >= t.min) pick = t; }
+        return pick;
+    }
+
+    function renderGradeCard(score) {
+        meeting.score = score;
+        const tier = tierOfAvg(score.avg);
+        const todos = Array.isArray(score.todos) && score.todos.length
+            ? '<div style="margin-top:12px;font-size:13px;color:rgba(200,210,255,.7);">📌 行动待办</div><ul class="todo-list">' +
+              score.todos.map(t => '<li>' + escHtml(t) + '</li>').join('') + '</ul>'
+            : '';
+        $('resultArea').innerHTML =
+            '<div class="result-card" style="--rc:' + tier.rc + ';--rcglow:' + tier.glow + ';--sheen:' + tier.sheen + ';">' +
+                '<div class="result-scene">' +
+                    '<img src="Atlases/Portraits/final' + tier.img + '.png" alt="讨论结果：' + tier.title + '">' +
+                '</div>' +
+                '<div class="result-caption">' +
+                    '<div class="r-title">' + tier.title + '</div>' +
+                    '<div class="r-flavor">' + tier.flavor + '</div>' +
+                '</div>' +
+                (score.comment ? '<div class="grade-comment">' + escHtml(score.comment) + '</div>' : '') +
+                todos +
+                '<div class="grade-actions">' +
+                    '<button class="btn-primary" id="exportJsonBtn" style="padding:9px 18px;">导出 JSON</button>' +
+                    '<button class="btn-ghost" id="exportTxtBtn">导出逐字稿 TXT</button>' +
+                    '<button class="btn-ghost" id="againBtn">再来一场</button>' +
+                '</div>' +
+            '</div>';
+        $('exportJsonBtn').addEventListener('click', () => downloadJson(meeting));
+        $('exportTxtBtn').addEventListener('click', () => downloadTxt(meeting));
+        $('againBtn').addEventListener('click', () => {
+            stageView.style.display = 'none';
+            setupView.style.display = '';
+            $('topicInput').focus();
+        });
+        stickBottom();
+    }
+
+    // ===== 导出 =====
+    function downloadBlob(filename, text, mime) {
+        const blob = new Blob([text], {type: mime});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    }
+    function downloadJson(m) {
+        downloadBlob('roundtable-' + m.id + '.json', JSON.stringify(m, null, 2), 'application/json');
+    }
+    function downloadTxt(m) {
+        const lines = [];
+        lines.push('议题：' + m.topic);
+        lines.push('时间：' + new Date(m.startedAt).toLocaleString());
+        lines.push('================================');
+        m.transcript.forEach(t => {
+            const tag = t.role === 'host' ? '主持人' : t.name;
+            lines.push('[' + tag + '] ' + t.content);
+            lines.push('');
+        });
+        if (m.score) {
+            lines.push('================================');
+            lines.push('评级：' + m.score.grade + '（' + m.score.avg + '）');
+            SCORE_DIMS.forEach(([k, label]) => lines.push(label + '：' + (m.score.scores[k] ?? '-')));
+            lines.push('综评：' + (m.score.comment || ''));
+            (m.score.todos || []).forEach((t, i) => lines.push((i+1) + '. ' + t));
+        }
+        downloadBlob('roundtable-' + m.id + '.txt', lines.join('\n'), 'text/plain;charset=utf-8');
+    }
+
+    // ===== 历史（localStorage） =====
+    function loadHistory() {
+        try { return JSON.parse(localStorage.getItem(HIST_KEY)) || []; }
+        catch (e) { return []; }
+    }
+    function saveHistory(m) {
+        if (!m || !m.score) return;
+        const list = loadHistory();
+        list.unshift({
+            id: m.id, topic: m.topic, rounds: m.rounds,
+            ts: m.finishedAt || Date.now(),
+            grade: m.score.grade, avg: m.score.avg,
+            transcript: m.transcript, score: m.score
+        });
+        localStorage.setItem(HIST_KEY, JSON.stringify(list.slice(0, 20)));
+    }
+    function renderHistory() {
+        const list = loadHistory();
+        const box = $('histList');
+        if (!list.length) { box.innerHTML = '<div class="hist-empty">还没有会议记录。</div>'; return; }
+        box.innerHTML = '';
+        list.forEach((item, idx) => {
+            const d = document.createElement('div');
+            d.className = 'hist-item';
+            const dStr = new Date(item.ts);
+            const timeStr = (dStr.getMonth()+1) + '/' + dStr.getDate() + ' ' +
+                String(dStr.getHours()).padStart(2,'0') + ':' + String(dStr.getMinutes()).padStart(2,'0');
+            const hTier = tierOfAvg(item.avg || (item.score && item.score.avg));
+            d.innerHTML =
+                '<img class="h-thumb" src="Atlases/Portraits/final' + hTier.img + '.png" alt="">' +
+                '<span class="h-topic" title="' + escHtml(item.topic) + '">' + escHtml(item.topic) + '</span>' +
+                '<span class="h-time">' + timeStr + ' · ' + item.rounds + '轮</span>' +
+                '<button data-act="replay" data-idx="' + idx + '">回看</button>' +
+                '<button data-act="del" data-idx="' + idx + '">删除</button>';
+            box.appendChild(d);
+        });
+        box.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const idx = parseInt(btn.dataset.idx, 10);
+                const list2 = loadHistory();
+                if (btn.dataset.act === 'del') {
+                    list2.splice(idx, 1);
+                    localStorage.setItem(HIST_KEY, JSON.stringify(list2));
+                    renderHistory();
+                } else {
+                    replayMeeting(list2[idx]);
+                }
+            });
+        });
+    }
+    renderHistory();
+
+    /** 回看：用历史数据重建舞台 + 结果场景图，不建立 SSE */
+    function replayMeeting(item) {
+        replayMode = true;
+        if (es) es.close();
+        // 回放不发出任何说话音效（setLive(false) 后 start/pushText/meetingEnd 全部空转）
+        if (window.RoundtableVoice) RoundtableVoice.setLive(false);
+        setupView.style.display = 'none';
+        stageView.style.display = '';
+        $('stageTopic').textContent = '议题：' + item.topic;
+        $('stageMeta').textContent = new Date(item.ts).toLocaleString() + ' · ' + item.rounds + ' 轮 · 回放';
+        $('stopBtn').style.display = 'none';
+        $('interjectRow').style.display = 'none';
+        $('backLink').textContent = '‹ 返回创建会议';
+        $('resultArea').innerHTML = '';
+        $('transcript').innerHTML = '';
+
+        const seats = $('seats');
+        seats.innerHTML = '';
+        seatAnims = {};
+        FALLBACK_SEATS.forEach(s => {
+            const el = document.createElement('div');
+            el.className = 'seat done';
+            el.id = 'seat-' + s.id;
+            el.style.setProperty('--c', s.color);
+            const charName = window.RoundtablePortraits && RoundtablePortraits.charOf(s.id);
+            const avatarHtml = charName
+                ? '<div class="avatar" style="background:' + s.color + '22"><img class="avatar-img" alt=""></div>'
+                : '<div class="avatar" style="background:' + s.color + '">' + escHtml(s.name.slice(0,1)) + '</div>';
+            el.innerHTML =
+                avatarHtml +
+                '<div class="s-name">' + escHtml(s.name) + '</div>' +
+                '<div class="s-title">' + escHtml(s.title) + '</div>' +
+                '<div class="s-state">' + (s.human ? '已参与' : '已发言') + '</div>';
+            seats.appendChild(el);
+            if (charName) seatAnims[s.id] = RoundtablePortraits.attach(el.querySelector('img.avatar-img'), s.id);
+        });
+
+        meeting = {
+            id: item.id, topic: item.topic, rounds: item.rounds,
+            startedAt: item.ts, finishedAt: item.ts,
+            transcript: [], score: item.score
+        };
+        speakers = FALLBACK_SEATS;
+        item.transcript.forEach(t => {
+            beginSpeech({speakerId:t.speakerId, role:t.role, name:t.name, color:t.color, ts:t.ts});
+            activeBubble.textContent = t.content;
+            activeBubble._fullText = t.content;
+            endSpeech({ts:t.ts});
+        });
+        if (item.score) renderGradeCard(item.score);
+        $('transcript').scrollTop = 0;
+        // 回放：主持鸟静卧在卡片上沿，不动画
+        if (window.RoundtableBird) RoundtableBird.perch(stageView.querySelector('.rt-panel'));
+    }
+})();
+</script>
+<script>
+    // ===== 雪花（与首页同款，精简） =====
+    (function () {
+        const cv = document.getElementById('snowCanvas');
+        const c = cv.getContext('2d');
+        function resize() { cv.width = innerWidth; cv.height = innerHeight; }
+        resize(); addEventListener('resize', resize);
+        const fs = [];
+        for (let i = 0; i < 70; i++) fs.push({
+            x: Math.random() * innerWidth, y: Math.random() * innerHeight,
+            r: Math.random() * 3 + 1, sp: Math.random() * 1.5 + 0.5,
+            w: Math.random() * 0.5 - 0.25, o: Math.random() * 0.6 + 0.2,
+            sw: Math.random() * Math.PI * 2, sws: Math.random() * 0.02 + 0.01
+        });
+        (function loop() {
+            c.clearRect(0, 0, cv.width, cv.height);
+            for (const f of fs) {
+                f.y += f.sp; f.sw += f.sws;
+                f.x += Math.sin(f.sw) * 0.5 + f.w;
+                if (f.y > cv.height + 10) { f.y = -10; f.x = Math.random() * cv.width; }
+                if (f.x > cv.width + 10) f.x = -10;
+                if (f.x < -10) f.x = cv.width + 10;
+                c.beginPath(); c.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+                c.fillStyle = 'rgba(255,255,255,' + f.o + ')'; c.fill();
+            }
+            requestAnimationFrame(loop);
+        })();
+    })();
+</script>
+<script src="js/seed.js"></script>
+</body>
+</html>

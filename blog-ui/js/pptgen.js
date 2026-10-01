@@ -5,7 +5,8 @@
 (function () {
     'use strict';
 
-    var CACHE_KEY = 'berryos-ppt-cache';
+    // 缓存 key 带 v2：标题格式改为「{topic}与我」后旧缓存全部作废
+    var CACHE_KEY = 'berryos-ppt-cache-v2';
 
     // ---- topic → 英文 slug（文件名用，如 凌波微步 → wavedash.ppt）----
     var TOPIC_SLUG_MAP = {
@@ -156,8 +157,8 @@
             '{',
             '',
             '─── P1 封面 ───',
-            '  "p1_title":   "格式：{topic} 与你，6-8字，例：凌波微步 与你",',
-            '                ✅ 凌波微步 与你  ❌ 关于凌波微步的学习指南',
+            '  "p1_title":   "格式：{topic}与我，6-9字，例：凌波微步与我",',
+            '                ✅ 凌波微步与我  ❌ 关于凌波微步的学习指南',
             '  "p1_sub":     "副标题，像 Madeline 随手写的一句话，≤14字"',
             '                ✅ 学不会？来看看  ❌ 学习凌波微步的实用方法',
             '',
@@ -299,7 +300,7 @@
         // 和 GRID_TEMPLATE 的 slotId 一一对应
         return {
             // p1 封面
-            p1_title: fname + ' 与你',
+            p1_title: topic + '与我',
             p1_sub:   '学不会？来看看',
 
             // p2 痛点

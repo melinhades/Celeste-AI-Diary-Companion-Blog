@@ -44,9 +44,11 @@ public class ChatController {
         return Result.success(data);
     }
 
+    /** 聊天历史：不传 beforeId 取最新 limit 条；传 beforeId 取该消息之前的 limit 条（向上加载更多） */
     @GetMapping("history")
-    public Result history(@RequestParam(defaultValue = "50") Integer limit) {
-        return chatService.history(limit);
+    public Result history(@RequestParam(defaultValue = "50") Integer limit,
+                          @RequestParam(required = false) String beforeId) {
+        return chatService.history(limit, beforeId);
     }
 
     @GetMapping("test-ai")

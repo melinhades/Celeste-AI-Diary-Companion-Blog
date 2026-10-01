@@ -324,17 +324,20 @@
   resize();
   window.addEventListener('resize', resize);
 
-  // 粒子活动范围：以背景截图招牌为中心的一圈（穹顶上方+周围）
-  // 百分比坐标，和 --neon-* 同区域并向外扩
-  var ZONE = { x: 0.30, y: 0.20, w: 0.40, h: 0.45 };
+  // 粒子活动范围：外围一圈 + 以画面正中的穹顶建筑物（含招牌、门口）为核心的密集区
+  // 百分比坐标；约 7 成粒子落在 CORE（建筑物本体周围），3 成散在 ZONE 外围
+  var ZONE = { x: 0.24, y: 0.16, w: 0.56, h: 0.60 };
+  var CORE = { x: 0.33, y: 0.26, w: 0.36, h: 0.40 };
   var COLORS = ['#ffffff', '#7affe0', '#ff7ad9', '#b98cff', '#8fd4ff', '#fff3a3'];
-  var COUNT = 16;
+  var COUNT = 44;
   var parts = [];
   for (var i = 0; i < COUNT; i++) {
+    // 70% 落建筑物密集区，30% 落外围
+    var z = (Math.random() < 0.7) ? CORE : ZONE;
     parts.push({
       // 百分比基准位置（在 zone 内）
-      bx: ZONE.x + Math.random() * ZONE.w,
-      by: ZONE.y + Math.random() * ZONE.h,
+      bx: z.x + Math.random() * z.w,
+      by: z.y + Math.random() * z.h,
       // 漂浮幅度（百分比）
       ampX: (Math.random() * 1.2 + .4) / 100,
       ampY: (Math.random() * 1.0 + .3) / 100,

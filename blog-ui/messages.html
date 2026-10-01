@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -12,28 +12,38 @@
         background:url('celeste-areas/ForsakenCity01.webp') center/cover no-repeat;
         opacity:0.25; pointer-events:none; z-index:0;
     }
-    .msg-layout { padding:24px 20px; position:relative; z-index:3; max-width:760px; margin:0 auto; }
-    .msg-title { font-size:22px; font-weight:700; color:#e8e8f0; margin-bottom:6px; display:flex; align-items:center; gap:10px; }
-    .msg-sub { font-size:13px; color:rgba(200,210,255,.45); margin-bottom:22px; }
-    .msg-item {
-        display:flex; align-items:center; gap:14px;
-        padding:14px 18px; margin-bottom:10px;
-        background:rgba(22,34,60,.72); border:1px solid rgba(120,200,255,.12);
-        border-radius:10px; cursor:pointer;
-        transition:transform .2s, border-color .2s, box-shadow .2s;
-        backdrop-filter:blur(8px);
-        animation:msgIn .45s ease both;
+    /* ===== 实时聊天 demo（功能优先，未做视觉精修） ===== */
+    .chat-wrap { position:relative; z-index:3; max-width:760px; margin:0 auto; padding:24px 20px; }
+    .chat-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+    .chat-title { font-size:20px; font-weight:700; color:#e8e8f0; }
+    .chat-status { font-size:12px; color:rgba(200,210,255,.6); }
+    .chat-status .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#888; margin-right:6px; vertical-align:1px; }
+    .chat-status.online .dot { background:#5fe38b; box-shadow:0 0 6px #5fe38b; }
+    .chat-status.offline .dot { background:#ff7b7b; }
+    #chatLog {
+        height:52vh; min-height:300px; overflow-y:auto;
+        background:rgba(22,34,60,.72); border:1px solid rgba(120,200,255,.15);
+        border-radius:10px; padding:14px; backdrop-filter:blur(8px);
     }
-    @keyframes msgIn { from{opacity:0; transform:translateY(14px);} to{opacity:1; transform:none;} }
-    .msg-item:hover { transform:translateX(6px); border-color:rgba(255,227,109,.5); box-shadow:0 4px 18px rgba(0,0,0,.35); }
-    .msg-item.unread { border-left:3px solid #ffe36d; background:rgba(30,44,76,.85); }
-    .msg-icon { font-size:22px; flex-shrink:0; filter:drop-shadow(0 0 6px rgba(255,227,109,.4)); }
-    .msg-body { flex:1; min-width:0; }
-    .msg-line1 { font-size:14px; color:#e8e8f0; margin-bottom:4px; }
-    .msg-line1 b { color:#ffe36d; font-weight:600; }
-    .msg-line2 { font-size:12px; color:rgba(200,210,255,.5); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .msg-time { font-size:11px; color:rgba(200,210,255,.35); flex-shrink:0; }
-    .msg-empty { text-align:center; color:rgba(200,210,255,.4); padding:60px 20px; font-size:14px; line-height:2; }
+    .chat-msg { margin-bottom:12px; font-size:14px; line-height:1.5; }
+    .chat-msg .meta { font-size:11px; color:rgba(200,210,255,.45); margin-bottom:2px; }
+    .chat-msg .bubble { display:inline-block; padding:8px 12px; border-radius:10px; background:rgba(60,80,130,.6); color:#e8e8f0; word-break:break-word; max-width:78%; }
+    .chat-msg.me { text-align:right; }
+    .chat-msg.me .bubble { background:rgba(255,227,109,.85); color:#222; }
+    .chat-sys { text-align:center; font-size:12px; color:rgba(200,210,255,.4); margin:8px 0; }
+    .chat-empty { text-align:center; color:rgba(200,210,255,.4); padding:40px 20px; font-size:13px; }
+    .chat-input-row { display:flex; gap:8px; margin-top:12px; }
+    #chatInput {
+        flex:1; background:rgba(22,34,60,.8); border:1px solid rgba(120,200,255,.25);
+        border-radius:8px; padding:10px 12px; color:#e8e8f0; font-size:14px; outline:none;
+    }
+    #chatInput:focus { border-color:#ffe36d; }
+    #chatSend {
+        padding:0 20px; background:#ffe36d; color:#222; border:0; border-radius:8px;
+        font-size:14px; font-weight:700; cursor:pointer;
+    }
+    #chatSend:disabled { opacity:.5; cursor:not-allowed; }
+    .chat-login-tip { position:relative; z-index:3; text-align:center; color:rgba(200,210,255,.5); padding:80px 20px; font-size:14px; }
     </style>
 </head>
 <body>
@@ -52,62 +62,159 @@
         </div>
     </header>
 
-    <div class="msg-layout">
-        <div class="msg-title">🔔 消息</div>
-        <div class="msg-sub">来自山间的风：谁给你的文字点了赞、留了言，都会飘到这里。</div>
-        <div id="msgList"><div class="msg-empty">正在收信…</div></div>
+    <div id="chatContainer">
+        <div class="chat-login-tip" id="loginTip" style="display:none;">
+            请先<a href="login.html" style="color:#ffe36d">登录</a>，才能进入实时聊天。
+        </div>
+        <div class="chat-wrap" id="chatWrap" style="display:none;">
+            <div class="chat-head">
+                <div class="chat-title">💬 山间实时聊天</div>
+                <div class="chat-status" id="chatStatus"><span class="dot"></span><span id="chatStatusText">连接中…</span></div>
+            </div>
+            <div id="chatLog"><div class="chat-empty">正在拉取聊天记录…</div></div>
+            <div class="chat-input-row">
+                <input type="text" id="chatInput" maxlength="500" placeholder="说点什么…（Enter 发送）" autocomplete="off">
+                <button id="chatSend">发送</button>
+            </div>
+        </div>
     </div>
 
-<script src="js/api.js"></script>
-<script src="js/auth.js"></script>
+<script src="js/api.js?v=20260925"></script>
+<script src="js/auth.js?v=20261002"></script>
 <script>
     initHeader();
 
-    if (!localStorage.getItem('token')) {
-        document.getElementById('msgList').innerHTML = '<div class="msg-empty">请先<a href="login.html" style="color:#ffe36d">登录</a>，才能收到消息哦。</div>';
-    } else {
-        loadMessages();
-    }
+    // ===== 实时聊天 demo（SSE 订阅 + POST 发送，历史/消息均存服务端内存） =====
+    (function () {
+        const token = localStorage.getItem('token');
+        const loginTip = document.getElementById('loginTip');
+        const chatWrap = document.getElementById('chatWrap');
+        if (!token) {
+            loginTip.style.display = '';
+            return;
+        }
+        chatWrap.style.display = '';
 
-    function fmtTime(ts) {
-        if (!ts) return '';
-        const d = new Date(Number(ts));
-        const now = new Date();
-        const diff = now - d;
-        if (diff < 60000) return '刚刚';
-        if (diff < 3600000) return Math.floor(diff / 60000) + ' 分钟前';
-        if (diff < 86400000) return Math.floor(diff / 3600000) + ' 小时前';
-        return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-    }
+        const logEl = document.getElementById('chatLog');
+        const inputEl = document.getElementById('chatInput');
+        const sendBtn = document.getElementById('chatSend');
+        const statusEl = document.getElementById('chatStatus');
+        const statusText = document.getElementById('chatStatusText');
 
-    function loadMessages() {
-        api('/notifications/list', 'GET').then(res => {
-            const box = document.getElementById('msgList');
-            if (!res.success || !res.data || res.data.length === 0) {
-                box.innerHTML = '<div class="msg-empty">山顶很安静，还没有消息。<br>去写点什么，或者给别人点个赞吧～</div>';
-                return;
-            }
-            box.innerHTML = res.data.map((n, i) => {
-                const isLike = n.type === 'like';
-                const verb = isLike ? '赞了' : '评论了';
-                const icon = isLike ? '❤️' : '💬';
-                return '<div class="msg-item' + (Number(n.isRead) === 0 ? ' unread' : '') + '" style="animation-delay:' + (i * 0.06) + 's" onclick="location.href=\'article.html?id=' + n.articleId + '\'">' +
-                    '<span class="msg-icon">' + icon + '</span>' +
-                    '<div class="msg-body">' +
-                        '<div class="msg-line1"><b>' + escHtml(n.fromName || '有人') + '</b> ' + verb + '你的文章</div>' +
-                        '<div class="msg-line2">《' + escHtml(n.articleTitle || '已删除的文章') + '》</div>' +
-                    '</div>' +
-                    '<span class="msg-time">' + fmtTime(n.createDate) + '</span>' +
-                '</div>';
-            }).join('');
-            // 展示后全部标记已读，铃铛清零
-            setTimeout(() => {
-                api('/notifications/readAll', 'POST').then(() => refreshBell());
-            }, 1200);
-        }).catch(() => {
-            document.getElementById('msgList').innerHTML = '<div class="msg-empty">收信失败了，稍后再试试…</div>';
+        let myUserId = null;
+        let loadedHistory = false;
+        const seenIds = {};   // 简单去重（历史和实时推送可能重叠）
+
+        function fmtClock(ts) {
+            const d = new Date(Number(ts));
+            return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+        }
+
+        function atBottom() {
+            return logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 60;
+        }
+        function scrollToBottom() { logEl.scrollTop = logEl.scrollHeight; }
+
+        function setStatus(state, text) {
+            statusEl.className = 'chat-status ' + state;
+            statusText.textContent = text;
+        }
+
+        function appendMsg(m) {
+            if (seenIds[m.id]) return;
+            seenIds[m.id] = true;
+            const empty = logEl.querySelector('.chat-empty');
+            if (empty) empty.remove();
+
+            const stick = atBottom();
+            const mine = String(m.userId) === String(myUserId);
+            const div = document.createElement('div');
+            div.className = 'chat-msg' + (mine ? ' me' : '');
+            div.innerHTML =
+                '<div class="meta">' + escHtml(m.name || '匿名') + ' · ' + fmtClock(m.ts) + '</div>' +
+                '<div class="bubble">' + escHtml(m.content || '') + '</div>';
+            logEl.appendChild(div);
+            if (stick) scrollToBottom();
+        }
+
+        function appendSys(text) {
+            const stick = atBottom();
+            const div = document.createElement('div');
+            div.className = 'chat-sys';
+            div.textContent = text;
+            logEl.appendChild(div);
+            if (stick) scrollToBottom();
+        }
+
+        // 当前用户 id（区分自己/他人气泡）
+        api('/users/currentUser', 'GET').then(res => {
+            if (res.success && res.data) myUserId = res.data.id;
         });
-    }
+
+        // 历史消息（早 -> 晚）
+        api('/realtime-chat/history', 'GET').then(res => {
+            if (res.success && Array.isArray(res.data)) {
+                logEl.innerHTML = '';
+                if (res.data.length === 0) {
+                    logEl.innerHTML = '<div class="chat-empty">还没有人说话，发第一条消息试试～</div>';
+                } else {
+                    res.data.forEach(appendMsg);
+                    scrollToBottom();
+                }
+            } else {
+                logEl.innerHTML = '<div class="chat-empty">历史记录加载失败。</div>';
+            }
+            loadedHistory = true;
+        });
+
+        // SSE 订阅（EventSource 无法加 Header，token 走 query）
+        let es = null;
+        function connect() {
+            setStatus('', '连接中…');
+            es = new EventSource(BASE_URL + '/realtime-chat/stream?token=' + encodeURIComponent(token));
+            es.addEventListener('chat', e => {
+                try { appendMsg(JSON.parse(e.data)); } catch (err) {}
+            });
+            es.addEventListener('presence', e => {
+                try {
+                    const p = JSON.parse(e.data);
+                    setStatus('online', '在线 ' + p.online + ' 人');
+                } catch (err) { setStatus('online', '已连接'); }
+            });
+            es.onopen = () => setStatus('online', '已连接');
+            es.onerror = () => {
+                // EventSource 浏览器内置自动重连，这里只更新状态
+                setStatus('offline', '连接断开，重连中…');
+            };
+        }
+        connect();
+
+        // 发送
+        let sending = false;
+        function doSend() {
+            const content = inputEl.value.trim();
+            if (!content || sending) return;
+            sending = true;
+            sendBtn.disabled = true;
+            // 自己发的消息不本地插入，等服务端广播回来（保证单一口径 + 多标签页同步）
+            api('/realtime-chat/send', 'POST', { content }).then(res => {
+                if (!res.success) appendSys('发送失败：' + (res.msg || '未知错误'));
+                inputEl.value = '';
+            }).catch(() => {
+                appendSys('发送失败，网络异常');
+            }).finally(() => {
+                sending = false;
+                sendBtn.disabled = false;
+                inputEl.focus();
+            });
+        }
+        sendBtn.addEventListener('click', doSend);
+        inputEl.addEventListener('keydown', e => {
+            if (e.key === 'Enter') { e.preventDefault(); doSend(); }
+        });
+
+        window.addEventListener('beforeunload', () => { if (es) es.close(); });
+    })();
 
     // ===== 雪花（与首页同款，精简） =====
     (function () {

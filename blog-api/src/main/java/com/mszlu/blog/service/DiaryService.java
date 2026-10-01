@@ -14,6 +14,9 @@ public interface DiaryService {
     /** 获取日记列表（分页）；type 为 null=全部，day=普通日记，dream=梦境日记 */
     Result list(int page, int pageSize, String type);
 
+    /** 当前用户普通日记（type=day）总数，me 页票根用 */
+    Result count();
+
     /** 保存一篇梦境日记（type=dream），并返回 Madeline 读完梦后的感受回应 */
     Result saveDream(DiaryParam param);
 

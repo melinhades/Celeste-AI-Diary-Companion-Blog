@@ -1,18 +1,19 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="icon/OIP.webp" type="image/webp">
     <title>Article - Celeste Blog</title>
-    <link rel="stylesheet" href="css/common.css">
-    <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/common.css?v=20261001b">
+    <link rel="stylesheet" href="css/theme.css?v=20261001b">
+    <script src="js/marked.min.js"></script>
     <style>
     body::after {
         content:'';
         position:fixed; left:0; right:0; top:0; bottom:-12%; /* 对齐 index：素材底边随 cover 缩放露出的白色条带向下延伸移出屏幕 */
-        background:url('celeste-areas/bg_calm.webp') center/cover no-repeat;
-        opacity:0.15;
+        background:url('celeste-areas/ForsakenCity01.webp') center/cover no-repeat;
+        opacity:0.3;
         pointer-events:none;
         z-index:0;
     }
@@ -36,13 +37,13 @@
         .sidebar { width: 280px; flex-shrink: 0; display: flex; flex-direction: column; gap: 20px; }
 
         /* 文章头部 */
-        .article-header { background: rgba(30, 27, 75, 0.6); backdrop-filter: blur(10px); border: 1px solid rgba(138,43,226,0.2); border-radius: 10px; padding: 32px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        .article-header { background: rgba(30, 27, 75, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(138,43,226,0.2); border-radius: 10px; padding: 32px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
         .article-header h1 { font-size: 26px; font-weight: 700; color: #e8e8f0; line-height: 1.4; margin-bottom: 16px; text-shadow: 0 0 20px rgba(138,43,226,0.3); }
         .article-meta { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: #8b8ba0; margin-bottom: 14px; }
         .article-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 
         /* 文章正文 */
-        .article-body { background: rgba(30, 27, 75, 0.6); backdrop-filter: blur(10px); border: 1px solid rgba(138,43,226,0.2); border-radius: 10px; padding: 32px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); line-height: 1.9; font-size: 15px; color: #c9c9dd; }
+        .article-body { background: rgba(30, 27, 75, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(138,43,226,0.2); border-radius: 10px; padding: 32px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); line-height: 1.9; font-size: 15px; color: #c9c9dd; }
         .article-body h1,.article-body h2,.article-body h3 { margin: 24px 0 12px; color: #e8e8f0; }
         .article-body a { color: #a78bfa; }
         .article-body p { margin-bottom: 14px; }
@@ -55,7 +56,7 @@
         .article-body li { margin-bottom: 6px; }
 
         /* 评论区 */
-        .comments-section { background: rgba(30, 27, 75, 0.6); backdrop-filter: blur(10px); border: 1px solid rgba(138,43,226,0.2); border-radius: 10px; padding: 28px 32px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        .comments-section { background: rgba(30, 27, 75, 0.4); backdrop-filter: blur(10px); border: 1px solid rgba(138,43,226,0.2); border-radius: 10px; padding: 28px 32px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
         .comments-title { font-size: 17px; font-weight: 600; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid rgba(138,43,226,0.25); color: #e8e8f0; }
         .comment-form { margin-bottom: 28px; }
         .comment-form textarea { width: 100%; padding: 12px 14px; border: 1px solid rgba(138,43,226,0.3); border-radius: 8px; font-size: 14px; outline: none; resize: vertical; min-height: 90px; font-family: inherit; transition: all 0.3s; background: rgba(15, 12, 41, 0.5); color: #e8e8f0; }
@@ -207,7 +208,7 @@
     .emoji-panel.open { display: block; animation: emojiIn .18s ease; }
     @keyframes emojiIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
     .emoji-tabs { display: flex; gap: 6px; margin-bottom: 8px; }
-    .emoji-tab { flex: 1; border: 1px solid rgba(138,43,226,.3); background: transparent; color: #b8b8d0; font-size: 12px; padding: 4px 0; border-radius: 6px; cursor: pointer; transition: all .2s; }
+    .emoji-tab { flex: 1; border: 1px solid rgba(138,43,226,.3); background: transparent; color: #b8b8d0; font-size: 11px; padding: 4px 2px; border-radius: 6px; cursor: pointer; transition: all .2s; white-space: nowrap; }
     .emoji-tab.active { background: linear-gradient(135deg,#667eea,#764ba2); color: #fff; border-color: transparent; }
     .emoji-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; max-height: 180px; overflow-y: auto; }
     .emoji-cell { border: none; background: transparent; padding: 3px; cursor: pointer; border-radius: 6px; transition: all .15s; display: flex; align-items: center; justify-content: center; }
@@ -294,6 +295,9 @@
                         <div id="emojiPanel" class="emoji-panel">
                             <div class="emoji-tabs">
                                 <button type="button" class="emoji-tab active" data-series="mad">Madeline</button>
+                                <button type="button" class="emoji-tab" data-series="bade">Badeline</button>
+                                <button type="button" class="emoji-tab" data-series="granny">Granny</button>
+                                <button type="button" class="emoji-tab" data-series="theo">Theo</button>
                                 <button type="button" class="emoji-tab" data-series="oshiro">Oshiro</button>
                             </div>
                             <div class="emoji-grid" id="emojiGrid"></div>
@@ -326,8 +330,8 @@
     <div class="container">© 2026 Celeste Blog · Explore the stars</div>
 </footer>
 
-<script src="js/api.js"></script>
-<script src="js/auth.js"></script>
+<script src="js/api.js?v=20260925"></script>
+<script src="js/auth.js?v=20261002"></script>
 <script>
     // ===== 加载层内雪花（snow-bgm 同款，登录页风格） =====
     (function () {
@@ -478,8 +482,14 @@
                     </div>
                 </div>`;
 
-            // 正文
-            const body = a.body?.content || a.body?.contentHtml || '';
+            // 正文：优先用 marked 解析原始 Markdown（含 # 标题、** 加粗、``` 代码块等），兜底纯文本自动分段
+            let body = a.body?.content || a.body?.contentHtml || '';
+            // 去掉可能的 ```markdown 或 ``` 整体包裹
+            body = body.replace(/^```[a-z]*\s*/, '').replace(/```\s*$/, '');
+            if (body && !/<[a-z][^>]*>/i.test(body)) {
+                // 是 Markdown 内容，用 marked 渲染
+                body = marked.parse(body);
+            }
             document.getElementById('articleBody').innerHTML = `<div class="article-body">${body}</div>`;
 
             // 生成目录
@@ -523,9 +533,12 @@
     const MAD_PORTRAITS = ['normal00.png', 'peaceful00.png', 'determined00.png', 'distracted00.png'];
     let avIdx = 0;
 
-    // ===== 评论表情包：Madeline / Oshiro 两系列（Atlases/Portraits 00 帧） =====
+    // ===== 评论表情包：五系列（Atlases/Portraits 各情绪 00 帧；暗面琳素材目录为 ghost） =====
     const EMOJI_PACKS = {
         mad: { dir: 'madeline', names: ['normal', 'peaceful', 'determined', 'distracted', 'panic', 'sad', 'sadder', 'surprised', 'angry', 'deadpan', 'upset', 'together'] },
+        bade: { dir: 'ghost', names: ['normal', 'angry', 'angryAlt', 'concerned', 'freakA', 'freakB', 'freakC', 'sad', 'scoff', 'serious', 'sigh', 'upset', 'worried', 'worriedAlt', 'yell'] },
+        granny: { dir: 'granny', names: ['normal', 'creepA', 'creepB', 'laugh', 'mock'] },
+        theo: { dir: 'theo', names: ['normal', 'excited', 'nailedit', 'serious', 'thinking', 'worried', 'wtf', 'yolo'] },
         oshiro: { dir: 'oshiro', names: ['normal', 'nervous', 'serious', 'sidehappy', 'sideworried', 'sidesuspicious', 'drama', 'lostcontrol', 'worried'] }
     };
     let emojiSeries = 'mad';
@@ -580,7 +593,7 @@
     // 渲染评论内容：先整体转义，再把白名单内的表情标记替换为图片（保证无 XSS 注入面）
     function renderCommentContent(text) {
         let s = escHtml(text);
-        s = s.replace(/\[(mad|oshiro):([a-zA-Z]+)\]/g, (m, series, name) => {
+        s = s.replace(/\[(mad|bade|granny|theo|oshiro):([a-zA-Z]+)\]/g, (m, series, name) => {
             const pack = EMOJI_PACKS[series];
             return (pack && pack.names.includes(name))
                 ? `<img class="comment-emoji" loading="lazy" src="Atlases/Portraits/${pack.dir}/${name}00.png" alt="${series}:${name}" decoding="async">`

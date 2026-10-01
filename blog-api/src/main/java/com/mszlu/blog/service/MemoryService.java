@@ -19,6 +19,9 @@ public interface MemoryService {
     /** 对话后异步提取记忆并入库（@Async，不阻塞回复） */
     void extractAsync(String userId, String userContent, String aiReply);
 
+    /** 保存日记后异步提取记忆（单边内容模式：日记不是对话，用专门的提取规则） */
+    void extractDiaryAsync(String userId, String diaryContent);
+
     /** 把这些记忆的 last_mentioned_time 更新为现在 */
     void markMentioned(List<Memory> memories);
 

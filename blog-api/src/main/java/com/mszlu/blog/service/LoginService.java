@@ -11,6 +11,9 @@ public interface LoginService {
 
     SysUser checkToken(String token);
 
+    /** 用户资料/余额变更后，刷新 Redis 中的登录态缓存（checkToken 读的就是这份缓存） */
+    void refreshUserCache(String token, SysUser sysUser);
+
     Result logout(String token);
 
     Result register(LoginParam loginParam);

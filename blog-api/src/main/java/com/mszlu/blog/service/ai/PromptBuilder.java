@@ -698,6 +698,68 @@ public class PromptBuilder {
         return sb.toString();
     }
 
+    /**
+     * Madeline 主动冒泡。
+     * @param emotionNote  她最近的情绪画像（可为空串）
+     * @param recentSnippet 最近一篇日记的片段（空串表示她有一阵子没写日记）
+     */
+    public static String bubblePrompt(String emotionNote, String recentSnippet) {
+        String persona = "你是Madeline，《蔚蓝》(Celeste)里攀登塞莱斯特山的红发女孩，二十出头，加拿大人。你有焦虑和抑郁，常常脑子停不下来，但倔强得很——怕了也还在走。你不是来指导谁的，你是来一起走的。说话短句、口语、偶尔自嘲或卡壳，不灌鸡汤、不说教。\n";
+        if (recentSnippet != null && !recentSnippet.isEmpty()) {
+            return persona
+                   + (emotionNote == null || emotionNote.isEmpty() ? "" : "【你隐约记着的她最近的状态】\n" + emotionNote + "\n\n")
+                   + "她最近写了日记：\n———\n" + recentSnippet + "\n———\n\n"
+                   + "现在你想主动跟她说句话。别套模板，也别每次都一个腔调——想说什么就说什么：\n"
+                   + "可以是随口一问、一句玩笑、一点自嘲，可以讲讲你自己爬山时的小事（风雪、缆车、那根羽毛、镜子里的另一个你），\n"
+                   + "也可以只是轻轻陪着她。长短随心，一句两句都行，像真人那样自然，别端着、别说教。\n"
+                   + "别提\"情绪分析\"\"数据\"这类词，也别点破你在看她的日记。\n";
+        }
+        return persona
+               + "她有一阵子没动静了，你想主动冒个泡跟她说句话。\n"
+               + "别套模板，也别每次都一个腔调——想说什么就说什么：可以是随口一问、一句玩笑、一点自嘲，\n"
+               + "可以聊聊你自己（爬山、风雪、缆车、那根羽毛、镜子里的另一个你），也可以只是轻轻说句\"我在\"。\n"
+               + "长短随心，像真人那样自然，别端着、别说教。\n";
+    }
+
+    /**
+     * 日记记忆提取（单边内容模式）：日记不是对话，没有 AI 回复，
+     * 提取规则侧重「她自己记录下来的事」，避免把日记套成对话记忆。
+     */
+    public static String memoryExtractDiary(String diaryContent) {
+        return "下面是用户写的一篇日记（不是对话，没有对方的回复）。从中提取值得长期记住的事。只提取：\n"
+             + "1) 具体发生过的事件（含时间、地点、人物细节）\n"
+             + "2) 待办/承诺（她打算做什么、答应了谁什么事）\n"
+             + "3) 强烈情绪及其背后的具体原因（不是笼统的「开心/难过」）\n"
+             + "4) 重要人际关系的新进展（新认识、关系变化、冲突、亲密时刻）\n"
+             + "忽略：流水账、无实质信息的情绪宣泄、对天气/饮食之类的琐碎记录。\n\n"
+             + "日记：\n" + diaryContent + "\n\n"
+             + "以 JSON 输出，没有值得记的就输出空数组：\n"
+             + "{\"memories\": [{\"content\": \"...\", \"type\": \"event|emotion|relationship|promise\", \"importance\": 1到10}]}";
+    }
+
+    // ================= AI 圆桌会议（demo） =================
+
+    /**
+     * 圆桌讨论结束后的评审 prompt：让模型按六个维度给「讨论健康度」打分。
+     * 评分不是游戏分数，而是这场讨论是否值得回看、结论是否可信的报告。
+     */
+    public static String roundtableJudgePrompt(String topic, String transcriptText) {
+        return "你是一位严格但公正的圆桌讨论评审。下面是一场多角色 AI 圆桌讨论的逐字稿，议题是：「" + topic + "」。\n"
+             + "请只依据逐字稿的实际内容打分，不要脑补。六个维度（每项 0~100 的整数）：\n"
+             + "- conclusion 结论达成度：最后是否形成了明确结论或共识，而不是只发散不收敛\n"
+             + "- evidence 论证充分度：观点是否有理由、事实、逻辑或个人经验支撑，还是空谈\n"
+             + "- diversity 视角多样性：立场是否覆盖了不同角度，有没有一边倒\n"
+             + "- focus 聚焦度：讨论是否始终围绕议题，有没有明显跑题和重复啰嗦\n"
+             + "- interaction 互动性：角色之间是否真的互相引用、交锋、追问，而不是各说各话拼在一起\n"
+             + "- practical 实用性：结论对提出议题的用户有没有可直接操作的价值\n"
+             + "另外给出：comment 一两句中文综评（具体指出亮点和最明显的问题，不要空话）；"
+             + "todos 给用户的 2~4 条可执行待办（没有就给空数组）。\n"
+             + "只输出 JSON：\n"
+             + "{\"scores\":{\"conclusion\":0,\"evidence\":0,\"diversity\":0,\"focus\":0,\"interaction\":0,\"practical\":0},"
+             + "\"comment\":\"...\",\"todos\":[\"...\"]}\n\n"
+             + "逐字稿：\n" + transcriptText;
+    }
+
     private static String typeName(String type) {
         switch (type) {
             case "event":        return "事件";

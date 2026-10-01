@@ -1385,6 +1385,10 @@ function inferReplyEmotion(text) {
             addMadelineMessage('你现在有 ' + berryBalanceLocal() + ' 颗草莓，慢慢攒，山顶有好东西等着你～', '可爱');
         });
         refreshShopUI();
+        // 草莓数变化（写日记/草莓籽组合/商店消费）时实时刷新这一栏
+        window.addEventListener('berries:change', refreshShopUI);
+        // 进页面先与后端权威余额对账（跨设备写日记/消费后保持一致）
+        if (typeof window.syncBerryBalance === 'function') syncBerryBalance();
     }
     function updateBonfire(d) {
         const fire = document.getElementById('sbFire');
@@ -1553,7 +1557,7 @@ function inferReplyEmotion(text) {
         sit: 'celeste-gui/madeline-sitdown.gif',
         sleep: 'celeste-gui/madeline-sleep.gif',
         wake: 'celeste-gui/madeline-wakeup.gif',
-        fall: 'celeste-gui/madeline-fallpose.gif'
+        fall: 'celeste-player/fallPose00.png'
     };
     const pmState = {
         x: window.innerWidth * 0.15,
@@ -1747,6 +1751,8 @@ function inferReplyEmotion(text) {
     const canInterrupt = pmCore.canInterrupt;
     const tryInterrupt = pmCore.tryInterrupt;
     const requestMode = pmCore.requestMode;
+    // fall（摔一跤）：贴地短动作，播放 fallPose 帧序列（pmSetSrc 拦截帧播放），低频随机触发
+    PM_MODES.fall = { src: 'fall', movable: false, canHop: false, priority: 15, ground: true, dur: () => 620 };
 
     function pmNextMode(now) {
         const e = companionState.currentEmotion;
@@ -1760,10 +1766,11 @@ function inferReplyEmotion(text) {
             ['fun',    0.16],
             ['look',   0.12],
             ['sit',    (gloomy ? 0.24 : 0.12) + (night ? 0.15 : 0)],
+            ['fall',   (lively ? 0.08 : 0.05) * (night ? 0.5 : 1)],
         ];
-        // 过滤掉不满足前置条件的（如 sit/bounce 需贴地）
+        // 过滤掉不满足前置条件的（如 sit/bounce/fall 需贴地）
         const pool = weights.filter(([k]) =>
-            (k === 'sit' || k === 'bounce') ? nearGround : true);
+            (k === 'sit' || k === 'bounce' || k === 'fall') ? nearGround : true);
         // 传入当前模式作 avoidKey：权重相同时不再连续选中同一动作
         enterMode(weightedPick(pool, pmState.mode), now);
     }
@@ -2141,9 +2148,9 @@ function inferReplyEmotion(text) {
     }
     async function shelfLoad() {
         shelfList.innerHTML = '<div class="shelf-empty">正在搬书……</div>';
-        const res = await api('/diary/list?type=day', 'GET');
-        if (res.success && Array.isArray(res.data)) {
-            shelfData = res.data;
+        const res = await api('/diary/list?page=1&pageSize=50&type=day', 'GET');
+        if (res.success && res.data && Array.isArray(res.data.list)) {
+            shelfData = res.data.list;
             if (!shelfData.length) { shelfList.innerHTML = '<div class="shelf-empty">书架还空着。<br>写下第一篇，它就有了位置。</div>'; return; }
             shelfList.innerHTML = shelfData.map((d, i) =>
                 '<div class="shelf-card" data-i="' + i + '">' +
@@ -2325,9 +2332,9 @@ function inferReplyEmotion(text) {
         const editId = new URLSearchParams(location.search).get('edit');
         if (editId) {
             history.replaceState(null, '', 'diary.html');
-            api('/diary/list?type=day', 'GET').then(r => {
-                if (r.success && Array.isArray(r.data)) {
-                    const d = r.data.find(x => String(x.id) === String(editId));
+            api('/diary/list?page=1&pageSize=50&type=day', 'GET').then(r => {
+                if (r.success && r.data && Array.isArray(r.data.list)) {
+                    const d = r.data.list.find(x => String(x.id) === String(editId));
                     if (d) {
                         editingDiaryId = d.id;
                         titleInput.value = d.title || '';

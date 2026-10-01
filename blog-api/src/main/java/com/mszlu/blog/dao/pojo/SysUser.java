@@ -30,4 +30,10 @@ public class SysUser {
     private String salt;
 
     private String status;
+
+    /** 草莓余额（写日记/收集草莓籽获得，商店消费） */
+    private Integer berry;
+
+    /** 个性签名（me 页票根编辑） */
+    private String signature;
 }

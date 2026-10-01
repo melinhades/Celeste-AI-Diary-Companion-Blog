@@ -129,12 +129,16 @@ public class ChatServiceImpl implements ChatService {
     }
 
     @Override
-    public Result history(Integer limit) {
+    public Result history(Integer limit, String beforeId) {
         SysUser user = UserThreadLocal.get();
-        int size = (limit == null || limit <= 0) ? 50 : limit;
+        int size = (limit == null || limit <= 0) ? 50 : Math.min(limit, 50);
         LambdaQueryWrapper<ChatMessage> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(ChatMessage::getUserId, user.getId());
-        wrapper.orderByDesc(ChatMessage::getCreateDate);
+        // 游标分页：ID 为雪花算法生成的定长数字串，字典序与时间序一致，可直接用 lt 取更早的消息
+        if (beforeId != null && !beforeId.isBlank()) {
+            wrapper.lt(ChatMessage::getId, beforeId);
+        }
+        wrapper.orderByDesc(ChatMessage::getId);
         wrapper.last("limit " + size);
         List<ChatMessage> messages = chatMessageMapper.selectList(wrapper);
         Collections.reverse(messages);
@@ -143,6 +147,7 @@ public class ChatServiceImpl implements ChatService {
         List<ChatMessageVo> vos = new ArrayList<>();
         for (ChatMessage m : messages) {
             ChatMessageVo vo = new ChatMessageVo();
+            vo.setId(m.getId());
             vo.setRole(m.getRole());
             vo.setContent(m.getContent());
             vo.setPersonaName(personaName);

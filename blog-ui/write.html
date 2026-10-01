@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -345,10 +345,10 @@
 </div>
 
 <footer class="footer"> <div class="container">© 2024 Celeste Blog · Explore the stars</div> </footer>
-<script src="js/api.js"></script>
-<script src="js/auth.js"></script>
-<script src="js/madeline-core.js"></script>
-<script src="js/write-madeline.js"></script>
+<script src="js/api.js?v=20260925"></script>
+<script src="js/auth.js?v=20261002"></script>
+<script src="js/madeline-core.js?v=20261002"></script>
+<script src="js/write-madeline.js?v=20261002"></script>
 <script>
 // ================= AI 生成文章：跑步指针 + 采纳/拒绝 + Fall 回退 =================
 (function () {
@@ -441,7 +441,7 @@
         };
     }
 
-    let runTimer = null, fallTimer = null;
+    let runTimer = null, fallTimer = null, fallHideTimer = null;
     function startRun() {
         runner.style.display = 'block';
         let i = 0;
@@ -461,7 +461,7 @@
     function playFall(x, y) {
         const sprite = document.getElementById('genFallSprite');
         sprite.style.left = Math.max(10, Math.min(window.innerWidth - 80, x - 32)) + 'px';
-        sprite.style.top = Math.max(10, y - 32) + 'px';
+        sprite.style.top = Math.max(10, Math.min(window.innerHeight - 80, y - 32)) + 'px';
         sprite.style.animation = 'none';
         void sprite.offsetWidth;
         sprite.style.animation = '';
@@ -470,9 +470,12 @@
         sprite.src = FALL_FRAMES[0];
         if (fallTimer) clearInterval(fallTimer);
         fallTimer = setInterval(() => { i = (i + 1) % FALL_FRAMES.length; sprite.src = FALL_FRAMES[i]; }, 200);
-        setTimeout(() => {
+        // 重复触发时先清掉上一次的隐藏定时器，避免旧定时器把本次动画提前砍掉
+        if (fallHideTimer) { clearTimeout(fallHideTimer); fallHideTimer = null; }
+        fallHideTimer = setTimeout(() => {
             fallLayer.classList.remove('show');
             if (fallTimer) { clearInterval(fallTimer); fallTimer = null; }
+            fallHideTimer = null;
         }, 1700);
     }
 
@@ -577,7 +580,6 @@
         bodyEl.value = genBefore;
         if (typeof updateCount === 'function') updateCount();
         playFall(p.x, p.y);
-        if (typeof showToast === 'function') showToast('已回退，Madeline 摔了一跤…', 'info');
     });
 
     const genBtn = document.getElementById('toolbarGenBtn');

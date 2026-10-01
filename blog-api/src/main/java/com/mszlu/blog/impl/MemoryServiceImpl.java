@@ -136,10 +136,23 @@ public class MemoryServiceImpl implements MemoryService {
     }
 
     @Override
-    @Async("taskExecutor")
+    @Async("aiExecutor")
     public void extractAsync(String userId, String userContent, String aiReply) {
+        doExtract(userId, PromptBuilder.memoryExtract(userContent, aiReply), "对话");
+    }
+
+    @Override
+    @Async("aiExecutor")
+    public void extractDiaryAsync(String userId, String diaryContent) {
+        if (diaryContent == null || diaryContent.trim().isEmpty()) return;
+        // 日记可能较长，提取时只送前 1500 字（与情绪分析一致）
+        String snippet = diaryContent.length() > 1500 ? diaryContent.substring(0, 1500) : diaryContent;
+        doExtract(userId, PromptBuilder.memoryExtractDiary(snippet), "日记");
+    }
+
+    /** 记忆提取公共流程：按 prompt 让 AI 抽 JSON → 入库 → 顺手向量化；任何失败都不影响主流程 */
+    private void doExtract(String userId, String prompt, String source) {
         try {
-            String prompt = PromptBuilder.memoryExtract(userContent, aiReply);
             String json = aiClient.chat(
                     Arrays.asList(new AiMessage("user", prompt)), true);
             if (json == null) {
@@ -165,7 +178,7 @@ public class MemoryServiceImpl implements MemoryService {
             }
         } catch (Exception e) {
             // 记忆提取失败只记日志，绝不影响主流程
-            log.error("记忆提取失败, userId={}", userId, e);
+            log.error("{}记忆提取失败, userId={}", source, userId, e);
         }
     }
 
@@ -230,7 +243,7 @@ public class MemoryServiceImpl implements MemoryService {
     private static final int CHUNKS_PER_DIARY = 8;
 
     @Override
-    @Async("taskExecutor")
+    @Async("aiExecutor")
     public void chunkDiary(String userId, String diaryId, String title, String content) {
         try {
             if (content == null || content.trim().length() < 20) return;

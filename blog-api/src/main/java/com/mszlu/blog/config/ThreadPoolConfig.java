@@ -27,9 +27,29 @@ public class ThreadPoolConfig {
         executor.setThreadNamePrefix("blog-task-");
         // 等待所有任务结束后再关闭线程池
         executor.setWaitForTasksToCompleteOnShutdown(true);
-        // 设置拒绝策略：由调用线程处理，防止任务丢失
+        // 拒绝策略：由调用线程处理，防止任务丢失
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         //执行初始化
+        executor.initialize();
+        return executor;
+    }
+
+    /**
+     * AI 调用专用线程池（情绪分析、记忆提取等）。
+     * AI 调用是 I/O 密集型（绝大部分时间在等 HTTP 响应），线程可以开多一些，
+     * 与通用 taskExecutor 隔离，避免互相挤占。
+     */
+    @Bean("aiExecutor")
+    public Executor aiExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(8);
+        executor.setMaxPoolSize(16);
+        executor.setQueueCapacity(200);
+        executor.setKeepAliveSeconds(60);
+        executor.setThreadNamePrefix("ai-call-");
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        // 队列满时由调用线程执行：对异步任务相当于自然限流，防止任务丢失
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         executor.initialize();
         return executor;
     }

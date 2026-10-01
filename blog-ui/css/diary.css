@@ -706,7 +706,8 @@ body::before {
 }
 #pixelMadeline[src*="madeline-sitdown.gif"],
 #pixelMadeline[src*="madeline-sleep.gif"],
-#pixelMadeline[src*="madeline-wakeup.gif"] { width: 100px !important; height: auto !important; }
+#pixelMadeline[src*="madeline-wakeup.gif"],
+#pixelMadeline[src*="fallPose"] { width: 100px !important; height: auto !important; }
 .madeline-row .msg-bubble {
     border-radius: 0;
     background: rgba(24, 12, 38, 0.92);

@@ -143,6 +143,20 @@ public class LoginServiceImpl implements LoginService {
     }
 
     @Override
+    public void refreshUserCache(String token, SysUser sysUser) {
+        try {
+            // 保持原 30 天 TTL：用 getExpire 读出剩余秒数后重写，过期后自然重新登录
+            String key = "Token_" + token;
+            Long ttl = redisTemplate.getExpire(key, TimeUnit.SECONDS);
+            if (ttl != null && ttl > 0) {
+                redisTemplate.opsForValue().set(key, JSON.toJSONString(sysUser), ttl, TimeUnit.SECONDS);
+            }
+        } catch (Exception e) {
+            // 缓存刷新失败不影响写库结果，下次登录自然一致
+        }
+    }
+
+    @Override
     public Result logout(String token) {
         redisTemplate.delete("Token_" + token);
         return Result.success(null);

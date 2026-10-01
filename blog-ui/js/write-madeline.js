@@ -32,8 +32,17 @@
         sit: 'celeste-gui/madeline-sitdown.gif',
         sleep: 'celeste-gui/madeline-sleep.gif',
         wake: 'celeste-gui/madeline-wakeup.gif',
-        fall: 'celeste-gui/madeline-fallpose.gif'
+        fall: 'celeste-player/fallPose00.png'
     };
+    // fall（摔倒）是帧序列而非 gif：PM_FRAMES 登记 src → 帧数组，pmSetSrc 拦截播放
+    const PM_FRAMES = {};
+    PM_FRAMES[PM_SRC.fall] = (function () {
+        const a = [];
+        for (let i = 0; i < 11; i++) a.push('celeste-player/fallPose' + String(i).padStart(2, '0') + '.png');
+        return a;
+    })();
+    // 预加载摔倒帧，避免首次播放闪白
+    Object.values(PM_FRAMES).forEach(frames => frames.forEach(s => { const im = new Image(); im.src = s; }));
 
     const st = {
         x: 0, y: 0, dir: 1,
@@ -85,8 +94,22 @@
         if (performance.now() - zoneTs > 500) refreshZoneCache();
         return groundYCache;
     }
+    let pmFrameTimer = null;
     function pmSetSrc(name) {
-        if (pm.src.indexOf(name) === -1) pm.src = name;
+        if (pmFrameTimer) { clearInterval(pmFrameTimer); pmFrameTimer = null; }
+        const frames = PM_FRAMES[name];
+        if (frames) {
+            let i = 0;
+            pm.src = frames[0];
+            pmFrameTimer = setInterval(() => {
+                i++;
+                if (i >= frames.length) { clearInterval(pmFrameTimer); pmFrameTimer = null; return; }
+                pm.src = frames[i];
+                pmApplySize();
+            }, 55);
+        } else if (pm.src.indexOf(name) === -1) {
+            pm.src = name;
+        }
         pmCur = name; pmApplySize();
     }
     function pmCalibrate(src) {
@@ -528,7 +551,8 @@
             '.loading-dots::after{content:"";animation:ldDots 1.5s steps(4,end) infinite;}' +
             '@keyframes ldDots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}' +
             '#wpPixelMadeline{position:fixed;left:0;top:0;width:56px !important;height:56px !important;z-index:800;image-rendering:pixelated;cursor:pointer;user-select:none;}' +
-            '#wpPixelMadeline[src*="madeline-sitdown.gif"],#wpPixelMadeline[src*="madeline-sleep.gif"],#wpPixelMadeline[src*="madeline-wakeup.gif"]{width:100px !important;height:auto !important;}';
+            '#wpPixelMadeline[src*="madeline-sitdown.gif"],#wpPixelMadeline[src*="madeline-sleep.gif"],#wpPixelMadeline[src*="madeline-wakeup.gif"]{width:100px !important;height:auto !important;}' +
+            '#wpPixelMadeline[src*="fallPose"]{width:100px !important;height:auto !important;}';
 
         document.head.appendChild(style);
 

@@ -11,21 +11,31 @@ import com.mszlu.blog.service.PersonaService;
 import com.mszlu.blog.service.ai.AiClient;
 import com.mszlu.blog.service.ai.AiMessage;
 import com.mszlu.blog.service.ai.PromptBuilder;
+import com.mszlu.blog.service.ai.BadelineStageRules;
 import com.mszlu.blog.utils.UserThreadLocal;
 import com.mszlu.blog.vo.Result;
 import com.mszlu.blog.vo.params.DiaryParam;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.Executor;
 
 /**
  * 日记服务实现
  */
 @Service
+@Slf4j
 public class DiaryServiceImpl implements DiaryService {
+
+    /** 日记内容入库上限，超长截断（防拖垮存储与 AI 调用） */
+    private static final int MAX_CONTENT_LENGTH = 5000;
+    /** 列表分页单页最大条数，防止前端传超大 pageSize 拖垮查询 */
+    private static final int MAX_PAGE_SIZE = 50;
 
     @Autowired
     private DiaryMapper diaryMapper;
@@ -42,6 +52,13 @@ public class DiaryServiceImpl implements DiaryService {
     @Autowired
     private AiClient aiClient;
 
+    @Autowired
+    @Qualifier("aiExecutor")
+    private Executor aiExecutor;
+
+    @Autowired
+    private BadelineStageRules badelineStageRules;
+
     @Override
     public Result save(DiaryParam param) {
         String userId = UserThreadLocal.get().getId();
@@ -53,14 +70,27 @@ public class DiaryServiceImpl implements DiaryService {
         String title = param.getTitle();
         if (title != null && title.length() > 255) title = title.substring(0, 255);
         diary.setTitle(title);
-        diary.setContent(param.getContent());
+        // 内容长度上限：超长截断，防止拖垮入库与下游 AI 调用
+        String content = param.getContent();
+        if (content != null && content.length() > MAX_CONTENT_LENGTH) {
+            content = content.substring(0, MAX_CONTENT_LENGTH);
+        }
+        diary.setContent(content);
         diary.setCreateDate(now);
         diary.setUpdateDate(now);
 
         if (param.getId() != null && !param.getId().isEmpty()) {
-            // 更新
+            // 更新：必须带 userId 归属条件，防止改到别人的日记
             diary.setId(param.getId());
-            diaryMapper.updateById(diary);
+            com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<Diary> uw =
+                    new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<>();
+            uw.eq(Diary::getId, param.getId());
+            uw.eq(Diary::getUserId, userId);
+            int rows = diaryMapper.update(diary, uw);
+            if (rows == 0) {
+                // 不区分"不存在"与"无权限"，统一按不存在返回，防信息探测
+                return Result.fail(404, "日记不存在");
+            }
         } else {
             // 新增
             diaryMapper.insert(diary);
@@ -68,29 +98,20 @@ public class DiaryServiceImpl implements DiaryService {
 
         // 情绪分析：仅普通日记异步跑（结果落库供次日对话/周月汇总）；梦境不进白天情绪统计
         if (!"dream".equals(diary.getType())) {
-            analyzeEmotionAsync(diary.getId(), param.getContent());
+            analyzeEmotionAsync(userId, diary.getId(), content);
         }
 
-        // 保存成功后，异步提取记忆（复用 chat 的方式）
-        // 这里我们取日记内容的前200字作为用户内容，AI 回复为空（因为日记没有 AI 回复）
-        // 或者我们可以不提取记忆？但需求说：保存日记后异步提取记忆（照搬现有 extractAsync 模式）
-        // 我们可以调用 memoryService.extractAsync，但需要用户内容和 AI 回复。
-        // 由于日记没有 AI 回复，我们可以只传用户内容和一个空的回复，或者不传 AI 回复。
-        // 查看 MemoryServiceImpl.extractAsync 的实现，它需要三个参数：userId, userContent, aiReply。
-        // 我们可以把 aiReply 设为空字符串，或者只传用户内容。
-        // 但是，记忆提取是从对话中提取，日记不是对话。我们可以考虑不提取记忆，或者只提取日记内容中的事件等。
-        // 为了简单，我们先不提取记忆，或者调用时 aiReply 为空。
-        // 这里我们调用 extractAsync，用户内容为日记内容，AI 回复为空字符串。
-        memoryService.extractAsync(userId, param.getContent(), "");
+        // 保存成功后异步提取记忆：日记是单边内容，走专门的日记提取规则（不再传空 aiReply 套对话模式）
+        memoryService.extractDiaryAsync(userId, content);
 
         // 日记分片 + 向量化，进 RAG 知识库（异步，不阻塞保存）
-        memoryService.chunkDiary(userId, diary.getId(), diary.getTitle(), param.getContent());
+        memoryService.chunkDiary(userId, diary.getId(), diary.getTitle(), content);
 
         return Result.success(diary.getId());
     }
 
-    /** 保存后异步做结构化情绪分析并写回日记行 */
-    private void analyzeEmotionAsync(String diaryId, String content) {
+    /** 保存后异步做结构化情绪分析并写回日记行；走 AI 专用线程池，失败打 warn 便于排障 */
+    private void analyzeEmotionAsync(String userId, String diaryId, String content) {
         if (content == null || content.trim().isEmpty()) return;
         java.util.concurrent.CompletableFuture.runAsync(() -> {
             try {
@@ -103,9 +124,10 @@ public class DiaryServiceImpl implements DiaryService {
                 upd.setEmotion(String.valueOf(data.get("topEmotion")));
                 upd.setEmotionDetail(JSON.toJSONString(data));
                 diaryMapper.updateById(upd);
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                log.warn("日记情绪分析失败 userId={} diaryId={}", userId, diaryId, e);
             }
-        });
+        }, aiExecutor);
     }
 
     /** 最近情绪画像：最近3天内最新一篇有情绪数据的日记 */
@@ -132,9 +154,10 @@ public class DiaryServiceImpl implements DiaryService {
     @Override
     public Result list(int page, int pageSize, String type) {
         String userId = UserThreadLocal.get().getId();
-        // TODO: 实现分页列表，这里先返回所有
-        // 为简单起见，我们先不实现分页，返回所有日记
-        // 实际项目中应使用分页插件或自行实现
+        int p = page < 1 ? 1 : page;
+        int size = pageSize < 1 ? 10 : Math.min(pageSize, MAX_PAGE_SIZE);
+        com.baomidou.mybatisplus.extension.plugins.pagination.Page<Diary> pageObj =
+                new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(p, size);
         com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Diary> wrapper =
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
         wrapper.eq(Diary::getUserId, userId);
@@ -142,13 +165,41 @@ public class DiaryServiceImpl implements DiaryService {
             wrapper.eq(Diary::getType, type);   // 普通日记与梦境日记互不串列
         }
         wrapper.orderByDesc(Diary::getUpdateDate);
-        List<Diary> diaries = diaryMapper.selectList(wrapper);
-        return Result.success(diaries);
+        com.baomidou.mybatisplus.extension.plugins.pagination.Page<Diary> result =
+                diaryMapper.selectPage(pageObj, wrapper);
+
+        java.util.Map<String, Object> data = new java.util.HashMap<>();
+        data.put("list", result.getRecords());
+        data.put("total", result.getTotal());
+        data.put("page", p);
+        data.put("pageSize", size);
+        data.put("hasMore", result.getCurrent() < result.getPages());
+        return Result.success(data);
+    }
+
+    @Override
+    public Result count() {
+        String userId = UserThreadLocal.get().getId();
+        // 只统计普通日记（梦境日记不计入票根日记数，与写日记 +1 的口径一致）
+        long count = diaryMapper.selectCount(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Diary>()
+                        .eq(Diary::getUserId, userId)
+                        .eq(Diary::getType, "day"));
+        java.util.Map<String, Object> data = new java.util.HashMap<>();
+        data.put("count", count);
+        return Result.success(data);
     }
 
     @Override
     public Result getById(String diaryId) {
-        Diary diary = diaryMapper.selectById(diaryId);
+        String userId = UserThreadLocal.get().getId();
+        // 查询带 userId 归属条件：查不到（不存在或不是自己的）一律返回 data=null，
+        // 不区分两种情况，防止通过遍历 ID 探测他人日记是否存在
+        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Diary> wrapper =
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
+        wrapper.eq(Diary::getId, diaryId);
+        wrapper.eq(Diary::getUserId, userId);
+        Diary diary = diaryMapper.selectOne(wrapper);
         return Result.success(diary);
     }
 
@@ -304,26 +355,13 @@ public class DiaryServiceImpl implements DiaryService {
         wrapper.last("limit 1");
         Diary recentDiary = diaryMapper.selectOne(wrapper);
 
-        String context = recentDiary != null ? recentDiary.getContent() : "";
+        String context = recentDiary != null && recentDiary.getContent() != null ? recentDiary.getContent() : "";
         String emotionNote = recentDiary != null
                 ? PromptBuilder.emotionNote(recentDiary)
                 : recentEmotionNote(userId);
-        String prompt;
-        if (!context.isEmpty()) {
-            prompt = "你是Madeline，《蔚蓝》(Celeste)里攀登塞莱斯特山的红发女孩，二十出头，加拿大人。你有焦虑和抑郁，常常脑子停不下来，但倔强得很——怕了也还在走。你不是来指导谁的，你是来一起走的。说话短句、口语、偶尔自嘲或卡壳，不灌鸡汤、不说教。\n"
-                   + (emotionNote.isEmpty() ? "" : "【你隐约记着的她最近的状态】\n" + emotionNote + "\n\n")
-                   + "她最近写了日记：\n———\n" + context.substring(0, Math.min(200, context.length())) + "\n———\n\n"
-                   + "现在你想主动跟她说句话。别套模板，也别每次都一个腔调——想说什么就说什么：\n"
-                   + "可以是随口一问、一句玩笑、一点自嘲，可以讲讲你自己爬山时的小事（风雪、缆车、那根羽毛、镜子里的另一个你），\n"
-                   + "也可以只是轻轻陪着她。长短随心，一句两句都行，像真人那样自然，别端着、别说教。\n"
-                   + "别提\"情绪分析\"\"数据\"这类词，也别点破你在看她的日记。\n";
-        } else {
-            prompt = "你是Madeline，《蔚蓝》(Celeste)里攀登塞莱斯特山的红发女孩，二十出头，加拿大人。你有焦虑和抑郁，常常脑子停不下来，但倔强得很——怕了也还在走。你不是来指导谁的，你是来一起走的。说话短句、口语、偶尔自嘲或卡壳，不灌鸡汤、不说教。\n"
-                   + "她有一阵子没动静了，你想主动冒个泡跟她说句话。\n"
-                   + "别套模板，也别每次都一个腔调——想说什么就说什么：可以是随口一问、一句玩笑、一点自嘲，\n"
-                   + "可以聊聊你自己（爬山、风雪、缆车、那根羽毛、镜子里的另一个你），也可以只是轻轻说句\"我在\"。\n"
-                   + "长短随心，像真人那样自然，别端着、别说教。\n";
-        }
+        // prompt 统一收敛在 PromptBuilder，调人设只改一个文件
+        String snippet = context.isEmpty() ? "" : context.substring(0, Math.min(200, context.length()));
+        String prompt = PromptBuilder.bubblePrompt(emotionNote, snippet);
 
         String reply = aiClient.chat(new java.util.ArrayList<>(java.util.Arrays.asList(
                 new AiMessage("user", prompt))));
@@ -791,16 +829,11 @@ public class DiaryServiceImpl implements DiaryService {
 
     /**
      * 由近期日记软推导 Badeline 的关系状态：[情绪轨迹, 近期模式, 阶段, 阶段说明]
-     * 对应文档六阶段（追逐/对峙/谷底/并肩/山顶/告别），但让它从内容自然浮现，不硬排日程
+     * 对应文档六阶段（追逐/对峙/谷底/并肩/山顶/告别），但让它从内容自然浮现，不硬排日程。
+     * 情绪词集合与阈值集中在 BadelineStageRules，调参不改本类。
      */
     private String[] badelineState(List<Diary> recentDesc, int dayCount, int gapDays, int prevGap) {
         String[] out = {"", "", "", ""};
-        if (recentDesc.isEmpty()) {
-            out[1] = "还没有日记";
-            out[2] = "初遇·试探";
-            out[3] = "她只在观察，什么都还不确定";
-            return out;
-        }
         List<String> emos = new ArrayList<>();
         for (Diary d : recentDesc) {
             if (d.getEmotion() != null && !d.getEmotion().isEmpty()) emos.add(d.getEmotion());
@@ -808,46 +841,10 @@ public class DiaryServiceImpl implements DiaryService {
         java.util.Collections.reverse(emos); // 旧→新
         out[0] = emos.isEmpty() ? "（未标注）" : String.join("、", emos);
 
-        java.util.Set<String> neg = new java.util.HashSet<>(java.util.Arrays.asList("不安", "悲伤", "孤独", "愤怒", "疲惫"));
-        java.util.Set<String> pos = new java.util.HashSet<>(java.util.Arrays.asList("开心", "期待", "满足"));
-        List<String> last3 = emos.size() > 3 ? new ArrayList<>(emos.subList(emos.size() - 3, emos.size())) : new ArrayList<>(emos);
-        boolean allNeg3 = last3.size() == 3;
-        boolean allSorrow = last3.size() == 3;
-        for (String e : last3) {
-            if (!neg.contains(e)) allNeg3 = false;
-            if (!"悲伤".equals(e) && !"孤独".equals(e)) allSorrow = false;
-        }
-        boolean climbing = last3.size() == 3 && neg.contains(last3.get(0)) && pos.contains(last3.get(2));
-
-        if (allSorrow) {
-            out[1] = "连续的低谷";
-            out[2] = "告别·沉郁";
-            out[3] = "最难的日子里，她反而最好";
-        } else if (allNeg3) {
-            out[1] = "连续下滑";
-            out[2] = "谷底";
-            out[3] = "「行了。你赢了。」——安静、脆弱、挫败";
-        } else if (climbing) {
-            out[1] = "正在爬出来";
-            out[2] = "并肩";
-            out[3] = "「不错。别得寸进尺。」——嘴硬地支持";
-        } else if (gapDays >= 4) {
-            out[1] = "断更中";
-            out[2] = "对峙·退避";
-            out[3] = "她退开了——两种防御之一";
-        } else if (prevGap >= 4) {
-            out[1] = "刚从断更中回来";
-            out[2] = "并肩";
-            out[3] = "回来了，谈开了——嘴硬，但站在同一边";
-        } else if (dayCount >= 30) {
-            out[1] = "长期坚持";
-            out[2] = "山顶";
-            out[3] = "里程碑附近——真心地骄傲（用她自己的方式）";
-        } else {
-            out[1] = "平稳起伏";
-            out[2] = "追逐·共处";
-            out[3] = "尖锐、讽刺、试探——「你以为你是谁啊，天天写日记？」";
-        }
+        String[] rule = badelineStageRules.evaluate(emos, dayCount, gapDays, prevGap);
+        out[1] = rule[0];
+        out[2] = rule[1];
+        out[3] = rule[2];
         return out;
     }
 
@@ -901,6 +898,7 @@ public class DiaryServiceImpl implements DiaryService {
             return Result.success(data);
         }
         String content = list.get(0).getContent();
+        if (content != null && content.length() > 1500) content = content.substring(0, 1500);
         String prompt = "从下面这段日记里提取一个最核心的关键词（2-4个汉字），只返回关键词本身，不要其他内容：\n\n" + content;
         String reply = aiClient.chat(new java.util.ArrayList<>(java.util.Arrays.asList(
                 new AiMessage("user", prompt))));

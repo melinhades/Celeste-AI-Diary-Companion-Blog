@@ -384,7 +384,7 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     <div class="hg-tip">点击收下</div>
 </div>
 
-<script src="js/api.js"></script>
+<script src="js/api.js?v=20260925"></script>
 <script>
     // ===== 音频手势解锁（修复音效不生效） =====
     ['pointerdown', 'keydown'].forEach(function(ev) {
@@ -1053,6 +1053,10 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
         render();
     }
     render();
+    // 草莓籽组合成草莓等场景下余额变化时，商店余额实时同步
+    window.addEventListener('berries:change', render);
+    // 进商店先拉后端权威余额（他端消费/获得后保持一致）
+    if (typeof window.syncBerryBalance === 'function') syncBerryBalance();
 
     // ===== 心之水晶兑换：可反复炼制，每颗追加进 heartDoorHearts（Badeline 人格光谱） =====
     function buyCrystal(btn) {

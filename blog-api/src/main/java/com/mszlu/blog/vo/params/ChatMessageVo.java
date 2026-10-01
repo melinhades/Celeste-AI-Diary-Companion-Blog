@@ -5,6 +5,9 @@ import lombok.Data;
 @Data
 public class ChatMessageVo {
 
+    /** 消息 ID，聊天历史游标分页（beforeId）时用 */
+    private String id;
+
     private String role;
 
     private String content;

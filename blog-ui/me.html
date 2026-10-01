@@ -96,7 +96,7 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 
 </div>
 
-<script src="js/api.js"></script>
+<script src="js/api.js?v=20260925"></script>
 <script>
     // 字体就绪后强制刷新，让 input 立即切到 Renogare（不需要点击）
     if (document.fonts && document.fonts.ready) {
@@ -117,18 +117,74 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     document.addEventListener('click', tryPlayMeBgm);
     document.addEventListener('keydown', tryPlayMeBgm);
 
-    const diaries = parseInt(localStorage.getItem('diarySaveCount') || '0');
+    // ===== 日记数：后端 /diary/count 为权威值（跨设备一致），接口未就绪前先用旧本地计数兜底渲染 =====
+    let diaries = parseInt(localStorage.getItem('diarySaveCount') || '0');
+    let shineStarted = false;
+    const CARD_STAMPS = ['farewell', 'flag', 'goldberry', 'goldheart', 'heart', 'cassettes'];
 
-    const tier = diaries >= 100 ? 3 : diaries >= 60 ? 2 : diaries >= 30 ? 1 : 0;
+    function createShine(elId, prefix) {
+        const el = document.getElementById(elId);
+        const frames = [];
+        for (let i = 0; i <= 5; i++) frames.push('namespace/' + prefix + '00' + i + '.png');
+        frames.forEach(s => { const im = new Image(); im.src = s; });
+        let timer = null;
+        return function () {
+            let i = 0;
+            el.src = frames[0];
+            el.style.opacity = '1';
+            clearInterval(timer);
+            timer = setInterval(() => {
+                i++;
+                if (i >= frames.length) {
+                    clearInterval(timer);
+                    timer = null;
+                    el.style.opacity = '0';
+                    return;
+                }
+                el.src = frames[i];
+            }, 90);
+        };
+    }
 
-    // 头像：日记<10 普通，≥10 金色
-    const portraitSrc = diaries >= 10
-        ? 'namespace/portraitOverlayGold.png'
-        : 'namespace/portraitOverlay.png';
-    document.getElementById('cePortrait').src = portraitSrc;
-    document.getElementById('cePortrait').onerror = function() { this.style.display = 'none'; };
+    function renderDiaryStats(n) {
+        diaries = n;
+        // 头像：日记<10 普通，≥10 金色
+        const portrait = document.getElementById('cePortrait');
+        portrait.src = diaries >= 10 ? 'namespace/portraitOverlayGold.png' : 'namespace/portraitOverlay.png';
+        portrait.onerror = function() { this.style.display = 'none'; };
+        document.getElementById('ticketDiaryCount').textContent = '× ' + diaries;
+        // 图案铺满卡片（每写一篇解锁一枚，最多 6 枚）
+        const box = document.getElementById('cardStamps');
+        box.innerHTML = '';
+        const stampCount = Math.min(diaries, CARD_STAMPS.length);
+        for (let i = 0; i < stampCount; i++) {
+            const im = document.createElement('img');
+            im.src = 'celeste-journal/' + CARD_STAMPS[i] + '.png';
+            im.alt = CARD_STAMPS[i];
+            box.appendChild(im);
+        }
+        // 周期性 shine 特效（只启动一次）
+        if (diaries >= 10 && !shineStarted) {
+            shineStarted = true;
+            const playCardShine = createShine('cardShine', 'cardShine');
+            const playTicketShine = createShine('ticketShine', 'ticketShine');
+            (function playShineLoop() {
+                playCardShine();
+                setTimeout(playTicketShine, 92);
+                setTimeout(playShineLoop, 2800);
+            })();
+        }
+    }
+    renderDiaryStats(diaries);
+    api('/diary/count', 'GET').then(res => {
+        if (res.success && res.data && typeof res.data.count === 'number') {
+            renderDiaryStats(res.data.count);
+            localStorage.setItem('diarySaveCount', String(res.data.count));
+        }
+    });
 
-    // 用户头像
+    // 用户头像 / 昵称 / 个性签名：均走后端
+    let serverSignature = '';
     api('/users/currentUser', 'GET').then(res => {
         if (res.success && res.data && res.data.avatar) {
             const avatarUrl = res.data.avatar.startsWith('http')
@@ -145,15 +201,19 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
         }
         if (res.success && res.data) {
             document.getElementById('ticketName').textContent = res.data.nickname || res.data.account || '未命名';
+            serverSignature = res.data.signature || '';
+            const sigEl0 = document.getElementById('ticketSig');
+            if (sigEl0) sigEl0.textContent = serverSignature || '点击编辑个性签名';
         }
     });
 
-    // 个性签名：点击编辑，localStorage 存储
-    const sigEl = document.getElementById('ticketSig');
-    const savedSig = localStorage.getItem('meSignature');
-    if (savedSig) sigEl.textContent = savedSig;
-    document.getElementById('cePoemPage').addEventListener('click', function() {
-        const current = sigEl.textContent === '点击编辑个性签名' ? '' : sigEl.textContent;
+    // 个性签名：点击编辑，PUT /users/signature 持久化到后端
+    const SIG_PLACEHOLDER = '点击编辑个性签名';
+    document.getElementById('cePoemPage').addEventListener('click', function(e) {
+        if (e.target.tagName === 'INPUT') return;   // 正在编辑中不重复触发
+        const sigEl = document.getElementById('ticketSig');
+        if (!sigEl) return;
+        const current = sigEl.textContent === SIG_PLACEHOLDER ? '' : sigEl.textContent;
         const input = document.createElement('input');
         input.type = 'text';
         input.value = current;
@@ -162,76 +222,43 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
         sigEl.replaceWith(input);
         input.focus();
         input.select();
+        let done = false;
         function save() {
+            if (done) return;
+            done = true;
             const val = input.value.trim();
             const span = document.createElement('span');
             span.id = 'ticketSig';
-            span.textContent = val || '点击编辑个性签名';
+            // 乐观展示，保存失败再回退
+            span.textContent = val || SIG_PLACEHOLDER;
             input.replaceWith(span);
-            if (val) localStorage.setItem('meSignature', val);
+            api('/users/signature', 'PUT', { signature: val }).then(r => {
+                if (r.success) {
+                    serverSignature = (r.data && r.data.signature) || '';
+                    span.textContent = serverSignature || SIG_PLACEHOLDER;
+                } else {
+                    span.textContent = serverSignature || SIG_PLACEHOLDER;
+                    showToast('签名保存失败，请重试', 'error');
+                }
+            });
         }
         input.addEventListener('blur', save);
-        input.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); save(); } });
+        input.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); input.blur(); } });
     });
 
+    // 草莓数：先显示本地缓存，再从后端拉权威值；草莓籽组合/写日记等 +1 时事件实时同步
     document.getElementById('ticketBerryCount').textContent = '× ' + berryBalance();
-    document.getElementById('ticketDiaryCount').textContent = '× ' + diaries;
+    window.addEventListener('berries:change', function (e) {
+        document.getElementById('ticketBerryCount').textContent = '× ' + e.detail.balance;
+    });
+    syncBerryBalance();
 
     // 羽毛数：后端实时拉取
     api('/feather/count', 'GET').then(res => {
-        console.log('羽毛返回', res);
         if (res.success && res.data != null) {
-            // 重点：从对象里面取出数字属性，比如 .count
             document.getElementById('ticketFeatherCount').textContent = '× ' + res.data.count;
         }
     });
-    // 图案铺满卡片
-    const CARD_STAMPS = ['farewell', 'flag', 'goldberry', 'goldheart', 'heart', 'cassettes'];
-    (function renderCardStamps() {
-        const box = document.getElementById('cardStamps');
-        const n = Math.min(diaries, CARD_STAMPS.length);
-        for (let i = 0; i < n; i++) {
-            const im = document.createElement('img');
-            im.src = 'celeste-journal/' + CARD_STAMPS[i] + '.png';
-            im.alt = CARD_STAMPS[i];
-            box.appendChild(im);
-        }
-    })();
-
-    // 周期性 shine 特效（日记≥10 时触发）
-    if (diaries >= 10) {
-        function createShine(elId, prefix) {
-            const el = document.getElementById(elId);
-            const frames = [];
-            for (let i = 0; i <= 5; i++) frames.push('namespace/' + prefix + '00' + i + '.png');
-            frames.forEach(s => { const im = new Image(); im.src = s; });
-            let timer = null;
-            return function () {
-                let i = 0;
-                el.src = frames[0];
-                el.style.opacity = '1';
-                clearInterval(timer);
-                timer = setInterval(() => {
-                    i++;
-                    if (i >= frames.length) {
-                        clearInterval(timer);
-                        timer = null;
-                        el.style.opacity = '0';
-                        return;
-                    }
-                    el.src = frames[i];
-                }, 90);
-            };
-        }
-        const playCardShine = createShine('cardShine', 'cardShine');
-        const playTicketShine = createShine('ticketShine', 'ticketShine');
-        function playShineLoop() {
-            playCardShine();
-            setTimeout(playTicketShine, 92);
-            setTimeout(playShineLoop, 2800);
-        }
-        playShineLoop();
-    }
 
 </script>
 <script src="js/seed.js"></script>

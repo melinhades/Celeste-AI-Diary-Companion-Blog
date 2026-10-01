@@ -12,4 +12,10 @@ public class LoginUserVo {
     private String nickname;
 
     private String avatar;
+
+    /** 草莓余额 */
+    private Integer berry;
+
+    /** 个性签名 */
+    private String signature;
 }

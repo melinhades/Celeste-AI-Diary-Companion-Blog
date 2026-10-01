@@ -923,7 +923,7 @@ body:has(.ds-world.panned) #strawberryBonfire { opacity:0; pointer-events:none; 
         <div id="badelineDialogText"></div>
     </div>
 </div>
-<script src="js/api.js"></script>
+<script src="js/api.js?v=20260925"></script>
 <script src="js/badeline-voice.js"></script>
 <script>
     // ===== 雪花动画（mountainSnow 原版贴图） =====
@@ -1320,9 +1320,9 @@ function stopPeSnow() {
     });
     async function load() {
         cards.innerHTML = '<div class="empty"><span class="em">📖</span>正在搬书……</div>';
-        const res = await api('/diary/list?type=day', 'GET');
-        if (res.success && Array.isArray(res.data)) {
-            data = res.data;
+        const res = await api('/diary/list?page=1&pageSize=50&type=day', 'GET');
+        if (res.success && res.data && Array.isArray(res.data.list)) {
+            data = res.data.list;
             if (window.__setDoorProgress) window.__setDoorProgress(data.length);
             if (!data.length) { cards.innerHTML = '<div class="empty"><svg class="empty-pix" viewBox="0 0 32 24" shape-rendering="crispEdges" aria-hidden="true">' +
                 '<rect x="5" y="3" width="1" height="1" fill="#ffe66d"/><rect x="16" y="4" width="1" height="1" fill="#a78bfa"/><rect x="27" y="5" width="1" height="1" fill="#ffe66d"/><rect x="3" y="7" width="1" height="1" fill="#ffffff"/>' +
@@ -2961,7 +2961,7 @@ function stopPeSnow() {
         }
         function loadDreams() {
             return api('/diary/list?page=1&pageSize=50&type=dream', 'GET').then(function (res) {
-                dreams = (res && res.success && Array.isArray(res.data)) ? res.data : [];
+                dreams = (res && res.success && res.data && Array.isArray(res.data.list)) ? res.data.list : [];
                 renderDreamList();
                 renderDreamPick();
                 return dreams;

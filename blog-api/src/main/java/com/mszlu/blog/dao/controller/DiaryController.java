@@ -2,7 +2,11 @@ package com.mszlu.blog.dao.controller;
 
 import com.mszlu.blog.service.DiaryService;
 import com.mszlu.blog.vo.Result;
+import com.mszlu.blog.vo.params.BadelineChatParam;
+import com.mszlu.blog.vo.params.CompanionParam;
 import com.mszlu.blog.vo.params.DiaryParam;
+import com.mszlu.blog.vo.params.DreamNightParam;
+import com.mszlu.blog.vo.params.OshiroChatParam;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,7 +28,7 @@ public class DiaryController {
         return diaryService.companion(param.getDraft());
     }
 
-    /** 获取日记列表（分页）；type=day 普通日记 / type=dream 梦境日记，不传则全部 */
+    /** 获取日记列表（真分页）；type=day 普通日记 / type=dream 梦境日记，不传则全部 */
     @GetMapping("list")
     public Result list(@RequestParam(defaultValue = "1") int page,
                        @RequestParam(defaultValue = "10") int pageSize,
@@ -32,7 +36,13 @@ public class DiaryController {
         return diaryService.list(page, pageSize, type);
     }
 
-    /** 获取日记详情 */
+    /** 当前用户普通日记总数（轻量 count，不拉列表） */
+    @GetMapping("count")
+    public Result count() {
+        return diaryService.count();
+    }
+
+    /** 获取日记详情（只能读自己的日记） */
     @GetMapping("detail")
     public Result getById(@RequestParam String diaryId) {
         return diaryService.getById(diaryId);
@@ -92,48 +102,10 @@ public class DiaryController {
         return diaryService.heartCrystal();
     }
 
-    /** 请求体体：用于 companion 接口 */
-    static class CompanionParam {
-        private String draft;
-
-        public String getDraft() {
-            return draft;
-        }
-
-        public void setDraft(String draft) {
-            this.draft = draft;
-        }
-    }
-
-    /** Oshiro 聊天请求体 */
-    static class OshiroChatParam {
-        private String message;
-        private String history; // JSON 数组字符串
-
-        public String getMessage() { return message; }
-        public void setMessage(String message) { this.message = message; }
-        public String getHistory() { return history; }
-        public void setHistory(String history) { this.history = history; }
-    }
-
     /** 梦境日记：保存一个梦（与普通日记分开），返回 Madeline 读完梦的感受回应 */
     @PostMapping("dream")
     public Result saveDream(@RequestBody DiaryParam param) {
         return diaryService.saveDream(param);
-    }
-
-    /** Badeline 夜话请求体 */
-    static class DreamNightParam {
-        private String dreamId;  // 指定读哪篇梦；为空则读最近一篇梦境日记
-        private String message;  // 首轮留空 → Badeline 先开口评论这个梦
-        private String history;  // JSON 数组字符串 [{role:'user'|'assistant', content:'...'}]
-
-        public String getDreamId() { return dreamId; }
-        public void setDreamId(String dreamId) { this.dreamId = dreamId; }
-        public String getMessage() { return message; }
-        public void setMessage(String message) { this.message = message; }
-        public String getHistory() { return history; }
-        public void setHistory(String history) { this.history = history; }
     }
 
     /** Badeline 夜话：她在梦里读你的梦，用影子视角回应 */
@@ -146,19 +118,5 @@ public class DiaryController {
     @PostMapping("badeline-chat")
     public Result badelineChat(@RequestBody BadelineChatParam param) {
         return diaryService.badelineChat(param.getMessage(), param.getHistory(), param.getHearts());
-    }
-
-    /** Badeline 聊天请求体 */
-    static class BadelineChatParam {
-        private String message;
-        private String history; // JSON 数组字符串 [{role:'user'|'assistant', content:'...'}]
-        private String hearts;  // JSON 数组字符串 [{color,title,desc,seq}]
-
-        public String getMessage() { return message; }
-        public void setMessage(String message) { this.message = message; }
-        public String getHistory() { return history; }
-        public void setHistory(String history) { this.history = history; }
-        public String getHearts() { return hearts; }
-        public void setHearts(String hearts) { this.hearts = hearts; }
     }
 }
