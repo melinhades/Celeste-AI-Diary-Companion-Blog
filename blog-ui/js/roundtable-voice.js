@@ -256,6 +256,17 @@
     /* ===== 节拍器泵：发声与 delta 到达时机彻底解耦 =====
        pushText 只记账；泵按节奏出声。一句完整发言 = per → A → B → C 轮转（seq 在 playOne 里推进） */
     var pumpTimer = null;
+    /* Madeline 最近一次情绪（playOne 更新），退出页面时写入共享存储供 sing 页读取 */
+    var lastMadelineEmotion = null;
+    window.addEventListener('pagehide', function () {
+        if (!lastMadelineEmotion) return;
+        try {
+            localStorage.setItem('madeline_emotion', JSON.stringify({
+                emotion: lastMadelineEmotion, source: 'roundtable', ts: Date.now()
+            }));
+        } catch (e) {}
+    });
+
     function startPump() { if (!pumpTimer) pumpTimer = setInterval(pump, PUMP_MS); }
     function stopPump() { if (pumpTimer) { clearInterval(pumpTimer); pumpTimer = null; } }
 
@@ -267,6 +278,7 @@
         }
         if (cur.id === 'madeline') {
             var md = inferMadeline(tail);
+            lastMadelineEmotion = md;   // 供退出时写入共享情绪存储
             playLoopBlip(MADE_BASE, md, cur.seq,
                 pickRate(MADE_RATE[md]), MADE_VOL[md] + (Math.random() - 0.5) * 0.08, 'std');
         } else if (cur.id === 'theo') {

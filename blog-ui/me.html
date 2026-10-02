@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
@@ -13,10 +13,11 @@
 @font-face { font-family:'Renogare'; src:url('celeste-font-en/Renogare-Regular.otf') format('opentype'); font-display:swap; }
 @font-face { font-family:'CelesteZH'; src:url('fonts/NotoSansCJKsc-Medium.otf') format('opentype'); font-display:swap; }
 body { min-height:100vh; background:url('celeste-gui/me-bg.webp') center/cover no-repeat fixed; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; }
-.topbar { position:fixed; top:14px; left:16px; z-index:20; }
-.topbar a { display:inline-block; padding:8px 14px; background:rgba(22,34,60,.88); color:#ffe36d; border:2px solid #ffe36d; border-radius:6px; text-decoration:none; font-size:13px; }
-h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family:'Press Start 2P',monospace; font-size:15px; color:#ffe36d; text-shadow:0 2px 0 rgba(0,0,0,.6); letter-spacing:2px; z-index:20; }
-.wrap { max-width:680px; margin:0 auto; padding:190px 20px 40px; }
+/* 冰山返回主页按钮（同 diary/shop 的 #homePosterBtn） */
+#homePosterBtn { position:fixed; top:16px; left:16px; z-index:900; width:96px; height:96px; padding:0; border:none; background:transparent; cursor:pointer; transition:transform .2s, filter .2s; }
+#homePosterBtn img { width:100%; height:100%; object-fit:contain; display:block; }
+#homePosterBtn:hover { transform:translateY(-2px) scale(1.05); filter:drop-shadow(1px 0 0 #10101c) drop-shadow(-1px 0 0 #10101c) drop-shadow(0 1px 0 #10101c) drop-shadow(0 -1px 0 #10101c) drop-shadow(0 0 10px rgba(200,235,255,1)) drop-shadow(0 0 24px rgba(120,190,255,.8)); }
+.wrap { max-width:680px; margin:0 auto; padding:118px 20px 40px; }
 .empty { color:rgba(255,255,255,.45); text-align:center; padding:20px; }
 
 /* ===== Celeste 存档卡 + 票根：同尺寸，票根在卡片下方，两侧圆弧露出 ===== */
@@ -53,8 +54,9 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 <audio id="meBgm" loop autoplay>
     <source src="bgm/madeline-and-theo.mp3" type="audio/mpeg">
 </audio>
-<h1>MY SPACE</h1>
-<div class="topbar"><a href="index.html">← 回首页</a></div>
+<button id="homePosterBtn" title="回到主页 · My Mountain" onclick="location.href='index.html'">
+    <img src="celeste-gui/mymountain_icon.png" alt="My Mountain" loading="lazy" decoding="async">
+</button>
 
 <div class="wrap">
 
@@ -261,6 +263,6 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     });
 
 </script>
-<script src="js/seed.js?v=20261002"></script>
+<script src="js/seed.js?v=20261002d"></script>
 </body>
 </html>

@@ -7,157 +7,365 @@
     <title>消息 · Celeste Blog</title>
     <link rel="stylesheet" href="css/common.css">
     <style>
-    body::after {
-        content:''; position:fixed; left:0; right:0; top:0; bottom:-12%; /* 底边下移：素材图底部自带白色条带，cover 缩放后会露出在视口底部 */
-        background:url('celeste-areas/ForsakenCity01.webp') center/cover no-repeat;
-        opacity:0.25; pointer-events:none; z-index:0;
+    /* ============================================================
+       Midnight Summit —— Instagram 风格消息中心
+       午夜雪山 + 极光光晕 + 玻璃层；冰川蓝为单一强调色
+       ============================================================ */
+    :root {
+        --ink: #f2f6ff;
+        --ink-2: rgba(226,235,255,.58);
+        --ink-3: rgba(226,235,255,.38);
+        --glass: rgba(255,255,255,.055);
+        --glass-2: rgba(255,255,255,.09);
+        --line: rgba(255,255,255,.09);
+        --line-2: rgba(140,190,255,.28);
+        --ice: #3aa0ff;
+        --ice-deep: #1677e5;
+        --ice-glow: rgba(64,164,255,.4);
+        --mint: #5eead4;
+        --rose: #ff5d8f;
+        --green: #46d686;
+        --font: 'Renogare','CelesteZH','PingFang SC','Microsoft YaHei',-apple-system,sans-serif;
+        --font-en: 'Renogare',var(--font);
     }
-    /* ===== 实时聊天：Instagram 风格消息流（无外框，气泡直铺页面） ===== */
-    .chat-wrap { position:relative; z-index:3; max-width:680px; margin:0 auto; padding:16px 18px 32px; }
-    .chat-head { display:flex; align-items:center; justify-content:space-between; margin:4px 4px 14px; }
-    .chat-title { font-size:18px; font-weight:700; color:#e8e8f0; letter-spacing:.5px; }
-    .chat-status { font-size:12px; color:rgba(200,210,255,.6); }
-    .chat-status .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#888; margin-right:6px; vertical-align:1px; }
-    .chat-status.online .dot { background:#5fe38b; box-shadow:0 0 6px #5fe38b; }
-    .chat-status.offline .dot { background:#ff7b7b; }
+    html { background: #070b16; }
+    body {
+        background: #070b16;
+        color: var(--ink);
+        font-family: var(--font);
+        overflow-x: hidden;
+    }
+    ::selection { background: rgba(64,164,255,.35); }
 
-    /* 消息行：无容器外框，直接铺在页面背景上 */
-    #chatLog { min-height:220px; }
-    .chat-msg { display:flex; align-items:flex-end; gap:9px; margin-bottom:3px; }
-    .chat-msg.other .av {
-        width:30px; height:30px; border-radius:50%; flex-shrink:0;
+    /* 导航图标按钮（与 index 一致：日记本 / 播放键） */
+    .nav-diary-btn { display:inline-block; cursor:pointer; vertical-align:middle; transition:transform .2s, filter .2s; }
+    .nav-diary-btn:hover { transform:scale(1.15); }
+    .nav-diary-btn img { height:36px; width:auto; display:block; filter:drop-shadow(0 0 10px rgba(255,235,59,.7)); }
+
+    /* 雪山实景层（素材底部自带白条，下移遮掉） */
+    body::after {
+        content:''; position:fixed; left:0; right:0; top:0; bottom:-12%;
+        background:url('celeste-areas/ForsakenCity01.webp') center/cover no-repeat;
+        opacity:.46; pointer-events:none; z-index:0;
+    }
+    /* 极光光晕层 */
+    .bg-aurora { position:fixed; inset:0; z-index:0; pointer-events:none; filter:blur(80px); }
+    .bg-aurora span { position:absolute; border-radius:50%; }
+    .bg-aurora span:nth-child(1) {
+        width:520px; height:520px; left:-14%; top:-16%;
+        background:radial-gradient(circle, rgba(94,234,212,.16), transparent 68%);
+    }
+    .bg-aurora span:nth-child(2) {
+        width:600px; height:600px; right:-16%; top:6%;
+        background:radial-gradient(circle, rgba(86,132,255,.20), transparent 68%);
+    }
+    .bg-aurora span:nth-child(3) {
+        width:640px; height:560px; left:24%; bottom:-30%;
+        background:radial-gradient(circle, rgba(244,114,182,.09), transparent 70%);
+    }
+    /* 可读性 scrim：上下压暗 */
+    #chatContainer::before {
+        content:''; position:fixed; inset:0; z-index:1; pointer-events:none;
+        background:
+            linear-gradient(180deg, rgba(7,11,22,.52) 0%, rgba(7,11,22,.16) 22%, rgba(7,11,22,.22) 62%, rgba(7,11,22,.64) 100%);
+    }
+
+    /* ===== 主布局：左 rail / 右内容 ===== */
+    .chat-wrap { position:relative; z-index:3; max-width:960px; margin:0 auto; padding:8px 20px 40px; }
+    .msg-layout { display:flex; gap:22px; align-items:flex-start; }
+    .msg-main { flex:1; min-width:0; }
+
+    /* ===== 左侧 rail ===== */
+    .msg-side {
+        width:250px; flex-shrink:0; position:sticky; top:112px;
+        background:var(--glass); border:1px solid var(--line);
+        border-radius:20px; padding:10px;
+        backdrop-filter:blur(18px) saturate(1.2); -webkit-backdrop-filter:blur(18px) saturate(1.2);
+        box-shadow:0 18px 50px rgba(0,0,0,.35);
+        animation:riseIn .6s cubic-bezier(.2,.8,.25,1) both;
+    }
+    .msg-side-title {
+        font-family:var(--font-en); font-size:10px; letter-spacing:3px;
+        color:var(--ink-3); padding:10px 12px 10px;
+    }
+    .msg-side-item {
+        position:relative; display:flex; align-items:center; gap:11px;
+        padding:9px 12px; border-radius:14px; margin-top:2px;
+        font-size:14px; color:var(--ink-2); cursor:pointer; user-select:none;
+        transition:background .2s, color .2s, transform .2s;
+    }
+    .msg-side-item:hover { background:var(--glass-2); color:var(--ink); transform:translateX(2px); }
+    .msg-side-item.active { background:rgba(64,164,255,.14); color:#fff; }
+    .msg-side-item.active::before {
+        content:''; position:absolute; left:-10px; top:50%; translate:0 -50%;
+        width:3px; height:22px; border-radius:3px;
+        background:linear-gradient(180deg,#6fc3ff,#1f87e8);
+        box-shadow:0 0 10px var(--ice-glow);
+    }
+    .rail-ic {
+        width:40px; height:40px; border-radius:50%; flex-shrink:0;
         display:flex; align-items:center; justify-content:center;
-        font-size:13px; font-weight:700; color:#fff;
+        background:var(--glass-2); border:1px solid var(--line);
+    }
+    .rail-ic svg { width:19px; height:19px; }
+    #sideChat.active .rail-ic {
+        background:linear-gradient(135deg,rgba(94,234,212,.25),rgba(64,164,255,.3));
+        border-color:rgba(120,200,255,.4);
+    }
+    #sideNotify.active .rail-ic {
+        background:rgba(255,93,143,.18); border-color:rgba(255,120,160,.4);
+    }
+    .side-badge {
+        margin-left:auto; background:linear-gradient(135deg,#ff7aa8,#f03370);
+        color:#fff; font-size:10px; min-width:18px; height:18px; line-height:18px;
+        border-radius:9px; text-align:center; padding:0 5px;
+        box-shadow:0 2px 8px rgba(240,51,112,.4);
+    }
+
+    /* ===== 内容头部 hero ===== */
+    .chat-head {
+        display:flex; align-items:center; justify-content:space-between;
+        margin:6px 2px 18px;
+        animation:riseIn .6s .08s cubic-bezier(.2,.8,.25,1) both;
+    }
+    .head-id { display:flex; align-items:center; gap:13px; }
+    .group-av {
+        position:relative; width:52px; height:52px; border-radius:50%;
+        background:conic-gradient(from 200deg,#feda75,#fa7e1e,#d62976,#962fbf,#4f5bd5,#feda75);
+        padding:2px; flex-shrink:0;
+    }
+    .group-av::after {
+        content:''; position:absolute; inset:2px; border-radius:50%;
+        background:#0b1326;
+    }
+    .group-av svg { position:relative; z-index:1; width:100%; height:100%; padding:11px; }
+    .head-id .bell-av {
+        width:52px; height:52px; border-radius:50%; flex-shrink:0;
+        display:flex; align-items:center; justify-content:center;
+        background:rgba(255,93,143,.14); border:1px solid rgba(255,120,160,.35);
+    }
+    .bell-av svg { width:23px; height:23px; }
+    .chat-title { font-size:17px; font-weight:600; color:var(--ink); letter-spacing:.3px; }
+    .chat-status {
+        display:inline-flex; align-items:center; gap:7px;
+        font-size:12px; color:var(--ink-2);
+        background:var(--glass); border:1px solid var(--line);
+        padding:6px 12px; border-radius:20px;
+        backdrop-filter:blur(10px);
+    }
+    .chat-status .dot { width:7px; height:7px; border-radius:50%; background:#7a869e; }
+    .chat-status.online { color:#c9f7dd; border-color:rgba(70,214,134,.3); background:rgba(70,214,134,.08); }
+    .chat-status.online .dot { background:var(--green); box-shadow:0 0 8px var(--green); animation:pulseDot 2s infinite; }
+    .chat-status.offline { color:#ffb4b4; border-color:rgba(255,100,100,.3); background:rgba(255,90,90,.07); }
+    .chat-status.offline .dot { background:#ff6b6b; }
+    @keyframes pulseDot { 0%,100%{opacity:1} 50%{opacity:.45} }
+
+    /* ===== 消息流 ===== */
+    #chatLog { min-height:240px; }
+    .chat-msg {
+        display:flex; align-items:flex-end; gap:10px; margin-bottom:4px;
+        animation:msgIn .32s cubic-bezier(.2,.8,.25,1) both;
+    }
+    @keyframes msgIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
+    @keyframes riseIn { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:none} }
+
+    .chat-msg.other .av {
+        width:32px; height:32px; border-radius:50%; flex-shrink:0;
+        display:flex; align-items:center; justify-content:center;
+        font-size:13px; font-weight:600; color:#fff;
         text-shadow:0 1px 2px rgba(0,0,0,.35); user-select:none;
     }
     .chat-msg.other .av.placeholder { visibility:hidden; }
-    /* birdAI 吉祥物头像 */
-    .chat-msg.other .av.bird { background:transparent !important; box-shadow:none; }
+    .chat-msg.other .av.bird { background:transparent !important; box-shadow:none; padding:0; }
     .chat-msg.other .av.bird img {
         width:100%; height:100%; object-fit:cover; border-radius:50%;
-        image-rendering:auto; background:#1b2b45;
-        border:1px solid rgba(130,160,255,.35);
+        background:#0e1c33; border:1.5px solid rgba(130,190,255,.5);
+    }
+    .chat-msg .body { max-width:72%; display:flex; flex-direction:column; }
+    .chat-msg .nm {
+        font-size:11px; color:var(--ink-3); margin:0 0 3px 4px;
+        display:flex; align-items:center;
     }
     .chat-msg .nm .bird-tag {
-        font-size:9px; color:#8fd4ff; border:1px solid rgba(143,212,255,.45);
-        border-radius:4px; padding:0 4px; margin-left:5px; vertical-align:1px;
+        font-family:var(--font-en); font-size:8px; letter-spacing:.5px;
+        color:#8fd4ff; border:1px solid rgba(143,212,255,.45);
+        border-radius:4px; padding:1px 5px; margin-left:6px;
     }
-    /* “正在输入…”指示器 */
-    .chat-msg.typing-row .typing-bubble { padding:12px 15px 10px; }
-    .chat-msg.typing-row .typing-bubble i {
-        display:inline-block; width:6px; height:6px; margin:0 2px;
-        border-radius:50%; background:rgba(220,228,255,.65);
-        animation: typingBlink 1.2s infinite ease-in-out;
-    }
-    .chat-msg.typing-row .typing-bubble i:nth-child(2) { animation-delay:.2s; }
-    .chat-msg.typing-row .typing-bubble i:nth-child(3) { animation-delay:.4s; }
-    @keyframes typingBlink { 0%,60%,100%{opacity:.25;transform:translateY(0)} 30%{opacity:1;transform:translateY(-3px)} }
-    .chat-msg .body { max-width:74%; display:flex; flex-direction:column; }
-    .chat-msg .nm { font-size:11px; color:rgba(200,210,255,.5); margin:0 0 2px 13px; }
     .chat-msg .bubble {
-        padding:8px 15px; border-radius:22px; font-size:14px; line-height:1.45;
-        color:#e8e8f0; word-break:break-word; white-space:pre-wrap;
-        background:rgba(46,54,78,.8); border:1px solid rgba(130,160,255,.14);
+        padding:9px 15px; border-radius:22px 22px 22px 7px;
+        font-size:14.5px; line-height:1.5; color:var(--ink);
+        word-break:break-word; white-space:pre-wrap;
+        background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.075);
+        backdrop-filter:blur(15px) saturate(1.15); -webkit-backdrop-filter:blur(15px) saturate(1.15);
+        box-shadow:0 3px 14px rgba(0,0,0,.16), inset 0 1px 0 rgba(255,255,255,.08);
+        transition:border-color .2s;
     }
+    .chat-msg .bubble:hover { border-color:var(--line-2); }
     .chat-msg.me { justify-content:flex-end; }
     .chat-msg.me .bubble {
-        color:#fff; border:none;
-        background:linear-gradient(135deg,#7b5cff 0%,#4a98ff 100%);
-        box-shadow:0 2px 12px rgba(90,110,255,.28);
+        color:#fff; border:0; border-radius:22px 22px 7px 22px;
+        background:linear-gradient(135deg,rgba(72,169,255,.92) 0%,rgba(26,130,236,.92) 100%);
+        box-shadow:0 4px 16px rgba(32,128,236,.36), inset 0 1px 0 rgba(255,255,255,.22);
     }
-    /* 时间分组分隔线 */
-    .chat-time { text-align:center; font-size:11px; color:rgba(200,210,255,.55); margin:18px 0 12px; }
-    .chat-time span { background:rgba(18,26,46,.66); border:1px solid rgba(130,160,255,.12); padding:3px 13px; border-radius:11px; }
-    .chat-sys { text-align:center; font-size:12px; color:rgba(200,210,255,.4); margin:8px 0; }
-    .chat-empty { text-align:center; color:rgba(200,210,255,.4); padding:60px 20px; font-size:13px; }
+    .chat-msg.me .bubble:hover { border:0; }
 
-    /* 底部胶囊输入栏：内嵌在右栏聊天面板底部（不悬浮，不挡内容） */
+    /* 正在输入指示器 */
+    .chat-msg.typing-row .typing-bubble { padding:13px 17px 11px; }
+    .chat-msg.typing-row .typing-bubble i {
+        display:inline-block; width:7px; height:7px; margin:0 2.5px;
+        border-radius:50%; background:rgba(220,232,255,.6);
+        animation:typingBlink 1.2s infinite ease-in-out;
+    }
+    .chat-msg.typing-row .typing-bubble i:nth-child(2){animation-delay:.2s}
+    .chat-msg.typing-row .typing-bubble i:nth-child(3){animation-delay:.4s}
+    @keyframes typingBlink {
+        0%,60%,100%{opacity:.3;transform:translateY(0)}
+        30%{opacity:1;transform:translateY(-4px)}
+    }
+
+    /* 时间分隔 / 系统消息 / 空状态 */
+    .chat-time { text-align:center; margin:22px 0 14px; animation:msgIn .3s both; }
+    .chat-time span {
+        font-size:11px; color:rgba(236,243,255,.82);
+        background:rgba(255,255,255,.09); border:1px solid var(--line);
+        padding:4px 14px; border-radius:13px; backdrop-filter:blur(10px);
+    }
+    .chat-sys { text-align:center; font-size:12px; color:var(--ink-3); margin:10px 0; }
+    .chat-empty {
+        text-align:center; color:var(--ink-3); padding:72px 20px; font-size:13.5px;
+        animation:riseIn .5s both;
+    }
+    .chat-login-tip {
+        position:relative; z-index:3; text-align:center;
+        color:var(--ink-2); padding:110px 20px; font-size:15px;
+        animation:riseIn .5s both;
+    }
+
+    /* ===== 输入区：玻璃胶囊（消息流末尾内嵌，不悬浮） ===== */
     .chat-input-row {
-        display:flex; align-items:center; gap:8px; margin-top:14px;
-        background:rgba(18,24,42,.72); backdrop-filter:blur(12px);
-        border:1px solid rgba(130,160,255,.2); border-radius:26px;
-        padding:5px 6px;
+        display:flex; align-items:center; gap:8px; margin-top:20px;
+        background:rgba(12,18,34,.66); border:1px solid var(--line);
+        border-radius:30px; padding:6px 7px;
+        backdrop-filter:blur(18px) saturate(1.3); -webkit-backdrop-filter:blur(18px) saturate(1.3);
+        box-shadow:0 10px 34px rgba(0,0,0,.35);
+        transition:border-color .25s, box-shadow .25s;
+        animation:riseIn .6s .16s cubic-bezier(.2,.8,.25,1) both;
+    }
+    .chat-input-row:focus-within {
+        border-color:rgba(100,180,255,.55);
+        box-shadow:0 10px 34px rgba(0,0,0,.35), 0 0 0 4px rgba(64,164,255,.1);
     }
     #chatInput {
         flex:1; min-width:0; background:transparent; border:0;
-        padding:9px 4px; color:#e8e8f0; font-size:14px; outline:none;
+        padding:10px 6px; color:var(--ink); font-size:14.5px;
+        outline:none; font-family:inherit;
     }
-    #chatInput::placeholder { color:rgba(200,210,255,.4); }
+    #chatInput::placeholder { color:var(--ink-3); }
     #chatSend {
-        width:40px; height:40px; border:0; border-radius:50%;
-        background:linear-gradient(135deg,#7b5cff 0%,#4a98ff 100%);
-        color:#fff; font-size:18px; line-height:1; cursor:pointer; flex-shrink:0;
-        box-shadow:0 2px 8px rgba(90,110,255,.35);
+        width:42px; height:42px; border:0; border-radius:50%; flex-shrink:0;
+        background:linear-gradient(135deg,#48a9ff,#1a82ec);
+        color:#fff; font-size:19px; line-height:1; cursor:pointer;
+        box-shadow:0 3px 10px rgba(32,128,236,.45);
+        transition:transform .15s, filter .15s;
     }
-    #chatSend:hover:not(:disabled) { filter:brightness(1.1); }
-    #chatSend:disabled { opacity:.5; cursor:not-allowed; }
+    #chatSend:hover:not(:disabled) { transform:scale(1.07); filter:brightness(1.08); }
+    #chatSend:active:not(:disabled) { transform:scale(.95); }
+    #chatSend:disabled { opacity:.45; cursor:not-allowed; }
 
-    /* ===== 表情包（与评论区同款五系列，暗色主题） ===== */
+    /* ===== 表情包面板（五系列） ===== */
     .emoji-wrap { position:relative; flex-shrink:0; }
-    .emoji-btn { width:40px; height:40px; border:1px solid rgba(130,160,255,.25); border-radius:50%; background:rgba(130,160,255,.08); cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; transition:all .2s; }
-    .emoji-btn:hover { border-color:rgba(130,160,255,.5); background:rgba(130,160,255,.16); }
-    .emoji-btn img { height:24px; width:auto; image-rendering:pixelated; }
-    .emoji-panel { display:none; position:absolute; bottom:calc(100% + 10px); left:0; width:300px; max-width:78vw; background:rgba(18,26,46,.97); border:1px solid rgba(130,160,255,.25); border-radius:14px; padding:10px; z-index:50; box-shadow:0 8px 28px rgba(0,0,0,.55); }
-    .emoji-panel.open { display:block; animation:emojiIn .18s ease; }
-    @keyframes emojiIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
-    .emoji-tabs { display:flex; gap:6px; margin-bottom:8px; }
-    .emoji-tab { flex:1; border:1px solid rgba(130,160,255,.25); background:transparent; color:rgba(200,210,255,.6); font-size:11px; padding:4px 2px; border-radius:6px; cursor:pointer; transition:all .2s; white-space:nowrap; }
-    .emoji-tab.active { background:linear-gradient(135deg,#7b5cff,#4a98ff); color:#fff; border-color:transparent; }
-    .emoji-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:4px; max-height:180px; overflow-y:auto; }
-    .emoji-cell { border:none; background:transparent; padding:3px; cursor:pointer; border-radius:6px; transition:all .15s; display:flex; align-items:center; justify-content:center; }
-    .emoji-cell:hover { background:rgba(130,160,255,.18); }
-    .emoji-cell img { height:34px; width:auto; image-rendering:pixelated; }
-    .chat-emoji { height:34px; width:auto; vertical-align:middle; image-rendering:pixelated; margin:0 3px; border-radius:5px; }
-    .chat-login-tip { position:relative; z-index:3; text-align:center; color:rgba(200,210,255,.5); padding:80px 20px; font-size:14px; }
-
-    /* ===== 左侧消息列表（IG 双栏：左导航 / 右内容） ===== */
-    .msg-layout { display:flex; gap:18px; align-items:flex-start; }
-    .msg-side {
-        width:196px; flex-shrink:0; position:sticky; top:84px;
-        background:rgba(18,26,46,.55); border:1px solid rgba(130,160,255,.14);
-        border-radius:14px; padding:8px; backdrop-filter:blur(8px);
+    .emoji-btn {
+        width:42px; height:42px; border:1px solid var(--line);
+        border-radius:50%; background:var(--glass-2); cursor:pointer;
+        display:flex; align-items:center; justify-content:center; padding:0;
+        transition:all .2s;
     }
-    .msg-side-title { font-size:11px; color:rgba(200,210,255,.4); letter-spacing:2px; padding:6px 10px 8px; }
-    .msg-side-item {
-        display:flex; align-items:center; gap:7px; padding:10px 12px; border-radius:10px;
-        font-size:13px; color:rgba(220,228,255,.72); cursor:pointer; user-select:none;
+    .emoji-btn:hover { border-color:var(--line-2); background:rgba(100,170,255,.16); }
+    .emoji-btn img { height:25px; width:auto; image-rendering:pixelated; }
+    .emoji-panel {
+        display:none; position:absolute; bottom:calc(100% + 12px); left:0;
+        width:308px; max-width:82vw;
+        background:rgba(13,20,38,.92); border:1px solid var(--line);
+        border-radius:18px; padding:11px; z-index:50;
+        backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
+        box-shadow:0 16px 50px rgba(0,0,0,.6);
     }
-    .msg-side-item:hover { background:rgba(130,160,255,.1); }
-    .msg-side-item.active { background:rgba(123,92,255,.22); color:#fff; }
-    .side-badge {
-        margin-left:auto; background:#e6517c; color:#fff; font-size:10px; min-width:16px;
-        height:16px; line-height:16px; border-radius:8px; text-align:center; padding:0 4px;
+    .emoji-panel.open { display:block; animation:emojiIn .2s cubic-bezier(.2,.8,.25,1); }
+    @keyframes emojiIn { from{opacity:0;transform:translateY(8px) scale(.97)} to{opacity:1;transform:none} }
+    .emoji-tabs { display:flex; gap:5px; margin-bottom:9px; }
+    .emoji-tab {
+        flex:1; border:1px solid var(--line); background:transparent;
+        color:var(--ink-2); font-size:10.5px; padding:5px 2px;
+        border-radius:8px; cursor:pointer; transition:all .2s; white-space:nowrap;
     }
-    .msg-main { flex:1; min-width:0; }
-
-    /* 通知列表 */
-    .notif-item {
-        display:flex; align-items:center; gap:10px; padding:10px 12px;
-        border-radius:12px; cursor:pointer; margin-bottom:4px;
+    .emoji-tab:hover { color:var(--ink); border-color:var(--line-2); }
+    .emoji-tab.active {
+        background:linear-gradient(135deg,#48a9ff,#1a82ec);
+        color:#fff; border-color:transparent;
     }
-    .notif-item:hover { background:rgba(130,160,255,.08); }
-    .notif-item.unread { background:rgba(123,92,255,.13); }
-    .notif-item .av {
-        width:34px; height:34px; border-radius:50%; flex-shrink:0;
+    .emoji-grid {
+        display:grid; grid-template-columns:repeat(6,1fr); gap:3px;
+        max-height:184px; overflow-y:auto; padding:2px;
+    }
+    .emoji-cell {
+        border:none; background:transparent; padding:4px; cursor:pointer;
+        border-radius:9px; transition:background .15s;
         display:flex; align-items:center; justify-content:center;
-        font-size:14px; font-weight:700; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.35);
     }
-    .notif-item .tx { flex:1; min-width:0; font-size:13px; color:#e8e8f0; line-height:1.5; word-break:break-word; }
-    .notif-item .tx .ttl { color:#b79aff; }
-    .notif-item .tm { font-size:11px; color:rgba(200,210,255,.45); flex-shrink:0; }
-    .notif-item .un { width:8px; height:8px; border-radius:50%; background:#e6517c; flex-shrink:0; }
+    .emoji-cell:hover { background:rgba(100,170,255,.18); }
+    .emoji-cell img { height:34px; width:auto; image-rendering:pixelated; }
+    .chat-emoji {
+        height:34px; width:auto; vertical-align:middle;
+        image-rendering:pixelated; margin:0 2px; border-radius:5px;
+    }
 
-    @media (max-width:640px) {
-        .chat-wrap { padding:12px 12px 24px; }
-        .chat-msg .body { max-width:80%; }
-        .msg-layout { flex-direction:column; gap:10px; }
-        .msg-side { width:100%; position:static; display:flex; gap:6px; padding:6px; }
+    /* ===== 通知列表 ===== */
+    #notifList { animation:riseIn .5s .05s both; }
+    .notif-item {
+        display:flex; align-items:center; gap:12px; padding:12px 14px;
+        border-radius:16px; cursor:pointer; margin-bottom:5px;
+        transition:background .2s, transform .2s;
+    }
+    .notif-item:hover { background:var(--glass-2); transform:translateX(3px); }
+    .notif-item.unread { background:rgba(64,164,255,.10); }
+    .notif-item .av {
+        width:44px; height:44px; border-radius:50%; flex-shrink:0;
+        display:flex; align-items:center; justify-content:center;
+        font-size:16px; font-weight:600; color:#fff;
+        text-shadow:0 1px 2px rgba(0,0,0,.35);
+    }
+    .notif-item .tx { flex:1; min-width:0; font-size:13.5px; color:var(--ink); line-height:1.55; word-break:break-word; }
+    .notif-item .tx b { font-weight:600; }
+    .notif-item .tx .ttl { color:#8fc4ff; }
+    .notif-item .tm { font-size:11px; color:var(--ink-3); flex-shrink:0; }
+    .notif-item .un { width:8px; height:8px; border-radius:50%; background:var(--ice); box-shadow:0 0 8px var(--ice-glow); flex-shrink:0; }
+
+    /* 滚动条 */
+    .emoji-grid::-webkit-scrollbar { width:6px; }
+    .emoji-grid::-webkit-scrollbar-thumb {
+        background:rgba(150,190,255,.25); border-radius:3px;
+    }
+
+    /* ===== 响应式 ===== */
+    @media (max-width:760px) {
+        .chat-wrap { padding:6px 12px 28px; }
+        .msg-layout { flex-direction:column; gap:12px; }
+        .msg-side {
+            width:100%; position:static; display:flex; gap:4px; padding:6px;
+            border-radius:16px; overflow-x:auto;
+        }
         .msg-side-title { display:none; }
-        .msg-side-item { flex:1; justify-content:center; }
+        .msg-side-item { flex:1; justify-content:center; min-width:130px; }
+        .msg-side-item.active::before { display:none; }
+        .msg-side-item .rail-ic { width:34px; height:34px; }
+        .chat-msg .body { max-width:82%; }
+        .chat-status { padding:5px 10px; }
+        .chat-status span:not(.dot) { max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     }
     </style>
 </head>
 <body>
+    <div class="bg-aurora" aria-hidden="true"><span></span><span></span><span></span></div>
     <canvas id="snowCanvas" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;"></canvas>
 
     <header class="header">
@@ -166,8 +374,12 @@
             <nav class="nav">
                 <a href="index.html" class="nav-link">Home</a>
                 <a href="archives.html" class="nav-link">Archives</a>
-                <a href="diary.html" class="nav-link" title="Diary with Madeline">Diary</a>
-                <a href="shop.html" class="nav-link" title="Celeste Resort · Oshiro">Shop</a>
+                <a href="diary.html" class="nav-link nav-diary-btn" title="Diary with Madeline">
+                    <img src="celeste-gui/journal.png" alt="Diary" loading="lazy" decoding="async">
+                </a>
+                <a href="shop.html" class="nav-link nav-diary-btn" title="Celeste Resort · Oshiro">
+                    <img src="Atlases/Gui/menu/play.png" alt="Shop" loading="lazy" decoding="async">
+                </a>
             </nav>
             <div class="header-right" id="headerRight"></div>
         </div>
@@ -181,13 +393,16 @@
             <div class="msg-layout">
                 <aside class="msg-side">
                     <div class="msg-side-title">消息</div>
-                    <div class="msg-side-item active" id="sideChat">山间聊天</div>
-                    <div class="msg-side-item" id="sideNotify">notify<span class="side-badge" id="notifBadge" style="display:none"></span></div>
+                    <div class="msg-side-item active" id="sideChat"><span class="rail-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18.5l6.2-9.5 3.3 5.2 2.3-3.2L21 18.5z"/><circle cx="16.4" cy="6" r="1.1" fill="currentColor" stroke="none"/></svg></span>山间聊天</div>
+                    <div class="msg-side-item" id="sideNotify"><span class="rail-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 10-12 0c0 7-3 8.5-3 8.5h18S18 15 18 8z"/><path d="M13.7 20a2 2 0 01-3.4 0"/></svg></span>notify<span class="side-badge" id="notifBadge" style="display:none"></span></div>
                 </aside>
                 <div class="msg-main">
                     <div id="chatPane">
                         <div class="chat-head">
-                            <div class="chat-title">💬 山间实时聊天</div>
+                            <div class="head-id">
+                                <div class="group-av"><svg viewBox="0 0 24 24" fill="none" stroke="#8fc4ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18.5l6.2-9.5 3.3 5.2 2.3-3.2L21 18.5z"/><circle cx="16.4" cy="6" r="1.1" fill="#fff3a3" stroke="none"/></svg></div>
+                                <div class="chat-title">山间聊天</div>
+                            </div>
                             <div class="chat-status" id="chatStatus"><span class="dot"></span><span id="chatStatusText">连接中…</span></div>
                         </div>
                         <div id="chatLog"><div class="chat-empty">正在拉取聊天记录…</div></div>
@@ -213,7 +428,10 @@
                     </div>
                     <div id="notifyPane" style="display:none;">
                         <div class="chat-head">
-                            <div class="chat-title">notify</div>
+                            <div class="head-id">
+                                <div class="bell-av"><svg viewBox="0 0 24 24" fill="none" stroke="#ff9dbb" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 10-12 0c0 7-3 8.5-3 8.5h18S18 15 18 8z"/><path d="M13.7 20a2 2 0 01-3.4 0"/></svg></div>
+                                <div class="chat-title">notify</div>
+                            </div>
                             <div class="chat-status online"><span class="dot"></span><span>点赞 / 评论通知</span></div>
                         </div>
                         <div id="notifList"><div class="chat-empty">正在拉取通知…</div></div>
@@ -702,6 +920,6 @@
         })();
     })();
 </script>
-<script src="js/seed.js?v=20261002"></script>
+<script src="js/seed.js?v=20261002d"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
@@ -8,18 +8,16 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
 
-  /* === neon 位置/大小：调这 4 个变量即可贴合背景 ===
-     也可以用 URL 参数：?nx=50.5&ny=42.5&nw=13.5&nh=16
-     或按 D 进入调试模式（拖拽移动 / 滚轮缩放 / P 导出数值） */
+  /* === neon 招牌位置/大小（固定值，已对齐背景） === */
   :root {
-    --neon-x: 50.5%;   /* 左偏移（招牌中心 X） */
-    --neon-y: 42.5%;   /* 顶部偏移（招牌顶部 Y） */
-    --neon-w: 13.5%;   /* 宽度（占视口宽度） */
-    --neon-h: 16%;     /* 高度（占视口高度） */
+    --neon-x: 52.6%;    /* 左偏移（招牌中心 X） */
+    --neon-y: 20.6%;    /* 顶部偏移（招牌顶部 Y） */
+    --neon-w: 39.47%;   /* 宽度（占视口宽度） */
+    --neon-h: 46.8%;    /* 高度（占视口高度） */
     --neon-bright: 1.35; /* 亮度 */
-    --int-x: 0%;       /* 内部图水平平移（占视口宽度） */
-    --int-y: 0%;       /* 内部图垂直平移（占视口高度） */
-    --int-s: 1;        /* 内部图缩放 */
+    --int-x: 3%;        /* 内部图水平平移（固定值） */
+    --int-y: -6.3%;     /* 内部图垂直平移（固定值） */
+    --int-s: 0.4;       /* 内部图缩放（固定值） */
   }
 
   /* === 背景截图充满全屏（新外观图） === */
@@ -39,9 +37,10 @@
   }
   #world.zoomed { transform: scale(1.22); }
 
-  /* === 外观表层：点击建筑物后透明化，显露出叠在下方的内部 === */
+  /* === 外观表层：z-index 高于内部层；点击建筑物后透明化，显露出叠在下方的内部 === */
   #camera {
     position: absolute; inset: 0;
+    z-index: 2;
     transition: opacity 1.1s ease;
   }
   #camera.entered { opacity: 0; pointer-events: none; }
@@ -136,98 +135,9 @@
       drop-shadow(0 0 7px rgba(255,80,210,.30));
   }
 
-  /* 调试模式：显示边框 + 允许鼠标操作 */
-  body.debug #neonSign {
-    pointer-events: auto;
-    cursor: move;
-    outline: 1px dashed #66ffdd;
-    outline-offset: 2px;
-  }
-  body.debug #neonSign canvas { pointer-events: none; }
-
-  /* 内部图调试：外观表层半透明作对齐参考，内部层可拖拽缩放 */
-  body.int-debug #camera { opacity: .18; pointer-events: none; }
-  body.int-debug #interior { pointer-events: auto; }
-  body.int-debug #interiorStage { cursor: move; outline: 1px dashed #ffb066; outline-offset: 2px; }
-  body.int-debug #noiseBox { pointer-events: none; }
-
-  /* 调试控制面板（按 D 显示） */
-  #debugPanel,
-  #intPanel {
-    position: fixed; right: 12px; top: 12px;
-    z-index: 9998;
-    display: none;
-    font-family: 'Courier New', monospace;
-    font-size: 12px;
-    color: #aaffee;
-    background: rgba(0,12,22,.88);
-    border: 1px solid rgba(102,255,221,.45);
-    border-radius: 6px;
-    padding: 10px 12px;
-    width: 226px;
-    box-shadow: 0 4px 24px rgba(0,0,0,.6);
-    user-select: none;
-  }
-  body.debug #debugPanel, body.int-debug #intPanel { display: block; }
-  #debugPanel h4 {
-    font-size: 12px; color: #fff; letter-spacing: 1px;
-    margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;
-  }
-  #debugPanel h4 span { color: #6a8; font-size: 10px; font-weight: normal; }
-  .dp-row { display: flex; align-items: center; gap: 6px; margin: 5px 0; }
-  .dp-row label { width: 34px; color: #7fc; font-size: 11px; }
-  .dp-row .val {
-    flex: 1; min-width: 0;
-    background: rgba(0,40,40,.6);
-    border: 1px solid rgba(102,255,221,.3);
-    color: #eafffb; font-family: inherit; font-size: 12px;
-    text-align: center;
-    padding: 3px 2px; border-radius: 3px;
-  }
-  .dp-row button {
-    width: 26px; height: 24px;
-    background: rgba(102,255,221,.12);
-    border: 1px solid rgba(102,255,221,.4);
-    color: #cffff5; font-size: 14px; font-weight: bold;
-    border-radius: 3px; cursor: pointer; line-height: 1;
-  }
-  .dp-row button:hover { background: rgba(102,255,221,.3); }
-  .dp-row button:active { background: rgba(102,255,221,.5); }
-  .dp-pad { display: grid; grid-template-columns: repeat(3, 30px); gap: 4px; justify-content: center; margin: 8px 0; }
-  .dp-pad button { padding: 0; width: 30px; height: 26px; }
-  .dp-pad .blank { visibility: hidden; }
-  .dp-actions { display: flex; gap: 6px; margin-top: 9px; }
-  .dp-actions button {
-    flex: 1; height: 28px; width: auto;
-    font-size: 11px; font-family: inherit;
-    background: rgba(102,255,221,.15);
-  }
-  .dp-actions button.danger { border-color: rgba(255,120,120,.5); color: #ffc9c9; background: rgba(255,80,80,.12); }
-  .dp-tip { color: #789; font-size: 10px; line-height: 1.5; margin-top: 8px; border-top: 1px solid rgba(102,255,221,.2); padding-top: 6px; }
-
-  /* 调整入口按钮（左下角常驻，点击开关对应调试面板） */
-  #neonAdjBtn, #intAdjBtn {
-    position: fixed; left: 12px; bottom: 12px;
-    z-index: 9997;
-    font-family: 'Courier New', monospace;
-    font-size: 12px; letter-spacing: 1px;
-    color: #aaffee;
-    background: rgba(0,12,22,.75);
-    border: 1px solid rgba(102,255,221,.45);
-    border-radius: 6px;
-    padding: 7px 12px;
-    cursor: pointer;
-    opacity: .5;
-    transition: opacity .2s, background .2s;
-  }
-  #intAdjBtn { left: 112px; color: #ffd9a8; border-color: rgba(255,176,102,.45); background: rgba(22,10,0,.75); }
-  #neonAdjBtn:hover, #intAdjBtn:hover { opacity: 1; }
-  body.debug #neonAdjBtn, body.int-debug #intAdjBtn { opacity: 1; background: rgba(102,255,221,.22); }
-  body.int-debug #intAdjBtn { background: rgba(255,176,102,.22); }
-
   /* === TV 热区已并入内部层 #noiseBox === */
 
-  /* === 环境均匀压暗层：亮度逐渐调低至 50%（全屏均匀，不做四周黑角） === */
+  /* === 环境均匀压暗层：亮度逐渐调低至 30%（全屏均匀，不做四周黑角、不完全黑） === */
   #dimLayer {
     position: fixed; inset: 0;
     z-index: 15; pointer-events: none;
@@ -235,18 +145,7 @@
     opacity: 0;
     transition: opacity 1.4s ease;
   }
-  #dimLayer.show { opacity: .5; }
-
-  /* === 全屏过渡层（点击 TV 后黑屏 → 跳转） === */
-  #transition {
-    position: fixed; inset: 0;
-    z-index: 9999;
-    background: #000;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity .4s ease-in;
-  }
-  #transition.active { opacity: 1; }
+  #dimLayer.show { opacity: .3; }
 </style>
 </head>
 <body>
@@ -268,7 +167,7 @@
       <!-- 招牌周围漂浮小粒子 -->
       <canvas id="sparkleCanvas"></canvas>
 
-      <!-- 霓虹招牌（15 帧逐帧动画，位置用 #adjustNeon 调整贴合背景） -->
+      <!-- 霓虹招牌（15 帧逐帧动画，位置已固定对齐背景） -->
       <div id="neonSign"><canvas></canvas></div>
 
       <!-- 建筑物点击热区 -->
@@ -276,129 +175,10 @@
     </div>
   </div>
 
-  <!-- 调整入口（左下角常驻） -->
-  <button id="neonAdjBtn">调整招牌</button>
-  <button id="intAdjBtn">调整内部图</button>
-
-  <!-- 调试控制面板（按 D 开关） -->
-  <div id="debugPanel">
-    <h4>neon 对齐 <span id="dpClose" style="cursor:pointer">✕</span></h4>
-
-    <!-- 位置方向键 -->
-    <div class="dp-pad">
-      <span class="blank"></span>
-      <button data-act="up">↑</button>
-      <span class="blank"></span>
-      <button data-act="left">←</button>
-      <button data-act="reset" title="复位">●</button>
-      <button data-act="right">→</button>
-      <span class="blank"></span>
-      <button data-act="down">↓</button>
-      <span class="blank"></span>
-    </div>
-
-    <!-- 整体大小（等比缩放） -->
-    <div class="dp-row">
-      <label>大小</label>
-      <button id="btnSizeM">−</button>
-      <input class="val" id="inpSize" type="number" step="5" title="相对默认尺寸的百分比">
-      <button id="btnSizeP">+</button>
-    </div>
-    <!-- 宽 -->
-    <div class="dp-row">
-      <label>宽 W</label>
-      <button data-key="w" data-step="-0.5">−</button>
-      <input class="val" id="inpW" type="number" step="0.1">
-      <button data-key="w" data-step="0.5">+</button>
-    </div>
-    <!-- 高 -->
-    <div class="dp-row">
-      <label>高 H</label>
-      <button data-key="h" data-step="-0.5">−</button>
-      <input class="val" id="inpH" type="number" step="0.1">
-      <button data-key="h" data-step="0.5">+</button>
-    </div>
-    <!-- 左偏移 -->
-    <div class="dp-row">
-      <label>X 位</label>
-      <button data-key="x" data-step="-0.3">−</button>
-      <input class="val" id="inpX" type="number" step="0.1">
-      <button data-key="x" data-step="0.3">+</button>
-    </div>
-    <!-- 顶偏移 -->
-    <div class="dp-row">
-      <label>Y 位</label>
-      <button data-key="y" data-step="-0.3">−</button>
-      <input class="val" id="inpY" type="number" step="0.1">
-      <button data-key="y" data-step="0.3">+</button>
-    </div>
-    <!-- 亮度 -->
-    <div class="dp-row">
-      <label>亮度</label>
-      <button data-key="b" data-step="-0.1">−</button>
-      <input class="val" id="inpB" type="number" step="0.05">
-      <button data-key="b" data-step="0.1">+</button>
-    </div>
-
-    <div class="dp-actions">
-      <button id="dpCopy">复制数值</button>
-      <button id="dpExit" class="danger">完成</button>
-    </div>
-    <div class="dp-tip">大小=等比缩放 · 宽/高=单独微调<br>数字可直接输入，回车生效 · Esc 退出</div>
-  </div>
-
-  <!-- 内部图调试面板 -->
-  <div id="intPanel">
-    <h4>内部图对齐 <span id="ipClose" style="cursor:pointer">✕</span></h4>
-    <div class="dp-row">
-      <label>X 位</label>
-      <button data-ikey="x" data-step="-0.3">−</button>
-      <input class="val" id="inpIX" type="number" step="0.1">
-      <button data-ikey="x" data-step="0.3">+</button>
-    </div>
-    <div class="dp-row">
-      <label>Y 位</label>
-      <button data-ikey="y" data-step="-0.3">−</button>
-      <input class="val" id="inpIY" type="number" step="0.1">
-      <button data-ikey="y" data-step="0.3">+</button>
-    </div>
-    <div class="dp-row">
-      <label>缩放</label>
-      <button data-ikey="s" data-step="-0.02">−</button>
-      <input class="val" id="inpIS" type="number" step="0.01">
-      <button data-ikey="s" data-step="0.02">+</button>
-    </div>
-    <div class="dp-actions">
-      <button id="ipReset" title="复位">复位</button>
-      <button id="ipCopy">复制数值</button>
-      <button id="ipExit" class="danger">完成</button>
-    </div>
-    <div class="dp-tip">直接拖动图片移动 · 滚轮缩放<br>外观会变半透明方便对齐<br>调好把数值发给我固化进代码</div>
-  </div>
-
   <!-- 四周环境压暗层 -->
   <div id="dimLayer"></div>
 
-  <!-- 全屏过渡层 -->
-  <div id="transition"></div>
-
 <script>
-/* ============================================================
-   0. 读取 URL 参数 → CSS 变量（?nx=&ny=&nw=&nh=&bright=）
-   ============================================================ */
-(function applyUrlVars() {
-  var p = new URLSearchParams(location.search);
-  var root = document.documentElement.style;
-  if (p.has('nx')) root.setProperty('--neon-x', p.get('nx') + '%');
-  if (p.has('ny')) root.setProperty('--neon-y', p.get('ny') + '%');
-  if (p.has('nw')) root.setProperty('--neon-w', p.get('nw') + '%');
-  if (p.has('nh')) root.setProperty('--neon-h', p.get('nh') + '%');
-  if (p.has('bright')) root.setProperty('--neon-bright', p.get('bright'));
-  if (p.has('ix')) root.setProperty('--int-x', p.get('ix') + '%');
-  if (p.has('iy')) root.setProperty('--int-y', p.get('iy') + '%');
-  if (p.has('is')) root.setProperty('--int-s', p.get('is'));
-})();
-
 /* ============================================================
    1. neon 15 帧逐帧动画（contain 完整显示，不裁切）
    ============================================================ */
@@ -453,7 +233,7 @@
 })();
 
 /* ============================================================
-   2. 招牌周围漂浮粒子（十几颗小星点，缓慢漂浮 + 闪烁）
+   2. 漂浮粒子：全屏 + 天空加密度（小星点缓慢漂浮 + 闪烁）
    ============================================================ */
 (function () {
   var canvas = document.getElementById('sparkleCanvas');
@@ -463,48 +243,92 @@
   resize();
   window.addEventListener('resize', resize);
 
-  // 粒子全屏覆盖：约 6 成全屏均匀散布，4 成集中在穹顶建筑核心
+  // 粒子全屏覆盖：5 成全屏均匀、约 3 成集中在天空（页面上半部）、2 成落穹顶建筑核心
   // 百分比坐标
   var FULL = { x: 0, y: 0, w: 1, h: 1 };
+  var SKY = { x: 0, y: 0, w: 1, h: 0.55 };
   var CORE = { x: 0.33, y: 0.26, w: 0.36, h: 0.40 };
+  function pickZone() {
+    var r = Math.random();
+    return (r < 0.5) ? FULL : (r < 0.78 ? SKY : CORE);
+  }
+
   var COLORS = ['#ffffff', '#7affe0', '#ff7ad9', '#b98cff', '#8fd4ff', '#fff3a3'];
-  var COUNT = 64;
   var parts = [];
-  for (var i = 0; i < COUNT; i++) {
-    // 60% 全屏均匀覆盖，40% 落建筑物密集区
-    var z = (Math.random() < 0.6) ? FULL : CORE;
+
+  // ① 闪烁星点：数量翻倍，大量 1px 小星点营造密度
+  var STAR_COUNT = 140;
+  for (var i = 0; i < STAR_COUNT; i++) {
+    var z = pickZone();
+    var big = Math.random() < .12;                 // 少数大星芒
     parts.push({
-      // 百分比基准位置（在所选区域内）
+      type: 'star',
       bx: z.x + Math.random() * z.w,
       by: z.y + Math.random() * z.h,
-      // 漂浮幅度（百分比）
-      ampX: (Math.random() * 1.2 + .4) / 100,
+      ampX: (Math.random() * 1.2 + .4) / 100,      // 漂浮幅度（百分比）
       ampY: (Math.random() * 1.0 + .3) / 100,
-      spd: Math.random() * .0006 + .0003,   // 漂浮速度
+      spd: Math.random() * .0006 + .0003,          // 漂浮速度
       phase: Math.random() * Math.PI * 2,
-      size: Math.random() < .25 ? 3 : 2,    // 少数几颗大星芒
+      size: big ? 3 : (Math.random() < .45 ? 1 : 2),
       color: COLORS[Math.random() * COLORS.length | 0],
-      tw: Math.random() * .003 + .001,      // 闪烁速度
+      tw: Math.random() * .004 + .0008,            // 闪烁速度（拉开差异避免齐闪）
+      twPhase: Math.random() * Math.PI * 2,
+      baseA: .22 + Math.random() * .28
+    });
+  }
+
+  // ② 漂浮尘埃：缓慢单向漂移 + 左右轻摆，出界回绕，让画面一直有流动感
+  var MOTE_COUNT = 28;
+  for (var m = 0; m < MOTE_COUNT; m++) {
+    parts.push({
+      type: 'mote',
+      bx: Math.random(),
+      by: Math.random(),
+      vx: (Math.random() * .000011 + .000005) * (Math.random() < .5 ? -1 : 1), // 百分比/ms
+      vy: -(Math.random() * .000008 + .000004),    // 整体缓慢上升（飘尘）
+      amp: (Math.random() * .8 + .3) / 100,        // 左右轻摆幅度
+      sway: Math.random() * .001 + .0005,
+      phase: Math.random() * Math.PI * 2,
+      size: Math.random() < .3 ? 3 : 2,
+      color: COLORS[Math.random() * COLORS.length | 0],
+      tw: Math.random() * .002 + .0008,
       twPhase: Math.random() * Math.PI * 2
     });
   }
 
+  var last = 0;
   function frame(t) {
+    var dt = Math.min(t - last, 50) || 16;         // 限幅防止切后台回跳
+    last = t;
     ctx.clearRect(0, 0, W, H);
     for (var i = 0; i < parts.length; i++) {
       var p = parts[i];
-      var x = (p.bx + Math.sin(t * p.spd + p.phase) * p.ampX) * W;
-      var y = (p.by + Math.cos(t * p.spd * .8 + p.phase) * p.ampY) * H;
-      var a = .35 + .55 * (0.5 + 0.5 * Math.sin(t * p.tw + p.twPhase));
-      ctx.globalAlpha = a;
-      ctx.fillStyle = p.color;
-      var s = p.size;
-      // 小十字星芒（像素风：中心方块 + 横竖各延 1px）
-      ctx.fillRect(x | 0, y | 0, s, s);
-      ctx.fillRect((x - 1) | 0, y | 0, 1, s);
-      ctx.fillRect((x + s) | 0, y | 0, 1, s);
-      ctx.fillRect(x | 0, (y - 1) | 0, s, 1);
-      ctx.fillRect(x | 0, (y + s) | 0, s, 1);
+      var x, y, s;
+      if (p.type === 'mote') {
+        p.bx += p.vx * dt; p.by += p.vy * dt;
+        if (p.bx < -.02) p.bx = 1.02; else if (p.bx > 1.02) p.bx = -.02;
+        if (p.by < -.02) p.by = 1.02; else if (p.by > 1.02) p.by = -.02;
+        x = (p.bx + Math.sin(t * p.sway + p.phase) * p.amp) * W;
+        y = p.by * H;
+        ctx.globalAlpha = .22 + .22 * (0.5 + 0.5 * Math.sin(t * p.tw + p.twPhase));
+        ctx.fillStyle = p.color;
+        ctx.fillRect(x | 0, y | 0, p.size, p.size);
+      } else {
+        x = (p.bx + Math.sin(t * p.spd + p.phase) * p.ampX) * W;
+        y = (p.by + Math.cos(t * p.spd * .8 + p.phase) * p.ampY) * H;
+        var a = p.baseA + (.92 - p.baseA) * (0.5 + 0.5 * Math.sin(t * p.tw + p.twPhase));
+        ctx.globalAlpha = a;
+        ctx.fillStyle = p.color;
+        s = p.size;
+        // 小十字星芒（像素风：中心方块 + 横竖各延 1px）；1px 只画单点
+        ctx.fillRect(x | 0, y | 0, s, s);
+        if (s > 1) {
+          ctx.fillRect((x - 1) | 0, y | 0, 1, s);
+          ctx.fillRect((x + s) | 0, y | 0, 1, s);
+          ctx.fillRect(x | 0, (y - 1) | 0, s, 1);
+          ctx.fillRect(x | 0, (y + s) | 0, s, 1);
+        }
+      }
     }
     ctx.globalAlpha = 1;
     requestAnimationFrame(frame);
@@ -513,363 +337,11 @@
 })();
 
 /* ============================================================
-   3. 调试模式：按 D 开关
-      面板按钮：方向键移动 / 宽高亮± / 直接输数值
-      画布：拖拽移动、滚轮缩放（Shift宽 / Alt高）
-      P 复制数值 · Esc 退出
-   ============================================================ */
-(function () {
-  var root = document.documentElement;
-  var neon = document.getElementById('neonSign');
-  var panel = document.getElementById('debugPanel');
-
-  // 左下角常驻入口按钮：点击开关调试模式；与内部图调试互斥
-  function syncAdjBtns() {
-    document.getElementById('neonAdjBtn').textContent =
-      document.body.classList.contains('debug') ? '完成调整' : '调整招牌';
-    document.getElementById('intAdjBtn').textContent =
-      document.body.classList.contains('int-debug') ? '完成调整' : '调整内部图';
-  }
-  window.__syncAdjBtns = syncAdjBtns;
-  document.getElementById('neonAdjBtn').addEventListener('click', function () {
-    var on = document.body.classList.toggle('debug');
-    if (on) { document.body.classList.remove('int-debug'); refreshInputs(); }
-    syncAdjBtns();
-  });
-
-  // 默认值（复位用；若 URL 带了参数，以 URL 值为默认）
-  var DEFAULTS = { x: 50.5, y: 42.5, w: 13.5, h: 16, b: 1.35 };
-  (function () {
-    var p = new URLSearchParams(location.search);
-    ['x','y','w','h','b'].forEach(function (k, i) {
-      var qk = ['nx','ny','nw','nh','bright'][i];
-      if (p.has(qk)) DEFAULTS[k] = parseFloat(p.get(qk));
-    });
-  })();
-
-  // 变量名 → CSS 变量名 / input id / 单位
-  var META = {
-    x: { css: '--neon-x', inp: 'inpX', unit: '%' },
-    y: { css: '--neon-y', inp: 'inpY', unit: '%' },
-    w: { css: '--neon-w', inp: 'inpW', unit: '%' },
-    h: { css: '--neon-h', inp: 'inpH', unit: '%' },
-    b: { css: '--neon-bright', inp: 'inpB', unit: '' }
-  };
-
-  function getVars() {
-    var cs = getComputedStyle(root);
-    return {
-      x: parseFloat(cs.getPropertyValue('--neon-x')) || 0,
-      y: parseFloat(cs.getPropertyValue('--neon-y')) || 0,
-      w: parseFloat(cs.getPropertyValue('--neon-w')) || 0,
-      h: parseFloat(cs.getPropertyValue('--neon-h')) || 0,
-      b: parseFloat(cs.getPropertyValue('--neon-bright')) || 1
-    };
-  }
-  function setVars(v) {
-    v.x = Math.max(0, Math.min(100, v.x));
-    v.y = Math.max(0, Math.min(100, v.y));
-    v.w = Math.max(2, Math.min(80, v.w));
-    v.h = Math.max(2, Math.min(80, v.h));
-    v.b = Math.max(.5, Math.min(3, v.b));
-    root.style.setProperty('--neon-x', v.x.toFixed(2) + '%');
-    root.style.setProperty('--neon-y', v.y.toFixed(2) + '%');
-    root.style.setProperty('--neon-w', v.w.toFixed(2) + '%');
-    root.style.setProperty('--neon-h', v.h.toFixed(2) + '%');
-    root.style.setProperty('--neon-bright', v.b);
-    refreshInputs();
-  }
-  function nudge(key, delta) {
-    var v = getVars();
-    v[key] += delta;
-    setVars(v);
-  }
-  function refreshInputs() {
-    var v = getVars();
-    for (var k in META) {
-      var el = document.getElementById(META[k].inp);
-      if (document.activeElement !== el) el.value = v[k].toFixed(2).replace(/\.?0+$/, '');
-    }
-    // 大小百分比（相对默认宽度）
-    var sizeEl = document.getElementById('inpSize');
-    if (document.activeElement !== sizeEl) {
-      sizeEl.value = Math.round(v.w / DEFAULTS.w * 100);
-    }
-  }
-
-  // ---- 整体大小：等比缩放（宽高同乘系数，保持招牌不变形） ----
-  function scaleBy(ratio) {
-    var v = getVars();
-    v.w *= ratio;
-    v.h *= ratio;
-    setVars(v);
-  }
-  document.getElementById('btnSizeP').addEventListener('click', function () { scaleBy(1.05); });  // +5%
-  document.getElementById('btnSizeM').addEventListener('click', function () { scaleBy(1 / 1.05); }); // -5%
-  // 直接输入百分比（相对默认尺寸，按默认比例等比设置）
-  document.getElementById('inpSize').addEventListener('change', function () {
-    var pct = parseFloat(this.value);
-    if (isNaN(pct) || pct <= 0) return;
-    var v = getVars();
-    var r = pct / 100;
-    v.w = DEFAULTS.w * r;
-    v.h = DEFAULTS.h * r;
-    setVars(v);
-  });
-  document.getElementById('inpSize').addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') this.blur();
-    e.stopPropagation();
-  });
-
-  // ---- ± 按钮 ----
-  panel.querySelectorAll('button[data-key]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      nudge(btn.dataset.key, parseFloat(btn.dataset.step));
-    });
-  });
-
-  // ---- 方向 pad ----
-  panel.querySelectorAll('button[data-act]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var v = getVars();
-      var s = 0.4;
-      switch (btn.dataset.act) {
-        case 'up':    v.y -= s; break;
-        case 'down':  v.y += s; break;
-        case 'left':  v.x -= s; break;
-        case 'right': v.x += s; break;
-        case 'reset': v.x = DEFAULTS.x; v.y = DEFAULTS.y; v.w = DEFAULTS.w; v.h = DEFAULTS.h; v.b = DEFAULTS.b; break;
-      }
-      setVars(v);
-    });
-  });
-
-  // ---- 数字输入框：输入即生效 ----
-  Object.keys(META).forEach(function (key) {
-    var el = document.getElementById(META[key].inp);
-    el.addEventListener('change', function () {
-      var val = parseFloat(el.value);
-      if (!isNaN(val)) nudge(key, val - getVars()[key]);
-    });
-    el.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') el.blur();
-      e.stopPropagation();   // 防止触发全局方向键快捷键
-    });
-  });
-
-  // ---- 复制数值 / 关闭 ----
-  function buildUrl() {
-    var v = getVars();
-    return location.pathname.split('/').pop() +
-      '?nx=' + v.x.toFixed(2) + '&ny=' + v.y.toFixed(2) +
-      '&nw=' + v.w.toFixed(2) + '&nh=' + v.h.toFixed(2) + '&bright=' + v.b;
-  }
-  function copyValues() {
-    var v = getVars();
-    var s = 'nx=' + v.x.toFixed(2) + ' ny=' + v.y.toFixed(2) +
-            ' nw=' + v.w.toFixed(2) + ' nh=' + v.h.toFixed(2) + ' bright=' + v.b;
-    var done = function () { alert('已复制链接！\n\n' + s + '\n\n' + buildUrl()); };
-    if (navigator.clipboard) navigator.clipboard.writeText(buildUrl()).then(done, done); else done();
-  }
-  document.getElementById('dpCopy').addEventListener('click', copyValues);
-  function exitDebug() { document.body.classList.remove('debug'); syncAdjBtns(); }
-  document.getElementById('dpExit').addEventListener('click', exitDebug);
-  document.getElementById('dpClose').addEventListener('click', exitDebug);
-
-  // ---- 拖拽移动 ----
-  var dragging = false, sx = 0, sy = 0, start = null;
-  neon.addEventListener('mousedown', function (e) {
-    if (!document.body.classList.contains('debug')) return;
-    dragging = true;
-    sx = e.clientX; sy = e.clientY;
-    start = getVars();
-    e.preventDefault();
-  });
-  window.addEventListener('mousemove', function (e) {
-    if (!dragging) return;
-    var v = getVars();
-    v.x = start.x + (e.clientX - sx) / window.innerWidth * 100;
-    v.y = start.y + (e.clientY - sy) / window.innerHeight * 100;
-    setVars(v);
-  });
-  window.addEventListener('mouseup', function () { dragging = false; });
-
-  // ---- 滚轮缩放（Shift宽 / Alt高 / 默认整体） ----
-  neon.addEventListener('wheel', function (e) {
-    if (!document.body.classList.contains('debug')) return;
-    e.preventDefault();
-    var v = getVars();
-    var d = e.deltaY < 0 ? 1.08 : 1 / 1.08;
-    if (e.shiftKey) v.w *= d;
-    else if (e.altKey) v.h *= d;
-    else { v.w *= d; v.h *= d; }
-    setVars(v);
-  }, { passive: false });
-
-  // ---- 键盘：D 开关，方向键微调，P 复制，Esc 退出 ----
-  window.addEventListener('keydown', function (e) {
-    if (e.key === 'd' || e.key === 'D') {
-      var on = document.body.classList.toggle('debug');
-      if (on) { document.body.classList.remove('int-debug'); refreshInputs(); }
-      syncAdjBtns();
-      return;
-    }
-    if (!document.body.classList.contains('debug')) return;
-    if (/^[0-9.\-]$/.test(e.key) && document.activeElement.tagName === 'INPUT') return;
-    var v = getVars();
-    var step = e.shiftKey ? 1 : .2;
-    switch (e.key) {
-      case 'ArrowLeft':  v.x -= step; break;
-      case 'ArrowRight': v.x += step; break;
-      case 'ArrowUp':    v.y -= step; break;
-      case 'ArrowDown':  v.y += step; break;
-      case 'p': case 'P': copyValues(); return;
-      case 'Escape': exitDebug(); return;
-      default: return;
-    }
-    setVars(v);
-    e.preventDefault();
-  });
-})();
-
-/* ============================================================
-   3.5 内部图调试：点左下角「调整内部图」开关
-       外观表层变半透明作对齐参考；拖动图片移动、滚轮缩放
-       方向键微调 · 复制数值 · Esc 退出
-   ============================================================ */
-(function () {
-  var root = document.documentElement;
-  var stage = document.getElementById('interiorStage');
-  var panel = document.getElementById('intPanel');
-  var DEFAULTS = { x: 0, y: 0, s: 1 };
-  var META = {
-    x: { inp: 'inpIX' },
-    y: { inp: 'inpIY' },
-    s: { inp: 'inpIS' }
-  };
-
-  function getV() {
-    var cs = getComputedStyle(root);
-    return {
-      x: parseFloat(cs.getPropertyValue('--int-x')) || 0,
-      y: parseFloat(cs.getPropertyValue('--int-y')) || 0,
-      s: parseFloat(cs.getPropertyValue('--int-s')) || 1
-    };
-  }
-  function setV(v) {
-    v.x = Math.max(-80, Math.min(80, v.x));
-    v.y = Math.max(-80, Math.min(80, v.y));
-    v.s = Math.max(.2, Math.min(5, v.s));
-    root.style.setProperty('--int-x', v.x.toFixed(2) + '%');
-    root.style.setProperty('--int-y', v.y.toFixed(2) + '%');
-    root.style.setProperty('--int-s', v.s.toFixed(3));
-    refreshI();
-  }
-  function refreshI() {
-    var v = getV();
-    for (var k in META) {
-      var el = document.getElementById(META[k].inp);
-      if (document.activeElement !== el) el.value = v[k];
-    }
-  }
-  function exitInt() {
-    document.body.classList.remove('int-debug');
-    if (window.__syncAdjBtns) window.__syncAdjBtns();
-  }
-
-  // 入口按钮：与招牌调试互斥
-  document.getElementById('intAdjBtn').addEventListener('click', function () {
-    var on = document.body.classList.toggle('int-debug');
-    if (on) { document.body.classList.remove('debug'); refreshI(); }
-    if (window.__syncAdjBtns) window.__syncAdjBtns();
-  });
-  document.getElementById('ipExit').addEventListener('click', exitInt);
-  document.getElementById('ipClose').addEventListener('click', exitInt);
-
-  // ± 按钮
-  panel.querySelectorAll('button[data-ikey]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var v = getV();
-      v[btn.dataset.ikey] += parseFloat(btn.dataset.step);
-      setV(v);
-    });
-  });
-  // 数字输入框：输入即生效
-  Object.keys(META).forEach(function (key) {
-    var el = document.getElementById(META[key].inp);
-    el.addEventListener('change', function () {
-      var val = parseFloat(el.value);
-      if (!isNaN(val)) { var v = getV(); v[key] = val; setV(v); }
-    });
-    el.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') el.blur();
-      e.stopPropagation();
-    });
-  });
-  // 复位
-  document.getElementById('ipReset').addEventListener('click', function () {
-    setV({ x: DEFAULTS.x, y: DEFAULTS.y, s: DEFAULTS.s });
-  });
-  // 复制数值
-  document.getElementById('ipCopy').addEventListener('click', function () {
-    var v = getV();
-    var s = 'ix=' + v.x.toFixed(2) + ' iy=' + v.y.toFixed(2) + ' is=' + v.s.toFixed(3);
-    var url = location.pathname.split('/').pop() +
-      '?ix=' + v.x.toFixed(2) + '&iy=' + v.y.toFixed(2) + '&is=' + v.s.toFixed(3);
-    var done = function () { alert('已复制链接！\n\n' + s + '\n\n' + url); };
-    if (navigator.clipboard) navigator.clipboard.writeText(url).then(done, done); else done();
-  });
-
-  // ---- 拖拽移动（平移单位为视口百分比） ----
-  var dragging = false, sx = 0, sy = 0, start = null;
-  stage.addEventListener('mousedown', function (e) {
-    if (!document.body.classList.contains('int-debug')) return;
-    dragging = true; sx = e.clientX; sy = e.clientY; start = getV();
-    e.preventDefault();
-  });
-  window.addEventListener('mousemove', function (e) {
-    if (!dragging) return;
-    var v = getV();
-    v.x = start.x + (e.clientX - sx) / window.innerWidth * 100;
-    v.y = start.y + (e.clientY - sy) / window.innerHeight * 100;
-    setV(v);
-  });
-  window.addEventListener('mouseup', function () { dragging = false; });
-
-  // ---- 滚轮缩放 ----
-  stage.addEventListener('wheel', function (e) {
-    if (!document.body.classList.contains('int-debug')) return;
-    e.preventDefault();
-    var v = getV();
-    v.s *= e.deltaY < 0 ? 1.06 : 1 / 1.06;
-    setV(v);
-  }, { passive: false });
-
-  // ---- 键盘：方向键微调，Esc 退出 ----
-  window.addEventListener('keydown', function (e) {
-    if (!document.body.classList.contains('int-debug')) return;
-    if (/^[0-9.\-]$/.test(e.key) && document.activeElement.tagName === 'INPUT') return;
-    var v = getV();
-    var step = e.shiftKey ? 1 : .2;
-    switch (e.key) {
-      case 'ArrowLeft':  v.x -= step; break;
-      case 'ArrowRight': v.x += step; break;
-      case 'ArrowUp':    v.y -= step; break;
-      case 'ArrowDown':  v.y += step; break;
-      case 'Escape': exitInt(); return;
-      default: return;
-    }
-    setV(v);
-    e.preventDefault();
-  });
-})();
-
-/* ============================================================
    4. 交互流：
       ① 内部层叠在外观表层下方；点建筑物 → 表层透明化显露内部、
-         环境均匀压暗 50%、镜头整体向近靠
+         环境均匀压暗 30%、镜头整体向近靠
       ② 内部电视循环播放 noise00~02
-      ③ 点电视 → 内部放大至 noise 占满全屏 → 黑屏 → berryos
+      ③ 点电视 → 镜头不断缩进至 noise 占满全屏（保持 30% 压暗，不黑屏）→ berryos
       Esc → 全部反向恢复
    ============================================================ */
 (function () {
@@ -880,7 +352,6 @@
   var stage = document.getElementById('interiorStage');
   var interiorImg = document.getElementById('interiorImg');
   var noiseBox = document.getElementById('noiseBox');
-  var trans = document.getElementById('transition');
   var dim = document.getElementById('dimLayer');
 
   /* ---- 电视屏在 building_back.png（120x79）内的比例坐标 ---- */
@@ -941,7 +412,7 @@
     fIdx = (fIdx + 1) % 3;
   }
 
-  /* ---- ① 点建筑物：表层透明化 + 环境压暗 50% + 镜头向近靠 ---- */
+  /* ---- ① 点建筑物：表层透明化 + 环境压暗 30% + 镜头向近靠 ---- */
   var entered = false;
   var noiseTimer = null;
 
@@ -951,7 +422,7 @@
 
     positionNoise();
     camera.classList.add('entered');    // 表层透明化，显露下方内部
-    dim.classList.add('show');          // 环境亮度渐降至 50%
+    dim.classList.add('show');          // 环境亮度渐降至 30%
     world.classList.add('zoomed');      // 镜头整体向近靠（内外同步）
     interior.classList.add('show');     // 内部可交互
 
@@ -964,7 +435,7 @@
     }, 1100);
   });
 
-  /* ---- ③ 点电视：内部放大至 noise 占满全屏 → 黑屏 → berryos ---- */
+  /* ---- ③ 点电视：镜头不断缩进至 noise 占满全屏 → 保持 30% 压暗直接跳转 ---- */
   var zooming = false;
   noiseBox.addEventListener('click', function () {
     if (zooming) return;
@@ -974,10 +445,8 @@
     stage.style.transformOrigin = tvOrigin;   // 精确对准电视屏中心
     var s = Math.max(window.innerWidth / nr.width, window.innerHeight / nr.height) * 1.06;
     stage.style.transform = 'scale(' + s.toFixed(3) + ')';
-    setTimeout(function () {
-      trans.classList.add('active');
-      setTimeout(function () { location.href = 'berryos.html'; }, 420);
-    }, 880);
+    // 四周保持 30% 压暗，不黑屏；noise 铺满后直接进入 berryos
+    setTimeout(function () { location.href = 'berryos.html'; }, 880);
   });
 
   /* ---- Esc：从内部退回外观（全部过渡反向播放）；点电视放大后禁用 ---- */
@@ -995,7 +464,6 @@
 })();
 </script>
 <script src="js/api.js?v=20261002"></script>
-<script src="js/seed.js?v=20261002"></script>
-<script>if (location.hash.indexOf('adjust') >= 0) document.write('<script src="js/adjuster.js?v=20261002"><\/script>');</script>
+<script src="js/seed.js?v=20261002d"></script>
 </body>
 </html>

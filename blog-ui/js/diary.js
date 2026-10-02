@@ -317,6 +317,15 @@
         localStorage.setItem('lastEmotion', emotion);
     }
 
+    // 退出页面时把当前情绪写入共享存储（与 roundtable 共用，sing 页按 ts 取最新）
+    window.addEventListener('pagehide', () => {
+        try {
+            localStorage.setItem('madeline_emotion', JSON.stringify({
+                emotion: currentEmotion || '默认', source: 'diary', ts: Date.now()
+            }));
+        } catch (e) {}
+    });
+
     function splitSpeak(text) {
         const parts = String(text || '').split(/(?<=[。！？!?…\n])/).map(s => s.trim()).filter(Boolean);
         const merged = [];

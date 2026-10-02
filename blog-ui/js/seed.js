@@ -171,7 +171,7 @@
     }
   }
 
-  // ===== 跟随：trail 历史延迟（按距离阈值记录，保证尾巴扯开不重叠） =====
+  // ===== 跟随：弹簧-阻尼物理（鼠标停 → 籽带速度滑行并刹车，停稳后轻微晃动） =====
   // 第 1 颗紧跟鼠标，第 i 颗取 trail[i] 位置（按收集顺序）
   // trail 只在鼠标移动 ≥ GAP 距离时才记录新点 → 相邻籽必然有间距，不重叠
   // 鼠标静止时 trail 保留上次形状 → 尾巴不聚拢
@@ -189,37 +189,58 @@
     if (trail.length > TRAIL_MAX) trail.pop();
   }
 
-  // 帧率无关的 lerp 系数：k 为 60fps 下单帧比例，dt 为实际帧间隔（秒）
-  function lerpDt(cur, target, k, dt) {
-    var f = 1 - Math.pow(1 - k, dt * 60);
-    return cur + (target - cur) * f;
-  }
+  // 帧率无关的阻尼系数：rate 为每秒速度衰减率，dt 为实际帧间隔（秒）
+  function dampDt(rate, dt) { return Math.exp(-rate * dt); }
 
   var lastFrameAt = 0;
   function followLoop(now) {
     var dt = lastFrameAt ? Math.min(0.05, (now - lastFrameAt) / 1000) : 1 / 60;
     lastFrameAt = now;
     var head = trail.length ? trail[0] : mouse;
+    var tSec = now / 1000;
     Object.keys(itemEls).forEach(function (id) {
       var entry = itemEls[id];
       if (!entry || !entry.follow) return;
       var idx = entry.followDelay || 0;
-      var cur = entry.cur || { x: mouse.x, y: mouse.y };
+      if (!entry.cur) entry.cur = { x: mouse.x, y: mouse.y };
+      if (!entry.vel) entry.vel = { x: 0, y: 0 };
+      var cur = entry.cur, vel = entry.vel;
+
+      var tx, ty, spring, damp;
       if (idx === 0) {
-        // 第 1 颗：瞬时吸附鼠标，永远跟手最流畅
-        cur.x = mouse.x;
-        cur.y = mouse.y;
+        // 头籽：弹簧硬、阻尼大 → 跟手但鼠标停下时有短促的刹车滑距
+        tx = mouse.x; ty = mouse.y;
+        spring = 380; damp = 22;
       } else {
-        // 第 i 颗：lerp 朝 trail[i]（扯开距离），0.82 让跟随既紧又有弹性
+        // 尾籽：弹簧软、阻尼小 → 弹性尾巴，刹车滑距更长更飘
         var i = Math.min(idx, trail.length - 1);
         var pos = (i >= 0 && trail[i]) ? trail[i] : head;
-        cur.x = lerpDt(cur.x, pos.x, 0.82, dt);
-        cur.y = lerpDt(cur.y, pos.y, 0.82, dt);
+        tx = pos.x; ty = pos.y;
+        spring = 130; damp = 12;
       }
-      entry.cur = cur;
+
+      // 弹簧加速 + 阻尼耗散：目标静止时速度被阻尼耗尽 → 在有限距离内自然刹停
+      vel.x += (tx - cur.x) * spring * dt;
+      vel.y += (ty - cur.y) * spring * dt;
+      var dk = dampDt(damp, dt);
+      vel.x *= dk; vel.y *= dk;
+      cur.x += vel.x * dt;
+      cur.y += vel.y * dt;
+
+      // 靠近目标（60px 内）就开始待机晃动：上下 ±4px（沿用 seedBob 待机节奏）
+      // + 左右 ±3px 摇摆（待机只有上下，跟随态增添左右），越贴近目标晃得越充分，每颗籽相位随机
+      var distT = Math.sqrt((tx - cur.x) * (tx - cur.x) + (ty - cur.y) * (ty - cur.y));
+      var prox = Math.max(0, 1 - distT / 60);
+      var wx = 0, wy = 0;
+      if (prox > 0.01) {
+        if (entry.phase == null) entry.phase = Math.random() * Math.PI * 2;
+        wx = Math.sin(tSec * 1.85 + entry.phase) * 3 * prox;
+        wy = Math.sin(tSec * 2.42 + entry.phase * 1.7) * 4 * prox;
+      }
+
       // 只改 transform（合成层），绝不碰 left/top，避免每帧重排
       entry.el.style.transform =
-        'translate3d(' + cur.x.toFixed(1) + 'px,' + cur.y.toFixed(1) + 'px,0) translate(-50%,-50%)';
+        'translate3d(' + (cur.x + wx).toFixed(1) + 'px,' + (cur.y + wy).toFixed(1) + 'px,0) translate(-50%,-50%)';
     });
     requestAnimationFrame(followLoop);
   }
@@ -278,11 +299,15 @@
       entry.el.classList.add('merge');
       var pos = entry.cur || { x: cx, y: cy };
       var dx = pos.x - cx, dy = pos.y - cy;
+      var base = Math.atan2(dy, dx);
+      var r0 = Math.max(60, Math.sqrt(dx * dx + dy * dy) * 0.5);   // 起始旋转半径：距中心的一半，圆明显收小
       parts.push({
         el: entry.el,
-        x: pos.x, y: pos.y,
-        base: Math.atan2(dy, dx),
-        r0: Math.max(120, Math.sqrt(dx * dx + dy * dy)),
+        base: base,
+        r0: r0,
+        // 接管偏移：籽当前位置与螺旋起点的差值，动画前 18% 内衰减到 0，避免半径减半后瞬移
+        ox: pos.x - (cx + Math.cos(base) * r0),
+        oy: pos.y - (cy + Math.sin(base) * r0 * 0.92),
         dir: Math.random() < 0.5 ? -1 : 1,
         turns: 1.6 + Math.random() * 1.1,       // 螺旋 1.6~2.7 圈
         spin: 600 + Math.random() * 360         // 自转角速度（度/秒）
@@ -386,11 +411,12 @@
       var t = Math.min(1, (now - t0) / MERGE_MS);
       var approach = easeInCubic(t);          // 半径收敛：先慢后快，持续靠近不回退
       var orbit = easeInOutCubic(t);          // 轨道角：单调递增，循环旋转
+      var offK = 1 - easeOutCubic(Math.min(1, t / 0.18));  // 接管偏移衰减：前 18% 滑入螺旋轨道
       parts.forEach(function (p) {
         var ang = p.base + p.dir * p.turns * Math.PI * 2 * orbit;
         var rad = p.r0 * (1 - approach);
-        var x = cx + Math.cos(ang) * rad;
-        var y = cy + Math.sin(ang) * rad * 0.92;   // 略扁，视觉更像聚拢
+        var x = cx + Math.cos(ang) * rad + p.ox * offK;
+        var y = cy + Math.sin(ang) * rad * 0.92 + p.oy * offK;   // 略扁，视觉更像聚拢
         var spin = p.dir * p.spin * (now - t0) / 1000;
         var sc = 1;                              // 旋转过程大小不变，只做旋转+汇聚
         var op = t > 0.86 ? Math.max(0, 1 - (t - 0.86) / 0.14) : 1;  // 末段融进草莓
@@ -413,26 +439,40 @@
     requestAnimationFrame(step);
   }
 
-  // ===== 启动 =====
-  // 新籽提示（自包含：不依赖 api.js 的 showToast）
-  function seedToast(text) {
-    var t = document.createElement('div');
-    t.textContent = text;
-    t.style.cssText =
-      'position:fixed;top:78px;left:50%;transform:translateX(-50%);z-index:99997;' +
-      'background:rgba(20,26,46,.9);color:#ffe9a8;border:1px solid rgba(255,200,120,.5);' +
-      'border-radius:18px;padding:7px 18px;font-size:13px;letter-spacing:1px;' +
-      'box-shadow:0 4px 18px rgba(0,0,0,.4);pointer-events:none;' +
-      'opacity:0;transition:opacity .35s,transform .35s;';
-    document.body.appendChild(t);
-    requestAnimationFrame(function () {
-      t.style.opacity = '1';
-      t.style.transform = 'translateX(-50%) translateY(2px)';
+  // ===== 新籽位置提示：diary 页由 Madeline 在聊天中自然说出，其他页走 toast =====
+  function seedDirText(x, y) {
+    var v = y < 35 ? '上' : (y > 65 ? '下' : '');
+    var h = x < 35 ? '左' : (x > 65 ? '右' : '');
+    if (h && v) return h + v + '角';        // 左上角 / 右下角…
+    if (v) return v === '上' ? '上方' : '下方';
+    if (h) return h === '左' ? '左侧' : '右侧';
+    return '正中间';
+  }
+  function buildSeedHint(seeds) {
+    var seen = {}, dirs = [];
+    seeds.forEach(function (sd) {
+      var d = seedDirText(sd.x, sd.y);
+      if (!seen[d]) { seen[d] = 1; dirs.push(d); }
     });
-    setTimeout(function () {
-      t.style.opacity = '0';
-      setTimeout(function () { if (t.parentNode) t.remove(); }, 400);
-    }, 2600);
+    var where = dirs.length <= 2 ? dirs.join('和') : dirs.slice(0, 2).join('、') + '……还有别的地方';
+    var templates = [
+      '诶？我感觉到这个页面有草莓籽的气息……好像在' + where + '附近闪着光。一共 ' + seeds.length + ' 颗，找找看？',
+      '刚刚有什么东西闪了一下！' + where + '……好像藏着 ' + seeds.length + ' 颗草莓籽，去看看？'
+    ];
+    return templates[Math.floor(Math.random() * templates.length)];
+  }
+  // 在 diary 页说出提示（存在 window.addMadelineMessage 时）；说完清 hintPending
+  function speakSeedHintIfNeeded(immediate) {
+    if (typeof window.addMadelineMessage !== 'function') return false;
+    var st = loadState();
+    if (!st.hintPending) return false;
+    var pending = st.seeds.filter(function (x) { return !x.collected; });
+    if (!pending.length) { st.hintPending = false; saveState(st); return false; }
+    st.hintPending = false;
+    saveState(st);
+    var say = function () { window.addMadelineMessage(buildSeedHint(pending), '惊讶'); };
+    if (immediate) say(); else setTimeout(say, 2600);   // 页面刚加载时让开场白先说
+    return true;
   }
 
   function init() {
@@ -450,9 +490,13 @@
     }
 
     if (shouldRefresh(s)) {
-      s = { lastRefresh: Date.now(), seeds: genSeeds(), credited: false };
+      s = { lastRefresh: Date.now(), seeds: genSeeds(), credited: false, hintPending: true };
       saveState(s);
-      seedToast('新的草莓籽出现了，找找看');
+      // 位置提示统一由 diary 聊天给出（本页是 diary 立即说，其他页留待进入 diary 补说）
+      speakSeedHintIfNeeded(true);
+    } else {
+      // 刷新发生在别的页面 → 来到 diary 时补说位置提示
+      speakSeedHintIfNeeded(false);
     }
     render();
     requestAnimationFrame(followLoop);
