@@ -1,11 +1,7 @@
 <div align="center">
 
 <!-- ═══════════════════ HERO BANNER ═══════════════════ -->
-<img src="blog-ui/celeste-gui/background.jpg" alt="Madeline reaching for the summit" width="100%" style="border-radius:12px;">
-
-<br>
-
-<img src="blog-ui/celeste-gui/title.png" alt="CELESTE" width="320">
+<img src="docs/banner.jpg" alt="Celeste AI Diary Companion Blog" width="100%" style="border-radius:12px;">
 
 #  AI Diary Companion Blog
 
@@ -78,6 +74,7 @@ This dual-platform flow creates meaning: **intimate personal reflections in the 
 
 | 🏷️ | Feature | Description | Status |
 |:---:|---------|-------------|:---:|
+| 🐦 | **AI Roundtable** | Madeline, Theo, Granny, Badeline & Oshiro debate your topic in-character until consensus — animated portraits, emotion voice blips, reactive bird host | ✅ |
 | <img src="blog-ui/celeste-icons/heartgem0.png" width="28"> | **AI Companionship** | Madeline provides intelligent, emotionally-aware interactions (7 emotion states) | ✅ |
 | <img src="blog-ui/celeste-collectables/cassette.png" width="28"> | **Memory System** | Daily postcards & monthly snapshot reflections (RAG-powered) | ✅ |
 | <img src="blog-ui/celeste-feather/feather0.png" width="28"> | **Feather Breathing Game** | Physics-based falling feather for anxiety relief | ✅ |
@@ -189,6 +186,14 @@ A quiet snow-night scene under glowing pixel stars. Click the payphone: the rece
 </p>
 
 A Server-Sent-Events powered live chatroom with self/other message bubbles, an online-presence badge, and a pixel-sticker emoji panel. The right-hand **notification column** gathers likes and comments on your writing in real time.
+
+### 🐦 AI Roundtable — *Five Celeste souls at the table, debating until consensus.*
+
+<p align="center">
+  <img src="docs/screenshots/roundtable.png" alt="AI Roundtable" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
+</p>
+
+The most fully-realized feature. Bring any dilemma to the table and **Madeline, Theo, Granny, Badeline and Oshiro** discuss it in-character — SSE-streamed dialogue with animated portrait frames, emotion-driven voice blips, and a bird host who flies between seats and grows restless as the debate heats up. Jump in anytime as yourself, or call on a character directly; rounds continue until the AI judge scores consensus, then the meeting closes with a final review and action items.
 
 ---
 

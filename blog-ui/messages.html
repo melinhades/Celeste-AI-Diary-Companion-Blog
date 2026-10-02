@@ -76,7 +76,7 @@
         display:flex; align-items:center; gap:8px; margin-top:14px;
         background:rgba(18,24,42,.72); backdrop-filter:blur(12px);
         border:1px solid rgba(130,160,255,.2); border-radius:26px;
-        padding:5px 6px 5px 18px;
+        padding:5px 6px;
     }
     #chatInput {
         flex:1; min-width:0; background:transparent; border:0;
@@ -91,6 +91,23 @@
     }
     #chatSend:hover:not(:disabled) { filter:brightness(1.1); }
     #chatSend:disabled { opacity:.5; cursor:not-allowed; }
+
+    /* ===== 表情包（与评论区同款五系列，暗色主题） ===== */
+    .emoji-wrap { position:relative; flex-shrink:0; }
+    .emoji-btn { width:40px; height:40px; border:1px solid rgba(130,160,255,.25); border-radius:50%; background:rgba(130,160,255,.08); cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; transition:all .2s; }
+    .emoji-btn:hover { border-color:rgba(130,160,255,.5); background:rgba(130,160,255,.16); }
+    .emoji-btn img { height:24px; width:auto; image-rendering:pixelated; }
+    .emoji-panel { display:none; position:absolute; bottom:calc(100% + 10px); left:0; width:300px; max-width:78vw; background:rgba(18,26,46,.97); border:1px solid rgba(130,160,255,.25); border-radius:14px; padding:10px; z-index:50; box-shadow:0 8px 28px rgba(0,0,0,.55); }
+    .emoji-panel.open { display:block; animation:emojiIn .18s ease; }
+    @keyframes emojiIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+    .emoji-tabs { display:flex; gap:6px; margin-bottom:8px; }
+    .emoji-tab { flex:1; border:1px solid rgba(130,160,255,.25); background:transparent; color:rgba(200,210,255,.6); font-size:11px; padding:4px 2px; border-radius:6px; cursor:pointer; transition:all .2s; white-space:nowrap; }
+    .emoji-tab.active { background:linear-gradient(135deg,#7b5cff,#4a98ff); color:#fff; border-color:transparent; }
+    .emoji-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:4px; max-height:180px; overflow-y:auto; }
+    .emoji-cell { border:none; background:transparent; padding:3px; cursor:pointer; border-radius:6px; transition:all .15s; display:flex; align-items:center; justify-content:center; }
+    .emoji-cell:hover { background:rgba(130,160,255,.18); }
+    .emoji-cell img { height:34px; width:auto; image-rendering:pixelated; }
+    .chat-emoji { height:34px; width:auto; vertical-align:middle; image-rendering:pixelated; margin:0 3px; border-radius:5px; }
     .chat-login-tip { position:relative; z-index:3; text-align:center; color:rgba(200,210,255,.5); padding:80px 20px; font-size:14px; }
 
     /* ===== 左侧消息列表（IG 双栏：左导航 / 右内容） ===== */
@@ -175,6 +192,21 @@
                         </div>
                         <div id="chatLog"><div class="chat-empty">正在拉取聊天记录…</div></div>
                         <div class="chat-input-row" id="chatInputRow">
+                            <div class="emoji-wrap">
+                                <button type="button" id="emojiBtn" class="emoji-btn" title="插入表情" aria-label="插入表情">
+                                    <img src="Atlases/Portraits/madeline/peaceful00.png" alt="表情" decoding="async">
+                                </button>
+                                <div id="emojiPanel" class="emoji-panel">
+                                    <div class="emoji-tabs">
+                                        <button type="button" class="emoji-tab active" data-series="mad">Madeline</button>
+                                        <button type="button" class="emoji-tab" data-series="bade">Badeline</button>
+                                        <button type="button" class="emoji-tab" data-series="granny">Granny</button>
+                                        <button type="button" class="emoji-tab" data-series="theo">Theo</button>
+                                        <button type="button" class="emoji-tab" data-series="oshiro">Oshiro</button>
+                                    </div>
+                                    <div class="emoji-grid" id="emojiGrid"></div>
+                                </div>
+                            </div>
                             <input type="text" id="chatInput" maxlength="500" placeholder="说点什么…（Enter 发送）" autocomplete="off">
                             <button id="chatSend" title="发送" aria-label="发送">↑</button>
                         </div>
@@ -192,7 +224,7 @@
     </div>
 
 <script src="js/api.js?v=20261002"></script>
-<script src="js/auth.js?v=20261002"></script>
+<script src="js/auth.js?v=20261002b"></script>
 <script>
     initHeader();
 
@@ -307,7 +339,7 @@
                 div.className = 'chat-msg me';
                 div.innerHTML =
                     '<div class="bubble" title="' + escHtml(fmtFull(ts)) + '">' +
-                    escHtml(m.content || '') + '</div>';
+                    renderChatContent(m.content || '') + '</div>';
             } else {
                 div.className = 'chat-msg other';
                 const name = m.name || '匿名';
@@ -324,7 +356,7 @@
                 div.innerHTML = av +
                     '<div class="body">' + nm +
                     '<div class="bubble" title="' + escHtml(fmtFull(ts)) + '">' +
-                    escHtml(m.content || '') + '</div></div>';
+                    renderChatContent(m.content || '') + '</div></div>';
             }
             logEl.appendChild(div);
             if (typingRow && typingRow.parentNode === logEl) logEl.appendChild(typingRow);
@@ -339,6 +371,64 @@
             logEl.appendChild(div);
             if (typingRow && typingRow.parentNode === logEl) logEl.appendChild(typingRow);
             if (stick) scrollToBottom();
+        }
+
+        /* ===== 表情包：与评论区同款五系列（Atlases/Portraits 各情绪 00 帧；暗面琳素材目录为 ghost） ===== */
+        const EMOJI_PACKS = {
+            mad: { dir: 'madeline', names: ['normal', 'peaceful', 'determined', 'distracted', 'panic', 'sad', 'sadder', 'surprised', 'angry', 'deadpan', 'upset', 'together'] },
+            bade: { dir: 'ghost', names: ['normal', 'angry', 'angryAlt', 'concerned', 'freakA', 'freakB', 'freakC', 'sad', 'scoff', 'serious', 'sigh', 'upset', 'worried', 'worriedAlt', 'yell'] },
+            granny: { dir: 'granny', names: ['normal', 'creepA', 'creepB', 'laugh', 'mock'] },
+            theo: { dir: 'theo', names: ['normal', 'excited', 'nailedit', 'serious', 'thinking', 'worried', 'wtf', 'yolo'] },
+            oshiro: { dir: 'oshiro', names: ['normal', 'nervous', 'serious', 'sidehappy', 'sideworried', 'sidesuspicious', 'drama', 'lostcontrol', 'worried'] }
+        };
+        let emojiSeries = 'mad';
+        const emojiBtn = document.getElementById('emojiBtn');
+        const emojiPanel = document.getElementById('emojiPanel');
+        const emojiGrid = document.getElementById('emojiGrid');
+
+        function renderEmojiGrid() {
+            const pack = EMOJI_PACKS[emojiSeries];
+            emojiGrid.innerHTML = pack.names.map(n =>
+                `<button type="button" class="emoji-cell" data-mark="[${emojiSeries}:${n}]" title="${n}"><img loading="lazy" src="Atlases/Portraits/${pack.dir}/${n}00.png" alt="${n}" decoding="async"></button>`
+            ).join('');
+        }
+        renderEmojiGrid();
+
+        emojiBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            emojiPanel.classList.toggle('open');
+        });
+        emojiPanel.addEventListener('click', e => e.stopPropagation());
+        document.addEventListener('click', e => {
+            if (!e.target.closest('.emoji-wrap')) emojiPanel.classList.remove('open');
+        });
+        emojiPanel.querySelectorAll('.emoji-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                emojiPanel.querySelectorAll('.emoji-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                emojiSeries = tab.dataset.series;
+                renderEmojiGrid();
+            });
+        });
+        emojiGrid.addEventListener('click', e => {
+            const cell = e.target.closest('.emoji-cell');
+            if (!cell) return;
+            const start = typeof inputEl.selectionStart === 'number' ? inputEl.selectionStart : inputEl.value.length;
+            const end = typeof inputEl.selectionEnd === 'number' ? inputEl.selectionEnd : inputEl.value.length;
+            inputEl.setRangeText(cell.dataset.mark, start, end, 'end');
+            inputEl.focus();
+        });
+
+        // 渲染消息内容：先整体转义，再把白名单内的表情标记替换为图片（防 XSS）
+        function renderChatContent(text) {
+            let s = escHtml(text);
+            s = s.replace(/\[(mad|bade|granny|theo|oshiro):([a-zA-Z]+)\]/g, (m, series, name) => {
+                const pack = EMOJI_PACKS[series];
+                return (pack && pack.names.includes(name))
+                    ? `<img class="chat-emoji" loading="lazy" src="Atlases/Portraits/${pack.dir}/${name}00.png" alt="${series}:${name}" decoding="async">`
+                    : m;
+            });
+            return s;
         }
 
         // 当前用户 id（区分自己/他人气泡）

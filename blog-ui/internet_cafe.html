@@ -17,6 +17,9 @@
     --neon-w: 13.5%;   /* 宽度（占视口宽度） */
     --neon-h: 16%;     /* 高度（占视口高度） */
     --neon-bright: 1.35; /* 亮度 */
+    --int-x: 0%;       /* 内部图水平平移（占视口宽度） */
+    --int-y: 0%;       /* 内部图垂直平移（占视口高度） */
+    --int-s: 1;        /* 内部图缩放 */
   }
 
   /* === 背景截图充满全屏（新外观图） === */
@@ -70,6 +73,9 @@
     position: absolute; inset: 0;
     z-index: 1;
     pointer-events: none;
+    /* 内部图对齐：平移（视口百分比）+ 缩放，用左下角「调整内部图」面板调 */
+    transform: translate(var(--int-x), var(--int-y)) scale(var(--int-s));
+    transform-origin: 50% 50%;
   }
   #interior.show { pointer-events: auto; }
   #interiorStage {
@@ -139,8 +145,15 @@
   }
   body.debug #neonSign canvas { pointer-events: none; }
 
+  /* 内部图调试：外观表层半透明作对齐参考，内部层可拖拽缩放 */
+  body.int-debug #camera { opacity: .18; pointer-events: none; }
+  body.int-debug #interior { pointer-events: auto; }
+  body.int-debug #interiorStage { cursor: move; outline: 1px dashed #ffb066; outline-offset: 2px; }
+  body.int-debug #noiseBox { pointer-events: none; }
+
   /* 调试控制面板（按 D 显示） */
-  #debugPanel {
+  #debugPanel,
+  #intPanel {
     position: fixed; right: 12px; top: 12px;
     z-index: 9998;
     display: none;
@@ -155,7 +168,7 @@
     box-shadow: 0 4px 24px rgba(0,0,0,.6);
     user-select: none;
   }
-  body.debug #debugPanel { display: block; }
+  body.debug #debugPanel, body.int-debug #intPanel { display: block; }
   #debugPanel h4 {
     font-size: 12px; color: #fff; letter-spacing: 1px;
     margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;
@@ -191,6 +204,26 @@
   }
   .dp-actions button.danger { border-color: rgba(255,120,120,.5); color: #ffc9c9; background: rgba(255,80,80,.12); }
   .dp-tip { color: #789; font-size: 10px; line-height: 1.5; margin-top: 8px; border-top: 1px solid rgba(102,255,221,.2); padding-top: 6px; }
+
+  /* 调整入口按钮（左下角常驻，点击开关对应调试面板） */
+  #neonAdjBtn, #intAdjBtn {
+    position: fixed; left: 12px; bottom: 12px;
+    z-index: 9997;
+    font-family: 'Courier New', monospace;
+    font-size: 12px; letter-spacing: 1px;
+    color: #aaffee;
+    background: rgba(0,12,22,.75);
+    border: 1px solid rgba(102,255,221,.45);
+    border-radius: 6px;
+    padding: 7px 12px;
+    cursor: pointer;
+    opacity: .5;
+    transition: opacity .2s, background .2s;
+  }
+  #intAdjBtn { left: 112px; color: #ffd9a8; border-color: rgba(255,176,102,.45); background: rgba(22,10,0,.75); }
+  #neonAdjBtn:hover, #intAdjBtn:hover { opacity: 1; }
+  body.debug #neonAdjBtn, body.int-debug #intAdjBtn { opacity: 1; background: rgba(102,255,221,.22); }
+  body.int-debug #intAdjBtn { background: rgba(255,176,102,.22); }
 
   /* === TV 热区已并入内部层 #noiseBox === */
 
@@ -242,6 +275,10 @@
       <div id="buildHotspot"></div>
     </div>
   </div>
+
+  <!-- 调整入口（左下角常驻） -->
+  <button id="neonAdjBtn">调整招牌</button>
+  <button id="intAdjBtn">调整内部图</button>
 
   <!-- 调试控制面板（按 D 开关） -->
   <div id="debugPanel">
@@ -310,6 +347,35 @@
     <div class="dp-tip">大小=等比缩放 · 宽/高=单独微调<br>数字可直接输入，回车生效 · Esc 退出</div>
   </div>
 
+  <!-- 内部图调试面板 -->
+  <div id="intPanel">
+    <h4>内部图对齐 <span id="ipClose" style="cursor:pointer">✕</span></h4>
+    <div class="dp-row">
+      <label>X 位</label>
+      <button data-ikey="x" data-step="-0.3">−</button>
+      <input class="val" id="inpIX" type="number" step="0.1">
+      <button data-ikey="x" data-step="0.3">+</button>
+    </div>
+    <div class="dp-row">
+      <label>Y 位</label>
+      <button data-ikey="y" data-step="-0.3">−</button>
+      <input class="val" id="inpIY" type="number" step="0.1">
+      <button data-ikey="y" data-step="0.3">+</button>
+    </div>
+    <div class="dp-row">
+      <label>缩放</label>
+      <button data-ikey="s" data-step="-0.02">−</button>
+      <input class="val" id="inpIS" type="number" step="0.01">
+      <button data-ikey="s" data-step="0.02">+</button>
+    </div>
+    <div class="dp-actions">
+      <button id="ipReset" title="复位">复位</button>
+      <button id="ipCopy">复制数值</button>
+      <button id="ipExit" class="danger">完成</button>
+    </div>
+    <div class="dp-tip">直接拖动图片移动 · 滚轮缩放<br>外观会变半透明方便对齐<br>调好把数值发给我固化进代码</div>
+  </div>
+
   <!-- 四周环境压暗层 -->
   <div id="dimLayer"></div>
 
@@ -328,6 +394,9 @@
   if (p.has('nw')) root.setProperty('--neon-w', p.get('nw') + '%');
   if (p.has('nh')) root.setProperty('--neon-h', p.get('nh') + '%');
   if (p.has('bright')) root.setProperty('--neon-bright', p.get('bright'));
+  if (p.has('ix')) root.setProperty('--int-x', p.get('ix') + '%');
+  if (p.has('iy')) root.setProperty('--int-y', p.get('iy') + '%');
+  if (p.has('is')) root.setProperty('--int-s', p.get('is'));
 })();
 
 /* ============================================================
@@ -453,6 +522,20 @@
   var root = document.documentElement;
   var neon = document.getElementById('neonSign');
   var panel = document.getElementById('debugPanel');
+
+  // 左下角常驻入口按钮：点击开关调试模式；与内部图调试互斥
+  function syncAdjBtns() {
+    document.getElementById('neonAdjBtn').textContent =
+      document.body.classList.contains('debug') ? '完成调整' : '调整招牌';
+    document.getElementById('intAdjBtn').textContent =
+      document.body.classList.contains('int-debug') ? '完成调整' : '调整内部图';
+  }
+  window.__syncAdjBtns = syncAdjBtns;
+  document.getElementById('neonAdjBtn').addEventListener('click', function () {
+    var on = document.body.classList.toggle('debug');
+    if (on) { document.body.classList.remove('int-debug'); refreshInputs(); }
+    syncAdjBtns();
+  });
 
   // 默认值（复位用；若 URL 带了参数，以 URL 值为默认）
   var DEFAULTS = { x: 50.5, y: 42.5, w: 13.5, h: 16, b: 1.35 };
@@ -589,7 +672,7 @@
     if (navigator.clipboard) navigator.clipboard.writeText(buildUrl()).then(done, done); else done();
   }
   document.getElementById('dpCopy').addEventListener('click', copyValues);
-  function exitDebug() { document.body.classList.remove('debug'); }
+  function exitDebug() { document.body.classList.remove('debug'); syncAdjBtns(); }
   document.getElementById('dpExit').addEventListener('click', exitDebug);
   document.getElementById('dpClose').addEventListener('click', exitDebug);
 
@@ -627,7 +710,8 @@
   window.addEventListener('keydown', function (e) {
     if (e.key === 'd' || e.key === 'D') {
       var on = document.body.classList.toggle('debug');
-      if (on) refreshInputs();
+      if (on) { document.body.classList.remove('int-debug'); refreshInputs(); }
+      syncAdjBtns();
       return;
     }
     if (!document.body.classList.contains('debug')) return;
@@ -644,6 +728,138 @@
       default: return;
     }
     setVars(v);
+    e.preventDefault();
+  });
+})();
+
+/* ============================================================
+   3.5 内部图调试：点左下角「调整内部图」开关
+       外观表层变半透明作对齐参考；拖动图片移动、滚轮缩放
+       方向键微调 · 复制数值 · Esc 退出
+   ============================================================ */
+(function () {
+  var root = document.documentElement;
+  var stage = document.getElementById('interiorStage');
+  var panel = document.getElementById('intPanel');
+  var DEFAULTS = { x: 0, y: 0, s: 1 };
+  var META = {
+    x: { inp: 'inpIX' },
+    y: { inp: 'inpIY' },
+    s: { inp: 'inpIS' }
+  };
+
+  function getV() {
+    var cs = getComputedStyle(root);
+    return {
+      x: parseFloat(cs.getPropertyValue('--int-x')) || 0,
+      y: parseFloat(cs.getPropertyValue('--int-y')) || 0,
+      s: parseFloat(cs.getPropertyValue('--int-s')) || 1
+    };
+  }
+  function setV(v) {
+    v.x = Math.max(-80, Math.min(80, v.x));
+    v.y = Math.max(-80, Math.min(80, v.y));
+    v.s = Math.max(.2, Math.min(5, v.s));
+    root.style.setProperty('--int-x', v.x.toFixed(2) + '%');
+    root.style.setProperty('--int-y', v.y.toFixed(2) + '%');
+    root.style.setProperty('--int-s', v.s.toFixed(3));
+    refreshI();
+  }
+  function refreshI() {
+    var v = getV();
+    for (var k in META) {
+      var el = document.getElementById(META[k].inp);
+      if (document.activeElement !== el) el.value = v[k];
+    }
+  }
+  function exitInt() {
+    document.body.classList.remove('int-debug');
+    if (window.__syncAdjBtns) window.__syncAdjBtns();
+  }
+
+  // 入口按钮：与招牌调试互斥
+  document.getElementById('intAdjBtn').addEventListener('click', function () {
+    var on = document.body.classList.toggle('int-debug');
+    if (on) { document.body.classList.remove('debug'); refreshI(); }
+    if (window.__syncAdjBtns) window.__syncAdjBtns();
+  });
+  document.getElementById('ipExit').addEventListener('click', exitInt);
+  document.getElementById('ipClose').addEventListener('click', exitInt);
+
+  // ± 按钮
+  panel.querySelectorAll('button[data-ikey]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var v = getV();
+      v[btn.dataset.ikey] += parseFloat(btn.dataset.step);
+      setV(v);
+    });
+  });
+  // 数字输入框：输入即生效
+  Object.keys(META).forEach(function (key) {
+    var el = document.getElementById(META[key].inp);
+    el.addEventListener('change', function () {
+      var val = parseFloat(el.value);
+      if (!isNaN(val)) { var v = getV(); v[key] = val; setV(v); }
+    });
+    el.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') el.blur();
+      e.stopPropagation();
+    });
+  });
+  // 复位
+  document.getElementById('ipReset').addEventListener('click', function () {
+    setV({ x: DEFAULTS.x, y: DEFAULTS.y, s: DEFAULTS.s });
+  });
+  // 复制数值
+  document.getElementById('ipCopy').addEventListener('click', function () {
+    var v = getV();
+    var s = 'ix=' + v.x.toFixed(2) + ' iy=' + v.y.toFixed(2) + ' is=' + v.s.toFixed(3);
+    var url = location.pathname.split('/').pop() +
+      '?ix=' + v.x.toFixed(2) + '&iy=' + v.y.toFixed(2) + '&is=' + v.s.toFixed(3);
+    var done = function () { alert('已复制链接！\n\n' + s + '\n\n' + url); };
+    if (navigator.clipboard) navigator.clipboard.writeText(url).then(done, done); else done();
+  });
+
+  // ---- 拖拽移动（平移单位为视口百分比） ----
+  var dragging = false, sx = 0, sy = 0, start = null;
+  stage.addEventListener('mousedown', function (e) {
+    if (!document.body.classList.contains('int-debug')) return;
+    dragging = true; sx = e.clientX; sy = e.clientY; start = getV();
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', function (e) {
+    if (!dragging) return;
+    var v = getV();
+    v.x = start.x + (e.clientX - sx) / window.innerWidth * 100;
+    v.y = start.y + (e.clientY - sy) / window.innerHeight * 100;
+    setV(v);
+  });
+  window.addEventListener('mouseup', function () { dragging = false; });
+
+  // ---- 滚轮缩放 ----
+  stage.addEventListener('wheel', function (e) {
+    if (!document.body.classList.contains('int-debug')) return;
+    e.preventDefault();
+    var v = getV();
+    v.s *= e.deltaY < 0 ? 1.06 : 1 / 1.06;
+    setV(v);
+  }, { passive: false });
+
+  // ---- 键盘：方向键微调，Esc 退出 ----
+  window.addEventListener('keydown', function (e) {
+    if (!document.body.classList.contains('int-debug')) return;
+    if (/^[0-9.\-]$/.test(e.key) && document.activeElement.tagName === 'INPUT') return;
+    var v = getV();
+    var step = e.shiftKey ? 1 : .2;
+    switch (e.key) {
+      case 'ArrowLeft':  v.x -= step; break;
+      case 'ArrowRight': v.x += step; break;
+      case 'ArrowUp':    v.y -= step; break;
+      case 'ArrowDown':  v.y += step; break;
+      case 'Escape': exitInt(); return;
+      default: return;
+    }
+    setV(v);
     e.preventDefault();
   });
 })();
