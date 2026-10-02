@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -178,7 +178,7 @@
     <div class="container">© 2026 Celeste Blog · Explore the stars</div>
 </footer>
     </main>
-<script src="js/api.js?v=20260925"></script>
+<script src="js/api.js?v=20261002"></script>
 <script src="js/auth.js?v=20261002"></script>
 <script src="js/snow-bgm.js"></script>
 <script>
@@ -273,7 +273,7 @@
         const html = list.map((a, i) => `
             <article class="article-card" style="animation-delay:${i * 0.06}s" onclick="location.href='article.html?id=${a.id}'">
                 <div class="article-meta">
-                    <span class="meta-author"><img loading="lazy" class="meta-author-img" src="${(a.author?.nickname || a.author?.username) ? 'celeste-portraits/madeline/normal00.png' : 'celeste-icons/beat.png'}" alt="" decoding="async">${escHtml(a.author?.nickname || a.author?.username || '匿名')}</span>
+                    <span class="meta-author"><img loading="lazy" class="meta-author-img" src="${(typeof a.author === 'string' ? a.author : (a.author?.nickname || a.author?.username)) ? 'celeste-portraits/madeline/normal00.png' : 'celeste-icons/beat.png'}" alt="" decoding="async">${escHtml((typeof a.author === 'string' ? a.author : (a.author?.nickname || a.author?.username)) || '匿名')}</span>
                     <span class="meta-date"><img loading="lazy" class="meta-icon" src="celeste-icons/cs_variantmode.png" alt="" decoding="async">${formatDate(a.createDate)}</span>
                     <span class="meta-views"><img loading="lazy" class="meta-icon" src="celeste-icons/time.png" alt="" decoding="async">${a.viewCounts || 0}</span>
                     <span class="meta-views"><img class="meta-icon" src="celeste-icons/heartgem1.png" alt="" loading="lazy" decoding="async"><span class="like-num" data-id="${a.id}">0</span></span>
@@ -591,6 +591,6 @@
   function startAnim() { rafId = requestAnimationFrame(draw); }
 })();
 </script>
-<script src="js/seed.js"></script>
+<script src="js/seed.js?v=20261002"></script>
 </body>
 </html>

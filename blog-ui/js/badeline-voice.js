@@ -94,7 +94,8 @@
     // 播一声
     function play(emo) {
         try {
-            if (!window.__audioGestured) return;
+            // 手势解锁双通道：pointerdown/keydown 标记 + Chrome User Activation（CDP 点击等场景兜底）
+            if (!window.__audioGestured && !(navigator.userActivation && navigator.userActivation.hasBeenActive)) return;
             var dir = EMOTION_MAP[emo] || 'normal';
             if (dir === SOLO_DIR) {
                 /* sad_solo：仅 AI 检测到特殊伤心时触发，单文件直达，不参与循环 */

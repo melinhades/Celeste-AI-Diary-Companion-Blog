@@ -12,38 +12,132 @@
         background:url('celeste-areas/ForsakenCity01.webp') center/cover no-repeat;
         opacity:0.25; pointer-events:none; z-index:0;
     }
-    /* ===== 实时聊天 demo（功能优先，未做视觉精修） ===== */
-    .chat-wrap { position:relative; z-index:3; max-width:760px; margin:0 auto; padding:24px 20px; }
-    .chat-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
-    .chat-title { font-size:20px; font-weight:700; color:#e8e8f0; }
+    /* ===== 实时聊天：Instagram 风格消息流（无外框，气泡直铺页面） ===== */
+    .chat-wrap { position:relative; z-index:3; max-width:680px; margin:0 auto; padding:16px 18px 32px; }
+    .chat-head { display:flex; align-items:center; justify-content:space-between; margin:4px 4px 14px; }
+    .chat-title { font-size:18px; font-weight:700; color:#e8e8f0; letter-spacing:.5px; }
     .chat-status { font-size:12px; color:rgba(200,210,255,.6); }
     .chat-status .dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#888; margin-right:6px; vertical-align:1px; }
     .chat-status.online .dot { background:#5fe38b; box-shadow:0 0 6px #5fe38b; }
     .chat-status.offline .dot { background:#ff7b7b; }
-    #chatLog {
-        height:52vh; min-height:300px; overflow-y:auto;
-        background:rgba(22,34,60,.72); border:1px solid rgba(120,200,255,.15);
-        border-radius:10px; padding:14px; backdrop-filter:blur(8px);
+
+    /* 消息行：无容器外框，直接铺在页面背景上 */
+    #chatLog { min-height:220px; }
+    .chat-msg { display:flex; align-items:flex-end; gap:9px; margin-bottom:3px; }
+    .chat-msg.other .av {
+        width:30px; height:30px; border-radius:50%; flex-shrink:0;
+        display:flex; align-items:center; justify-content:center;
+        font-size:13px; font-weight:700; color:#fff;
+        text-shadow:0 1px 2px rgba(0,0,0,.35); user-select:none;
     }
-    .chat-msg { margin-bottom:12px; font-size:14px; line-height:1.5; }
-    .chat-msg .meta { font-size:11px; color:rgba(200,210,255,.45); margin-bottom:2px; }
-    .chat-msg .bubble { display:inline-block; padding:8px 12px; border-radius:10px; background:rgba(60,80,130,.6); color:#e8e8f0; word-break:break-word; max-width:78%; }
-    .chat-msg.me { text-align:right; }
-    .chat-msg.me .bubble { background:rgba(255,227,109,.85); color:#222; }
+    .chat-msg.other .av.placeholder { visibility:hidden; }
+    /* birdAI 吉祥物头像 */
+    .chat-msg.other .av.bird { background:transparent !important; box-shadow:none; }
+    .chat-msg.other .av.bird img {
+        width:100%; height:100%; object-fit:cover; border-radius:50%;
+        image-rendering:auto; background:#1b2b45;
+        border:1px solid rgba(130,160,255,.35);
+    }
+    .chat-msg .nm .bird-tag {
+        font-size:9px; color:#8fd4ff; border:1px solid rgba(143,212,255,.45);
+        border-radius:4px; padding:0 4px; margin-left:5px; vertical-align:1px;
+    }
+    /* “正在输入…”指示器 */
+    .chat-msg.typing-row .typing-bubble { padding:12px 15px 10px; }
+    .chat-msg.typing-row .typing-bubble i {
+        display:inline-block; width:6px; height:6px; margin:0 2px;
+        border-radius:50%; background:rgba(220,228,255,.65);
+        animation: typingBlink 1.2s infinite ease-in-out;
+    }
+    .chat-msg.typing-row .typing-bubble i:nth-child(2) { animation-delay:.2s; }
+    .chat-msg.typing-row .typing-bubble i:nth-child(3) { animation-delay:.4s; }
+    @keyframes typingBlink { 0%,60%,100%{opacity:.25;transform:translateY(0)} 30%{opacity:1;transform:translateY(-3px)} }
+    .chat-msg .body { max-width:74%; display:flex; flex-direction:column; }
+    .chat-msg .nm { font-size:11px; color:rgba(200,210,255,.5); margin:0 0 2px 13px; }
+    .chat-msg .bubble {
+        padding:8px 15px; border-radius:22px; font-size:14px; line-height:1.45;
+        color:#e8e8f0; word-break:break-word; white-space:pre-wrap;
+        background:rgba(46,54,78,.8); border:1px solid rgba(130,160,255,.14);
+    }
+    .chat-msg.me { justify-content:flex-end; }
+    .chat-msg.me .bubble {
+        color:#fff; border:none;
+        background:linear-gradient(135deg,#7b5cff 0%,#4a98ff 100%);
+        box-shadow:0 2px 12px rgba(90,110,255,.28);
+    }
+    /* 时间分组分隔线 */
+    .chat-time { text-align:center; font-size:11px; color:rgba(200,210,255,.55); margin:18px 0 12px; }
+    .chat-time span { background:rgba(18,26,46,.66); border:1px solid rgba(130,160,255,.12); padding:3px 13px; border-radius:11px; }
     .chat-sys { text-align:center; font-size:12px; color:rgba(200,210,255,.4); margin:8px 0; }
-    .chat-empty { text-align:center; color:rgba(200,210,255,.4); padding:40px 20px; font-size:13px; }
-    .chat-input-row { display:flex; gap:8px; margin-top:12px; }
+    .chat-empty { text-align:center; color:rgba(200,210,255,.4); padding:60px 20px; font-size:13px; }
+
+    /* 底部胶囊输入栏：内嵌在右栏聊天面板底部（不悬浮，不挡内容） */
+    .chat-input-row {
+        display:flex; align-items:center; gap:8px; margin-top:14px;
+        background:rgba(18,24,42,.72); backdrop-filter:blur(12px);
+        border:1px solid rgba(130,160,255,.2); border-radius:26px;
+        padding:5px 6px 5px 18px;
+    }
     #chatInput {
-        flex:1; background:rgba(22,34,60,.8); border:1px solid rgba(120,200,255,.25);
-        border-radius:8px; padding:10px 12px; color:#e8e8f0; font-size:14px; outline:none;
+        flex:1; min-width:0; background:transparent; border:0;
+        padding:9px 4px; color:#e8e8f0; font-size:14px; outline:none;
     }
-    #chatInput:focus { border-color:#ffe36d; }
+    #chatInput::placeholder { color:rgba(200,210,255,.4); }
     #chatSend {
-        padding:0 20px; background:#ffe36d; color:#222; border:0; border-radius:8px;
-        font-size:14px; font-weight:700; cursor:pointer;
+        width:40px; height:40px; border:0; border-radius:50%;
+        background:linear-gradient(135deg,#7b5cff 0%,#4a98ff 100%);
+        color:#fff; font-size:18px; line-height:1; cursor:pointer; flex-shrink:0;
+        box-shadow:0 2px 8px rgba(90,110,255,.35);
     }
+    #chatSend:hover:not(:disabled) { filter:brightness(1.1); }
     #chatSend:disabled { opacity:.5; cursor:not-allowed; }
     .chat-login-tip { position:relative; z-index:3; text-align:center; color:rgba(200,210,255,.5); padding:80px 20px; font-size:14px; }
+
+    /* ===== 左侧消息列表（IG 双栏：左导航 / 右内容） ===== */
+    .msg-layout { display:flex; gap:18px; align-items:flex-start; }
+    .msg-side {
+        width:196px; flex-shrink:0; position:sticky; top:84px;
+        background:rgba(18,26,46,.55); border:1px solid rgba(130,160,255,.14);
+        border-radius:14px; padding:8px; backdrop-filter:blur(8px);
+    }
+    .msg-side-title { font-size:11px; color:rgba(200,210,255,.4); letter-spacing:2px; padding:6px 10px 8px; }
+    .msg-side-item {
+        display:flex; align-items:center; gap:7px; padding:10px 12px; border-radius:10px;
+        font-size:13px; color:rgba(220,228,255,.72); cursor:pointer; user-select:none;
+    }
+    .msg-side-item:hover { background:rgba(130,160,255,.1); }
+    .msg-side-item.active { background:rgba(123,92,255,.22); color:#fff; }
+    .side-badge {
+        margin-left:auto; background:#e6517c; color:#fff; font-size:10px; min-width:16px;
+        height:16px; line-height:16px; border-radius:8px; text-align:center; padding:0 4px;
+    }
+    .msg-main { flex:1; min-width:0; }
+
+    /* 通知列表 */
+    .notif-item {
+        display:flex; align-items:center; gap:10px; padding:10px 12px;
+        border-radius:12px; cursor:pointer; margin-bottom:4px;
+    }
+    .notif-item:hover { background:rgba(130,160,255,.08); }
+    .notif-item.unread { background:rgba(123,92,255,.13); }
+    .notif-item .av {
+        width:34px; height:34px; border-radius:50%; flex-shrink:0;
+        display:flex; align-items:center; justify-content:center;
+        font-size:14px; font-weight:700; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.35);
+    }
+    .notif-item .tx { flex:1; min-width:0; font-size:13px; color:#e8e8f0; line-height:1.5; word-break:break-word; }
+    .notif-item .tx .ttl { color:#b79aff; }
+    .notif-item .tm { font-size:11px; color:rgba(200,210,255,.45); flex-shrink:0; }
+    .notif-item .un { width:8px; height:8px; border-radius:50%; background:#e6517c; flex-shrink:0; }
+
+    @media (max-width:640px) {
+        .chat-wrap { padding:12px 12px 24px; }
+        .chat-msg .body { max-width:80%; }
+        .msg-layout { flex-direction:column; gap:10px; }
+        .msg-side { width:100%; position:static; display:flex; gap:6px; padding:6px; }
+        .msg-side-title { display:none; }
+        .msg-side-item { flex:1; justify-content:center; }
+    }
     </style>
 </head>
 <body>
@@ -67,19 +161,37 @@
             请先<a href="login.html" style="color:#ffe36d">登录</a>，才能进入实时聊天。
         </div>
         <div class="chat-wrap" id="chatWrap" style="display:none;">
-            <div class="chat-head">
-                <div class="chat-title">💬 山间实时聊天</div>
-                <div class="chat-status" id="chatStatus"><span class="dot"></span><span id="chatStatusText">连接中…</span></div>
-            </div>
-            <div id="chatLog"><div class="chat-empty">正在拉取聊天记录…</div></div>
-            <div class="chat-input-row">
-                <input type="text" id="chatInput" maxlength="500" placeholder="说点什么…（Enter 发送）" autocomplete="off">
-                <button id="chatSend">发送</button>
+            <div class="msg-layout">
+                <aside class="msg-side">
+                    <div class="msg-side-title">消息</div>
+                    <div class="msg-side-item active" id="sideChat">山间聊天</div>
+                    <div class="msg-side-item" id="sideNotify">notify<span class="side-badge" id="notifBadge" style="display:none"></span></div>
+                </aside>
+                <div class="msg-main">
+                    <div id="chatPane">
+                        <div class="chat-head">
+                            <div class="chat-title">💬 山间实时聊天</div>
+                            <div class="chat-status" id="chatStatus"><span class="dot"></span><span id="chatStatusText">连接中…</span></div>
+                        </div>
+                        <div id="chatLog"><div class="chat-empty">正在拉取聊天记录…</div></div>
+                        <div class="chat-input-row" id="chatInputRow">
+                            <input type="text" id="chatInput" maxlength="500" placeholder="说点什么…（Enter 发送）" autocomplete="off">
+                            <button id="chatSend" title="发送" aria-label="发送">↑</button>
+                        </div>
+                    </div>
+                    <div id="notifyPane" style="display:none;">
+                        <div class="chat-head">
+                            <div class="chat-title">notify</div>
+                            <div class="chat-status online"><span class="dot"></span><span>点赞 / 评论通知</span></div>
+                        </div>
+                        <div id="notifList"><div class="chat-empty">正在拉取通知…</div></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-<script src="js/api.js?v=20260925"></script>
+<script src="js/api.js?v=20261002"></script>
 <script src="js/auth.js?v=20261002"></script>
 <script>
     initHeader();
@@ -104,20 +216,72 @@
         let myUserId = null;
         let loadedHistory = false;
         const seenIds = {};   // 简单去重（历史和实时推送可能重叠）
+        let lastTs = 0, lastSender = null;   // 时间分组 + 连续消息合并
 
+        function pad(n) { return String(n).padStart(2, '0'); }
         function fmtClock(ts) {
             const d = new Date(Number(ts));
-            return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+            return pad(d.getHours()) + ':' + pad(d.getMinutes());
+        }
+        function fmtFull(ts) {
+            const d = new Date(Number(ts));
+            return (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + fmtClock(ts);
+        }
+        // 时间分组标签：今天 / 昨天 / M月D日（IG 风格居中分隔）
+        function fmtDivider(ts) {
+            const d = new Date(Number(ts));
+            const today = new Date();
+            const yest = new Date(); yest.setDate(today.getDate() - 1);
+            if (d.toDateString() === today.toDateString()) return '今天 ' + fmtClock(ts);
+            if (d.toDateString() === yest.toDateString()) return '昨天 ' + fmtClock(ts);
+            return (d.getMonth() + 1) + '月' + d.getDate() + '日';
         }
 
+        // 消息流为页面级滚动（不再有独立滚动容器）
         function atBottom() {
-            return logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 60;
+            return innerHeight + scrollY >= document.documentElement.scrollHeight - 90;
         }
-        function scrollToBottom() { logEl.scrollTop = logEl.scrollHeight; }
+        function scrollToBottom() { scrollTo(0, document.documentElement.scrollHeight); }
+
+        // “XX 正在输入…”指示器（只显示最近一个人，3s 无续报自动消失）
+        let typingRow = null, typingHideTimer = null;
+        function clearTyping() {
+            if (typingRow && typingRow.parentNode) typingRow.remove();
+            typingRow = null;
+        }
+        function showTyping(name) {
+            if (!typingRow) {
+                typingRow = document.createElement('div');
+                typingRow.className = 'chat-msg other typing-row';
+                typingRow.innerHTML =
+                    '<div class="av placeholder"></div>' +
+                    '<div class="body"><div class="nm typing-name"></div>' +
+                    '<div class="bubble typing-bubble"><i></i><i></i><i></i></div></div>';
+                logEl.appendChild(typingRow);
+            }
+            typingRow.querySelector('.typing-name').textContent = name + ' 正在输入';
+            logEl.appendChild(typingRow);   // 始终钉在消息流最底
+            if (atBottom()) scrollToBottom();
+            clearTimeout(typingHideTimer);
+            typingHideTimer = setTimeout(clearTyping, 3000);
+        }
 
         function setStatus(state, text) {
             statusEl.className = 'chat-status ' + state;
             statusText.textContent = text;
+        }
+
+        // 字母头像：按用户 id 哈希出稳定色相（消息数据无头像字段）
+        function hashHue(seed) {
+            var s = String(seed), h = 0;
+            for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+            return h % 360;
+        }
+        function appendTime(ts) {
+            var div = document.createElement('div');
+            div.className = 'chat-time';
+            div.innerHTML = '<span>' + escHtml(fmtDivider(ts)) + '</span>';
+            logEl.appendChild(div);
         }
 
         function appendMsg(m) {
@@ -127,13 +291,43 @@
             if (empty) empty.remove();
 
             const stick = atBottom();
+            const ts = Number(m.ts) || Date.now();
             const mine = String(m.userId) === String(myUserId);
+            const sender = mine ? '__me__' : String(m.userId);
+
+            // 距上一条 >10 分钟 → 插入时间分隔（同时打断连续消息合并）
+            let divided = false;
+            if (!lastTs || ts - lastTs > 10 * 60 * 1000) { appendTime(ts); divided = true; }
+            const sameChain = !divided && lastSender === sender;
+            lastTs = ts;
+            lastSender = sender;
+
             const div = document.createElement('div');
-            div.className = 'chat-msg' + (mine ? ' me' : '');
-            div.innerHTML =
-                '<div class="meta">' + escHtml(m.name || '匿名') + ' · ' + fmtClock(m.ts) + '</div>' +
-                '<div class="bubble">' + escHtml(m.content || '') + '</div>';
+            if (mine) {
+                div.className = 'chat-msg me';
+                div.innerHTML =
+                    '<div class="bubble" title="' + escHtml(fmtFull(ts)) + '">' +
+                    escHtml(m.content || '') + '</div>';
+            } else {
+                div.className = 'chat-msg other';
+                const name = m.name || '匿名';
+                const isBird = String(m.userId) === BIRD_ID;
+                const initial = (name[0] || '?').toUpperCase();
+                const hue = hashHue(m.userId);
+                const av = sameChain
+                    ? '<div class="av placeholder"></div>'
+                    : (isBird
+                        ? '<div class="av bird"><img src="Atlases/WaveDashing/Bird%20Clip%20Art.png" alt="bird"></div>'
+                        : '<div class="av" style="background:hsl(' + hue + ' 52% 55%)">' + escHtml(initial) + '</div>');
+                const nm = sameChain ? '' : '<div class="nm">' + escHtml(name) +
+                    (isBird ? '<span class="bird-tag">吉祥物</span>' : '') + '</div>';
+                div.innerHTML = av +
+                    '<div class="body">' + nm +
+                    '<div class="bubble" title="' + escHtml(fmtFull(ts)) + '">' +
+                    escHtml(m.content || '') + '</div></div>';
+            }
             logEl.appendChild(div);
+            if (typingRow && typingRow.parentNode === logEl) logEl.appendChild(typingRow);
             if (stick) scrollToBottom();
         }
 
@@ -143,6 +337,7 @@
             div.className = 'chat-sys';
             div.textContent = text;
             logEl.appendChild(div);
+            if (typingRow && typingRow.parentNode === logEl) logEl.appendChild(typingRow);
             if (stick) scrollToBottom();
         }
 
@@ -151,10 +346,75 @@
             if (res.success && res.data) myUserId = res.data.id;
         });
 
+        /* ===== birdAI：群聊吉祥物小鸟 =====
+           触发：对每条新消息做确定性哈希（消息 id），全端一致判定"回不回"，
+           约 30% 概率、2~6 秒延迟冒泡 —— 不定时、不必回；
+           回复：调后端裸 AI（/chat/generate-article，不写聊天历史），
+           提示词按 QQ 群 AI 助手风格写；失败回落本地语料。
+           bird 的消息只本地渲染（不广播），userId 固定 __bird__。 */
+        const BIRD_ID = '__bird__';
+        const BIRD_NAME = 'bird';
+        let lastBirdAt = 0;
+        function birdHash(s) {
+            s = String(s); let h = 5381;
+            for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+            return h;
+        }
+        const BIRD_FALLBACK = [
+            '啾？有人在叫我吗',
+            '说得好，赏你一颗草莓 🍓',
+            '本鸟已阅，继续继续',
+            '爬山累了就歇会儿，群我盯着',
+            '啾啾，这个我熟！',
+            '在？看看风景（扇翅）'
+        ];
+        const BIRD_PROMPT =
+            '你是 Celeste 登山群聊的吉祥物小鸟"bird"，一只会打字的北美金翅雀，兼任群 AI 助手（类似 QQ 群机器人）。' +
+            '性格：活泼嘴碎、热心肠、偶尔懒洋洋，喜欢在句子里偶尔带"啾"。\n' +
+            '规则：像群友一样自然接话，一两句短口语；可以鼓励、吐槽、玩梗、给登山上的人文关怀；' +
+            '禁止长篇大论、禁止说教、禁止自称 AI 或语言模型；不超过 50 字。\n' +
+            '群友「%NAME%」说：「%MSG%」\n你的接话：';
+        function maybeBird(m) {
+            if (!m || !m.content) return;
+            if (String(m.userId) === BIRD_ID || m.name === BIRD_NAME) return;   // 不理自己
+            const h = birdHash(m.id || (m.content + m.ts));
+            // @bird（或句子里直呼 bird）→ 必定接话，无视概率与冷却
+            const called = /(^|[^a-z])@?bird([^a-z]|$)/i.test(String(m.content));
+            if (!called && h % 100 >= 30) return;                               // 平时 30% 触发
+            const now = Date.now();
+            if (!called && now - lastBirdAt < 45000) return;                    // 普通触发冷却 45s
+            lastBirdAt = now;
+            const delay = called ? (800 + h % 2200) : (2000 + (h % 4000));      // @ 时更快：0.8~3s
+            setTimeout(() => birdReply(m), delay);
+        }
+        function birdSay(text) {
+            appendMsg({
+                id: 'bird' + Date.now(), userId: BIRD_ID, name: BIRD_NAME,
+                content: text, ts: Date.now()
+            });
+        }
+        function birdReply(m) {
+            const prompt = BIRD_PROMPT
+                .replace('%NAME%', m.name || '群友')
+                .replace('%MSG%', String(m.content).slice(0, 200));
+            api('/chat/generate-article', 'POST', { content: prompt }).then(res => {
+                if (res.success && res.data && res.data.content) {
+                    let t = String(res.data.content).trim().replace(/\s+/g, ' ');
+                    if (t.length > 60) t = t.slice(0, 60) + '…';
+                    birdSay(t);
+                } else {
+                    birdSay(BIRD_FALLBACK[birdHash(m.content) % BIRD_FALLBACK.length]);
+                }
+            }).catch(() => {
+                birdSay(BIRD_FALLBACK[birdHash(m.content) % BIRD_FALLBACK.length]);
+            });
+        }
+
         // 历史消息（早 -> 晚）
         api('/realtime-chat/history', 'GET').then(res => {
             if (res.success && Array.isArray(res.data)) {
                 logEl.innerHTML = '';
+                lastTs = 0; lastSender = null;
                 if (res.data.length === 0) {
                     logEl.innerHTML = '<div class="chat-empty">还没有人说话，发第一条消息试试～</div>';
                 } else {
@@ -173,7 +433,17 @@
             setStatus('', '连接中…');
             es = new EventSource(BASE_URL + '/realtime-chat/stream?token=' + encodeURIComponent(token));
             es.addEventListener('chat', e => {
-                try { appendMsg(JSON.parse(e.data)); } catch (err) {}
+                try {
+                    const m = JSON.parse(e.data);
+                    appendMsg(m);
+                    maybeBird(m);
+                } catch (err) {}
+            });
+            es.addEventListener('typing', e => {
+                try {
+                    const p = JSON.parse(e.data);
+                    if (String(p.userId) !== String(myUserId)) showTyping(p.name || '有人');
+                } catch (err) {}
             });
             es.addEventListener('presence', e => {
                 try {
@@ -212,8 +482,106 @@
         inputEl.addEventListener('keydown', e => {
             if (e.key === 'Enter') { e.preventDefault(); doSend(); }
         });
+        // 输入中上报：防抖 2s 一次，有内容才发
+        let lastTypeReport = 0;
+        inputEl.addEventListener('input', () => {
+            const now = Date.now();
+            if (inputEl.value.trim() && now - lastTypeReport > 2000) {
+                lastTypeReport = now;
+                api('/realtime-chat/typing', 'POST');
+            }
+        });
 
         window.addEventListener('beforeunload', () => { if (es) es.close(); });
+    })();
+
+    // ===== 左侧列表：聊天 / 消息notify 面板切换 + 通知拉取（点赞/评论你的文章） =====
+    (function () {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        const sideChat = document.getElementById('sideChat');
+        const sideNotify = document.getElementById('sideNotify');
+        const chatPane = document.getElementById('chatPane');
+        const notifyPane = document.getElementById('notifyPane');
+        const inputRow = document.getElementById('chatInputRow');
+        const notifList = document.getElementById('notifList');
+        const badge = document.getElementById('notifBadge');
+
+        function hashHue(seed) {
+            var s = String(seed), h = 0;
+            for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+            return h % 360;
+        }
+        function fmtNotifTime(ts) {
+            const d = new Date(Number(ts)), t = new Date();
+            const hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+            if (d.toDateString() === t.toDateString()) return hm;
+            return (d.getMonth() + 1) + '月' + d.getDate() + '日';
+        }
+
+        function switchPane(which) {
+            const isChat = which === 'chat';
+            sideChat.classList.toggle('active', isChat);
+            sideNotify.classList.toggle('active', !isChat);
+            chatPane.style.display = isChat ? '' : 'none';
+            notifyPane.style.display = isChat ? 'none' : '';
+            inputRow.style.display = isChat ? '' : 'none';   // 通知面板不需要输入栏
+            if (!isChat) loadNotify();
+        }
+        sideChat.addEventListener('click', () => switchPane('chat'));
+        sideNotify.addEventListener('click', () => switchPane('notify'));
+
+        const TYPE_TEXT = { like: '赞了你的文章', comment: '评论了你的文章' };
+        function renderNotify(list) {
+            if (!list.length) {
+                notifList.innerHTML = '<div class="chat-empty">还没有通知，去写篇文章试试～</div>';
+                return;
+            }
+            notifList.innerHTML = list.map(n => {
+                const name = n.fromName || '有人';
+                const initial = (name[0] || '?').toUpperCase();
+                const hue = hashHue(name);
+                const act = TYPE_TEXT[n.type] || '互动了你的文章';
+                const unread = Number(n.isRead) === 0;
+                return '<div class="notif-item' + (unread ? ' unread' : '') + '" data-id="' + escHtml(n.articleId || '') + '">' +
+                    '<div class="av" style="background:hsl(' + hue + ' 52% 55%)">' + escHtml(initial) + '</div>' +
+                    '<div class="tx"><b>' + escHtml(name) + '</b> ' + act +
+                    '<span class="ttl">《' + escHtml(n.articleTitle || '') + '》</span></div>' +
+                    '<div class="tm">' + fmtNotifTime(n.createDate) + '</div>' +
+                    (unread ? '<div class="un"></div>' : '') +
+                    '</div>';
+            }).join('');
+            notifList.querySelectorAll('.notif-item').forEach(el => {
+                el.addEventListener('click', () => {
+                    if (el.dataset.id) location.href = 'article.html?id=' + encodeURIComponent(el.dataset.id);
+                });
+            });
+        }
+
+        function loadNotify() {
+            api('/notifications/list', 'GET').then(res => {
+                if (res.success && Array.isArray(res.data)) renderNotify(res.data);
+                else notifList.innerHTML = '<div class="chat-empty">通知加载失败。</div>';
+            });
+            // 打开即全部已读，同步清掉头部铃铛徽标
+            api('/notifications/readAll', 'POST').then(() => {
+                setBadge(0);
+                if (typeof refreshBell === 'function') refreshBell();
+            });
+        }
+
+        function setBadge(n) {
+            badge.textContent = n > 99 ? '99+' : String(n);
+            badge.style.display = n > 0 ? 'inline-block' : 'none';
+        }
+
+        // 未读数统一由 auth.js 轮询（refreshBell），这里只监听广播，不重复请求
+        window.addEventListener('notify:unread', e => {
+            const n = Number(e.detail.unread || 0);
+            setBadge(n);
+            // 正停留在 notify 面板时来了新通知 → 刷新列表
+            if (n > 0 && notifyPane.style.display !== 'none') loadNotify();
+        });
     })();
 
     // ===== 雪花（与首页同款，精简） =====
@@ -244,6 +612,6 @@
         })();
     })();
 </script>
-<script src="js/seed.js"></script>
+<script src="js/seed.js?v=20261002"></script>
 </body>
 </html>

@@ -75,7 +75,14 @@ function addBerries(n) {
     const optimistic = Math.max(prev + n, 0);
     localStorage.setItem('berryBalance', String(optimistic));
     emitBerriesChange(optimistic);
-    if (!token) return;
+    if (!token) {
+        // 未登录：记账 pending，登录后任意页面加载时自动补 POST
+        if (n > 0) {
+            const pending = parseInt(localStorage.getItem('berryPendingCredit') || '0');
+            localStorage.setItem('berryPendingCredit', String(pending + n));
+        }
+        return;
+    }
     api('/users/berry', 'POST', { delta: n }).then(res => {
         if (res.success && res.data && typeof res.data.berry === 'number') {
             // 权威值与本地乐观值不一致时对账（他端变动/服务端兜底扣减等）
@@ -91,3 +98,26 @@ function addBerries(n) {
     });
 }
 function spendBerries(n) { addBerries(-Math.abs(n)); }
+
+/**
+ * 把未登录期间攒下的草莓补到服务端。
+ * api.js 加载时即执行；登录后打开/刷新任意页面都会触发。
+ */
+function flushPendingBerries() {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    const pending = parseInt(localStorage.getItem('berryPendingCredit') || '0');
+    if (pending <= 0) return;
+    localStorage.removeItem('berryPendingCredit');
+    api('/users/berry', 'POST', { delta: pending }).then(res => {
+        if (res.success && res.data && typeof res.data.berry === 'number') {
+            localStorage.setItem('berryBalance', String(res.data.berry));
+            emitBerriesChange(res.data.berry);
+        } else {
+            // 失败放回，下次再试
+            const back = parseInt(localStorage.getItem('berryPendingCredit') || '0');
+            localStorage.setItem('berryPendingCredit', String(back + pending));
+        }
+    });
+}
+flushPendingBerries();

@@ -151,6 +151,22 @@ public class RealtimeChatController {
         return Result.success(new ArrayList<>(recent));
     }
 
+    /** 输入中广播（前端防抖调用，不存历史、不返回消息体） */
+    @PostMapping("typing")
+    public Result typing() {
+        SysUser user = UserThreadLocal.get();
+        if (user == null) {
+            return Result.fail(401, "未登录");
+        }
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("userId", String.valueOf(user.getId()));
+        payload.put("name", user.getNickname() != null && !user.getNickname().isEmpty()
+                ? user.getNickname() : user.getAccount());
+        payload.put("ts", System.currentTimeMillis());
+        broadcast("typing", payload);
+        return Result.success(null);
+    }
+
     // ===== 内部实现 =====
 
     private Map<String, Object> onlinePayload() {

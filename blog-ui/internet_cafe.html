@@ -19,18 +19,89 @@
     --neon-bright: 1.35; /* 亮度 */
   }
 
-  /* === 背景截图充满全屏 === */
+  /* === 背景截图充满全屏（新外观图） === */
   #sky {
-    position: fixed; inset: 0;
-    background: url('Atlases/Gameplay/scenery/internet_cafe_bg.png') center/cover no-repeat;
+    position: absolute; inset: 0;
+    background: url('Atlases/Gameplay/scenery/internet_cafe_bg2.png') center/cover no-repeat;
     image-rendering: pixelated;
     image-rendering: -moz-crisp-edges;
     image-rendering: crisp-edges;
   }
 
-  /* === 招牌周围漂浮粒子 === */
+  /* === 镜头：内外两层共同的父容器；整体 scale 即镜头向近靠（两层同步缩放，相对位置不变） === */
+  #world {
+    position: fixed; inset: 0;
+    transform-origin: 51% 42%;   /* 对准穹顶建筑中心 */
+    transition: transform 2.0s cubic-bezier(.55,0,.8,.35) .1s;
+  }
+  #world.zoomed { transform: scale(1.22); }
+
+  /* === 外观表层：点击建筑物后透明化，显露出叠在下方的内部 === */
+  #camera {
+    position: absolute; inset: 0;
+    transition: opacity 1.1s ease;
+  }
+  #camera.entered { opacity: 0; pointer-events: none; }
+
+  /* 建筑物点击热区（穹顶） */
+  #buildHotspot {
+    position: absolute;
+    left: 36%; top: 17%;
+    width: 30%; height: 49%;
+    z-index: 12; cursor: pointer;
+    border-radius: 40% 40% 12% 12%;
+  }
+  #buildHotspot::after {
+    content: '点击进入';
+    position: absolute; bottom: -24px; left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Courier New', monospace;
+    font-size: 11px; letter-spacing: 1px;
+    color: rgba(200,230,255,.85);
+    background: rgba(0,0,0,.6);
+    padding: 2px 8px; border-radius: 3px;
+    opacity: 0; transition: opacity .2s;
+    pointer-events: none; white-space: nowrap;
+  }
+  #buildHotspot:hover::after { opacity: 1; }
+
+  /* === 内部层：叠在外观表层下方并全屏铺满；表层透明化后直接显露，无四周黑边 === */
+  #interior {
+    position: absolute; inset: 0;
+    z-index: 1;
+    pointer-events: none;
+  }
+  #interior.show { pointer-events: auto; }
+  #interiorStage {
+    position: absolute; inset: 0;
+  }
+  #interiorImg {
+    display: block; width: 100%; height: 100%;
+    object-fit: cover;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+  }
+  /* 电视屏区域（图内像素 x44-75 y40-57 → 百分比） */
+  #noiseBox {
+    position: absolute;
+    left: 36.7%; top: 50.6%;
+    width: 25.9%; height: 21.6%;
+    cursor: pointer;
+    overflow: hidden;
+  }
+  #noiseBox canvas {
+    display: block; width: 100%; height: 100%;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+  }
+  #noiseBox:hover { outline: 1px solid rgba(150,220,255,.55); outline-offset: 1px; }
+
+  /* === 招牌周围漂浮粒子（canvas 是替换元素，inset:0 不会拉伸，必须显式 100%） === */
   #sparkleCanvas {
     position: absolute; inset: 0;
+    width: 100%; height: 100%;
     z-index: 8;
     pointer-events: none;
   }
@@ -121,35 +192,17 @@
   .dp-actions button.danger { border-color: rgba(255,120,120,.5); color: #ffc9c9; background: rgba(255,80,80,.12); }
   .dp-tip { color: #789; font-size: 10px; line-height: 1.5; margin-top: 8px; border-top: 1px solid rgba(102,255,221,.2); padding-top: 6px; }
 
-  /* === TV 热区（点击跳转 berryos） === */
-  #tvHotspot {
-    position: absolute;
-    left: 39%; top: 28%;
-    width: 22%; height: 20%;
-    z-index: 10;
-    cursor: pointer;
-    border-radius: 4px;
-    overflow: hidden;
-    box-shadow: 0 0 0 2px rgba(150,200,255,0);
-    transition: box-shadow .2s, filter .2s;
+  /* === TV 热区已并入内部层 #noiseBox === */
+
+  /* === 环境均匀压暗层：亮度逐渐调低至 50%（全屏均匀，不做四周黑角） === */
+  #dimLayer {
+    position: fixed; inset: 0;
+    z-index: 15; pointer-events: none;
+    background: #000;
+    opacity: 0;
+    transition: opacity 1.4s ease;
   }
-  #tvHotspot:hover {
-    box-shadow: 0 0 0 2px rgba(150,220,255,.6), 0 0 20px rgba(100,180,255,.5);
-    filter: brightness(1.1);
-  }
-  #tvHotspot::after {
-    content: '点击进入 BerryOS';
-    position: absolute; bottom: -22px; left: 50%;
-    transform: translateX(-50%);
-    font-family: 'Courier New', monospace;
-    font-size: 11px; letter-spacing: 1px;
-    color: rgba(200,230,255,.8);
-    background: rgba(0,0,0,.6);
-    padding: 2px 8px; border-radius: 3px;
-    opacity: 0; transition: opacity .2s;
-    pointer-events: none; white-space: nowrap;
-  }
-  #tvHotspot:hover::after { opacity: 1; }
+  #dimLayer.show { opacity: .5; }
 
   /* === 全屏过渡层（点击 TV 后黑屏 → 跳转） === */
   #transition {
@@ -164,17 +217,31 @@
 </style>
 </head>
 <body>
-  <!-- 背景：Celeste 游戏截图充满全屏 -->
-  <div id="sky"></div>
+  <!-- 镜头：内外两层叠放，整体缩放即镜头向近靠 -->
+  <div id="world">
+    <!-- 内部层：叠在表层下方并全屏铺满，表层透明化后直接显露 -->
+    <div id="interior">
+      <div id="interiorStage">
+        <img id="interiorImg" src="Atlases/Gameplay/objects/wavedashtutorial/building_back.png" alt="">
+        <div id="noiseBox" title="电视"><canvas></canvas></div>
+      </div>
+    </div>
 
-  <!-- 招牌周围漂浮小粒子 -->
-  <canvas id="sparkleCanvas"></canvas>
+    <!-- 外观表层：透明化后显露内部 -->
+    <div id="camera">
+      <!-- 背景：Celeste 游戏截图充满全屏 -->
+      <div id="sky"></div>
 
-  <!-- 霓虹招牌逐帧动画（15 帧 neon_00~14 循环） -->
-  <div id="neonSign"><canvas></canvas></div>
+      <!-- 招牌周围漂浮小粒子 -->
+      <canvas id="sparkleCanvas"></canvas>
 
-  <!-- TV 热区 -->
-  <div id="tvHotspot"></div>
+      <!-- 霓虹招牌（15 帧逐帧动画，位置用 #adjustNeon 调整贴合背景） -->
+      <div id="neonSign"><canvas></canvas></div>
+
+      <!-- 建筑物点击热区 -->
+      <div id="buildHotspot"></div>
+    </div>
+  </div>
 
   <!-- 调试控制面板（按 D 开关） -->
   <div id="debugPanel">
@@ -242,6 +309,9 @@
     </div>
     <div class="dp-tip">大小=等比缩放 · 宽/高=单独微调<br>数字可直接输入，回车生效 · Esc 退出</div>
   </div>
+
+  <!-- 四周环境压暗层 -->
+  <div id="dimLayer"></div>
 
   <!-- 全屏过渡层 -->
   <div id="transition"></div>
@@ -324,18 +394,18 @@
   resize();
   window.addEventListener('resize', resize);
 
-  // 粒子活动范围：外围一圈 + 以画面正中的穹顶建筑物（含招牌、门口）为核心的密集区
-  // 百分比坐标；约 7 成粒子落在 CORE（建筑物本体周围），3 成散在 ZONE 外围
-  var ZONE = { x: 0.24, y: 0.16, w: 0.56, h: 0.60 };
+  // 粒子全屏覆盖：约 6 成全屏均匀散布，4 成集中在穹顶建筑核心
+  // 百分比坐标
+  var FULL = { x: 0, y: 0, w: 1, h: 1 };
   var CORE = { x: 0.33, y: 0.26, w: 0.36, h: 0.40 };
   var COLORS = ['#ffffff', '#7affe0', '#ff7ad9', '#b98cff', '#8fd4ff', '#fff3a3'];
-  var COUNT = 44;
+  var COUNT = 64;
   var parts = [];
   for (var i = 0; i < COUNT; i++) {
-    // 70% 落建筑物密集区，30% 落外围
-    var z = (Math.random() < 0.7) ? CORE : ZONE;
+    // 60% 全屏均匀覆盖，40% 落建筑物密集区
+    var z = (Math.random() < 0.6) ? FULL : CORE;
     parts.push({
-      // 百分比基准位置（在 zone 内）
+      // 百分比基准位置（在所选区域内）
       bx: z.x + Math.random() * z.w,
       by: z.y + Math.random() * z.h,
       // 漂浮幅度（百分比）
@@ -579,21 +649,137 @@
 })();
 
 /* ============================================================
-   4. 点击 TV → 黑屏过渡 → 进 berryos.html
+   4. 交互流：
+      ① 内部层叠在外观表层下方；点建筑物 → 表层透明化显露内部、
+         环境均匀压暗 50%、镜头整体向近靠
+      ② 内部电视循环播放 noise00~02
+      ③ 点电视 → 内部放大至 noise 占满全屏 → 黑屏 → berryos
+      Esc → 全部反向恢复
    ============================================================ */
 (function () {
-  var tv = document.getElementById('tvHotspot');
+  var world = document.getElementById('world');
+  var camera = document.getElementById('camera');
+  var hotspot = document.getElementById('buildHotspot');
+  var interior = document.getElementById('interior');
+  var stage = document.getElementById('interiorStage');
+  var interiorImg = document.getElementById('interiorImg');
+  var noiseBox = document.getElementById('noiseBox');
   var trans = document.getElementById('transition');
+  var dim = document.getElementById('dimLayer');
 
-  tv.addEventListener('click', function () {
-    trans.classList.add('active');
-    setTimeout(function () { location.href = 'berryos.html'; }, 400);
+  /* ---- 电视屏在 building_back.png（120x79）内的比例坐标 ---- */
+  var TV = { x: .367, y: .506, w: .259, h: .216 };
+  var tvOrigin = '49.6% 61.4%';
+
+  // 内部图以 cover 铺满全屏；按 cover 实际显示矩形定位 noiseBox，
+  // 图片被裁切时电视热区仍精确贴合
+  function positionNoise() {
+    var iw = interiorImg.naturalWidth || 120;
+    var ih = interiorImg.naturalHeight || 79;
+    var cw = stage.clientWidth || window.innerWidth;
+    var ch = stage.clientHeight || window.innerHeight;
+    var s = Math.max(cw / iw, ch / ih);
+    var dw = iw * s, dh = ih * s;
+    var ox = (cw - dw) / 2, oy = (ch - dh) / 2;
+    noiseBox.style.left = (ox + TV.x * dw) + 'px';
+    noiseBox.style.top = (oy + TV.y * dh) + 'px';
+    noiseBox.style.width = (TV.w * dw) + 'px';
+    noiseBox.style.height = (TV.h * dh) + 'px';
+    // 电视中心相对 stage 的比例（点电视放大时作 transform-origin）
+    var cxr = (ox + (TV.x + TV.w / 2) * dw) / cw * 100;
+    var cyr = (oy + (TV.y + TV.h / 2) * dh) / ch * 100;
+    tvOrigin = cxr.toFixed(2) + '% ' + cyr.toFixed(2) + '%';
+  }
+  interiorImg.addEventListener('load', positionNoise);
+  window.addEventListener('load', positionNoise);
+  window.addEventListener('resize', positionNoise);
+
+  /* ---- noise 3 帧动画（懒启动：进入内部后才播） ---- */
+  var canvas = noiseBox.querySelector('canvas');
+  var ctx = canvas.getContext('2d');
+  var frames = [], animOn = false, noiseIv = null;
+  for (var i = 0; i < 3; i++) {
+    var nimg = new Image();
+    nimg.src = 'Atlases/Gameplay/objects/wavedashtutorial/noise0' + i + '.png';
+    frames.push(nimg);
+  }
+  function resizeNoise() {
+    canvas.width = Math.max(1, canvas.clientWidth);
+    canvas.height = Math.max(1, canvas.clientHeight);
+    ctx.imageSmoothingEnabled = false;
+  }
+  window.addEventListener('resize', function () { if (animOn) resizeNoise(); });
+  var fIdx = 0;
+  function noiseTick() {
+    if (!animOn) return;
+    var img = frames[fIdx];
+    if (img && img.complete && img.naturalWidth > 0) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // cover：铺满电视屏
+      var w = img.naturalWidth, h = img.naturalHeight;
+      var cw = canvas.width, ch = canvas.height;
+      var s = Math.max(cw / w, ch / h);
+      var dw = w * s, dh = h * s;
+      ctx.drawImage(img, (cw - dw) / 2 | 0, (ch - dh) / 2 | 0, dw | 0, dh | 0);
+    }
+    fIdx = (fIdx + 1) % 3;
+  }
+
+  /* ---- ① 点建筑物：表层透明化 + 环境压暗 50% + 镜头向近靠 ---- */
+  var entered = false;
+  var noiseTimer = null;
+
+  hotspot.addEventListener('click', function () {
+    if (entered) return;
+    entered = true;
+
+    positionNoise();
+    camera.classList.add('entered');    // 表层透明化，显露下方内部
+    dim.classList.add('show');          // 环境亮度渐降至 50%
+    world.classList.add('zoomed');      // 镜头整体向近靠（内外同步）
+    interior.classList.add('show');     // 内部可交互
+
+    // 等表层透明化后启动 noise
+    noiseTimer = setTimeout(function () {
+      resizeNoise();
+      animOn = true;
+      noiseTick();
+      if (!noiseIv) noiseIv = setInterval(noiseTick, 140);   // 约 7fps，只建一次
+    }, 1100);
   });
-  tv.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') tv.click();
+
+  /* ---- ③ 点电视：内部放大至 noise 占满全屏 → 黑屏 → berryos ---- */
+  var zooming = false;
+  noiseBox.addEventListener('click', function () {
+    if (zooming) return;
+    zooming = true;
+    positionNoise();
+    var nr = noiseBox.getBoundingClientRect();
+    stage.style.transformOrigin = tvOrigin;   // 精确对准电视屏中心
+    var s = Math.max(window.innerWidth / nr.width, window.innerHeight / nr.height) * 1.06;
+    stage.style.transform = 'scale(' + s.toFixed(3) + ')';
+    setTimeout(function () {
+      trans.classList.add('active');
+      setTimeout(function () { location.href = 'berryos.html'; }, 420);
+    }, 880);
+  });
+
+  /* ---- Esc：从内部退回外观（全部过渡反向播放）；点电视放大后禁用 ---- */
+  window.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (zooming || !interior.classList.contains('show')) return;
+
+    camera.classList.remove('entered');   // 表层恢复不透明
+    dim.classList.remove('show');         // 环境亮度恢复
+    world.classList.remove('zoomed');     // 镜头回位
+    interior.classList.remove('show');    // 内部退出可交互
+    animOn = false;
+    entered = false;
   });
 })();
 </script>
-<script src="js/seed.js"></script>
+<script src="js/api.js?v=20261002"></script>
+<script src="js/seed.js?v=20261002"></script>
+<script>if (location.hash.indexOf('adjust') >= 0) document.write('<script src="js/adjuster.js?v=20261002"><\/script>');</script>
 </body>
 </html>

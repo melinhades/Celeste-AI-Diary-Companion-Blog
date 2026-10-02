@@ -330,7 +330,7 @@
     <div class="container">© 2026 Celeste Blog · Explore the stars</div>
 </footer>
 
-<script src="js/api.js?v=20260925"></script>
+<script src="js/api.js?v=20261002"></script>
 <script src="js/auth.js?v=20261002"></script>
 <script>
     // ===== 加载层内雪花（snow-bgm 同款，登录页风格） =====
@@ -471,7 +471,7 @@
                 <div class="article-header">
                     <h1>${escHtml(a.title)}</h1>
                     <div class="article-meta">
-                        <span class="meta-author"><img loading="lazy" class="meta-author-img" src="celeste-portraits/madeline/normal00.png" alt="" decoding="async">${escHtml(a.author?.nickname || a.author?.username || 'Anonymous')}</span>
+                        <span class="meta-author"><img loading="lazy" class="meta-author-img" src="celeste-portraits/madeline/normal00.png" alt="" decoding="async">${escHtml((typeof a.author === 'string' ? a.author : (a.author?.nickname || a.author?.username)) || 'Anonymous')}</span>
                         <span class="meta-date"><img loading="lazy" class="meta-icon" src="celeste-icons/cs_variantmode.png" alt="" decoding="async">${formatDate(a.createDate)}</span>
                         <span class="meta-views"><img loading="lazy" class="meta-icon" src="celeste-icons/time.png" alt="" decoding="async">${a.viewCounts || 0} Reads</span>
                         <span class="meta-views"><img loading="lazy" class="meta-icon" src="celeste-icons/time.png" alt="" decoding="async">~${readMin} min read</span>
@@ -504,7 +504,7 @@
 
             // 编辑入口：仅作者本人可见
             const myNick = localStorage.getItem('nickname');
-            const authorName = a.author?.nickname || a.author?.username;
+            const authorName = typeof a.author === 'string' ? a.author : (a.author?.nickname || a.author?.username);
             if (myNick && authorName && myNick === authorName) {
                 document.getElementById('editArticleBtn').style.display = 'inline-block';
             }
@@ -741,6 +741,6 @@
         });
     }
 </script>
-<script src="js/seed.js"></script>
+<script src="js/seed.js?v=20261002"></script>
 </body>
 </html>

@@ -273,12 +273,12 @@
         </div>
     </div>
 
-<script src="js/api.js?v=20260930"></script>
+<script src="js/api.js?v=20261002"></script>
 <script src="js/auth.js?v=20261002"></script>
-<script src="js/badeline-voice.js"></script>
-<script src="js/roundtable-voice.js"></script>
+<script src="js/badeline-voice.js?v=20261002b"></script>
+<script src="js/roundtable-voice.js?v=20261002b"></script>
 <script src="js/roundtable-portraits.js"></script>
-<script src="js/roundtable-bird.js"></script>
+<script src="js/roundtable-bird.js?v=20261002b"></script>
 <script>
 initHeader();
 
@@ -316,6 +316,10 @@ initHeader();
     let activeBubble = null;     // 当前正在接收 delta 的气泡元素
     let seatAnims = {};          // 席位头像动画器：speakerId → Animator
     let replayMode = false;
+    // ===== mock 模式（?mock=1）：本地罐头剧本，无 AI 后端也能验证音效/头像/行为树全管线 =====
+    const MOCK = new URLSearchParams(location.search).has('mock');
+    let mockAbort = null;        // 中止模拟（结束会议按钮）
+    let mockQueue = [];          // mock 里的用户插话队列（下一句开场前广播）
 
     const $ = id => document.getElementById(id);
 
@@ -335,7 +339,77 @@ initHeader();
         if (!topic) { showToast('先写一个议题吧', 'info'); return; }
         replayMode = false;
         openStage({topic, speakers});
+        if (MOCK) { runMockMeeting(topic); return; }
         connectStream(topic);
+    }
+
+    /** mock 模式：罐头剧本按后端 8 字/24ms 节奏推 delta，走完 beginSpeech/appendDelta/endSpeech 真实管线 */
+    function runMockMeeting(topic) {
+        meeting.id = 'mock-' + Date.now();
+        mockQueue = [];
+        if (window.RoundtableVoice) RoundtableVoice.setLive(true);
+        $('stageMeta').textContent = '本地模拟演示（未连接 AI）· Madeline / Theo / You / Granny / Badeline / Oshiro';
+        addSystemLine('mock 模式：本地演示剧本（罐头台词），用于无 AI 环境验证演出管线');
+        // 台词遵守人设硬规则：中文名称呼；Badeline「亲爱的」限频；Oshiro 第一人称开头
+        const SCRIPT = [
+            {id:'host', role:'host', text:'各位都到齐了。今天的议题是「' + topic + '」。老规矩，畅所欲言，聊到形成共识为止。玛德琳，你先来。'},
+            {id:'madeline', text:'我觉得这事没那么可怕！站在山脚往上看，是好难！但一步一步走，总能爬上去的。'},
+            {id:'theo', text:'等等等等，你说得倒轻巧。只要相信自己，梦想总是能实现的对吧？我保证？……开玩笑的吧，这也太想当然了。'},
+            {id:'granny', text:'呵呵，傻孩子，站着说话不腰疼。话说得漂亮，可你自己真试过吗？老婆子我当年在山脚下，见过太多说大话的人了。'},
+            {id:'badeline', text:'哟，又开始了。亲爱的，你们一个个装得胸有成竹，累不累啊？我看这根本是个死胡同，别白费力气了！'},
+            {id:'oshiro', text:'那、那个……大家别激动。我、我觉得玛德琳说得有道理，暗面琳的担心也不是没道理……要不，折、折中一下？拜托了！'},
+            {id:'madeline', text:'暗面琳，我知道你是怕我摔下去。可是摔了我也会爬起来啊！这样好不好：先试一小步，不行就退回来。'},
+            {id:'theo', text:'……行吧，听你们这么一说，好像也没那么离谱。先试一步这个方案，我跟了！搞定记得请我喝热巧克力。'},
+            {id:'host', role:'host', text:'好，意见收拢了：先迈出一小步，边走边看。本场会议达成共识，散会！'}
+        ];
+        let li = 0, dead = false;
+        mockAbort = () => { if (!dead) { dead = true; mockFinish(); } };
+        addSystemLine('第 1 轮', 'round-banner');
+        (function next() {
+            if (dead) return;
+            if (li >= SCRIPT.length) { mockFinish(); return; }
+            // 插话队列：两句间隙广播（对齐后端 drainInterjections 的时机）
+            if (mockQueue.length) {
+                const t = mockQueue.shift();
+                beginSpeech({speakerId:'user', role:'user', name:'你', color:'#ffe36d', ts:Date.now()});
+                appendDelta({speakerId:'user', text:t});
+                endSpeech({ts:Date.now()});
+            }
+            const line = SCRIPT[li++];
+            if (line.role !== 'host') {
+                setSeatState(line.id, 'prepare');
+                if (window.RoundtableBird) RoundtableBird.focusSeat(line.id);
+            }
+            setTimeout(() => {
+                if (dead) return;
+                beginSpeech({speakerId: line.id, role: line.role || 'ai', ts: Date.now()});
+                let i = 0;
+                const iv = setInterval(() => {
+                    if (dead) { clearInterval(iv); return; }
+                    if (i >= line.text.length) {
+                        clearInterval(iv);
+                        endSpeech({ts: Date.now()});
+                        setTimeout(next, 600 + Math.random() * 500);
+                        return;
+                    }
+                    appendDelta({speakerId: line.id, text: line.text.slice(i, i += 8)});
+                }, 24);
+            }, 650);
+        })();
+        function mockFinish() {
+            const score = {grade:'A', avg:84,
+                scores:{conclusion:85, evidence:80, diversity:88, focus:82, interaction:86, practical:83},
+                comment:'先立后破再收拢，议题落到了「先试一小步」的具体行动上。',
+                todos:['迈出一小步验证可行性', '不行就退回山脚重新规划']};
+            renderGradeCard(score);
+            if (window.RoundtableVoice) RoundtableVoice.meetingEnd(meeting.transcript);
+            if (window.RoundtableBird) RoundtableBird.onScore(score.avg);
+            meeting.finishedAt = Date.now();
+            meeting.score = score; meeting.status = 'consensus'; meeting.rounds = 1;
+            finishUI();
+            saveHistory(meeting);
+            if (window.RoundtableBird) RoundtableBird.leave();
+        }
     }
 
     // ===== 会议舞台 =====
@@ -431,6 +505,8 @@ initHeader();
         activeBubble._emotion = emo;
         if (activeBubble._portrait) activeBubble._portrait.play(emo);
         if (seatAnims[speakerId]) seatAnims[speakerId].play(emo);
+        // 主持鸟行为树：情绪流入会场气氛（激烈情绪可能把鸟吸引过去）
+        if (window.RoundtableBird && !replayMode) RoundtableBird.onEmotion(speakerId, emo);
     }
 
     function beginSpeech(ev) {
@@ -471,6 +547,11 @@ initHeader();
             }
         }
         if (ev.speakerId !== 'host') setSeatState(ev.speakerId, 'speaking');
+        // 主持鸟行为树：主持人开口=鸟代言鸣叫；用户插话=冲刺到用户席位
+        if (window.RoundtableBird && !replayMode) {
+            if (isHost) RoundtableBird.onHostSpeak(true);
+            else if (ev.speakerId === 'user') RoundtableBird.onUserInterject();
+        }
         // 说话音效：把上一句全文交给引擎（奶奶 oneha 剧情触发判定用）；回放时引擎自动静音
         const prev = meeting && meeting.transcript.length ? meeting.transcript[meeting.transcript.length - 1].content : '';
         if (window.RoundtableVoice && !replayMode) RoundtableVoice.start(ev.speakerId, prev);
@@ -503,6 +584,11 @@ initHeader();
             content: activeBubble._fullText, ts: m.ts || (ev && ev.ts) || Date.now()
         });
         if (m.speakerId !== 'host') setSeatState(m.speakerId, 'idle');
+        // 主持鸟行为树：主持人闭嘴 / 发言人结束（驻留一会儿后回空闲脑）
+        if (window.RoundtableBird && !replayMode) {
+            if (m.role === 'host') RoundtableBird.onHostSpeak(false);
+            else RoundtableBird.speechEnd(m.speakerId);
+        }
         activeBubble = null;
     }
 
@@ -543,6 +629,8 @@ initHeader();
         es.addEventListener('score', e => {
             const score = JSON.parse(e.data);
             renderGradeCard(score);
+            // 主持鸟终场演出：低分受击坠落 / 高分投掷庆祝 / 一般鸣叫
+            if (window.RoundtableBird) RoundtableBird.onScore(score.avg);
             // 散会彩蛋：西奥最后一次发言透着累 → yolo_solo + yolo 头像演一遍
             if (window.RoundtableVoice) {
                 const yoloFired = RoundtableVoice.meetingEnd(meeting.transcript);
@@ -587,6 +675,12 @@ initHeader();
         const inp = $('interjectInput');
         const text = inp.value.trim();
         if (!text || !meeting || !meeting.id) return;
+        if (MOCK) {   // mock：本地排队，下一句开场前广播（顺带演示主持鸟冲刺）
+            inp.value = '';
+            mockQueue.push(text);
+            showToast('已加入发言队列', 'info');
+            return;
+        }
         $('interjectBtn').disabled = true;
         api('/roundtable/' + meeting.id + '/interject', 'POST', {content:text}).then(res => {
             if (res.success) { inp.value = ''; showToast('已加入发言队列', 'info'); }
@@ -599,6 +693,7 @@ initHeader();
     $('stopBtn').addEventListener('click', () => {
         if (!meeting || !meeting.id) return;
         $('stopBtn').disabled = true;
+        if (MOCK) { if (mockAbort) mockAbort(); return; }
         api('/roundtable/' + meeting.id + '/stop', 'POST').then(res => {
             if (res.success) showToast('将在当前发言结束后结束会议', 'info');
             else { $('stopBtn').disabled = false; showToast(res.msg || '操作失败', 'info'); }
@@ -842,6 +937,6 @@ initHeader();
         })();
     })();
 </script>
-<script src="js/seed.js"></script>
+<script src="js/seed.js?v=20261002"></script>
 </body>
 </html>

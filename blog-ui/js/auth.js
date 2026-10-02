@@ -57,6 +57,8 @@ function refreshBell() {
         b.style.display = n > 0 ? 'inline-block' : 'none';
         if (lastUnread >= 0 && n > lastUnread) playNotifySound();
         lastUnread = n;
+        // 单一轮询源：把未读数广播给各页面（messages 页侧栏徽标等），避免重复请求
+        window.dispatchEvent(new CustomEvent('notify:unread', { detail: { unread: n } }));
     }).catch(() => {});
 }
 

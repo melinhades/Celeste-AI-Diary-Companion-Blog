@@ -493,8 +493,8 @@
         { cls: 't-body', chars: true, stream: true, d: 4.6, x: 9.15, y: 43.0, w: 25, t: '- 有时候没能跳的很远' },
         { cls: 't-body', chars: true, stream: true, d: 6.4, x: 9.15, y: 50.5, w: 25, t: '- 而且打第九章还必须得学' },
         { cls: 't-body', chars: true, stream: true, d: 8.2, x: 9.15, y: 58.0, w: 25, t: '- （这最坏了）' },
-        { cls: 't-big anim-rot', d: 9.8, x: 53.06, y: 36.93, w: 46, t: '根本学不会？' },
-        { kind: 'img', cls: 'anim-bounce', d: 10.5, x: 63.90, y: 38.47, w: 35.21, src: 'Atlases/WaveDashing/Guy Clip Art.png' }
+        { cls: 't-big anim-rot', d: 10.5, x: 53.06, y: 36.93, w: 46, t: '根本学不会？' },
+        { kind: 'img', cls: 'anim-rise', d: 10.5, x: 63.90, y: 38.47, w: 35.21, src: 'Atlases/WaveDashing/Guy Clip Art.png' }
       ]},
       { bg: '#D9EAD3', tr: 'dissolve', dur: 10000, items: [
         { cls: 't-head-en white', chars: true, stream: true, d: .5, x: 5.36, y: 11.47, w: 90, t: '介绍…凌波微步.ppt!!' },
@@ -525,12 +525,12 @@
     // 每页进入后的音效（转场音 / 入场特效音 / 语音梗；delay 单位 ms，enterSfx 会再 ×1.3 对齐动画节奏）
     // 注意：键名必须是 sfx 表里存在的音效，否则 playSfx 会抛错
     var PAGE_SFX = {
-      1: [['cube', 0]],
-      2: [['cube', 0], ['whoosh', 9800], ['impossible', 10500]],
-      3: [['dissolve', 0], ['whoosh', 5000], ['easy', 5050]],
-      4: [], // fade 转场无专属音效
-      5: [['spin', 0]],
-      6: [['cube', 0], ['happy', 1600]]
+      1: [], // 封面：BGM 起播后才展示，无转场
+      2: [['cube', 0], ['impossible', 10500]],                 // p1→2 cube；小人从下浮现与文字同步 → impossible
+      3: [['dissolve', 0], ['whoosh', 2500], ['easy', 5000]],  // p2→3 dissolve；配图展现 whoosh；「这很简单」iteasy
+      4: [], // p3→4 fade 转场无专属音效
+      5: [['spin', 0]],                                        // p4→5 spinningtransition
+      6: [['happy', 3492]]                                      // Bird Clip Art 完成(≈2.54s)后等 2s → happy
     };
 
     var PPT = (function () {
@@ -596,7 +596,8 @@
       }
 
       function enterSfx(i) {
-        (PAGE_SFX[i] || []).forEach(function (p) { playSfx(p[0], Math.round(p[1] * 1.3)); });
+        // PAGE_SFX 键名为 1 起始（对齐"第几页"），go(n) 是 0 起始索引，这里 +1 对齐
+        (PAGE_SFX[i + 1] || []).forEach(function (p) { playSfx(p[0], Math.round(p[1] * 1.3)); });
       }
 
       function go(n) {
@@ -690,17 +691,19 @@
           sfx.on.currentTime = 0; sfx.on.play().catch(function(){});
           var bgmPromise = ensureBgm();
 
-          // 等 splash 展开完（1000ms）+ BGM 好 → 一起开始播放并展示内容
+          // 等 splash 展开完（1000ms）+ BGM 好 → 先起 BGM，确认开始播放后才淡出纯色、展示内容
           Promise.all([
             new Promise(function (res) { setTimeout(res, 1000); }),
             bgmPromise
           ]).then(function () {
             if (!PPT.isOpen) return; // 期间被关闭了
-            // splash 淡出 + player 内容淡入
+            sfx.bgm.currentTime = 0;
+            var p = sfx.bgm.play();
+            return (p || Promise.resolve()).catch(function () {});
+          }).then(function () {
+            if (!PPT.isOpen) return; // BGM 真正开始播放后才展示
             splash.classList.add('fade');
             player.style.opacity = '1';
-            sfx.bgm.currentTime = 0;
-            sfx.bgm.play().catch(function(){});
             cur = -1;
             setTimeout(function(){ go(0); }, 320);
           });
@@ -820,7 +823,7 @@
   })();
     // 困境检测 + PPT 生成器（外部 JS，独立 IIFE）
   </script>
-  <script src="js/api.js?v=20260925"></script>
+  <script src="js/api.js?v=20261002"></script>
   <script src="js/detect.js"></script>
   <script src="js/pptgen.js?v=20261004"></script>
   <script>
@@ -839,6 +842,6 @@
       tryAuto();
     })();
   </script>
-<script src="js/seed.js"></script>
+<script src="js/seed.js?v=20261002"></script>
 </body>
 </html>

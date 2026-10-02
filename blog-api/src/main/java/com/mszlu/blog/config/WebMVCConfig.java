@@ -48,6 +48,7 @@ public class WebMVCConfig implements WebMvcConfigurer {
                 .addPathPatterns("/feather/**")
                 // 实时聊天 demo：send/history 走登录拦截器；stream 用 query token 手动鉴权（EventSource 带不了 Header）
                 .addPathPatterns("/realtime-chat/send")
+                .addPathPatterns("/realtime-chat/typing")
                 .addPathPatterns("/realtime-chat/history")
                 // AI 圆桌 demo：stream 用 query token 手验，插话/终止走拦截器
                 .addPathPatterns("/roundtable/*/interject")

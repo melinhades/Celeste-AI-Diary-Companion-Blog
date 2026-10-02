@@ -30,7 +30,7 @@
       var s = JSON.parse(localStorage.getItem(STORAGE_KEY));
       if (s && typeof s === 'object' && Array.isArray(s.seeds)) return s;
     } catch (e) {}
-    return { lastRefresh: 0, seeds: [] };
+    return { lastRefresh: 0, seeds: [], credited: false };
   }
   function saveState(s) {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch (e) {}
@@ -339,10 +339,15 @@
         requestAnimationFrame(pop);
       });
 
-      // 入账 berry 余额（仅当 api.js 已加载）
+      // 入账 berry 余额（仅当 api.js 已加载）；置 credited 防止中断后重复补账
       if (typeof window.addBerries === 'function') {
         try { window.addBerries(1); } catch (e) {}
       }
+      try {
+        var cs2 = loadState();
+        cs2.credited = true;
+        saveState(cs2);
+      } catch (e) {}
     }
 
     function finish() {
@@ -409,12 +414,45 @@
   }
 
   // ===== 启动 =====
+  // 新籽提示（自包含：不依赖 api.js 的 showToast）
+  function seedToast(text) {
+    var t = document.createElement('div');
+    t.textContent = text;
+    t.style.cssText =
+      'position:fixed;top:78px;left:50%;transform:translateX(-50%);z-index:99997;' +
+      'background:rgba(20,26,46,.9);color:#ffe9a8;border:1px solid rgba(255,200,120,.5);' +
+      'border-radius:18px;padding:7px 18px;font-size:13px;letter-spacing:1px;' +
+      'box-shadow:0 4px 18px rgba(0,0,0,.4);pointer-events:none;' +
+      'opacity:0;transition:opacity .35s,transform .35s;';
+    document.body.appendChild(t);
+    requestAnimationFrame(function () {
+      t.style.opacity = '1';
+      t.style.transform = 'translateX(-50%) translateY(2px)';
+    });
+    setTimeout(function () {
+      t.style.opacity = '0';
+      setTimeout(function () { if (t.parentNode) t.remove(); }, 400);
+    }, 2600);
+  }
+
   function init() {
     injectStyle();
     var s = loadState();
+
+    // 中断恢复：上次籽已全部收集（螺旋汇聚途中刷新/关页）且未入账 → 补一颗
+    if (s.seeds.length > 0 && s.seeds.every(function (x) { return x.collected; }) && !s.credited) {
+      if (typeof window.addBerries === 'function') {
+        try { window.addBerries(1); } catch (e) {}
+      }
+      seedToast('上次的草莓已补发 +1');
+      saveState({ lastRefresh: Date.now(), seeds: [], credited: false });
+      s = loadState();
+    }
+
     if (shouldRefresh(s)) {
-      s = { lastRefresh: Date.now(), seeds: genSeeds() };
+      s = { lastRefresh: Date.now(), seeds: genSeeds(), credited: false };
       saveState(s);
+      seedToast('新的草莓籽出现了，找找看');
     }
     render();
     requestAnimationFrame(followLoop);

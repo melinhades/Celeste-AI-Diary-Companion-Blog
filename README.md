@@ -85,6 +85,11 @@ This dual-platform flow creates meaning: **intimate personal reflections in the 
 | 🪞 | **Badeline Night Talk** | Shatter the mirror to summon your shadow self; 15 emotion portraits + emotion-driven voice sfx | ✅ |
 | 🌙 | **Dream World** | Snow-night campfire & mirror room with smooth cinematic camera pan | ✅ |
 | 💎 | **Crystal Heart Door** | Split-open heart door, star-dust burst, crystal-heart ceremony | ✅ |
+| 💻 | **BerryOS Desktop** | Simulated retro OS: desktop icons, taskbar, clock, strawberry Start menu | ✅ |
+| 📊 | **Monthly PPT Player** | Auto-generated monthly slideshow with cube/dissolve/spin 3D transitions & BGM | ✅ |
+| 🌃 | **Internet Cafe Scene** | Neon-sign frame animation, full-screen particles, layered interior reveal | ✅ |
+| ☎️ | **Madeline Sings** | Click the payphone on a snow night to hear her sing | ✅ |
+| 💬 | **Realtime Chatroom** | SSE live chat, online badge, emoji stickers, real-time like/comment notifications | ✅ |
 | 📝 | **Private Diary Writing** | Secure, formatted text with auto-save & AI feedback | ✅ |
 | 🌐 | **Public Blog Sharing** | Transform diary entries into blog posts with one click | ✅ |
 | 🔄 | **Diary → Blog Flow** | Seamless transition from private reflection to public sharing | ✅ |
@@ -144,6 +149,46 @@ A full Markdown editor under a dreamy purple twilight sky — toolbar supports r
 </p>
 
 Oshiro's cozy inn — pixel-perfect Celeste interior with purple curtains, campfire chimneys curling smoke, and the sharp-tongued innkeeper herself. Spend your 🍓 strawberries on decorations, chat with Oshiro, and explore the resort.
+
+### 💻 BerryOS — *A retro desktop inside the mountain — files, clock, and a strawberry Start button.*
+
+<p align="center">
+  <img src="docs/screenshots/berryos.png" alt="BerryOS Desktop" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
+</p>
+
+A fully simulated retro operating system. Double-click **我的大山** to return to the blog, open the auto-generated monthly **总结.ppt**, or empty the **回收站** — complete with a taskbar, live clock, custom bird cursor, and a strawberry BerryOS Start menu.
+
+### 📊 Monthly PPT Player — *Cube, dissolve, and spin transitions — your month, slideshow-style.*
+
+<p align="center">
+  <img src="docs/screenshots/berryos-ppt.png" alt="Monthly PPT" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
+</p>
+
+Double-click the monthly PPT icon on BerryOS: a splash expands from the icon, BGM kicks in, and the slideshow plays with **cube / dissolve / spin** 3D transitions, pixel typewriter text, and per-slide sound effects. Click or use arrow keys to page through; Esc exits. The slide data is fully decoupled from the renderer — future AI-generated monthly JSON simply replaces the data.
+
+### 🌃 Internet Cafe — *Neon signs flicker; step inside the dome.*
+
+<p align="center">
+  <img src="docs/screenshots/internet-cafe.png" alt="Internet Cafe" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
+</p>
+
+A starry Celeste street scene: Madeline waits by the parked car while a **15-frame neon-sign animation** flickers above the dome entrance, surrounded by drifting sparkle particles that cover the full screen. Click the building — the exterior surface fades away to reveal the interior layered beneath, the environment dims smoothly, and the camera pushes in.
+
+### ☎️ Madeline Sings at the Payphone — *Pick up the receiver; listen to her sing.*
+
+<p align="center">
+  <img src="docs/screenshots/payphone.png" alt="Madeline Singing Payphone" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
+</p>
+
+A quiet snow-night scene under glowing pixel stars. Click the payphone: the receiver lifts, and Madeline sings a song that plays exactly once and rests on its final frame.
+
+### 💬 Realtime Chatroom — *The mountain talks back — live, together.*
+
+<p align="center">
+  <img src="docs/screenshots/realtime-chat.png" alt="Realtime Chatroom" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
+</p>
+
+A Server-Sent-Events powered live chatroom with self/other message bubbles, an online-presence badge, and a pixel-sticker emoji panel. The right-hand **notification column** gathers likes and comments on your writing in real time.
 
 ---
 
@@ -331,6 +376,11 @@ blog/
 └── blog-ui/                             # Frontend static assets
     ├── index.html                       # Blog index
     ├── diary.html                       # Diary main page
+    ├── berryos.html                     # BerryOS retro desktop + monthly PPT player
+    ├── internet_cafe.html               # Internet Cafe scene: neon animation & interior reveal
+    ├── payphone.html                    # Snow-night payphone: Madeline sings
+    ├── realtime-chat.html               # SSE live chatroom + notification column
+    ├── roundtable.html                  # Character roundtable with voices
     ├── write.html                       # Writing editor (Markdown + AI tools)
     ├── shelf.html                       # Dream world: Heart Door & Badeline
     ├── shop.html                        # Oshiro Inn (strawberry economy)
@@ -338,7 +388,7 @@ blog/
     ├── archives.html / article.html     # Blog archives & detail
     ├── login.html / register.html       # Auth pages
     ├── badeline-sounds/                 # Badeline voice clips (10 emotions + sad_solo)
-    ├── css/  js/  celeste-gui/  celeste-sounds/  celeste-font-en/ ...
+    └── css/  js/  celeste-gui/  celeste-sounds/  celeste-font-en/ ...
 ```
 
 ---
@@ -602,6 +652,11 @@ logging:
 blog-ui/
 ├── index.html          → Blog feed (category filter, search, popular, tags)
 ├── diary.html          → Postcard viewer + Madeline chat (~2400-line diary.js)
+├── berryos.html        → BerryOS retro desktop + monthly PPT player
+├── internet_cafe.html  → Neon-sign scene with layered interior reveal
+├── payphone.html       → Snow-night payphone: Madeline sings
+├── realtime-chat.html  → SSE live chatroom + like/comment notifications
+├── roundtable.html     → Character roundtable with portraits & voices
 ├── write.html          → Markdown editor + AI toolbar (Polish, Generate, Madeline)
 ├── shelf.html          → Dream world (Heart Door, mirror room, Badeline)
 ├── shop.html           → Oshiro Inn (dialogue, strawberry shop)
