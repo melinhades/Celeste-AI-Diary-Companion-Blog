@@ -23,7 +23,7 @@ public class WebMVCConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
-                .allowedOrigins("http://localhost:8080", "http://localhost:3000", "https://instapix.icu", "https://www.instapix.icu")
+                .allowedOriginPatterns("http://localhost:*", "http://127.0.0.1:*", "https://instapix.icu", "https://www.instapix.icu")
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true)
@@ -50,9 +50,12 @@ public class WebMVCConfig implements WebMvcConfigurer {
                 .addPathPatterns("/realtime-chat/send")
                 .addPathPatterns("/realtime-chat/typing")
                 .addPathPatterns("/realtime-chat/history")
-                // AI 圆桌 demo：stream 用 query token 手验，插话/终止走拦截器
+                // AI 圆桌 demo：stream/observe 用 query token 手验（EventSource 带不了 Header），
+                // 大厅列表/插话/终止/议题推荐走拦截器
+                .addPathPatterns("/roundtable/live")
                 .addPathPatterns("/roundtable/*/interject")
                 .addPathPatterns("/roundtable/*/stop")
+                .addPathPatterns("/roundtable/suggestions")
                 .excludePathPatterns("/chat/test-ai");
     }
 

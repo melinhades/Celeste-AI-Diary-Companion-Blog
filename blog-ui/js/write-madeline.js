@@ -400,25 +400,33 @@
         if (useGD) { clearTimeout(dialogHideTimer); openDialog(emotion); }
 
         for (const msg of msgs) {
+            const fmsg = window.TextFx ? TextFx.autoMark(msg) : msg;   // 无标记台词自动补三种动画
             if (useGD) {
-                dialogText.textContent = '';
-                let sc = 0;
+                const gdEl = dialogText.closest('#gameDialog') || dialogText;
+                if (window.TextFx) { TextFx.set(dialogText, ''); gdEl.classList.add('tfx-typing'); }
+                else dialogText.textContent = '';
+                let sc = 0, ci = 0;
                 for (const ch of msg) {
-                    dialogText.textContent += ch;
+                    if (window.TextFx) TextFx.set(dialogText, fmsg.slice(0, ++ci));
+                    else dialogText.textContent += ch;
                     if (!/[\s。！？!?…，,、；;：:（）()*]/.test(ch)) { sc++; if (sc % 3 === 1) playSpeak(emotion); }
                     await sleep(45 + Math.random() * 20);
                 }
+                if (window.TextFx) { TextFx.set(dialogText, fmsg); gdEl.classList.remove('tfx-typing'); }
                 if (msgs.length > 1) await sleep(1000 + Math.random() * 600);
             } else {
                 const histBubble = newChatRow(emotion);
-                histBubble.textContent = '';
+                if (window.TextFx) { TextFx.set(histBubble, ''); histBubble.classList.add('tfx-typing'); }
+                else histBubble.textContent = '';
                 let sc = 0, typeI = 0;
                 for (const ch of msg) {
-                    histBubble.textContent += ch;
-                    if (++typeI % 3 === 0) chatMessages.scrollTop = chatMessages.scrollHeight;
+                    if (window.TextFx) TextFx.set(histBubble, fmsg.slice(0, ++typeI));
+                    else histBubble.textContent += ch;
+                    if (typeI % 3 === 0) chatMessages.scrollTop = chatMessages.scrollHeight;
                     if (!/[\s。！？!?…，,、；;：:（）()*]/.test(ch)) { sc++; if (sc % 3 === 1) playSpeak(emotion); }
                     await sleep(45 + Math.random() * 20);
                 }
+                if (window.TextFx) { TextFx.set(histBubble, fmsg); histBubble.classList.remove('tfx-typing'); }
                 chatMessages.scrollTop = chatMessages.scrollHeight;
                 if (msgs.length > 1) await sleep(240 + Math.random() * 200);
             }

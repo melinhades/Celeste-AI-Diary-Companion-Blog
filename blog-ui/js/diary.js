@@ -474,19 +474,23 @@
             openGameDialog(emotion);
         }
         let lastMsgEmotion = emotion || '默认';
+        const gameDialogEl = document.getElementById('gameDialog');
         for (const msg of messages) {
             if (useGameDialog && myToken !== gameDialogToken) return; // 已被用户关闭，放弃后面还没说的话
+            const fmsg = window.TextFx ? TextFx.autoMark(msg) : msg;   // 无标记台词自动补三种动画
             const { bubble: histBubble } = newMadelineRow(emotion);
-            histBubble.textContent = msg;
+            if (window.TextFx) TextFx.set(histBubble, fmsg); else histBubble.textContent = msg;
             let sentenceBuf = '';
             const aiLocked = !!(emotion && emotion !== '默认');
             let voiceEmotion = aiLocked ? emotion : inferReplyEmotion(msg);
             if (useGameDialog) {
-                gameDialogText.textContent = '';
-                let speakCount = 0;
+                if (window.TextFx) { TextFx.set(gameDialogText, ''); gameDialogEl.classList.add('tfx-typing'); }
+                else gameDialogText.textContent = '';
+                let speakCount = 0, ci = 0;
                 for (const ch of msg) {
                     if (myToken !== gameDialogToken) return; // 用户中途关闭：立刻停下，不再隐形说话
-                    gameDialogText.textContent += ch;
+                    if (window.TextFx) TextFx.set(gameDialogText, fmsg.slice(0, ++ci));
+                    else gameDialogText.textContent += ch;
                     if (/[。！？!?]/.test(ch)) {
                         const inferred = inferSentenceEmotion(sentenceBuf);
                         voiceEmotion = (inferred !== '默认') ? inferred : nextDefaultVoice();
@@ -498,13 +502,16 @@
                     }
                     await sleep(45 + Math.random() * 20);
                 }
+                if (window.TextFx) { TextFx.set(gameDialogText, fmsg); gameDialogEl.classList.remove('tfx-typing'); }
                 if (messages.length > 1) await sleep(1000 + Math.random() * 600);
             } else {
-                histBubble.textContent = '';
+                if (window.TextFx) { TextFx.set(histBubble, ''); histBubble.classList.add('tfx-typing'); }
+                else histBubble.textContent = '';
                 let speakCount = 0, typeI = 0;
                 for (const ch of msg) {
-                    histBubble.textContent += ch;
-                    if (++typeI % 3 === 0) chatMessages.scrollTop = chatMessages.scrollHeight;
+                    if (window.TextFx) TextFx.set(histBubble, fmsg.slice(0, ++typeI));
+                    else histBubble.textContent += ch;
+                    if (typeI % 3 === 0) chatMessages.scrollTop = chatMessages.scrollHeight;
                     if (/[。！？!?]/.test(ch)) {
                         if (!aiLocked) {
                             const inferred = inferSentenceEmotion(sentenceBuf);
@@ -518,6 +525,7 @@
                     }
                     await sleep(45 + Math.random() * 20);
                 }
+                if (window.TextFx) { TextFx.set(histBubble, fmsg); histBubble.classList.remove('tfx-typing'); }
                 chatMessages.scrollTop = chatMessages.scrollHeight;
                 if (messages.length > 1) await sleep(240 + Math.random() * 200);
             }
@@ -1098,6 +1106,9 @@ function inferReplyEmotion(text) {
         MAX_LOCAL_REACTIONS: 2,
         LOCAL_REACT_COOLDOWN: 20000
     };
+    // 暴露情绪词表/色板给 TextFx（日记关键词波浪高亮）
+    window.__DIARY_EMOTION_WORDS = REALTIME_CONFIG.EMOTION_WORDS;
+    window.__DIARY_EMOTION_COLORS = REALTIME_CONFIG.EMOTION_COLORS;
 // ... existing code ...
 
     const companionState = {

@@ -10,9 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -36,6 +34,12 @@ public class RoundtableEngine {
     private AiClient aiClient;
 
     @Autowired
+    private TurnScheduler turnScheduler;
+
+    @Autowired
+    private ConsensusTracker consensusTracker;
+
+    @Autowired
     @Qualifier("aiExecutor")
     private Executor aiExecutor;
 
@@ -45,81 +49,91 @@ public class RoundtableEngine {
     private static final int CHUNK_CHARS = 8;
     /** 切片推送间隔（毫秒），营造打字感 */
     private static final long CHUNK_INTERVAL_MS = 24L;
+    /** owner 连接抖动后等待 SSE 自动重连的宽限期（毫秒），宽限内恢复则会议继续且事件补发 */
+    private static final long OWNER_RECONNECT_GRACE_MS = 3000L;
     /** 每次间隙最多吐出的人类插话条数，防止刷屏 */
     private static final int MAX_INTERJECTIONS_PER_DRAIN = 3;
 
-    /** 无限讨论：至少跑这么多轮才允许判定达成共识（避免第一轮就草草收场） */
-    private static final int MIN_ROUNDS_BEFORE_JUDGE = 2;
-    /** 无限讨论：综合均分达到此阈值视为达成共识，自动收尾 */
+    /** 每 N 条发言推送一次共识/分歧 pulse */
+    private static final int PULSE_EVERY = 2;
+    /** 第几条发言起开始触发评审 */
+    private static final int REVIEW_START = 12;
+    /** 评审间隔 */
+    private static final int REVIEW_EVERY = 6;
+    /** 评审均分 ≥ 此阈值视为达成共识，自动收尾 */
     private static final int COMPLETE_AVG_THRESHOLD = 75;
-    /** 无限讨论：硬上限轮数，超过强制收尾（防烧 token） */
-    private static final int MAX_ROUNDS = 20;
+    /** 硬上限发言条数（防烧 token） */
+    private static final int MAX_SPEECHES = 120;
 
     /** 六个评分维度，顺序即前端展示顺序 */
     private static final String[] SCORE_KEYS = {"conclusion", "evidence", "diversity", "focus", "interaction", "practical"};
 
     /** 在 aiExecutor 线程上跑完一整场会议 */
-    public void run(RoundtableSession session, SseEmitter emitter) {
+    public void run(RoundtableSession session) {
         aiExecutor.execute(() -> {
-            boolean dead = false;
+            // 幂等闸门：SSE 自动重连可能让同一场会议的 stream 被请求多次，
+            // 但引擎只能有一个，否则整场讨论会重播。
+            if (!session.tryStartEngine()) {
+                log.info("圆桌会议引擎已在运行，忽略重复触发 sessionId={}", session.getId());
+                return;
+            }
             try {
-                emitMeta(session, emitter);
+                emitMeta(session);
 
                 // 1. 主持人开场
                 String open = callHost(session,
-                        "会议刚开始。请用一两句话点题、说明讨论规则（每人简短发言，讨论会持续到众人形成共识为止，议题主人也可随时要求结束），并请玛德琳先发言。");
-                dead = pushSpeech(emitter, session, RoundtablePersonas.HOST, "host", open);
-                if (dead) return;
+                        "会议刚开始。请用一两句话点题、说明讨论规则（每人简短发言，讨论会持续到众人形成共识为止，议题主人也可随时要求结束），并请 Madeline 先发言。称呼其他角色时一律用英文名。");
+                if (pushSpeech(session, RoundtablePersonas.HOST, "host", open)) return;
 
-                // 2. 无限讨论：每轮 5 个 AI 依次发言 → 第 2 轮起每轮结束评审一次，
-                //    综合均分 ≥ 阈值则视为达成共识自动收尾；硬上限 MAX_ROUNDS 兜底。
-                int round = 0;
+                // 2. 自主调度循环：TurnScheduler 选下一位发言者，
+                //    每 2 条发言推一次共识 pulse，第 12 条起每 6 条评审一次，达成共识自动收尾。
                 Map<String, Object> finalScore = null;
-                while (!session.isStopRequested() && round < MAX_ROUNDS) {
+                int speechCount = session.getSpeechCount();
+                int round = 0;
+                while (!session.isStopRequested() && session.isOwnerConnected() && speechCount < MAX_SPEECHES) {
                     round++;
-                    dead = emit(emitter, "round", mapOf("round", round, "rounds", 0));
-                    if (dead) return;
 
-                    for (RoundtablePersonas p : RoundtablePersonas.aiSpeakers()) {
-                        if (session.isStopRequested()) break;
-                        List<String> userSaid = drainInterjections(emitter, session);
-                        if (userSaid == null) return; // 连接已死
-
-                        // 点名规则：人类插话里点名了某角色，该角色「额外插队」立即回应（不顶替本轮正常席位）
-                        RoundtablePersonas forced = null;
-                        for (String text : userSaid) {
-                            RoundtablePersonas m = RoundtablePersonas.matchMention(text);
-                            if (m != null) forced = m;
-                        }
-                        String addressedQuestion = forced == null ? null : userSaid.get(userSaid.size() - 1);
-
-                        List<RoundtablePersonas> turnTargets = new ArrayList<>();
-                        if (forced != null && forced != p) turnTargets.add(forced);
-                        turnTargets.add(p);
-                        for (int ti = 0; ti < turnTargets.size(); ti++) {
-                            if (session.isStopRequested()) break;
-                            RoundtablePersonas target = turnTargets.get(ti);
-                            // 只有插队的那次是"回答点名"；后面正常轮转走普通发言指令
-                            String question = (forced != null && target == forced && ti == 0) ? addressedQuestion : null;
-
-                            // 准备发言：前端把该角色卡片切成「准备发言」
-                            dead = emit(emitter, "turn_prepare", mapOf("speakerId", target.getId()));
-                            if (dead) return;
-
-                            String content = callSpeaker(session, target, round, question);
-                            if (content == null || content.trim().isEmpty()) {
-                                // 单个角色失败不毁掉整场：提示后跳过
-                                dead = emit(emitter, "notice", mapOf("text", target.getName() + " 这轮没接上话，先跳过。"));
-                                if (dead) return;
-                                continue;
-                            }
-                            dead = pushSpeech(emitter, session, target, "ai", content.trim());
-                            if (dead) return;
-                        }
+                    // 处理人类插话
+                    List<String> userSaid = drainInterjections(session);
+                    if (userSaid == null) return;
+                    String forcedId = null;
+                    String addressedQuestion = null;
+                    for (String text : userSaid) {
+                        RoundtablePersonas m = RoundtablePersonas.matchMention(text);
+                        if (m != null) { forcedId = m.getId(); addressedQuestion = text; }
                     }
 
-                    // 第 2 轮起，每轮结束评审一次：均分达标 → 达成共识，复用本次评审结果收尾
-                    if (round >= MIN_ROUNDS_BEFORE_JUDGE && !session.isStopRequested()) {
+                    // 调度下一位发言者
+                    TurnScheduler.ScheduleResult sched = turnScheduler.schedule(session, forcedId);
+                    RoundtablePersonas target = RoundtablePersonas.byId(sched.getSpeakerId());
+                    if (target == null) {
+                        Thread.sleep(200);
+                        speechCount = session.getSpeechCount();
+                        continue;
+                    }
+
+                    if (broadcast(session, "turn_prepare", mapOf(
+                            "speakerId", target.getId(), "action", sched.getAction(),
+                            "publicNote", sched.getPublicNote()))) return;
+
+                    String question = (forcedId != null && forcedId.equals(target.getId())) ? addressedQuestion : null;
+                    String content = callSpeaker(session, target, round, question);
+                    if (content == null || content.trim().isEmpty()) {
+                        // 调度/生成过程属于内部事件，不在 transcript 展示（FR-8），静默跳过
+                        speechCount = session.getSpeechCount();
+                        continue;
+                    }
+                    if (pushSpeech(session, target, "ai", content.trim())) return;
+                    speechCount = session.getSpeechCount();
+
+                    // pulse：每 PULSE_EVERY 条发言
+                    if (speechCount % PULSE_EVERY == 0) {
+                        Map<String, Object> pulse = consensusTracker.update(session);
+                        if (broadcast(session, "pulse", pulse)) return;
+                    }
+
+                    // 评审：第 REVIEW_START 条起每 REVIEW_EVERY 条
+                    if (speechCount >= REVIEW_START && (speechCount - REVIEW_START) % REVIEW_EVERY == 0) {
                         Map<String, Object> score = judge(session);
                         if (score != null && !Boolean.TRUE.equals(score.get("fallback"))) {
                             int avg = (int) score.get("avg");
@@ -128,30 +142,24 @@ public class RoundtableEngine {
                                 break;
                             }
                         }
-                        // 未达标则丢弃本次评审，继续下一轮
                     }
                 }
                 session.setRounds(round);
 
-                // 3. 收尾前再放一批人类插话
-                drainInterjections(emitter, session);
+                drainInterjections(session);
 
-                // 4. 主持人自然语言总结（禁止 JSON 原文展示：总结本身就是自然语言）
                 String closing = callHost(session,
                         "讨论结束。请用口语化的一小段做总结：共识是什么、主要分歧是什么、给用户的可行建议是什么。不要分点、不要 JSON。");
                 if (closing != null && !closing.trim().isEmpty()) {
-                    dead = pushSpeech(emitter, session, RoundtablePersonas.HOST, "host", closing.trim());
-                    if (dead) return;
+                    if (pushSpeech(session, RoundtablePersonas.HOST, "host", closing.trim())) return;
                 }
 
-                // 5. 评审打分：若循环内已因达成共识拿到评分则复用，否则（stop / 到上限）现评一次
                 if (finalScore == null) {
-                    emit(emitter, "notice", mapOf("text", "评审中…"));
+                    // 评审过程是内部事件，不向前端广播 notice（FR-8）
                     finalScore = judge(session);
                 }
                 session.setScore(finalScore);
-                dead = emit(emitter, "score", finalScore);
-                if (dead) return;
+                broadcast(session, "score", finalScore);
 
                 session.setStatus(session.isStopRequested() ? "ABORTED" : "FINISHED");
                 Map<String, Object> done = new LinkedHashMap<>();
@@ -161,12 +169,10 @@ public class RoundtableEngine {
                 done.put("rounds", round);
                 done.put("transcript", session.getTranscript());
                 done.put("score", finalScore);
-                emit(emitter, "done", done);
+                broadcast(session, "done", done);
             } catch (Exception e) {
                 log.warn("圆桌会议异常 sessionId={}, userId={}", session.getId(), session.getUserId(), e);
-                emit(emitter, "error", mapOf("text", "会议中断：" + e.getMessage()));
-            } finally {
-                emitter.complete();
+                broadcast(session, "error", mapOf("text", "会议中断：" + e.getMessage()));
             }
         });
     }
@@ -188,14 +194,18 @@ public class RoundtableEngine {
         if (addressedQuestion != null) {
             // 点名插队：最后一条就是人类的问题，要求直接回应
             user.append("目前为止的讨论记录：\n").append(record).append("\n");
-            user.append("注意：人类用户刚刚点名叫你（").append(p.getName()).append("）发言，原话是：「")
+            user.append("注意：人类用户刚刚点名叫你（").append(p.getEnName()).append("）发言，原话是：「")
                 .append(addressedQuestion).append("」\n");
             user.append("你必须直接回答 TA 的问题或回应 TA 的观点，不许回避、不许转给别人。直接说内容：\n");
         } else if (record.isEmpty()) {
-            user.append("目前还没有人发言，你是第一个，请直接针对议题亮明你的态度。\n");
+            user.append("目前还没有人发言，你是第一个，请直接针对议题亮明你的态度和理由。\n");
         } else {
             user.append("目前为止的讨论记录：\n").append(record).append("\n");
-            user.append("现在轮到你（").append(p.getName()).append("）发言。针对上面某人的观点回应，1~3 句话，直接说内容：\n");
+            user.append("现在轮到你（").append(p.getEnName())
+                .append("）发言。请围绕议题给出新的推进：没人提过的角度、具体理由、反例、可执行建议，" +
+                        "或推动大家走向结论。只讲一个你认为最关键的点，不许罗列两三条建议；" +
+                        "直接开口说你的内容，不要先总结别人说过什么，严禁复述原话。" +
+                        "1~2 句话、不超过 60 个字，直接说：\n");
         }
         msgs.add(new AiMessage("user", user.toString()));
         return aiClient.chat(msgs, false);
@@ -312,74 +322,70 @@ public class RoundtableEngine {
 
     // ==================== SSE 推送 ====================
 
+    /**
+     * 实时发言事件的统一出口：广播失败（owner 连接刚断）时先给一个重连宽限期，
+     * 宽限内连接恢复则把该事件补发给新订阅者并继续会议；宽限后仍断线才终止。
+     * 这样网络瞬断 / EventSource 自动重连既不会重播整场，也不会丢失当前发言。
+     */
+    private boolean sendEvent(RoundtableSession session, String eventName, Object payload)
+            throws InterruptedException {
+        if (broadcast(session, eventName, payload)) {
+            Thread.sleep(OWNER_RECONNECT_GRACE_MS);
+            if (!session.isOwnerConnected()) return true;
+            broadcast(session, eventName, payload);   // 重连已恢复：向新 emitter 补发
+        }
+        return false;
+    }
+
     /** 一条发言：turn_start → 若干 delta（伪流式逐字）→ turn_end，同时入逐字稿 */
-    private boolean pushSpeech(SseEmitter emitter, RoundtableSession session,
+    private boolean pushSpeech(RoundtableSession session,
                                RoundtablePersonas persona, String role, String content) throws InterruptedException {
         long ts = System.currentTimeMillis();
-        boolean dead = emit(emitter, "turn_start", mapOf(
-                "speakerId", persona.getId(), "role", role, "name", persona.getName(),
-                "color", persona.getColor(), "ts", ts));
-        if (dead) return true;
+        if (sendEvent(session, "turn_start", mapOf(
+                "speakerId", persona.getId(), "role", role, "name", persona.getEnName(),
+                "color", persona.getColor(), "ts", ts))) return true;
 
-        // 切片推送
         int len = content.length();
         for (int i = 0; i < len; i += CHUNK_CHARS) {
             int end = Math.min(i + CHUNK_CHARS, len);
-            dead = emit(emitter, "delta", mapOf("speakerId", persona.getId(), "text", content.substring(i, end)));
-            if (dead) return true;
+            if (sendEvent(session, "delta", mapOf("speakerId", persona.getId(), "text", content.substring(i, end))))
+                return true;
             Thread.sleep(CHUNK_INTERVAL_MS);
         }
 
-        session.addSpeech(persona.getId(), persona.getName(), persona.getColor(), role, content);
-        dead = emit(emitter, "turn_end", mapOf("speakerId", persona.getId(), "ts", ts));
-        return dead;
+        session.addSpeech(persona.getId(), persona.getEnName(), persona.getColor(), role, content);
+        return sendEvent(session, "turn_end", mapOf("speakerId", persona.getId(), "ts", ts));
     }
 
-    /**
-     * 人类插话：队列里的内容作为 user 发言广播并入逐字稿（不切片，本身就是完整文本）。
-     * @return 本次吐出的插话文本（空列表=没有）；null 表示 SSE 连接已死
-     */
-    private List<String> drainInterjections(SseEmitter emitter, RoundtableSession session) {
+    private List<String> drainInterjections(RoundtableSession session) throws InterruptedException {
         List<String> pending = new ArrayList<>();
         session.getInterjections().drainTo(pending, MAX_INTERJECTIONS_PER_DRAIN);
         for (String text : pending) {
             long ts = System.currentTimeMillis();
-            boolean dead = emit(emitter, "turn_start", mapOf(
+            if (sendEvent(session, "turn_start", mapOf(
                     "speakerId", "user", "role", "user", "name", session.getUserNickname(),
-                    "color", RoundtablePersonas.USER.getColor(), "ts", ts));
-            if (dead) return null;
-            dead = emit(emitter, "delta", mapOf("speakerId", "user", "text", text));
-            if (dead) return null;
+                    "color", RoundtablePersonas.USER.getColor(), "ts", ts))) return null;
+            if (sendEvent(session, "delta", mapOf("speakerId", "user", "text", text))) return null;
             session.addSpeech("user", session.getUserNickname(),
                     RoundtablePersonas.USER.getColor(), "user", text);
-            dead = emit(emitter, "turn_end", mapOf("speakerId", "user", "ts", ts));
-            if (dead) return null;
+            if (sendEvent(session, "turn_end", mapOf("speakerId", "user", "ts", ts))) return null;
         }
         return pending;
     }
 
-    private void emitMeta(RoundtableSession session, SseEmitter emitter) {
-        List<Map<String, Object>> seats = new ArrayList<>();
-        for (RoundtablePersonas p : RoundtablePersonas.seats()) {
-            seats.add(p.toMeta());
-        }
+    private void emitMeta(RoundtableSession session) {
         Map<String, Object> meta = new LinkedHashMap<>();
         meta.put("sessionId", session.getId());
         meta.put("topic", session.getTopic());
-        meta.put("rounds", 0); // 0 = 无限模式，实际轮数在 done 事件里返回
-        meta.put("speakers", seats);
-        emit(emitter, "meta", meta);
+        meta.put("rounds", 0);
+        meta.put("speakers", RosterBuilder.build(session));
+        broadcast(session, "meta", meta);
     }
 
-    /** 发一个 SSE 事件；IOException 说明连接已死，返回 true */
-    private boolean emit(SseEmitter emitter, String eventName, Object payload) {
-        try {
-            emitter.send(SseEmitter.event().name(eventName).data(payload));
-            return false;
-        } catch (IOException | IllegalStateException e) {
-            log.debug("圆桌 SSE 发送失败 event={}, err={}", eventName, e.getMessage());
-            return true;
-        }
+    /** 广播一个事件到总线；owner 已断连返回 true */
+    private boolean broadcast(RoundtableSession session, String eventName, Object payload) {
+        session.getBus().broadcast(eventName, payload);
+        return !session.isOwnerConnected();
     }
 
     private static Map<String, Object> mapOf(Object... kv) {

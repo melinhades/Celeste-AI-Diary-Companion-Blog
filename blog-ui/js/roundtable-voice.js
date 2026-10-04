@@ -10,7 +10,7 @@
        · Theo  yolo/yolo_solo.wav   —— 散会时他最后发言透着累
        · 奶奶  laugh/oneha/…_01-24  —— 接话对象刚说了「没切身体会的大话」或「绝境里的极端乐观」
        · 暗面 sad_solo              —— 由 BadelineVoice 自身判定
-   - 主持人/用户/大崎无素材：静音。回放历史不触发任何音效（setLive(false)）。
+   - 主持人/用户无素材：静音。大崎仅有 worried 情绪素材（mid_A/B/C + end，无 per）。回放历史不触发任何音效（setLive(false)）。
    暴露 window.RoundtableVoice：
      setLive(flag)        本场是否实时（false 时全部静音，回放用）
      setEnabled(flag)     总开关
@@ -23,12 +23,12 @@
     var MADE_BASE = 'celeste-sounds/madeline/';
     var THEO_BASE = 'theo-sounds/';
     var GRAN_BASE = 'granny-sounds/';
+    var OSHIRO_BASE = 'celeste-sounds/oshiro/';
     var ABC = ['mid_A', 'mid_B', 'mid_C'];
-    /* ===== 发声节拍器参数（节奏对齐 write 页 doAddM：3 字一声 × 55ms/字 ≈ 165ms） ===== */
-    var BLIP_GAP = 150;            // 两声基准间隔 ms
-    var BLIP_JITTER = 60;          // 间隔抖动，避免机械感
-    var CHARS_PER_BLIP = 9;        // 一声核销的非标点字符数（吸收网络合批涌浪）
-    var PENDING_CAP = 27;          // 积压上限（≈3 声），超出跳读防拖尾
+    /* ===== 发声节拍器：声数跟句子长度走（长句多声、短句少声），结尾补齐 ===== */
+    var BLIP_GAP = 130;            // 两声基准间隔 ms
+    var BLIP_JITTER = 50;          // 间隔抖动，避免机械感
+    var CHARS_PER_BLIP = 6;        // 约每 6 个非标点字符 1 声（长句自动多声、短句少声）
     var PUMP_MS = 40;              // 泵循环 tick
     var SKIP_CHARS = /[\s。！？!?…，,、；;：:（）()·—\-「」『』""'']/;   // 不发声字符
 
@@ -155,6 +155,10 @@
         return 'normal';
     }
 
+    /* ============ Oshiro（仅 worried 情绪素材：mid_A/B/C + end，无 per） ============ */
+    var OSHIRO_RATE = { worried: [0.88, 1.02] };
+    var OSHIRO_VOL = { worried: 0.62 };
+
     // 统一入口：席位 id + 最新一句 → 该角色的情绪 key（与头像文件夹 1:1）
     function infer(speakerId, text) {
         if (speakerId === 'madeline') return inferMadeline(text);
@@ -181,7 +185,8 @@
     var chTheo = makeChannel();
     chTheo.solo.src = THEO_BASE + 'yolo/yolo_solo.wav';
     var chGranny = makeChannel();
-    var allChannels = [chMadeline, chTheo, chGranny];
+    var chOshiro = makeChannel();
+    var allChannels = [chMadeline, chTheo, chGranny, chOshiro];
 
     var cur = null;          // { id, seq, chars, dir, granSpecial }
     var grannyOnehaUsed = false;
@@ -208,7 +213,7 @@
     function start(speakerId, respondTo) {
         cur = null;                 // 新开口硬切：上一人的发声余量直接作废
         if (!maySound()) return;
-        cur = { id: speakerId, seq: 0, pending: 0, full: '', ended: false, nextBlipAt: 0 };
+        cur = { id: speakerId, seq: 0, chars: 0, full: '', ended: false, nextBlipAt: 0 };
         if (speakerId === 'madeline') { silenceOthers(chMadeline); chMadeline.silence(); }
         else if (speakerId === 'theo') { silenceOthers(chTheo); chTheo.silence(); }
         else if (speakerId === 'granny') {
@@ -226,7 +231,10 @@
             silenceOthers(null);
             if (window.BadelineVoice) window.BadelineVoice.resetSeq();
         }
-        else { cur = null; }   // host / user / oshiro：无素材
+        else if (speakerId === 'oshiro') {
+            silenceOthers(chOshiro); chOshiro.silence();
+        }
+        else { cur = null; }   // host / user：无素材
     }
 
     function playLoopBlip(base, dir, seq, rate, vol, variantFor) {
@@ -244,13 +252,16 @@
             if (seq > 0 && (seq % 4) === 0) variant = 'end';
             else variant = ABC[seq % 3];
         } else {
-            variant = (seq === 0) ? 'per' : ABC[(seq - 1) % 3];
+            // oshiro 无 per 素材，第一声直接 mid_A
+            if (base === OSHIRO_BASE) variant = ABC[seq % 3];
+            else variant = (seq === 0) ? 'per' : ABC[(seq - 1) % 3];
         }
         var num = randNum(10);
         var src = base + dir + '/' + variant + '/' + dir + '_' + variant + '_' + num + '.wav';
         if (base === MADE_BASE) chMadeline.play(src, rate, vol);
         else if (base === THEO_BASE) chTheo.play(src, rate, vol);
         else if (base === GRAN_BASE) chGranny.play(src, rate, vol);
+        else if (base === OSHIRO_BASE) chOshiro.play(src, rate, vol);
     }
 
     /* ===== 节拍器泵：发声与 delta 到达时机彻底解耦 =====
@@ -290,6 +301,10 @@
             var policy = gd === 'normal' ? 'std' : gd; // laugh / mock 各自的 variant 规则
             playLoopBlip(GRAN_BASE, gd, cur.seq,
                 pickRate(GRAN_RATE[gd]), GRAN_VOL[gd] + (Math.random() - 0.5) * 0.08, policy);
+        } else if (cur.id === 'oshiro') {
+            // oshiro 仅 worried 情绪素材，所有发言统一用 worried
+            playLoopBlip(OSHIRO_BASE, 'worried', cur.seq,
+                pickRate(OSHIRO_RATE.worried), OSHIRO_VOL.worried + (Math.random() - 0.5) * 0.08, 'std');
         }
         cur.seq++;
     }
@@ -298,13 +313,13 @@
         if (!cur) { stopPump(); return; }
         var now = performance.now();
         if (now < cur.nextBlipAt) return;
-        if (cur.pending < 3) {
-            // 流停顿自动静音；turn_end 后余量念完自动收声
+        if (cur.chars <= 0) {
+            // 全文念完自动收声
             if (cur.ended) { cur = null; stopPump(); }
             return;
         }
         playOne();
-        cur.pending = Math.max(0, cur.pending - CHARS_PER_BLIP);
+        cur.chars = Math.max(0, cur.chars - CHARS_PER_BLIP);
         cur.nextBlipAt = now + BLIP_GAP + Math.random() * BLIP_JITTER;
     }
 
@@ -312,19 +327,17 @@
         if (!maySound() || !cur || !chunk) return;
         var s = String(chunk);
         cur.full = ((cur.full || '') + s).slice(-200);   // 供情绪推断（只保留尾部 200 字）
-        var add = 0;
         for (var i = 0; i < s.length; i++) {
-            if (!SKIP_CHARS.test(s.charAt(i))) add++;
+            if (!SKIP_CHARS.test(s.charAt(i))) cur.chars++;   // 声数按累计字数自然增长
         }
-        cur.pending = Math.min(cur.pending + add, PENDING_CAP);   // 涌浪自动跳读
         startPump();
     }
 
     function end() {
         if (!cur) return;
         cur.ended = true;
-        if (cur.pending < 3) { cur = null; stopPump(); }   // 尾巴不够一声，直接收
-        // 否则交给泵把余量念完（ended 且 pending<3 时自动收声）
+        if (cur.chars <= 0) { cur = null; stopPump(); }
+        // 否则交给泵把全文念完（chars 耗尽自动收声）——长句自然会播更多声
     }
 
     // 散会：Theo 最后一次发言透着累 → yolo_solo（整场最多一次）

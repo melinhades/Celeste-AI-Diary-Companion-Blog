@@ -1,11 +1,13 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="icon/OIP.webp" type="image/webp">
     <title>Write - Celeste Blog</title>
-    <link rel="stylesheet" href="css/common.css">
+    <link rel="stylesheet" href="css/common.css?v=20261003e">
+    <link rel="stylesheet" href="css/text-fx.css?v=20261004a">
+    <style>#wpGameDialogText, .msg-bubble { --c:#F94A4A; }</style>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
     /* 暗色配色方案：输入法合成/插入区、选区、滚动条都走暗色，防止插入历史文本时露白底 */
@@ -267,6 +269,7 @@
             <a href="shop.html" class="nav-link nav-diary-btn" title="Celeste Resort · Oshiro">
                 <img src="Atlases/Gui/menu/play.png" alt="Shop" loading="lazy" decoding="async">
             </a>
+            <a href="roundtable.html" class="nav-link nav-chair" title="AI 圆桌会议">🪑</a>
         </nav>
         <div class="header-right" id="headerRight"></div>
     </div>
@@ -346,9 +349,10 @@
 
 <footer class="footer"> <div class="container">© 2024 Celeste Blog · Explore the stars</div> </footer>
 <script src="js/api.js?v=20261002"></script>
-<script src="js/auth.js?v=20261002b"></script>
+<script src="js/text-fx.js?v=20261004a"></script>
+<script src="js/auth.js?v=20261003b"></script>
 <script src="js/madeline-core.js?v=20261002"></script>
-<script src="js/write-madeline.js?v=20261002"></script>
+<script src="js/write-madeline.js?v=20261004a"></script>
 <script>
 // ================= AI 生成文章：跑步指针 + 采纳/拒绝 + Fall 回退 =================
 (function () {

@@ -103,6 +103,9 @@ a { text-decoration: none; color: inherit; }
     margin-left: auto;
 }
 .user-info { display: flex; align-items: center; gap: 10px; font-size: 14px; color: #b8b8d0; }
+.user-self { display: flex; align-items: center; gap: 10px; color: #b8b8d0; transition: color 0.2s; }
+.user-self:hover { color: #fff; }
+.user-self:hover .user-avatar { box-shadow: 0 0 18px rgba(138, 43, 226, 0.75); }
 .user-avatar {
     width: 32px;
     height: 32px;
@@ -260,3 +263,20 @@ a { text-decoration: none; color: inherit; }
     position: relative;
     z-index: 1;
 }
+
+/* 顶部 Chat 乌鸦小按钮：两侧留白，避免和用户名、写文章按钮贴太近 */
+.chat-crow { position: relative; display: inline-flex; align-items: center; vertical-align: middle; margin: 0 8px; }
+/* 圆桌会议入口：标题同款凳子 emoji，尺寸对齐图标导航 */
+.nav-chair { font-size: 27px; line-height: 1; display: inline-flex; align-items: center; }
+.chat-crow-box {
+    width: 19px; height: 18px; overflow: hidden;
+    display: inline-flex; background: transparent;
+    border: 0;
+}
+.chat-crow-box img {
+    width: 40px; height: 30px;
+    margin: -14px 0 0 -10px;
+    image-rendering: pixelated;
+    transition: filter 0.2s;
+}
+.chat-crow:hover .chat-crow-box img { filter: brightness(1.3); }

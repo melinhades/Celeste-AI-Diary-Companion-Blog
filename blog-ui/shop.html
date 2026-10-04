@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
@@ -6,6 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="icon/OIP.webp" type="image/webp">
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/text-fx.css?v=20261004a">
+<style>#gameDialogText { --c:#7BD838; }</style>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; }
 @font-face { font-family:'Renogare'; src:url('celeste-font-en/Renogare-Regular.otf') format('opentype'); font-display:swap; }
@@ -385,6 +387,7 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 </div>
 
 <script src="js/api.js?v=20261002"></script>
+<script src="js/text-fx.js?v=20261004a"></script>
 <script>
     // ===== 音频手势解锁（修复音效不生效） =====
     ['pointerdown', 'keydown'].forEach(function(ev) {
@@ -505,21 +508,27 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
         if (OSHIRO_FRAMES[emo]) startPortraitAnim(emo);
         dialogText.textContent = '';
         gameDialog.classList.add('show');
+        if (window.TextFx) gameDialog.classList.add('tfx-typing');
         if (dialogTimer) clearTimeout(dialogTimer);
         if (dialogTypeTimer) clearInterval(dialogTypeTimer);
 
+        var ftext = window.TextFx ? TextFx.autoMark(text) : text;  // 无标记台词自动补三种动画
         var charIdx = 0;
         dialogTypeTimer = setInterval(function() {
-            if (charIdx >= text.length) {
+            if (charIdx >= ftext.length) {
                 clearInterval(dialogTypeTimer);
                 dialogTypeTimer = null;
+                if (window.TextFx) { TextFx.set(dialogText, ftext); gameDialog.classList.remove('tfx-typing'); }
                 dialogTimer = setTimeout(function() { gameDialog.classList.remove('show'); }, 6000);
                 return;
             }
-            var ch = text[charIdx];
-            dialogText.textContent += ch;
+            var ch = ftext[charIdx];
             charIdx++;
-            if (!/[\s。！？!?…，,、；;：:（）()*]/.test(ch)) {
+            if (window.TextFx) TextFx.set(dialogText, ftext.slice(0, charIdx));
+            else dialogText.textContent += ch;
+            /* 标记符 { } ~ * 不参与发声计数 */
+            var isMarker = ch === '{' || ch === '}' || ch === '~' || ch === '*';
+            if (!isMarker && !/[\s。！？!?…，,、；;：:（）()*]/.test(ch)) {
                 osSpeakSeq++;
                 if (osSpeakSeq % 3 === 1) playOshiroSound();
             }
@@ -534,6 +543,7 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     gameDialog.addEventListener('click', function() {
         if (dialogTimer) { clearTimeout(dialogTimer); dialogTimer = null; }
         if (dialogTypeTimer) { clearInterval(dialogTypeTimer); dialogTypeTimer = null; }
+        gameDialog.classList.remove('tfx-typing');
         gameDialog.classList.remove('show');
     });
     // ===== 像素 Oshiro 行为：默认四处游逛，害怕才坐 =====

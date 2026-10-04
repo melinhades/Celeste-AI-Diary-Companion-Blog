@@ -1,0 +1,1369 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Madeline 唱 AI 的话 · 逐字变调</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:16px; background:#10121f; color:#eaf0ff; padding:24px;
+    font-family:'Renogare','CelesteZH','PingFang SC','Microsoft YaHei',sans-serif;
+    background-image:radial-gradient(60%50% at 50%0%,rgba(255,90,120,.12),transparent 70%); }
+
+  #mad { position:relative; width:88px; height:88px; }
+  .hair { position:absolute; inset:0; background:#e8435c; clip-path:polygon(18%0,82%0,100%30%,92%72%,70%100%,30%100%,8%72%,0%30%); }
+  .face { position:absolute; left:16px; top:24px; width:56px; height:48px; background:#ffd9b8; border-radius:6px; }
+  .eye { position:absolute; top:15px; width:6px; height:9px; background:#2a2330; border-radius:2px; }
+  .eye.l { left:13px; } .eye.r { right:13px; }
+  .mouth { position:absolute; left:50%; bottom:7px; width:12px; height:4px; margin-left:-6px;
+    background:#8a2b3a; border-radius:0 0 6px 6px; }
+
+  #lyric { max-width:520px; min-height:28px; font-size:17px; line-height:1.8; text-align:center;
+    letter-spacing:1px; word-break:break-all; }
+  #lyric span { transition:color .1s, text-shadow .1s; color:rgba(234,240,255,.45); }
+  #lyric span.now { color:#ffd9b8; text-shadow:0 0 12px rgba(255,90,120,.8); }
+  #lyric span.done { color:#eaf0ff; }
+
+  .inputrow { display:flex; gap:8px; width:min(520px,92vw); }
+  .inputrow input { flex:1; padding:10px 16px; border-radius:999px; border:1px solid rgba(255,255,255,.16);
+    background:rgba(255,255,255,.06); color:#fff; font-size:14px; outline:none; font-family:inherit; }
+  .inputrow input:focus { border-color:#ff8a9c; }
+
+  .actions { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+  .actions button { padding:11px 26px; border:1px solid rgba(255,255,255,.18); border-radius:999px;
+    background:rgba(255,90,120,.15); color:#fff; font-size:14px; cursor:pointer;
+    font-family:inherit; transition:.18s; }
+  .actions button:hover { background:rgba(255,90,120,.32); transform:translateY(-1px); }
+  .actions button:disabled { opacity:.4; cursor:default; transform:none; }
+  #origBtn, #directBtn { background:rgba(255,255,255,.07); }
+  #origBtn:hover, #directBtn:hover { background:rgba(255,255,255,.15); }
+  .actions button.stageBtn { background:rgba(120,160,255,.13); }
+  .actions button.stageBtn:hover { background:rgba(120,160,255,.3); }
+
+  .emoinfo { font-size:12px; color:#ffd9b8; min-height:16px; text-align:center; }
+  .status { font-size:12px; color:#9aa6c4; min-height:16px; text-align:center; }
+  .hint { font-size:11px; color:#7f8aa8; text-align:center; line-height:1.7; max-width:500px; }
+</style>
+</head>
+<body>
+  <div id="mad">
+    <div class="hair"></div>
+    <div class="face">
+      <div class="eye l"></div><div class="eye r"></div>
+      <div class="mouth" id="mouth"></div>
+    </div>
+  </div>
+
+  <div id="lyric">…</div>
+
+  <div class="inputrow">
+    <input id="prompt" placeholder="写一句词，Madeline 复读唱出来（回车发送）" maxlength="60">
+  </div>
+  <div class="actions">
+    <button id="aiBtn">AI 复读唱出</button>
+    <button id="directBtn">直接唱输入框文字</button>
+    <button id="origBtn">听原版对比</button>
+  </div>
+  <div class="actions">
+    <button id="stage1Btn" class="stageBtn">① 对话原声</button>
+    <button id="stage2Btn" class="stageBtn">② 变调歌唱</button>
+  </div>
+  <label style="font-size:13px;color:#9fb0d8;display:flex;align-items:center;gap:6px;cursor:pointer">
+    <input type="checkbox" id="concatMode" checked style="accent-color:#ff5a78">
+    拼接模式：步骤1 自动听参考音频识别音高/旋律/节奏，步骤2 一字一音贴旋律节奏、精确变调+字尾滑音（机器测频校验音头，不准则自动修正），关掉则是乐句单声源
+  </label>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center">
+    <label style="font-size:12px;color:#9fb0d8">喂一首歌（AI 自动转谱）：</label>
+    <input type="file" id="refFile" accept="audio/*" style="font-size:12px;color:#9fb0d8;max-width:280px">
+    <label style="font-size:12px;color:#9fb0d8">起始秒
+      <input type="number" id="refStart" value="0" min="0" step="1" style="width:56px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:6px;color:#fff;padding:3px 6px">
+    </label>
+  </div>
+  <div class="emoinfo" id="emoinfo"></div>
+  <div class="status" id="status"></div>
+  <div class="hint">演唱情绪固定为生气（唯一池，调音与听感最佳）· 选声与 diary 一致（第 7 声 per + A/B/C 轮转）<br>
+  带伴奏的歌转谱易混入乐器音：建议先用 Demucs 等工具分离出纯人声再喂，识别会准很多</div>
+
+<script src="./js/blip_data.js"></script>
+<script>
+// ===== 步骤1：自动"听"参考音频，识别音高 / 旋律 / 节奏（YIN 基频检测） =====
+// 简谱数字 → MIDI（五声，本地兜底旋律用）
+const DEG_TO_MIDI = { 1: 60, 2: 62, 3: 64, 5: 67, 6: 69 };
+
+/* 单帧 YIN：差分函数 → 累积均值归一化(CMND) → 绝对阈值 → 局部极小 → 抛物线插值。
+   返回 { f0, cmnd（越小越清晰）}。tau 搜索范围限定人声 200~900Hz，又快又稳 */
+function yinFrame(d, i0, frame, lo, hi, sr) {
+  const span = frame - hi;
+  const cmnd = new Float32Array(hi + 1);
+  let run = 0;
+  for (let tau = lo; tau <= hi; tau++) {
+    let s = 0;
+    for (let j = 0; j < span; j += 2) {
+      const x = d[i0 + j] - d[i0 + j + tau];
+      s += x * x;
+    }
+    run += s;
+    cmnd[tau] = s * tau / run;
+  }
+  // 绝对阈值 0.15：第一个越过阈值的 tau，再沿下降沿走到局部极小
+  let tau = lo;
+  while (tau < hi && cmnd[tau] >= 0.15) tau++;
+  let t = lo, best = 1;
+  for (let x = lo; x <= hi; x++) if (cmnd[x] < best) { best = cmnd[x]; t = x; }
+  if (tau < hi) {
+    t = tau;
+    while (t < hi && cmnd[t + 1] < cmnd[t]) t++;
+  }
+  // 抛物线插值（亚采样精度）
+  if (t > lo && t < hi) {
+    const a = cmnd[t - 1], b = cmnd[t], c = cmnd[t + 1], den = a - 2 * b + c;
+    if (Math.abs(den) > 1e-9) {
+      const shift = Math.max(-0.5, Math.min(0.5, (a - c) / (2 * den)));
+      return { f0: sr / (t + shift), cmnd: b };
+    }
+  }
+  return { f0: sr / t, cmnd: best };
+}
+
+const median = arr => {
+  const a = arr.slice().sort((x, y) => x - y);
+  return a[a.length >> 1];
+};
+
+/* 分析整段音频 → 音符列表 [{t, dur, midi, f0}] + span（首尾音跨度，供循环偏移） */
+function analyzeAudioNotes(buf) {
+  const sr = buf.sampleRate, d = buf.getChannelData(0);
+  const FRAME = 512, HOP = 128, fdur = FRAME / sr;
+  const lo = Math.floor(sr / 900), hi = Math.floor(sr / 200);
+  const frames = [];
+  let maxRms = 1e-6;
+  for (let i0 = 0; i0 + FRAME <= d.length; i0 += HOP) {
+    let rms = 0;
+    for (let j = 0; j < FRAME; j++) rms += d[i0 + j] * d[i0 + j];
+    rms = Math.sqrt(rms / FRAME);
+    if (rms > maxRms) maxRms = rms;
+    const y = yinFrame(d, i0, FRAME, lo, hi, sr);
+    frames.push({ t: i0 / sr, rms, f0: y.f0, voiced: y.cmnd < 0.18 });
+  }
+  // 能量门控（相对峰值 -24dB）+ 连续八度纠错（消 YIN 倍频跳变）
+  let est = null;
+  for (const f of frames) {
+    f.voiced = f.voiced && f.rms > maxRms * 0.06;
+    if (!f.voiced) continue;
+    if (est === null) est = f.f0;
+    else {
+      while (f.f0 > est * 1.6) f.f0 /= 2;
+      while (f.f0 < est / 1.6) f.f0 *= 2;
+      est = est * 0.8 + f.f0 * 0.2;
+    }
+  }
+  // ---- 帧 → 原始音符：静音超 80ms 断句，音高跳动 >0.9 半音断音 ----
+  const raw = [];
+  let cur = null;
+  const semiOf = f => 12 * Math.log2(f / 440);
+  for (const f of frames) {
+    if (!f.voiced) continue;
+    if (cur && f.t - cur.endT <= 0.08) {
+      const m = median(cur.semis), s = semiOf(f.f0);
+      if (Math.abs(s - m) < 0.9) {
+        cur.semis.push(s); cur.endT = f.t + fdur;
+        cur.rmsAcc += f.rms * f.rms; cur.nf++;
+        continue;
+      }
+    }
+    if (cur) raw.push(cur);
+    cur = { startT: f.t, endT: f.t + fdur, semis: [semiOf(f.f0)], rmsAcc: f.rms * f.rms, nf: 1 };
+  }
+  if (cur) raw.push(cur);
+
+  /* ---- 能量审查：低于局部(±0.9s)强音 20% 的音 = 滑音过渡/气口尾音，
+     并入前一个真音并保持其音高纯度（前音不存在则并入后音），防止碎片顶掉真音索引 ---- */
+  const quiet = new Array(raw.length).fill(false);
+  raw.forEach((n, i) => {
+    n.rms = Math.sqrt(n.rmsAcc / n.nf);
+    let local = n.rms;
+    for (let j = Math.max(0, i - 6); j <= Math.min(raw.length - 1, i + 6); j++)
+      if (Math.abs(raw[j].startT - n.startT) < 0.9) local = Math.max(local, raw[j].rms);
+    if (n.rms < local * 0.2) quiet[i] = true;
+  });
+  const hosts = [];
+  for (let i = 0; i < raw.length; i++) {
+    if (!quiet[i]) { hosts.push(raw[i]); continue; }
+    const tgt = hosts.length ? hosts[hosts.length - 1] : raw[i + 1];
+    if (!tgt) continue;
+    tgt.endT = Math.max(tgt.endT, raw[i].endT);
+    tgt.semis.push(...raw[i].semis.map(() => median(tgt.semis)));   // 音高按宿主音抹平
+  }
+  /* ---- 成型：MIDI 量化 → 同音近邻(缺口≤0.2s)合并 → <0.07s 短音并入最接近的邻音（迭代到稳定） ---- */
+  let work = hosts.map(n => ({ t: n.startT, endT: n.endT, midi: Math.round(median(n.semis)) + 69 }));
+  const out1 = [];
+  for (const n of work) {
+    const p = out1[out1.length - 1];
+    if (p && p.midi === n.midi && n.t - p.endT <= 0.2) p.endT = n.endT;
+    else out1.push(n);
+  }
+  work = out1;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let i = 0; i < work.length; i++) {
+      const n = work[i];
+      if (n.endT - n.t < 0.07) {
+        const prev = work[i - 1], next = work[i + 1];
+        let tgt;
+        if (prev && next) tgt = Math.abs(prev.midi - n.midi) <= Math.abs(next.midi - n.midi) ? prev : next;
+        else tgt = prev || next;
+        if (!tgt) continue;
+        if (tgt === prev) prev.endT = Math.max(prev.endT, n.endT);
+        else { next.t = Math.min(next.t, n.t); next.endT = Math.max(next.endT, n.endT); }
+        work.splice(i, 1); changed = true; break;
+      }
+    }
+  }
+  const notes = work.map(n => ({ t: n.t, dur: Math.max(0.05, n.endT - n.t), midi: n.midi, f0: m2f(n.midi) }));
+  const span = notes.length > 1 ? notes[notes.length - 1].t - notes[0].t : notes[0]?.dur || 0.5;
+  return { notes, span };
+}
+
+/* 按主音位置先验逐音"听音"：在每个预期 onset 的小窗内自动测基频，
+   取窗口内中位音高（拒绝窗外和声伴唱）；窗口内无有效音则回退先验音高。
+   这是多声部音频下唯一可靠的自动识别策略 */
+function measureGrid(buf, grid) {
+  const sr = buf.sampleRate, d = buf.getChannelData(0);
+  const FRAME = 512, HOP = 128;
+  const lo = Math.floor(sr / 900), hi = Math.floor(sr / 200);
+  let maxRms = 1e-6;
+  for (let i = 0; i + FRAME <= d.length; i += HOP) {
+    let s = 0;
+    for (let j = 0; j < FRAME; j++) s += d[i + j] * d[i + j];
+    maxRms = Math.max(maxRms, Math.sqrt(s / FRAME));
+  }
+  return grid.map(g => {
+    const tA = g[0] + 0.02, tB = g[0] + Math.min(0.12, Math.max(0.06, g[1] * 0.7));
+    const sems = [];
+    // 先验音高 ±4 半音的窄 lag 窗：防 YIN 八度跳变/和声误锁，半音精度更高
+    const expF = m2f(g[2]);
+    const nlo = Math.floor(sr / (expF * Math.pow(2, 4 / 12))), nhi = Math.ceil(sr / (expF * Math.pow(2, -4 / 12)));
+    for (let t = tA; t < tB; t += HOP / sr) {
+      const i0 = Math.floor(t * sr);
+      if (i0 + FRAME > d.length) break;
+      let rms = 0;
+      for (let j = 0; j < FRAME; j++) rms += d[i0 + j] * d[i0 + j];
+      rms = Math.sqrt(rms / FRAME);
+      if (rms < maxRms * 0.08) continue;
+      const y = yinFrame(d, i0, FRAME, nlo, Math.min(nhi, FRAME >> 1), sr);
+      if (y.cmnd < 0.2) sems.push(12 * Math.log2(y.f0 / 440));
+    }
+    const midi = sems.length ? Math.round(median(sems)) + 69 : g[2];
+    return { t: g[0], dur: g[1], midi, f0: m2f(midi), auto: !!sems.length };
+  });
+}
+
+/* ===== 自定义参考音频：喂任意歌曲，AI 自由转谱（无需先验网格） =====
+   能量 onset 分段（上升沿 + 最小间隔）→ 段内元音区 YIN 测频取中位 → 音符 {t,dur,midi} */
+function transcribeMelody(buf, startSec = 0, maxSec = 24) {
+  const sr = buf.sampleRate, d = buf.getChannelData(0);
+  const HOP = Math.floor(sr * 0.01), FRAME = 1024;
+  const iStart = Math.floor(startSec * sr);
+  const iEnd = Math.min(d.length - FRAME, iStart + Math.floor(maxSec * sr));
+  if (iEnd - iStart < FRAME) return [];
+  const rmsArr = [];
+  for (let i = iStart; i + FRAME <= iEnd; i += HOP) {
+    let s = 0;
+    for (let j = 0; j < FRAME; j++) s += d[i + j] * d[i + j];
+    rmsArr.push({ i, rms: Math.sqrt(s / FRAME) });
+  }
+  const peak = Math.max(...rmsArr.map(x => x.rms), 1e-6);
+  const thr = Math.max(peak * 0.10, 0.01);
+  const onsets = [];
+  let lastOn = -1e9;
+  // 起始秒切进持续音时首帧即超阈值、没有上升沿 → 补一个窗口起点 onset，防漏掉第一个音
+  if (rmsArr.length && rmsArr[0].rms > thr) { onsets.push(rmsArr[0].i / sr); lastOn = onsets[0]; }
+  for (let k = 1; k < rmsArr.length; k++) {
+    const t = rmsArr[k].i / sr;
+    if (rmsArr[k].rms > thr && rmsArr[k].rms > rmsArr[k - 1].rms * 1.35 && t - lastOn > 0.09) {
+      onsets.push(t); lastOn = t;
+    }
+  }
+  if (!onsets.length) return [];
+  const notes = [];
+  const lo = Math.floor(sr / 800), hi = Math.floor(sr / 120);
+  const endT = iEnd / sr;
+  // 音高跳变切分：能量 onset 只能保证"有新声"，一段里可能连着几个不同音高的音——
+  // 逐帧测频后，连续 3 帧偏离当前段中位 >1 半音即切分（Claude 建议的 split_semitones 思路）
+  for (let n = 0; n < onsets.length; n++) {
+    const t0n = onsets[n], t1n = n + 1 < onsets.length ? onsets[n + 1] : endT;
+    const a = t0n + (t1n - t0n) * 0.06, b = t1n - (t1n - t0n) * 0.05;
+    const frames = [];
+    for (let t = a; t < b && t + FRAME / sr < endT; t += 0.01) {
+      const i0 = Math.floor(t * sr);
+      const y = yinFrame(d, i0, FRAME, lo, Math.min(hi, FRAME >> 1), sr);
+      if (y.cmnd < 0.18) frames.push({ t, midi: 12 * Math.log2(y.f0 / 440) });
+    }
+    const pieces = [];
+    let cur = [], drift = 0;
+    const flushP = () => {
+      if (cur.length >= 3) {
+        const midi = Math.round(median(cur.map(f => f.midi))) + 69;
+        pieces.push({ t: cur[0].t, tEnd: cur[cur.length - 1].t + 0.01, midi });
+      }
+      cur = [];
+    };
+    for (const f of frames) {
+      if (cur.length) {
+        const ref = median(cur.slice(-8).map(x => x.midi));
+        if (Math.abs(f.midi - ref) > 1.0) {
+          if (++drift >= 3) { flushP(); cur = [f]; drift = 0; continue; }
+        } else drift = 0;
+      }
+      cur.push(f);
+    }
+    flushP();
+    for (const p of pieces) {
+      const prev = notes[notes.length - 1];
+      if (prev && prev.midi === p.midi && p.t - (prev.t + prev.dur) < 0.03) {
+        prev.dur = p.tEnd - prev.t;           // 同音连段合并
+        continue;
+      }
+      notes.push({ t: p.t, dur: p.tEnd - p.t, midi: p.midi, f0: m2f(p.midi), auto: true });
+    }
+  }
+  return notes;
+}
+
+/* 自定义音频文件加载 + 缓存失效 */
+let customRefBuf = null, customRefName = '';
+const refFileEl = document.getElementById('refFile');
+const refStartEl = document.getElementById('refStart');
+/* 选歌/调起始秒时立刻转谱（非实时演绎）：结果缓存进 REF，点②零等待直接唱 */
+function rebuildCustomRef(prefix) {
+  const startSec = Math.max(0, parseFloat(refStartEl.value) || 0);
+  status.textContent = `正在转谱「${customRefName}」（${startSec}s 起 · 24s 窗口）…`;
+  const notes = transcribeMelody(customRefBuf, startSec, 24);
+  if (!notes.length) {
+    REF = null; REF_LOADING = null;
+    status.textContent = `转谱失败：${startSec}s 起的区间没识别到音符，调「起始秒」跳到人声段再试`;
+    return;
+  }
+  REF = { notes, span: notes[notes.length - 1].t - notes[0].t, name: customRefName };
+  REF_LOADING = null;
+  const preview = notes.slice(0, 24).map(n => n.midi).join(' ') + (notes.length > 24 ? ' …' : '');
+  status.textContent = `${prefix}「${customRefName}」· 转谱完成 ${notes.length} 音 · 音高「${preview}」· 填歌词点 ② 演唱`;
+}
+refFileEl.addEventListener('change', async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  status.textContent = `解码「${f.name}」…`;
+  try {
+    customRefBuf = await ctx.decodeAudioData(await f.arrayBuffer());
+    customRefName = f.name;
+    rebuildCustomRef('已载入');
+  } catch (err) { status.textContent = '解码失败：' + err.message; }
+});
+refStartEl.addEventListener('change', () => { if (customRefBuf) rebuildCustomRef('起始秒已调整 ·'); });
+
+/* 加载并分析参考音频（只做一次，缓存）：位置先验 + 逐音自动测频；失败抛错由调用方降级 */
+let REF = null, REF_LOADING = null;
+async function ensureReference() {
+  if (REF) return REF;
+  if (!REF_LOADING)
+    REF_LOADING = (async () => {
+      let notes;
+      if (customRefBuf) {
+        const startSec = Math.max(0, parseFloat(refStartEl.value) || 0);
+        notes = transcribeMelody(customRefBuf, startSec, 24);
+        if (!notes.length) throw new Error('转谱失败：该区间没识别到音符（试试调「起始秒」跳过前奏）');
+      } else {
+        const r = await fetch('celeste-sounds/wow_so_secret.wav');
+        if (!r.ok) throw new Error('reference fetch ' + r.status);
+        const buf = await ctx.decodeAudioData(await r.arrayBuffer());
+        notes = measureGrid(buf, NOTES);
+        if (!notes.length) throw new Error('no notes recognized');
+      }
+      const span = notes[notes.length - 1].t - notes[0].t;
+      REF = { notes, span, name: customRefName || 'wow 彩蛋' };
+      return REF;
+    })();
+  return REF_LOADING;
+}
+
+/* 本地兜底节奏（参考音频不可用时）：以 3 起 3 落，正弦轮廓在五声内起伏 */
+function fallbackMelody(n) {
+  const scale = [1, 2, 3, 5, 6], out = [];
+  for (let k = 0; k < n; k++) {
+    if (k === 0 || k === n - 1) { out.push(3); continue; }
+    out.push(scale[Math.max(0, Math.min(4, Math.round(2 + Math.sin(k * 1.15) * 1.8)))]);
+  }
+  return out;
+}
+
+// diary 的中文情绪标签 → 音效池（与 diary.js VOICE_DIRS 一致）；roundtable 存的就是池 key
+const EMO_TO_VOICE = { '默认':'determined','不安':'upset','惊讶':'surprised','怨恨':'angry','不开心':'sad','可爱':'determined','无语':'deadpan','冒泡':'distracted' };
+const POOL_KEYS = ['determined','deadpan','distracted','angry','upset','surprised','sad','sadder'];
+const POOL_LABEL = { determined:'坚定', deadpan:'平淡', distracted:'分心', angry:'生气', upset:'沮丧', surprised:'惊讶', sad:'难过', sadder:'更难过' };
+const BOOST_WEIGHT = 4;   // 被检测情绪池的权重倍数
+
+// 与 diary.js 的 VOICE_RATE / VOICE_VOL 完全对齐（按池）：语速抖动范围 + 音量档位
+const POOL_VOICE = {
+  determined: { rate: [0.92, 1.06], vol: 0.75 },  // 默认/可爱
+  upset:      { rate: [0.88, 1.00], vol: 0.65 },  // 不安
+  surprised:  { rate: [1.00, 1.18], vol: 0.85 },  // 惊讶
+  angry:      { rate: [0.95, 1.12], vol: 0.85 },  // 怨恨
+  sad:        { rate: [0.82, 0.94], vol: 0.55 },  // 不开心
+  sadder:     { rate: [0.82, 0.94], vol: 0.55 },  // 不开心(diary 里 sad/sadder 各 50%)
+  deadpan:    { rate: [0.85, 0.95], vol: 0.60 },  // 无语
+  distracted: { rate: [0.90, 1.05], vol: 0.70 }   // 冒泡
+};
+
+// wow 旋律 44 音符（量化到半音）：[开始s, 时长s, MIDI]
+const NOTES = [[0.043,0.128,68],[0.171,0.107,70],[0.32,0.107,73],[0.875,0.363,78],[1.237,0.725,75],[2.005,0.107,69],[2.304,0.149,71],[2.475,0.128,75],[2.816,0.363,76],[3.179,0.405,73],[3.669,0.235,70],[3.904,0.128,69],[4.032,0.107,70],[4.267,0.107,71],[4.395,0.427,73],[4.821,0.256,75],[5.077,0.299,73],[5.376,0.192,71],[5.611,0.277,68],[6.059,0.235,68],[6.336,0.448,75],[6.784,0.469,74],[7.765,0.149,69],[7.915,0.107,70],[8.619,0.384,77],[9.003,0.64,75],[9.984,0.128,71],[10.176,0.192,81],[10.453,0.149,80],[10.667,0.256,73],[10.923,0.256,73],[11.179,0.107,72],[11.285,0.277,70],[11.563,0.149,69],[12.053,0.427,73],[12.48,0.256,75],[12.757,0.171,72],[12.928,0.213,70],[13.141,0.299,69],[13.653,0.192,68],[13.952,0.405,75],[14.357,0.555,73],[15.467,0.107,73],[15.68,0.107,73]];
+const NOTE_T0 = NOTES[0][0];
+// 旋律一轮的长度（末音结束时刻）；循环到第二轮时 start 整体加它，防止时间轴倒流
+const MELODY_CYCLE = NOTES[NOTES.length - 1][0] + NOTES[NOTES.length - 1][1] - NOTE_T0;
+
+const ctx = new (window.AudioContext || window.webkitAudioContext)();
+const pool = {};          // emo -> items[]（加载完成才写入）
+const poolLoading = {};   // emo -> Promise
+const status = document.getElementById("status");
+const emoinfo = document.getElementById("emoinfo");
+const mouth = document.getElementById("mouth");
+const lyricEl = document.getElementById("lyric");
+
+/* ===== 唱歌情绪：固定生气池（听感与调音最佳） =====
+   生气池 blip 基频清晰、最像原版；其他池不直接演唱，仅先验展示 */
+const SING_POOLS = ['angry'];
+const bannedBlips = new Set();   // 唱歌修正中发现烘焙基频严重失真的 blip，禁用于演唱选声
+// 非演唱情绪 → 生气（全部归一）
+const PRIOR_MAP = {
+  angry:'angry', deadpan:'angry', determined:'angry',
+  surprised:'angry', upset:'angry', sad:'angry', sadder:'angry', distracted:'angry'
+};
+// 语义词典（命中给生气加分；单池下仅影响展示）
+const LEX = {
+  angry: ['烦','讨厌','可恶','滚','气死','受够','闭嘴','该死','别烦','恨','砸','够了','蠢','白痴','见鬼']
+};
+
+/* 文本语义打分 */
+function emotionScores(text) {
+  const s = { angry: 0 };
+  for (const w of LEX.angry) if (text.includes(w)) s.angry += 1.5;
+  const bangs = (text.match(/[!！]/g) || []).length;
+  if (bangs) s.angry += bangs * 0.5;
+  return s;
+}
+
+/* localStorage 情绪先验（diary / 圆桌会议写入）；无效返回 null */
+function priorFromStorage() {
+  try {
+    const raw = localStorage.getItem('madeline_emotion');
+    if (!raw) return null;
+    const rec = JSON.parse(raw);
+    if (!rec) return null;
+    let pk = SING_POOLS.includes(rec.emotion) ? rec.emotion
+           : (EMO_TO_VOICE[rec.emotion] ? PRIOR_MAP[EMO_TO_VOICE[rec.emotion]] : null);
+    if (!pk) return null;
+    return { pool: pk, source: rec.source || '?', ts: rec.ts || 0 };
+  } catch { return null; }
+}
+
+/* 情绪概率（单池恒为生气 100%），保留先验信息用于展示 */
+function emotionProbabilities(text) {
+  const prior = priorFromStorage();
+  return { probs: [1], prior };
+}
+
+/* 按概率抽演唱情绪（单池：恒为生气） */
+function pickSingEmotion(text) {
+  const { probs, prior } = emotionProbabilities(text);
+  return { poolKey: SING_POOLS[0], probs, prior };
+}
+
+/* 展示演唱情绪 + 先验来源 */
+function showEmotionInfo(probs, chosen, prior) {
+  const priorStr = prior
+    ? (() => { const ageMin = prior.ts ? Math.round((Date.now() - prior.ts) / 60000) : null;
+        const age = ageMin === null ? '' : ageMin < 1 ? '刚刚' : ageMin < 60 ? ageMin + '分钟前' : Math.round(ageMin/60) + '小时前';
+        return `（先验「${POOL_LABEL[prior.pool]}」来自 ${prior.source}${age ? ' · ' + age : ''}）`; })()
+    : '';
+  emoinfo.textContent = `演唱情绪：生气（固定）${priorStr}`;
+}
+
+function analyzeBlip(buf) {
+  const d = buf.getChannelData(0), sr = buf.sampleRate;
+  const s0 = Math.floor(d.length * 0.15), s1 = Math.floor(d.length * 0.85);
+  const n = Math.min(8192, s1 - s0);
+  let rms = 0;
+  for (let i = 0; i < n; i++) rms += d[s0 + i] * d[s0 + i];
+  rms = Math.sqrt(rms / n);
+  const lo = Math.floor(sr / 900), hi = Math.floor(sr / 80);
+  let best = lo, bestV = -1;
+  for (let lag = lo; lag < Math.min(hi, n >> 1); lag++) {
+    let v = 0;
+    for (let i = 0; i < n - lag; i += 2) v += d[s0 + i] * d[s0 + i + lag];
+    if (v > bestV) { bestV = v; best = lag; }
+  }
+  return { f0: sr / best, rms };
+}
+
+/* 为 blip 找循环区（采样器 loop region）：稳态段内一对正向过零点，
+   循环长度 = 基频周期整数倍（波形无缝延续，不产生与音高不协和的嗡声），
+   端点振幅匹配防接缝爆点；找不到返回 null（该 blip 不循环） */
+function findLoopRegion(buf, f0) {
+  if (!f0) return null;
+  const d = buf.getChannelData(0), sr = buf.sampleRate, n = d.length;
+  const from = Math.floor(n * 0.25), to = Math.floor(n * 0.92);
+  // 正向过零：d[i-1]<=0 < d[i]
+  const zeros = [];
+  for (let i = from + 1; i < to; i++)
+    if (d[i - 1] <= 0 && d[i] > 0) zeros.push(i);
+  if (zeros.length < 2) return null;
+  const ls = zeros[0];
+  const period = sr / f0;                                    // 基频周期（样本数）
+  const maxLoop = Math.floor(sr * 0.09);                     // 循环段 ≤90ms，贴稳态
+  const minCycles = 3;
+  const idealL = Math.max(minCycles * period, Math.floor(maxLoop / period) * period);
+  if (ls + idealL >= to) return null;
+  // 在理想终点 ±2.5ms 内挑振幅最接近循环起点的过零点（同相位 + 同幅度 → 无缝）
+  const win = Math.floor(sr * 0.0025);
+  const ampAt = i => Math.max(Math.abs(d[i]), Math.abs(d[Math.min(n - 1, i + Math.floor(period / 2))]));
+  const a0 = ampAt(ls);
+  let best = -1, bestDiff = 1e9;
+  for (const z of zeros) {
+    if (Math.abs(z - (ls + idealL)) > win) continue;
+    const diff = Math.abs(ampAt(z) - a0);
+    if (diff < bestDiff) { bestDiff = diff; best = z; }
+  }
+  if (best < 0) {
+    // 没有落在窗口内的过零点：退而求其次取理想终点后第一个过零点（长度偏差 < 半周期，仍协和）
+    for (const z of zeros)
+      if (z >= ls + idealL) { best = z; break; }
+    if (best < 0) return null;
+  }
+  return { loopStart: ls / sr, loopEnd: best / sr };
+}
+
+async function loadEmo(emo) {
+  const rels = [];
+  for (const g of ["mid_A","mid_B","mid_C","per"])
+    for (let i = 1; i <= 10; i++)
+      rels.push(`${g}/${emo}_${g}_${String(i).padStart(2,"0")}.wav`);
+  const bufs = await Promise.all(rels.map(async rel => {
+    try { const r = await fetch(`sounds/${emo}/${rel}`); if (!r.ok) return null;
+      return await ctx.decodeAudioData(await r.arrayBuffer());
+    } catch { return null; }
+  }));
+  const bakedMap = (window.BLIP_DATA && window.BLIP_DATA[emo]) || {};
+  const items = [];
+  bufs.forEach((buf, i) => {
+    if (!buf) return;
+    const baked = bakedMap[rels[i]];
+    const a = baked ? null : analyzeBlip(buf);           // 无烘焙数据才回退浏览器粗测
+    let f0raw = baked ? baked.f0 : a.f0;
+    // 烘焙数据用朴素自相关，易锁错八度：加载时用 YIN（CMND 归一化）在稳态段复测，以其为准
+    if (f0raw) {
+      const sd = buf.getChannelData(0), sr = buf.sampleRate, n = buf.length;
+      const i0 = Math.floor(n * 0.3), fl = Math.min(2048, Math.floor(n * 0.55));
+      const lo = Math.floor(sr / 900), hi = Math.min(Math.floor(sr / 80), fl >> 1);
+      if (i0 + fl <= n && hi > lo) {
+        const y = yinFrame(sd, i0, fl, lo, hi, sr);
+        if (y.cmnd < 0.25 && y.f0 > 0) f0raw = y.f0;
+      }
+    }
+    const loopReg = findLoopRegion(buf, f0raw);
+    items.push({
+      buf, f0: f0raw, rms: baked ? baked.rms : a.rms, pitched: !!f0raw, baked: !!baked,
+      group: rels[i].split('/')[0],
+      loopStart: loopReg ? loopReg.loopStart : null,
+      loopEnd: loopReg ? loopReg.loopEnd : null
+    });
+  });
+  const rmss = items.map(x => x.rms).sort((a, b) => a - b);
+  const med = rmss[rmss.length >> 1] || 1;
+  items.forEach(x => x.norm = med / (x.rms || 1));
+  // 池内中位基频：气声 blip（f0=null）借它做变调基准；浏览器粗测路径才需要八度纠错
+  const f0s = items.filter(x => x.pitched).map(x => x.f0).sort((a, b) => a - b);
+  const f0med = f0s[f0s.length >> 1] || 300;
+  items.forEach(x => {
+    if (!x.pitched) { x.f0 = f0med; return; }
+    if (!x.baked) {
+      while (x.f0 > f0med * 1.9) x.f0 /= 2;
+      while (x.f0 < f0med / 1.9) x.f0 *= 2;
+    }
+  });
+  return items;
+}
+
+/* 确保目标池已加载（等它），其余演唱池后台加载；只加载三枚举 */
+async function ensurePools(boosted) {
+  const first = SING_POOLS.includes(boosted) ? boosted : 'determined';
+  if (!pool[first] && !poolLoading[first])
+    poolLoading[first] = loadEmo(first).then(it => { pool[first] = it; });
+  if (!pool[first]) await poolLoading[first];
+  for (const k of SING_POOLS) {
+    if (k === first || pool[k] || poolLoading[k]) continue;
+    poolLoading[k] = loadEmo(k).then(it => { pool[k] = it; });
+  }
+}
+
+/* 加权抽 blip：只在三枚举已加载池里，当前情绪池权重 ×BOOST_WEIGHT（乐句单声源模式用） */
+function pickBlip(boosted) {
+  const loaded = SING_POOLS.filter(k => pool[k]);
+  if (!loaded.length) return null;
+  let total = 0;
+  for (const k of loaded) total += (k === boosted ? BOOST_WEIGHT : 1);
+  let r = Math.random() * total;
+  let chosen = loaded[0];
+  for (const k of loaded) {
+    r -= (k === boosted ? BOOST_WEIGHT : 1);
+    if (r <= 0) { chosen = k; break; }
+  }
+  const items = pool[chosen];
+  return items[Math.random() * items.length | 0];
+}
+
+/* 复刻 diary.js playSpeakSound 的选声规则：整句锁定单个情绪池，
+   speakSeq 跨句累计（diary 闭包同理），seq%7===0 用 per，其余按 seq%3 轮转 mid_B→mid_C→mid_A。
+   说话态（targetMidis=null）：组内随机 01-10；
+   歌唱态（targetMidis 给每声目标 MIDI）：组别仍按 diary 轮转，组内选 f0 最接近目标音的 item，
+   变调率自然贴近 1，不需要八度硬挪（相邻音各挪八度会把旋律轮廓拆散）。
+   返回 [{ it, playRate, vol }]，有效基频 = it.f0 * playRate */
+let speakSeqGlobal = 0;
+function pickDiarySeq(poolKey, n, targetMidis = null) {
+  const items = pool[poolKey] || pool.determined || [];
+  const byGroup = { mid_A: [], mid_B: [], mid_C: [], per: [] };
+  items.forEach(it => { if (byGroup[it.group]) byGroup[it.group].push(it); });
+  const VARIANTS = ['mid_A', 'mid_B', 'mid_C', 'per'];   // 与 diary 的 VOICE_VARIANTS 同序
+  const pv = POOL_VOICE[poolKey] || POOL_VOICE.determined;
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const seq = ++speakSeqGlobal;
+    const g = (seq % 7 === 0) ? 'per' : VARIANTS[seq % 3];
+    const arr0 = byGroup[g].length ? byGroup[g] : items;
+    const pitchedArr = arr0.filter(x => x.pitched);   // 气声 blip 变调后不成调，唱歌优先有基频的
+    const arr = pitchedArr.length ? pitchedArr : arr0;
+    let it;
+    if (targetMidis) {
+      const tf = m2f(targetMidis[i]);
+      it = arr.reduce((a, b) => Math.abs(Math.log2(tf / b.f0)) < Math.abs(Math.log2(tf / a.f0)) ? b : a, arr[0]);
+    } else {
+      it = arr[Math.random() * arr.length | 0];
+    }
+    out.push({
+      it,
+      playRate: pv.rate[0] + Math.random() * (pv.rate[1] - pv.rate[0]),
+      vol: pv.vol
+    });
+  }
+  return out;
+}
+
+/* 文本 → 说话单元：有效字（中日韩/英文数字词）speak=true 参与发声计数；
+   标点/空白 speak=false 只占字位时间不发声（与 diary.js 的发声判定同规则） */
+function textToUnits(text) {
+  const units = [];
+  for (const ch of text) {
+    if (/[。！？!?…，,、；;：:（）()*\s]/.test(ch)) { units.push({ ch, speak: false }); continue; }
+    if (/[\u4e00-\u9fff\u3040-\u30ff\uff01-\uff5e]/.test(ch)) { units.push({ ch, speak: true }); continue; }
+    if (/[a-zA-Z0-9']/.test(ch)) {
+      if (units.length && units[units.length - 1].word) units[units.length - 1].ch += ch;
+      else units.push({ ch, speak: true, word: true });
+    }
+  }
+  return units.slice(0, 44);
+}
+
+// 音高同步重叠拼接长音垫：重叠窗口=1个周期、片段长取整周期 → 相位对齐，无梳状滤波金属声
+function makePad(buf, seconds, f0) {
+  const sr = buf.sampleRate;
+  const id = buf.getChannelData(0);
+  const period = Math.max(24, Math.round(sr / f0));
+  const s0 = Math.floor(id.length * 0.15);
+  let segLen = Math.floor(id.length * 0.7);
+  segLen = Math.max(period * 2, Math.floor(segLen / period) * period);
+  if (s0 + segLen > id.length) segLen = Math.floor((id.length - s0) / period) * period;
+  const fade = period;
+  const step = segLen - fade;
+  const outLen = Math.ceil(seconds * sr) + segLen;
+  const out = new Float32Array(outLen);
+  for (let pos = 0; pos < outLen; pos += step) {
+    for (let i = 0; i < segLen; i++) {
+      const d2 = pos + i;
+      if (d2 >= outLen) break;
+      let w = 1;
+      if (i < fade) w = i / fade;
+      else if (i >= segLen - fade) w = (segLen - i) / fade;
+      out[d2] += id[s0 + i] * w;
+    }
+  }
+  const b = ctx.createBuffer(1, outLen, sr);
+  b.getChannelData(0).set(out);
+  return b;
+}
+
+const m2f = m => 440 * Math.pow(2, (m - 69) / 12);
+let stopAll = null;
+
+/* ===== TD-PSOLA 歌声合成核心：变调只移基频，声道音色（共振峰）保留 =====
+   playbackRate 重采样的根本缺陷：变调必变共振峰 → 变调率大就"花栗鼠"，颤音/滑音连音色一起抖。
+   PSOLA 把 blip 按基频周期重排：音高走任意目标轨迹（fFn），谱包络近似不动 → 真人换音高的质感。
+   it: blip（f0/loopStart/loopEnd）；span: 本声时长(s)；fFn(τ): 瞬时频率函数（含变调/滑音/颤音/scoop） */
+function psolaVoice(it, span, fFn) {
+  const sr = 48000;
+  const inp = it.buf.getChannelData(0), israte = it.buf.sampleRate, ilen = inp.length;
+  const rs = sr / israte;                       // 输入域→输出域采样位置换算
+  const N = Math.ceil(span * sr);
+  const out = new Float32Array(N);
+  const f0 = Math.max(80, Math.min(600, it.f0));
+  const vStart = it.loopStart != null ? Math.round(it.loopStart * israte) : Math.floor(ilen * 0.4);  // 元音稳态起点（loopStart 是秒→转采样点）
+  const vEnd = it.loopEnd != null ? Math.round(it.loopEnd * israte) : ilen;
+  const paOut = sr / f0;                        // 分析周期（输出域）
+  // 分析 epoch：名义周期网格 + 低通副本上的峰值吸附。
+  // 纯等间距网格会与真实激励脉冲脱相（blip 有微音高漂移，网格慢慢滑出相位 → 粒相位交错 → 亚谐波/糊）；
+  // 纯峰值搜索又会交替锁主/次峰。折中：~1kHz 单极低通保留脉冲磨掉次峰，在网格 ±半周期窗内吸附脉冲。
+  const lp = new Float32Array(ilen);
+  { let y = 0; const al = 1 - Math.exp(-2 * Math.PI * 1000 / israte);
+    for (let i = 0; i < ilen; i++) { y += al * (inp[i] - y); lp[i] = y; } }
+  const epochs = [];
+  { const step = israte / f0, halfW = Math.round(step * 0.5);
+    for (let p0 = vStart + step * 0.5; p0 + halfW < vEnd; p0 += step) {
+      const a = Math.max(vStart, Math.round(p0 - halfW)), b = Math.min(vEnd - 1, Math.round(p0 + halfW));
+      let bi = Math.round(p0), bv = -1;
+      for (let i = a; i <= b; i++) { const v = Math.abs(lp[i]); if (v > bv) { bv = v; bi = i; } }
+      epochs.push(bi);
+    } }
+  if (epochs.length < 3) return null;
+  // 头部（辅音+起音）：逐采样瞬时重采样，fFn 里 scoop 让起音从低滑正
+  let ipf = 0, op = 0;
+  const headIn = vStart;
+  while (op < N && ipf < headIn - 1) {
+    const f = Math.max(70, Math.min(800, fFn(op / sr)));
+    ipf += f / f0;
+    if (ipf >= headIn - 1) break;
+    const i0 = Math.floor(ipf), fr = ipf - i0;
+    out[op] = i0 + 1 < ilen ? inp[i0] * (1 - fr) + inp[i0 + 1] * fr : inp[i0];
+    op++;
+  }
+  const headEnd = op, fadeLen = Math.min(0.012 * sr, Math.max(64, headEnd >> 1));
+  // 头部尾 12ms hann 淡出（与 PSOLA 段交叉）
+  for (let i = Math.max(0, headEnd - fadeLen); i < headEnd; i++)
+    out[i] *= (headEnd - i) / fadeLen;
+  // PSOLA 主段：相位累计法布粒（音高=fFn），输入指针按 pa×f0/f 推进（标准公式：时长自动实况，
+  // tf>f0 时 epoch 重用、tf<f0 时跳 epoch；避免 stretch 爬行让同一脉冲连放 2-3 遍产生周期 N 重复结构）
+  let synthPh = 0, ipE = 0, xfadeN = 0;
+  for (; op < N; op++) {
+    const f = Math.max(70, Math.min(800, fFn(op / sr)));
+    synthPh += 2 * Math.PI * f / sr;
+    if (synthPh < 2 * Math.PI) continue;
+    synthPh -= 2 * Math.PI;                      // 每周期放 1 粒（TD-PSOLA 标准）
+    const ps = sr / f;
+    const wN = Math.max(16, Math.round(paOut * 2)); // 窗=2×分析周期（固定），样本 1:1 读取
+    const amp = Math.max(0.5, Math.min(2, ps / paOut)); // OLA 幅度归一（窗和≈pa/ps）
+    const srcCin = epochs[ipE];                  // 粒中心（输入域）
+    const halfN = wN >> 1;
+    // 输入读指针：每粒推进 pa×f0/f（输入域）——输入消耗率 = israte 采样/秒 = 实况
+    ipf += (israte / f0) * (f0 / f);
+    if (ipf > vEnd - (israte / f0)) ipf = vStart + (ipf - vStart) % Math.max(64, vEnd - vStart - (israte / f0));
+    while (ipE + 1 < epochs.length && epochs[ipE + 1] < ipf) ipE++;
+    while (ipE > 0 && epochs[ipE] > ipf) ipE--;
+    for (let i = 0; i < wN; i++) {
+      const oi = Math.round(op) - halfN + i;
+      if (oi < headEnd || oi >= N) continue;
+      const si = srcCin + (i - halfN) / rs;      // 1:1 读取（音色包络原样保留，绝不粒内重采样变调）
+      const s0 = Math.floor(si);
+      if (s0 < 0 || s0 + 1 >= ilen) continue;
+      const wv = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (wN - 1));
+      let g = (inp[s0] * (1 - (si - s0)) + inp[s0 + 1] * (si - s0)) * wv * amp;
+      if (oi < headEnd + fadeLen) g *= (oi - headEnd) / fadeLen;  // 与头部交叉淡入
+      out[oi] += g;
+    }
+    xfadeN++;
+  }
+  // 尾部 12ms 淡出防 click
+  const tail = Math.min(0.012 * sr, N);
+  for (let i = N - tail; i < N; i++) out[i] *= (N - i) / tail;
+  // 响度对齐：峰值归一到原 blip 峰值（保持 blip 间的响度关系，renderSpeech 的 gain 再整体调）
+  let pk = 0, ipk = 0;
+  for (let i = 0; i < ilen; i++) if (Math.abs(inp[i]) > pk) pk = Math.abs(inp[i]);
+  let ok = 0;
+  for (let i = 0; i < N; i++) if (Math.abs(out[i]) > ok) ok = Math.abs(out[i]);
+  if (ok > 0) { const g = pk / ok; for (let i = 0; i < N; i++) out[i] *= g; }
+  return out;
+}
+
+/* 从加权池抽候选，选"最佳八度下变调率最接近 1"的 blip，返回 {it, oct} */
+function pickBestBlip(boosted, midi) {
+  let it = null, oct = 0, bestCost = 1e9;
+  for (let k = 0; k < 8; k++) {
+    const c = pickBlip(boosted);
+    if (!c) continue;
+    let o = 0;
+    while (m2f(midi + o) / c.f0 > 1.6) o -= 12;
+    while (m2f(midi + o) / c.f0 < 0.7) o += 12;
+    const cost = Math.abs(Math.log2(m2f(midi + o) / c.f0));
+    if (cost < bestCost) { bestCost = cost; it = c; oct = o; }
+  }
+  if (!it)   // 极端兜底：从已加载三池取第一个可用 blip
+    for (const pk of SING_POOLS) if (pool[pk] && pool[pk].length) { it = pool[pk][0]; break; }
+  return { it, oct };
+}
+
+/* 拼接模式 v4：先 diary 式"正常对话"再变调。
+   1) planSpeech：字间隔 45~65ms 随机（diary.js 的 sleep(45+random*20)），
+      每 3 个有效字发一声（speakCount%3===1），标点只占位不发声
+   2) renderSpeech：离线渲染对话，新声截断旧声（diary 单 Audio 元素质感）
+   3) 歌唱态：每声 blip 按 音符频率/有效基频 做 playbackRate 重采样——
+      音高数学精确，无粒度合成的相位 artifact/时间漂移问题 */
+const CHAR_MIN = 0.045, CHAR_VAR = 0.02;
+
+function planSpeech(units) {
+  const charTimes = [], sounds = [];
+  let t = 0, speakCount = 0;
+  units.forEach((u, i) => {
+    charTimes.push(t);
+    if (u.speak) {
+      speakCount++;
+      if (speakCount % 3 === 1) sounds.push({ t, unitIdx: i });
+    }
+    t += CHAR_MIN + Math.random() * CHAR_VAR;
+  });
+  return { charTimes, sounds, speechLen: t };
+}
+
+async function renderSpeech(units, picks, plan, noteRates = null, glideRates = null, expr = null, fFns = null) {
+  const sr = 48000;
+  const { sounds, speechLen } = plan;
+  const dur = speechLen + 0.7;   // 尾声自然衰减余量（最低变调率 0.5，最长 blip 也放得下）
+  const off = new OfflineAudioContext(1, Math.ceil(dur * sr), sr);
+  const master = off.createGain();
+  master.connect(off.destination);
+  let prevGain = null;
+  sounds.forEach((sd, k) => {
+    const p = picks[k];
+    const e = expr ? expr[k] : null;
+    const s = off.createBufferSource();
+    const hasNext = k + 1 < sounds.length;
+    const nxtT = hasNext ? sounds[k + 1].t : null;
+    if (noteRates && fFns && fFns[k]) {
+      // ===== 歌唱态：TD-PSOLA 合成（音高=fFn 轨迹精确，共振峰保留不花栗鼠）=====
+      const span = hasNext ? nxtT - sd.t : Math.min(0.5, dur - 0.72 - sd.t);
+      const wave = psolaVoice(p.it, Math.max(0.09, span), fFns[k]);
+      if (wave) {
+        const nb = off.createBuffer(1, wave.length, sr);
+        nb.copyToChannel(wave, 0);
+        s.buffer = nb;
+      } else {
+        s.buffer = p.it.buf;                     // epoch 太少等异常 → 回退重采样
+        s.playbackRate.value = p.playRate * noteRates[k];
+      }
+    } else {
+      s.buffer = p.it.buf;
+      // 对话态 = diary 语速抖动；歌唱态无 fFn 时回退 = 语速 × 音符变调率
+      const r0 = p.playRate * (noteRates ? noteRates[k] : 1);
+      // 起音下滑（scoop）：句首/换气后的音从低 1.5 半音 45ms 滑正——真实歌手的起音习惯
+      const scoop = e && e.scoop;
+      if (noteRates && glideRates && hasNext) {
+        const span = nxtT - sd.t;
+        const target = p.playRate * glideRates[k];
+        s.playbackRate.setValueAtTime(scoop ? r0 * Math.pow(2, -1.5 / 12) : r0, sd.t);
+        if (scoop) s.playbackRate.exponentialRampToValueAtTime(r0, sd.t + 0.045);
+        const gStart = sd.t + span * 0.65;
+        if (e && e.vib && span >= 0.3) {
+          const vStart = sd.t + span * 0.35, vDur = gStart - vStart - 0.005;
+          if (vDur > 0.06) {
+            const N = 48, curve = new Float32Array(N);
+            const ph = Math.random() * 6.283;
+            for (let i = 0; i < N; i++) {
+              const x = i / (N - 1);
+              const env = Math.min(1, x / 0.3) * Math.min(1, (1 - x) / 0.18);
+              curve[i] = r0 * Math.pow(2, (e.vib.depth * env * Math.sin(6.283 * e.vib.f * x * vDur + ph)) / 1200);
+            }
+            curve[N - 1] = r0;
+            s.playbackRate.setValueCurveAtTime(curve, vStart, vDur);
+          }
+        }
+        s.playbackRate.setValueAtTime(r0, gStart);
+        s.playbackRate.exponentialRampToValueAtTime(target, nxtT);
+      } else {
+        s.playbackRate.setValueAtTime(scoop ? r0 * Math.pow(2, -1.5 / 12) : r0, sd.t);
+        if (scoop) s.playbackRate.exponentialRampToValueAtTime(r0, sd.t + 0.045);
+      }
+    }
+    // 长音延续：blip 自然播完撑不到下一声 onset 时，在稳态循环区内循环（不重复音头），
+    // 到下一声 onset 停止——配合旧声 15ms 截断淡出，交接平滑无 click（仅重采样回退路径需要）
+    if (hasNext && s.buffer === p.it.buf && p.it.loopStart !== null) {
+      const r0 = p.playRate * (noteRates ? noteRates[k] : 1);
+      const natural = p.it.buf.duration / r0;
+      if (nxtT - sd.t > natural + 0.03) {
+        s.loop = true;
+        s.loopStart = p.it.loopStart;
+        s.loopEnd = p.it.loopEnd;
+      }
+    }
+    const g = off.createGain();
+    // 力度弧线：高音更亮（真实歌手高音需要更多气息支撑）
+    const targetVol = Math.min(2.2, 1.9 * p.it.norm * (p.vol / 0.75) * (e ? e.gain : 1));  // diary 音量档位（基准 0.75）
+    // 起音 6ms 振幅 attack：blip 起始相位任意，硬起会有爆音
+    g.gain.setValueAtTime(0, sd.t);
+    g.gain.linearRampToValueAtTime(targetVol, sd.t + 0.006);
+    if (prevGain) prevGain.gain.setTargetAtTime(0, sd.t, 0.005);   // 新声截断旧声（~15ms 淡出）
+    s.connect(g).connect(master);
+    s.start(sd.t);
+    if (s.loop) s.stop(nxtT);   // 循环长音到下一声 onset 停（必须在 start 之后调）
+    prevGain = g;
+  });
+  // 结尾 120ms 整体淡出，避免缓冲末尾硬切
+  master.gain.setValueAtTime(1, dur - 0.14);
+  master.gain.linearRampToValueAtTime(0, dur - 0.02);
+  const buf = await off.startRendering();
+  return { buf, speechLen, charTimes: plan.charTimes, sounds };
+}
+
+/* ===== 音高校验闭环：对渲染成品逐声机器测频，用数据证明"在调上" ===== */
+
+/* 在 buf 的 [tA,tB] 窗口做 YIN 测频，返回 { f0, clarity }。
+   expF=期望频率时只在 ±5 半音窄带内找（防次谐波/倍频假谷）；null 则全带 150-700Hz。
+   clarity=CMND 值，越小越清晰；>0.3 说明窗口处是辅音/噪声，测量不可信 */
+function measurePitchWindow(buf, tA, tB, expF) {
+  const sr = buf.sampleRate, d = buf.getChannelData(0);
+  const i0 = Math.floor(tA * sr), i1 = Math.floor(tB * sr), N = i1 - i0;
+  let flo = 150, fhi = 700;
+  if (expF) { flo = Math.max(100, expF * Math.pow(2, -5 / 12)); fhi = Math.min(900, expF * Math.pow(2, 5 / 12)); }
+  const lo = Math.floor(sr / fhi), hi = Math.min(Math.floor(sr / flo), (N >> 1) - 1);
+  if (hi <= lo || N - hi < 64) return { f0: 0, clarity: 1 };
+  const span = N - hi;
+  const cmnd = new Float32Array(hi + 1);
+  let run = 0, best = 1, t = lo;
+  for (let tau = lo; tau <= hi; tau++) {
+    let s = 0;
+    for (let i = 0; i < span; i++) {
+      const x = d[i0 + i] - d[i0 + i + tau];
+      s += x * x;
+    }
+    run += s;
+    cmnd[tau] = s * tau / run;
+    if (cmnd[tau] < best) { best = cmnd[tau]; t = tau; }
+  }
+  // 抛物线插值
+  let f0 = sr / t;
+  if (t > lo && t < hi) {
+    const a = cmnd[t - 1], b = cmnd[t], c = cmnd[t + 1], den = a - 2 * b + c;
+    if (Math.abs(den) > 1e-9) f0 = sr / (t + Math.max(-0.5, Math.min(0.5, (a - c) / (2 * den))));
+  }
+  return { f0, clarity: best };
+}
+
+/* 逐声测频 → 音分偏差（不可信为 null）；
+   测量窗随变调率自适应：辅音段约 90ms/rate，窗口起点必须越过它落在元音稳定区；
+   每声两次尝试（元音区 + 更靠后的补测区），都测不到才判 null */
+function verifyPitch(buf, sounds, targetMidis, bestOct, effRates = null, glideFrom = 0, expr = null) {
+  const cents = [];
+  sounds.forEach((sd, k) => {
+    const nxt = sounds[k + 1];
+    const span = nxt ? nxt.t - sd.t : 0.3;
+    const r = effRates ? effRates[k] : 1;
+    const cons = 0.09 / Math.max(0.5, r);          // 辅音段时长（rate 压缩）
+    const target = m2f(targetMidis[k] + bestOct);
+    // 滑音从 span×glideFrom 开始 → 测频窗口右端必须避开滑音区，否则测到的是滑向下一音的过渡音
+    let cap = glideFrom > 0 ? span * (glideFrom - 0.03) : span * 0.95;
+    // 颤音从 span×0.35 起振 → 长音的窗口再收窄到前 32%，否则测到的是抖动的平均/边频
+    if (expr && expr[k] && expr[k].vib) cap = Math.min(cap, span * 0.32);
+    const tries = [
+      [Math.max(0.025, Math.min(cons + 0.012, span * 0.7)),
+       0],                                          // [wA偏移, wB额外延展占位]
+      [Math.max(0.025, Math.min(cons + 0.03, span * 0.85)),
+       0]
+    ];
+    let got = null;
+    for (const [aOff] of tries) {
+      let a = Math.min(aOff, span * 0.85);
+      if (glideFrom > 0 && cap > 0.05) a = Math.min(a, cap - 0.024);
+      const b = Math.min(a + Math.max(0.024, (span - a) * 0.6), cap);
+      if (b - a < 0.02) continue;
+      const m = measurePitchWindow(buf, sd.t + a, sd.t + b, target);
+      if (m.clarity > 0.3) {   // 窄带测不到（该 blip 真实音高偏八度）再全带宽搜一次
+        const m2 = measurePitchWindow(buf, sd.t + a, sd.t + b, null);
+        if (m2.clarity > 0.3) continue;
+        got = Math.round(1200 * Math.log2(m2.f0 / target));
+      } else {
+        got = Math.round(1200 * Math.log2(m.f0 / target));
+      }
+      break;
+    }
+    cents.push(got);   // 辅音/噪声：拒绝测量，不修正
+  });
+  const valid = cents.filter(c => c !== null);
+  const maxCents = valid.length ? Math.max(...valid.map(Math.abs)) : 0;
+  const bad = cents.map((c, k) => c !== null && Math.abs(c) > 80 ? k : -1).filter(k => k >= 0);
+  return { cents, maxCents, bad };
+}
+
+/* 拼接流水线：步骤1 自动识别参考音频的音高/旋律/节奏 → 步骤2 按节奏快慢说话 + 精确变调 + 滑音唱出
+   stage：1=只播对话原声（不变调） ≥2=识别驱动的歌唱。返回 { charTimes, soundTimes, totalDur, pitchReport } */
+async function singConcat(units, boosted, t0, srcs, stage = 2) {
+  // diary 基础节奏规划：45-65ms/字，每 3 有效字一声，标点占位（① 直接用；② 会被识别节奏覆盖）
+  const plan = planSpeech(units);
+  if (!plan.sounds.length) return null;
+  const poolKey = SING_POOLS.includes(boosted) ? boosted : 'determined';
+  let picks, rates = null, glideRates = null, pitchReport = null;
+  if (stage >= 2) {
+    // ===== 步骤1：识别参考音频（YIN），失败走本地兜底 =====
+    status.textContent = `正在听参考音频，识别音高与节奏…`;
+    let ref = null;
+    try { ref = await ensureReference(); } catch { ref = null; }
+    // ===== 唱歌 = 一字一音：每个可发声字唱一个音符，依次落到旋律节奏网格上 =====
+    // 字数 ≥ 音符数（44）→ 整条 wow 旋律完整可辨；字数不足 → 唱前段
+    const speakIdx = [];
+    units.forEach((u, i) => { if (u.speak) speakIdx.push(i); });
+    if (!speakIdx.length) return null;
+    let midis, onsetT;
+    if (ref) {
+      const ns = ref.notes;
+      midis = speakIdx.map((_, k) => ns[k % ns.length].midi);
+      onsetT = speakIdx.map((_, k) => {
+        const n = ns[k % ns.length], cyc = Math.floor(k / ns.length);
+        return n.t + cyc * ref.span;
+      });
+    } else {
+      // 兜底：五声级 + 0.16s 等距网格
+      const deg = fallbackMelody(speakIdx.length);
+      midis = deg.map(d => DEG_TO_MIDI[d]);
+      onsetT = deg.map((_, k) => k * 0.16);
+    }
+    const nSnd = speakIdx.length, tGrid0 = onsetT[0];
+    plan.sounds = speakIdx.map((ui, k) => ({ unitIdx: ui, t: onsetT[k] - tGrid0 }));
+    const lastDur = ref ? ref.notes[(nSnd - 1) % ref.notes.length].dur : 0.25;
+    plan.speechLen = (onsetT[nSnd - 1] - tGrid0) + Math.max(0.15, Math.min(0.6, lastDur));
+    // 卡拉 OK：一字一音，发声字对齐自己的音符；标点等占位字跟随前一声
+    plan.charTimes = new Array(units.length).fill(0);
+    speakIdx.forEach((ui, k) => { plan.charTimes[ui] = plan.sounds[k].t; });
+    for (let i = 1; i < units.length; i++) if (!units[i].speak) plan.charTimes[i] = plan.charTimes[i - 1];
+    // ===== 步骤2b：选声 + 选调 =====
+    // 先按未移调目标选声，用于估算整首该唱什么调
+    picks = pickDiarySeq(poolKey, nSnd, midis);
+    let f0eff = picks.map(p => p.it.f0 * p.playRate);
+    // 选调：整首移调 key 半音（音程轮廓严格不变，= 真人换到适合自己的调），
+    // ±12 半音全搜索，代价 = 钳制 [0.7,1.4] 后的实际音高误差（音分）——保证选出的调
+    // 让所有音的变调率都落在安全区，而不是只追求平均变调幅度小
+    let bestKey = 0, bestCost = 1e9;
+    for (let s = -12; s <= 12; s++) {
+      let c = 0;
+      for (let k = 0; k < midis.length; k++) {
+        const r = Math.min(1.4, Math.max(0.7, m2f(midis[k] + s) / f0eff[k]));
+        c += Math.abs(1200 * Math.log2(r));
+      }
+      c /= midis.length;
+      if (c < bestCost) { bestCost = c; bestKey = s; }
+    }
+    const tMidis = midis.map(m => m + bestKey);
+    // 用移调后的目标重选 blip（基频最贴近目标音 → 变调率最小）
+    picks = pickDiarySeq(poolKey, nSnd, tMidis);
+    f0eff = picks.map(p => p.it.f0 * p.playRate);
+    // 变调率：每声 playbackRate = 目标音频率 / blip 基频（字头稳音准，机器测频校验这段）
+    rates = tMidis.map((mm, k) => Math.min(1.4, Math.max(0.7, m2f(mm) / f0eff[k])));
+    // 滑音率：字身 65% 后对数域滑向下一音，onset 一刻精确落到下一音的频率
+    const glideRates = tMidis.map((mm, k) => {
+      const nxt = tMidis[k + 1];
+      if (nxt === undefined) return rates[k];
+      return Math.min(1.6, Math.max(0.6, m2f(nxt) / f0eff[k]));
+    });
+    // ===== 表情层（SVS 唱歌机制四件套）：颤音 / 起音下滑 / 力度弧线 / 时机拟人 =====
+    const spans = plan.sounds.map((sd, k) => (k + 1 < plan.sounds.length ? plan.sounds[k + 1].t - sd.t : 0.4));
+    const loM = Math.min(...tMidis), hiM = Math.max(...tMidis);
+    const expr = tMidis.map((mm, k) => {
+      const e = {};
+      if (spans[k] >= 0.25)   // 长音颤音：5.8-6.5Hz、18-32 音分，35% 处起振 65% 处全深（在测频窗口之后）
+        e.vib = { f: 5.8 + Math.random() * 0.7, depth: 18 + Math.random() * 14 };
+      e.scoop = k === 0 || (plan.sounds[k].t - plan.sounds[k - 1].t) > 0.14;  // 句首/换气后起音下滑 1.5 半音
+      e.gain = 0.88 + 0.24 * (hiM > loM ? (mm - loM) / (hiM - loM) : 0.5);   // 力度弧线：高音更亮
+      return e;
+    });
+    // 时机拟人化：onset ±10ms 抖动（保持单调），歌手从不机械踩格
+    const jsounds = plan.sounds.map(sd => ({ t: sd.t, unitIdx: sd.unitIdx }));
+    for (let k = 0; k < jsounds.length; k++) {
+      let jt = jsounds[k].t + (Math.random() * 2 - 1) * 0.01;
+      if (k === 0) jt = Math.max(jt, 0);            // 首音不能抖成负时间（AudioParam 拒绝）
+      if (k > 0) jt = Math.max(jt, jsounds[k - 1].t + 0.02);
+      if (k + 1 < plan.sounds.length) jt = Math.min(jt, plan.sounds[k + 1].t - 0.02);
+      jsounds[k].t = jt;
+    }
+    const planE = { charTimes: plan.charTimes, sounds: jsounds, speechLen: plan.speechLen };
+    // 每声的瞬时频率轨迹 fFn（PSOLA 用）：变调/scoop/颤音/滑音全在对数域合成一条平滑曲线
+    const spansE = jsounds.map((sd, k) => (k + 1 < jsounds.length ? jsounds[k + 1].t - sd.t : 0.45));
+    const fFns = tMidis.map((mm, k) => {
+      const tf = m2f(mm), e = expr[k], span = spansE[k];
+      const gT = k + 1 < tMidis.length ? m2f(tMidis[k + 1]) : tf;
+      const gC = 1200 * Math.log2(gT / tf);          // 滑音总音分（对数域直线）
+      const vPh = Math.random() * 6.283;
+      const hasVib = e && e.vib, hasScoop = e && e.scoop;
+      return tau => {
+        let cents = 0;
+        if (hasScoop && tau < 0.045) cents += -150 * (1 - tau / 0.045);   // 起音从低 1.5 半音滑正
+        if (hasVib && tau > span * 0.35 && tau < span * 0.68) {
+          const x = (tau - span * 0.35) / (span * 0.33);
+          cents += e.vib.depth * Math.min(1, x / 0.3) * Math.min(1, (1 - x) / 0.15)
+                 * Math.sin(6.283 * e.vib.f * (tau - span * 0.35) + vPh);
+        }
+        if (k + 1 < tMidis.length && tau > span * 0.65) cents += gC * Math.min(1, (tau - span * 0.65) / Math.max(0.01, span * 0.35));
+        return tf * Math.pow(2, cents / 1200);
+      };
+    });
+    // 渲染 → 机器逐声测频（窗口避开滑音/颤音区）→ 偏差 >80 音分则修正重渲染（最多 6 轮）
+    let rendered = await renderSpeech(units, picks, planE, rates, glideRates, expr, fFns);
+    const effRates = rates.map((r, k) => r * picks[k].playRate);
+    let vrep = verifyPitch(rendered.buf, planE.sounds, tMidis, 0, effRates, 0.65, expr);
+    let rounds = 1;
+    while (vrep.bad.length && rounds < 6) {
+      for (const k of vrep.bad) {
+        const c = vrep.cents[k];
+        if (c === null) continue;
+        // 实测频率反推该 blip 真实基频（烘焙数据可能错八度）
+        const measF = m2f(tMidis[k]) * Math.pow(2, c / 1200);
+        const f0true = measF / (picks[k].playRate * rates[k]);
+        const needRate = m2f(tMidis[k]) / (f0true * picks[k].playRate);
+        if (needRate > 1.8 || needRate < 0.6) {
+          // 到位所需变调超出范围 → 该 blip 烘焙基频不可信：拉黑，换基频最接近的其他 blip
+          bannedBlips.add(picks[k].it);
+          const items = (pool[poolKey] || pool.determined || []).filter(x => x.pitched && !bannedBlips.has(x));
+          if (items.length) {
+            const tf = m2f(tMidis[k]);
+            const nit = items.reduce((a, b) => Math.abs(Math.log2(tf / b.f0)) < Math.abs(Math.log2(tf / a.f0)) ? b : a, items[0]);
+            picks[k] = { it: nit, playRate: picks[k].playRate, vol: picks[k].vol };
+          }
+        }
+        // 按（新）blip 的基频估计重算 rate：实测反推值优先，否则用烘焙值
+        const f0est = (needRate <= 1.8 && needRate >= 0.6) ? f0true : picks[k].it.f0;
+        rates[k] = Math.min(2.2, Math.max(0.6, m2f(tMidis[k]) / (f0est * picks[k].playRate)));
+        if (tMidis[k + 1] !== undefined)
+          glideRates[k] = Math.min(2.4, Math.max(0.5, m2f(tMidis[k + 1]) / (f0est * picks[k].playRate)));
+      }
+      rendered = await renderSpeech(units, picks, planE, rates, glideRates, expr, fFns);
+      vrep = verifyPitch(rendered.buf, planE.sounds, tMidis, 0, rates.map((r, k) => r * picks[k].playRate), 0.65, expr);
+      rounds++;
+    }
+    pitchReport = {
+      source: ref ? 'audio' : 'fallback', recognized: ref?.notes.length || 0, refName: ref?.name || '',
+      midis: tMidis, key: bestKey, cents: vrep.cents, maxCents: vrep.maxCents, rounds
+    };
+    status.textContent = `选调 ${bestKey > 0 ? '+' : ''}${bestKey} 半音 · 音高校验（${vrep.cents.filter(c => c !== null).length}/${vrep.cents.length} 可测，最大偏差 ${vrep.maxCents} 音分）`;
+    var finalBuf = rendered.buf, speechLen = rendered.speechLen, sounds = rendered.sounds;
+  } else {
+    picks = pickDiarySeq(poolKey, plan.sounds.length);
+  }
+  // 5) 对话态（①）直接渲染；歌唱态（②）用校验后的成品
+  if (stage < 2) {
+    const r1 = await renderSpeech(units, picks, plan, rates, glideRates);
+    var finalBuf = r1.buf, speechLen = r1.speechLen, sounds = r1.sounds;
+  }
+  const charTimes = plan.charTimes.map(t => t0 + t);
+  const soundTimes = sounds.map(s => t0 + s.t);
+  const totalDur = speechLen + 0.7;
+  const src = ctx.createBufferSource();
+  src.buffer = finalBuf;
+  src.connect(ctx.destination);
+  src.start(t0);
+  srcs.push(src);
+  return { charTimes, soundTimes, totalDur, pitchReport };
+}
+
+async function singText(text, boosted, stage = 3) {
+  const units = textToUnits(text);
+  if (!units.length) { status.textContent = "没有可唱的字"; return; }
+  // 卡拉 OK 字幕（含标点占位）
+  lyricEl.innerHTML = units.map(u => `<span>${u.ch === ' ' ? '&nbsp;' : u.ch.replace(/</g,'&lt;')}</span>`).join('');
+  const spans = lyricEl.querySelectorAll('span');
+
+  if (stopAll) { stopAll(); stopAll = null; }
+  const t0 = ctx.currentTime + 0.15;
+  const srcs = [];
+
+  let charTimes, soundTimes, totalDur, mouthDur, pitchReport = null;
+  // ①② 级分步试听强制走拼接流水线（只有它有工序可拆）
+  if (document.getElementById('concatMode').checked || stage < 3) {
+    const r = await singConcat(units, boosted, t0, srcs, stage);
+    if (!r) { status.textContent = "没有可发声的字"; return; }
+    ({ charTimes, soundTimes, totalDur, pitchReport } = r);
+    mouthDur = 0.18;
+  } else {
+  const SCALE = 0.9; // 整体稍提速，更接近说话节奏
+  // 每字配音符（乐句模式仍按逐字）
+  const notesOf = units.map((u, i) => {
+    const N = NOTES[i % NOTES.length], cyc = Math.floor(i / NOTES.length);
+    return { u, ns: N[0] + cyc * MELODY_CYCLE, nd: N[1], nm: N[2], i };
+  });
+  const phrases = [[notesOf[0]]];
+  for (let i = 1; i < notesOf.length; i++) {
+    const gap = notesOf[i].ns - (notesOf[i - 1].ns + notesOf[i - 1].nd);
+    if (gap > 0.22) phrases.push([]);
+    phrases[phrases.length - 1].push(notesOf[i]);
+  }
+
+  for (const ph of phrases) {
+    // 乐句中位音 → 选最佳八度下变调率最接近 1 的 blip → 最少电音 artifact
+    const meds = ph.map(x => x.nm).sort((a, b) => a - b);
+    const medMidi = meds[meds.length >> 1];
+    const { it, oct } = pickBestBlip(boosted, medMidi);
+
+    const phStart = t0 + (ph[0].ns - NOTE_T0) * SCALE;
+    const phEnd = t0 + (ph[ph.length - 1].ns + ph[ph.length - 1].nd - NOTE_T0) * SCALE;
+    const phDur = Math.max(0.2, phEnd - phStart);
+
+    // 一句一个连续声源：整句长音垫，字间只变调不重触发 → 消除断续"卡"感
+    const src = ctx.createBufferSource();
+    src.buffer = makePad(it.buf, phDur + 0.35, it.f0);
+    let prevRate = null;
+    ph.forEach((x, j) => {
+      const rate = Math.min(1.6, Math.max(0.7, m2f(x.nm + oct) / it.f0));
+      const t = t0 + (x.ns - NOTE_T0) * SCALE;
+      if (j === 0) {
+        src.playbackRate.setValueAtTime(rate, t);
+      } else {
+        // 字间 40ms 弯音滑到下一字（legato），音高变化无阶梯感
+        src.playbackRate.setValueAtTime(prevRate, t - 0.028);
+        src.playbackRate.linearRampToValueAtTime(rate, t + 0.012);
+      }
+      prevRate = rate;
+    });
+
+    const g = ctx.createGain();
+    const vol = 1.7 * it.norm;
+    let lastAuto = phStart + 0.025;
+    g.gain.setValueAtTime(0, phStart);
+    g.gain.linearRampToValueAtTime(vol, phStart + 0.025);
+    // 咬字凹陷：每字边界音量轻压再恢复，保留字的节奏感但不切断声音
+    ph.forEach((x, j) => {
+      if (!j) return;
+      const t = t0 + (x.ns - NOTE_T0) * SCALE;
+      g.gain.setValueAtTime(vol, t - 0.018);
+      g.gain.linearRampToValueAtTime(vol * 0.55, t + 0.008);
+      g.gain.linearRampToValueAtTime(vol, t + 0.055);
+      lastAuto = t + 0.055;
+    });
+    g.gain.setValueAtTime(vol, Math.max(phEnd - 0.06, lastAuto));
+    g.gain.linearRampToValueAtTime(0, Math.max(phEnd - 0.06, lastAuto) + 0.08);
+    src.connect(g).connect(ctx.destination);
+    src.start(phStart);
+    src.stop(phEnd + 0.4);
+    srcs.push(src);
+  }
+  charTimes = notesOf.map(n => t0 + (n.ns - NOTE_T0) * SCALE);
+  soundTimes = charTimes;
+  const lastIdx = units.length - 1, lastCyc = Math.floor(lastIdx / NOTES.length);
+  totalDur = ((NOTES[lastIdx % NOTES.length][0] - NOTE_T0 + NOTES[lastIdx % NOTES.length][1]) + lastCyc * MELODY_CYCLE) * SCALE;
+  mouthDur = 0.3;
+  }
+
+  // 字幕高亮（逐字）+ 嘴型（按发声点）
+  units.forEach((u, i) => {
+    const t = charTimes[i];
+    setTimeout(() => {
+      spans.forEach((s, j) => s.className = j < i ? 'done' : (j === i ? 'now' : ''));
+    }, Math.max(0, (t - ctx.currentTime) * 1000));
+  });
+  soundTimes.forEach(t => {
+    setTimeout(() => {
+      mouth.style.height = "14px"; mouth.style.marginBottom = "-3px"; mouth.style.borderRadius = "50%";
+      setTimeout(() => { mouth.style.height = "4px"; mouth.style.marginBottom = "0"; mouth.style.borderRadius = "0 0 6px 6px"; },
+        Math.min(mouthDur, 0.35) * 900);
+    }, Math.max(0, (t - ctx.currentTime) * 1000));
+  });
+
+  stopAll = () => srcs.forEach(s => { try { s.stop(); } catch {} });
+  return new Promise(res => setTimeout(() => res(pitchReport), totalDur * 1000 + 300));
+}
+
+const aiBtn = document.getElementById("aiBtn");
+const directBtn = document.getElementById("directBtn");
+const promptEl = document.getElementById("prompt");
+
+async function aiSing() {
+  const q = promptEl.value.trim() || "我要一步一步爬到山顶";
+  aiBtn.disabled = true;
+  try {
+    // 不调 AI 回话：直接复读输入框的词并唱出
+    const emo = pickSingEmotion(q);
+    showEmotionInfo(emo.probs, emo.poolKey, emo.prior);
+    status.textContent = `演唱情绪「${POOL_LABEL[emo.poolKey]}」，加载音效池…`;
+    await ensurePools(emo.poolKey);
+    status.textContent = `演唱中…`;
+    await singText(q, emo.poolKey);
+    status.textContent = `唱完了 · ${POOL_LABEL[emo.poolKey]}`;
+  } catch (err) {
+    console.error(err);
+    status.textContent = "出错：" + (err && err.message);
+  }
+  aiBtn.disabled = false;
+}
+
+async function directSing() {
+  const text = promptEl.value.trim();
+  if (!text) { status.textContent = "先在输入框写点字"; return; }
+  directBtn.disabled = true;
+  try {
+    const emo = pickSingEmotion(text);
+    showEmotionInfo(emo.probs, emo.poolKey, emo.prior);
+    status.textContent = `演唱情绪「${POOL_LABEL[emo.poolKey]}」，加载音效池…`;
+    await ensurePools(emo.poolKey);
+    status.textContent = `演唱中…`;
+    await singText(text, emo.poolKey);
+    status.textContent = `唱完了 · ${POOL_LABEL[emo.poolKey]}`;
+  } catch (err) {
+    console.error(err);
+    status.textContent = "出错：" + (err && err.message);
+  }
+  directBtn.disabled = false;
+}
+
+aiBtn.addEventListener("click", () => { ctx.resume(); aiSing(); });
+directBtn.addEventListener("click", () => { ctx.resume(); directSing(); });
+promptEl.addEventListener("keydown", e => { if (e.key === "Enter") { ctx.resume(); aiSing(); } });
+
+// 分步试听：① 对话原声 ② 变调歌唱，唱的都是输入框文字
+const STAGE_NAME = { 1: "① 对话原声（不变调）", 2: "② 自动识别 · 滑音歌唱" };
+async function stageSing(stage, btn) {
+  const text = promptEl.value.trim();
+  if (!text) { status.textContent = "先在输入框写点字"; return; }
+  btn.disabled = true;
+  try {
+    const emo = pickSingEmotion(text);
+    showEmotionInfo(emo.probs, emo.poolKey, emo.prior);
+    status.textContent = "加载音效池…";
+    await ensurePools(emo.poolKey);
+    status.textContent = `演唱中 · ${STAGE_NAME[stage]}…`;
+    const pitchReport = await singText(text, emo.poolKey, stage);
+    status.textContent = pitchReport
+      ? `唱完了 · ${POOL_LABEL[emo.poolKey]} · 自动识别（${pitchReport.source === 'audio' ? `参考「${pitchReport.refName}」${pitchReport.recognized} 音` : '兜底旋律'}）· 用到音高「${pitchReport.midis.join(' ')}」· 音高校验 ${pitchReport.cents.length}/${pitchReport.cents.length}（最大偏差 ${pitchReport.maxCents} 音分，${pitchReport.rounds} 轮）`
+      : `唱完了（${STAGE_NAME[stage]}）`;
+  } catch (err) {
+    console.error(err);
+    status.textContent = "出错：" + (err && err.message);
+  }
+  btn.disabled = false;
+}
+[["stage1Btn", 1], ["stage2Btn", 2]].forEach(([id, st]) => {
+  const btn = document.getElementById(id);
+  btn.addEventListener("click", () => { ctx.resume(); stageSing(st, btn); });
+});
+
+// 初始化：未输入文本时只展示先验状态
+(() => {
+  const prior = priorFromStorage();
+  emoinfo.textContent = prior
+    ? `演唱情绪按语义概率抽取 · 先验「${POOL_LABEL[prior.pool]}」（来自 ${prior.source}）`
+    : `演唱情绪将按语义概率从三枚举抽取：生气 / 平淡 / 坚定`;
+})();
+
+// 调试探针：供自动化测试量化分析渲染产物（峰值/时长等）
+window.__dbg = { renderSpeech, planSpeech, pickBlip, pickDiarySeq, ensurePools, textToUnits, pool, singConcat, ensureReference, analyzeAudioNotes, emotionProbabilities, pickSingEmotion };
+
+// 原版对比
+const orig = new Audio("celeste-sounds/wow_so_secret.wav");
+const origBtn = document.getElementById("origBtn");
+origBtn.addEventListener("click", () => {
+  orig.currentTime = 0; orig.play().catch(() => {});
+  origBtn.disabled = true;
+  setTimeout(() => origBtn.disabled = false, 16000);
+});
+</script>
+</body>
+</html>

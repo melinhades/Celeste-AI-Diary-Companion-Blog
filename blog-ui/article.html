@@ -1,11 +1,11 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="icon/OIP.webp" type="image/webp">
     <title>Article - Celeste Blog</title>
-    <link rel="stylesheet" href="css/common.css?v=20261001b">
+    <link rel="stylesheet" href="css/common.css?v=20261003e">
     <link rel="stylesheet" href="css/theme.css?v=20261001b">
     <script src="js/marked.min.js"></script>
     <style>
@@ -265,6 +265,7 @@
             <a href="shop.html" class="nav-link nav-diary-btn" title="Celeste Resort · Oshiro">
                 <img loading="lazy" src="Atlases/Gui/menu/play.png" alt="Shop" decoding="async">
             </a>
+            <a href="roundtable.html" class="nav-link nav-chair" title="AI 圆桌会议">🪑</a>
         </nav>
         <div class="header-right" id="headerRight"></div>
     </div>
@@ -331,7 +332,8 @@
 </footer>
 
 <script src="js/api.js?v=20261002"></script>
-<script src="js/auth.js?v=20261002b"></script>
+<script src="js/auth.js?v=20261003b"></script>
+<script src="js/felt-piano.js?v=20261003"></script>
 <script>
     // ===== 加载层内雪花（snow-bgm 同款，登录页风格） =====
     (function () {
@@ -665,12 +667,16 @@
                 document.getElementById('commentContent').value = '';
                 clearReply();
                 showToast('Comment posted', 'success');
+                FeltPiano.send();
                 loadComments();
             } else {
                 showToast(res.msg || 'Failed to post comment', 'error');
             }
         });
     }
+
+    // 毛毡钢琴打字音效（textarea：Enter 换行也响打字音）
+    FeltPiano.bind(document.getElementById('commentContent'));
 
     // ===== 心之宝石点赞 =====
     function loadLikeState() {

@@ -6,6 +6,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="icon/OIP.webp" type="image/webp">
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/text-fx.css?v=20261004a">
+<style>
+/* TextFx：Badeline 对话框/气泡内动画词的专属紫（普通文字仍为原色） */
+#badelineDialogText, .bl-msg.assistant, .nt-row.bl .nt-bub { --c:#D678DB; }
+</style>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; }
 @font-face { font-family:'Renogare'; src:url('celeste-font-en/Renogare-Regular.otf') format('opentype'); font-display:swap; }
@@ -924,6 +929,7 @@ body:has(.ds-world.panned) #strawberryBonfire { opacity:0; pointer-events:none; 
     </div>
 </div>
 <script src="js/api.js?v=20261002"></script>
+<script src="js/text-fx.js?v=20261004a"></script>
 <script src="js/badeline-voice.js"></script>
 <script>
     // ===== 雪花动画（mountainSnow 原版贴图） =====
@@ -1867,7 +1873,11 @@ function stopPeSnow() {
                 tag.textContent = BL_EMO_ZH[emo];
                 d.appendChild(tag);
             }
-            d.appendChild(document.createTextNode(text));
+            if (window.TextFx && role === 'assistant') {
+                d.insertAdjacentHTML('beforeend', TextFx.render(TextFx.autoMark(text)));  // 历史气泡也带三种动画
+            } else {
+                d.appendChild(document.createTextNode(text));
+            }
             blMsgs.appendChild(d);
             blMsgs.scrollTop = blMsgs.scrollHeight;
             return d;
@@ -2003,27 +2013,34 @@ function stopPeSnow() {
             var pages = blSplitPages(text);
             for (var p = 0; p < pages.length; p++) {
                 if (my !== blDialogToken) return;
-                blDialogText.textContent = '';
+                var fpage = window.TextFx ? TextFx.autoMark(pages[p]) : pages[p];  // 无标记台词自动补三种动画
+                if (window.TextFx) { TextFx.set(blDialogText, ''); blDialogText.classList.add('tfx-typing'); }
+                else blDialogText.textContent = '';
                 blResetVoiceSeq();     /* 每句重置序列：per→A→B→C→A→B→C…（句子过短只播 per 也不强求循环） */
                 var voiceEmo = emo, sentenceBuf = '', sc = 0;
-                for (var ci = 0; ci < pages[p].length; ci++) {
+                for (var ci = 0; ci < fpage.length; ci++) {
                     if (my !== blDialogToken) return;
-                    var ch = pages[p][ci];
-                    blDialogText.textContent += ch;
-                    if (/[。！？!?]/.test(ch)) {
+                    var ch = fpage[ci];
+                    if (window.TextFx) TextFx.set(blDialogText, fpage.slice(0, ci + 1));
+                    else blDialogText.textContent += ch;
+                    /* 动画标记符 { } ~ * 不参与音色逻辑；结尾定界 ! 紧跟 } 也不是句读 */
+                    var isMark = ch === '{' || ch === '}' || ch === '~' || ch === '*';
+                    var isSentEnd = /[。！？!?]/.test(ch) && fpage[ci + 1] !== '}';
+                    if (isSentEnd) {
                         /* 句末：AI 未锁定时按本句关键词重推断音色（立绘保持 AI 标记不变） */
                         if (!aiLocked) {
                             var inf = BadelineVoice.infer(sentenceBuf);
                             if (inf) voiceEmo = inf;
                         }
                         sentenceBuf = '';
-                    } else if (!/[\s，,、；;：:（）()*「」·—。！？!?…]/.test(ch)) {
+                    } else if (!isMark && !/[\s，,、；;：:（）()*「」·—。！？!?…]/.test(ch)) {
                         sentenceBuf += ch;
                         sc++;
                         if (sc % 3 === 1) blVoice(voiceEmo);
                     }
                     await blSleep(45 + Math.random() * 20);
                 }
+                if (window.TextFx) { TextFx.set(blDialogText, fpage); blDialogText.classList.remove('tfx-typing'); }
                 if (p < pages.length - 1) await blSleep(900 + Math.random() * 500);
             }
             if (my === blDialogToken) {
@@ -3243,7 +3260,8 @@ function stopPeSnow() {
             }
             var bub = document.createElement('div');
             bub.className = 'nt-bub';
-            bub.textContent = text;
+            if (window.TextFx && role !== 'user') bub.innerHTML = TextFx.render(TextFx.autoMark(text));  // 梦境夜谈气泡
+            else bub.textContent = text;
             row.appendChild(bub);
             msgs.appendChild(row);
             msgs.scrollTop = msgs.scrollHeight;

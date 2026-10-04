@@ -58,6 +58,28 @@
 
     // 已预热过的情绪（每帧 new Image 一次，让浏览器后台缓存，切换不闪）
     var warmed = {};
+    // 帧加载状态：1=已解码可直接切 src；0=加载中（切过去会 ERR_ABORTED/闪空白，先保持上一帧）；-1=缺失
+    var loaded = {};
+    var waiters = {};   // 加载中的帧 → 完成回调（用于定格场景的"加载完追显"）
+    var blobUrl = {};   // src → blob:ObjectURL。静态服务器无缓存头时 img.src 每次切帧都要重新校验网络，
+                        // 快速切帧会中止在途请求(ERR_ABORTED)；预热成 blob URL 后切帧零网络、永不中止
+    function preload(src, cb) {
+        if (loaded[src] === 1) { if (cb) cb(); return; }
+        if (loaded[src] === -1) return;
+        if (loaded[src] === 0) { if (cb) (waiters[src] = waiters[src] || []).push(cb); return; }
+        loaded[src] = 0;
+        waiters[src] = cb ? [cb] : [];
+        fetch(src).then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.blob();
+        }).then(function (blob) {
+            blobUrl[src] = URL.createObjectURL(blob);
+            loaded[src] = 1;
+            var ws = waiters[src] || [];
+            waiters[src] = null;
+            for (var i = 0; i < ws.length; i++) ws[i]();
+        }).catch(function () { loaded[src] = -1; waiters[src] = null; });
+    }
 
     function pad2(n) { return n < 10 ? '0' + n : '' + n; }
 
@@ -76,8 +98,7 @@
         warmed[key] = true;
         var n = frameCount(charName, emotion);
         for (var i = 0; i < n; i++) {
-            var im = new Image();
-            im.src = frameSrc(charName, emotion, i);
+            preload(frameSrc(charName, emotion, i));
         }
     }
 
@@ -91,7 +112,19 @@
     }
 
     Animator.prototype._show = function () {
-        this.img.src = frameSrc(this.charName, this.emotion, this.idx);
+        var self = this;
+        var src = frameSrc(this.charName, this.emotion, this.idx);
+        if (loaded[src] === 1) {
+            this.img.src = blobUrl[src];            // blob 本地 URL：零网络切换，绝不 ABORTED
+        } else if (loaded[src] !== -1) {
+            preload(src, function () {               // 后台拉取；加载完若仍停在这一帧就追显（定格头像也能出画）
+                if (self.img.isConnected &&
+                    frameSrc(self.charName, self.emotion, self.idx) === src) {
+                    self.img.src = blobUrl[src];
+                }
+            });
+        }
+        // loaded === -1（帧真缺失）：保持上一帧，不显示破图
     };
 
     // 内部：切到某情绪（不负责启停）；返回是否真的换了组

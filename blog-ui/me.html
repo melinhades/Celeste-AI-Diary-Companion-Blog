@@ -14,7 +14,7 @@
 @font-face { font-family:'CelesteZH'; src:url('fonts/NotoSansCJKsc-Medium.otf') format('opentype'); font-display:swap; }
 body { min-height:100vh; background:url('celeste-gui/me-bg.webp') center/cover no-repeat fixed; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; }
 /* 冰山返回主页按钮（同 diary/shop 的 #homePosterBtn） */
-#homePosterBtn { position:fixed; top:16px; left:16px; z-index:900; width:96px; height:96px; padding:0; border:none; background:transparent; cursor:pointer; transition:transform .2s, filter .2s; }
+#homePosterBtn { position:fixed; top:16px; left:16px; z-index:900; width:96px; height:96px; padding:0; border:none; background:transparent; cursor:pointer; filter:drop-shadow(1px 0 0 #10101c) drop-shadow(-1px 0 0 #10101c) drop-shadow(0 1px 0 #10101c) drop-shadow(0 -1px 0 #10101c); transition:transform .2s, filter .2s; }
 #homePosterBtn img { width:100%; height:100%; object-fit:contain; display:block; }
 #homePosterBtn:hover { transform:translateY(-2px) scale(1.05); filter:drop-shadow(1px 0 0 #10101c) drop-shadow(-1px 0 0 #10101c) drop-shadow(0 1px 0 #10101c) drop-shadow(0 -1px 0 #10101c) drop-shadow(0 0 10px rgba(200,235,255,1)) drop-shadow(0 0 24px rgba(120,190,255,.8)); }
 .wrap { max-width:680px; margin:0 auto; padding:118px 20px 40px; }

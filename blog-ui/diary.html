@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -7,6 +7,13 @@
     <title>Madeline - 写日记</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Patrick+Hand&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/diary.css?v=20261002">
+    <link rel="stylesheet" href="css/text-fx.css?v=20261004a">
+    <style>
+        /* TextFx：Madeline 对话框内动画词的默认专属色（普通文字仍为原色） */
+        #gameDialogText, .chat-messages .msg-bubble { --c:#F94A4A; }
+        /* 输入框文字透明后，placeholder 保持独立可见（不被 -webkit-text-fill-color 带走） */
+        .book-page textarea::placeholder, .book-page input::placeholder { -webkit-text-fill-color:rgba(64,58,66,.3); }
+    </style>
     <style>
         /* ===== 羽毛随笔弹框：poempage 纸页 + 登录页同款滑入动画 ===== */
         #featherNoteBox {
@@ -120,11 +127,35 @@
     </div>
 
     <script src="js/api.js?v=20261002"></script>
+    <script src="js/text-fx.js?v=20261004a"></script>
     <script src="js/feather-game.js"></script>
     <script src="js/feather-trigger.js"></script>
     <script src="js/madeline-core.js?v=20261002"></script>
-    <script src="js/diary.js?v=20261003"></script>
+    <script src="js/diary.js?v=20261004a"></script>
     <script src="js/detect.js"></script>
+    <script>
+    // TextFx：日记本输入框里命中的情绪关键词 → 波浪动画 + 情绪色（仅第一种效果）
+    (function () {
+        function boot() {
+            if (!window.TextFx || !window.__DIARY_EMOTION_WORDS) return;
+            var words = window.__DIARY_EMOTION_WORDS, colors = window.__DIARY_EMOTION_COLORS || {};
+            var palette = {}, wordArr = [];
+            Object.keys(words).forEach(function (emo) {
+                words[emo].forEach(function (w) {
+                    if (w.length < 2) return;            // 单字（恨/甜/哭）太容易误伤，跳过
+                    palette[w] = colors[emo] || '#FF6B6B';
+                    wordArr.push(w);
+                });
+            });
+            TextFx.setPalette(palette);
+            document.querySelectorAll('#journalBook textarea, #titleInput').forEach(function (el) {
+                TextFx.attachTextarea(el, wordArr);
+            });
+        }
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+        else boot();
+    })();
+    </script>
     <script src="js/pptgen.js"></script>
     <script>
     (function() {

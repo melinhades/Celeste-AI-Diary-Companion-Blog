@@ -1,5 +1,7 @@
 
-const BASE_URL = 'https://api.instapix.icu';
+const BASE_URL = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+    ? 'http://localhost:8888'
+    : 'https://api.instapix.icu';
 
 function api(path, method, body, timeoutMs) {
     const options = {

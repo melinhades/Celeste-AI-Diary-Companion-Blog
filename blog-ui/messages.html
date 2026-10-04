@@ -1,11 +1,11 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="icon/OIP.webp" type="image/webp">
     <title>消息 · Celeste Blog</title>
-    <link rel="stylesheet" href="css/common.css">
+    <link rel="stylesheet" href="css/common.css?v=20261003e">
     <style>
     /* ============================================================
        Midnight Summit —— Instagram 风格消息中心
@@ -380,6 +380,7 @@
                 <a href="shop.html" class="nav-link nav-diary-btn" title="Celeste Resort · Oshiro">
                     <img src="Atlases/Gui/menu/play.png" alt="Shop" loading="lazy" decoding="async">
                 </a>
+                <a href="roundtable.html" class="nav-link nav-chair" title="AI 圆桌会议">🪑</a>
             </nav>
             <div class="header-right" id="headerRight"></div>
         </div>
@@ -442,7 +443,8 @@
     </div>
 
 <script src="js/api.js?v=20261002"></script>
-<script src="js/auth.js?v=20261002b"></script>
+<script src="js/auth.js?v=20261003b"></script>
+<script src="js/felt-piano.js?v=20261003"></script>
 <script>
     initHeader();
 
@@ -772,6 +774,7 @@
         function doSend() {
             const content = inputEl.value.trim();
             if (!content || sending) return;
+            FeltPiano.send();
             sending = true;
             sendBtn.disabled = true;
             // 自己发的消息不本地插入，等服务端广播回来（保证单一口径 + 多标签页同步）
@@ -787,6 +790,8 @@
             });
         }
         sendBtn.addEventListener('click', doSend);
+        // 毛毡钢琴打字音效：Enter 发送 → 播 send 音
+        FeltPiano.bind(inputEl, { enterSend: true });
         inputEl.addEventListener('keydown', e => {
             if (e.key === 'Enter') { e.preventDefault(); doSend(); }
         });

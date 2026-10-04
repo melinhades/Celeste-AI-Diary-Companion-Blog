@@ -1,0 +1,79 @@
+/* =====================================================================
+   TextFx —— 全站通用字体动画
+   {~波浪~}  {*抖动*}  {!弹跳!}
+   普通文字静止；仅标记内文字带细黑像素描边 + 专属色。
+   各页面在容器上设 --c 作为该角色的默认动画色。
+   ===================================================================== */
+
+.fx {
+    display:inline-block; position:relative;
+    -webkit-text-stroke:.5px #000; paint-order:stroke fill;
+    text-shadow:1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000;
+}
+/* fx-ch 必须 inline-block：transform 对默认 inline 的 span 无效 */
+.fx .fx-ch { display:inline-block; white-space:pre; }
+
+/* 角色固有色 */
+.fx[data-char="madeline"] { --fxc:#F94A4A; }
+.fx[data-char="badeline"] { --fxc:#D678DB; }
+.fx[data-char="oshiro"]   { --fxc:#7BD838; }
+.fx[data-char="theo"]     { --fxc:#FF9523; }
+.fx[data-char="granny"]   { --fxc:#B18CFF; }
+.fx[data-char="mountain"] { --fxc:#96EFFF; }
+.fx { color:var(--fxc, var(--c, #ffe36d)); }
+
+/* ① 波浪：字母错开缓慢正弦浮动。
+   delay 挂墙钟变量 --t：打字机重建 DOM 后相位连续 */
+.fx-wave .fx-ch {
+    animation:tfxWave 2.2s ease-in-out infinite;
+    animation-delay:calc(var(--i) * .08s - var(--t, 0s));
+}
+@keyframes tfxWave {
+    0%,100% { transform:translateY(0); }
+    25%     { transform:translateY(-2px); }
+    75%     { transform:translateY(2px); }
+}
+
+/* ② 抖动：细碎微小随机震颤 */
+.fx-shake .fx-ch {
+    animation:tfxShake .32s linear infinite;
+    animation-delay:calc(var(--i) * .05s - var(--t, 0s));
+}
+@keyframes tfxShake {
+    0%   { transform:translate(0,0); }
+    20%  { transform:translate(.6px,-.5px); }
+    40%  { transform:translate(-.6px,.4px); }
+    60%  { transform:translate(.4px,.5px); }
+    80%  { transform:translate(-.4px,-.4px); }
+    100% { transform:translate(0,0); }
+}
+
+/* ③ 弹跳：一次性短促弹性弹跳；打字进行中（容器加 .tfx-typing）暂停，结束整句播一次 */
+.fx-bounce .fx-ch {
+    animation:tfxBounce .6s cubic-bezier(.2,.9,.3,1.4) 1;
+    animation-delay:calc(var(--i) * .04s);
+}
+.tfx-typing .fx-bounce .fx-ch { animation:none; }
+@keyframes tfxBounce {
+    0%   { transform:scale(1); }
+    30%  { transform:scale(1.15) translateY(-3px); }
+    60%  { transform:scale(.95) translateY(1px); }
+    100% { transform:scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fx .fx-ch { animation:none !important; }
+}
+
+/* ===== textarea / input 镜像高亮层（日记关键词波浪用） ===== */
+.tfx-mirror {
+    position:absolute; z-index:0; pointer-events:none;
+    overflow:hidden; white-space:pre-wrap; word-wrap:break-word;
+    overflow-wrap:break-word;
+    font-family:inherit;
+}
+.tfx-mirror .fx {
+    /* 纸面上用纤细暖色描边，不用对话框那种粗黑四向投影 */
+    -webkit-text-stroke:.3px rgba(50,32,26,.55);
+    text-shadow:none;
+}

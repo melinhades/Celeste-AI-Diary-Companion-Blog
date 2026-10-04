@@ -90,13 +90,34 @@
     };
 
     var warmed = false;
+    // 帧加载门控：加载中不切 img.src（避免 ERR_ABORTED 与闪空白），加载完追显
+    var birdLoaded = {};
+    var birdWaiters = {};
+    var birdBlob = {};      // name → blob:ObjectURL，切帧零网络，避免无缓存头下条件请求被中止(ERR_ABORTED)
+    function preloadFrame(name, cb) {
+        var src = BASE + name + '.png';
+        if (birdLoaded[src] === 1) { if (cb) cb(); return; }
+        if (birdLoaded[src] === -1) return;
+        if (birdLoaded[src] === 0) { if (cb) (birdWaiters[src] = birdWaiters[src] || []).push(cb); return; }
+        birdLoaded[src] = 0;
+        birdWaiters[src] = cb ? [cb] : [];
+        fetch(src).then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.blob();
+        }).then(function (blob) {
+            birdBlob[src] = URL.createObjectURL(blob);
+            birdLoaded[src] = 1;
+            var ws = birdWaiters[src] || [];
+            birdWaiters[src] = null;
+            ws.forEach(function (f) { f(); });
+        }).catch(function () { birdLoaded[src] = -1; birdWaiters[src] = null; });
+    }
     function warm() {
         if (warmed) return;
         warmed = true;
         Object.keys(FRAMES).forEach(function (g) {
             FRAMES[g].forEach(function (n) {
-                var im = new Image();
-                im.src = BASE + n + '.png';
+                preloadFrame(n);
             });
         });
     }
@@ -117,7 +138,21 @@
     var lastRequest = {};                // 反应式触发逐模式冷却表
     var raf = null, lastTs = 0;
 
-    function applyFrame() { img.src = BASE + FRAMES[anim][idx] + '.png'; }
+    function applyFrame() {
+        var name = FRAMES[anim][idx];
+        var src = BASE + name + '.png';
+        if (birdLoaded[src] === 1) {
+            var url = birdBlob[src];
+            if (img.getAttribute('src') !== url) img.src = url;   // blob 本地帧，零网络切换
+        } else if (birdLoaded[src] !== -1) {
+            preloadFrame(name, function () {                       // 加载完若仍在这一帧就追显（含 perch 定格）
+                if (img.isConnected && FRAMES[anim][idx] === name &&
+                    img.getAttribute('src') !== birdBlob[src]) {
+                    img.src = birdBlob[src];
+                }
+            });
+        }
+    }
 
     function setAnim(name) {
         if (anim === name) return;
@@ -143,25 +178,23 @@
         applyFrame();
     }
 
-    // ===== 锚点 =====
+    // ===== 锚点（视口坐标系：整个页面盘旋，bird-sprite 用 position:fixed） =====
     function seatAnchorOf(id) {
         var seat = panel && panel.querySelector('#seat-' + id);
         if (!seat) return null;
-        var pr = panel.getBoundingClientRect(), sr = seat.getBoundingClientRect();
-        return { x: (sr.left - pr.left) + (sr.width - W) / 2, y: (sr.top - pr.top) - H - 8 };
+        var sr = seat.getBoundingClientRect();
+        return { x: sr.left + (sr.width - W) / 2, y: sr.top - H - 8 };
     }
-    // 随机游荡锚点：会议卡片上沿之上的一条横带（避开左上返回链接与右上按钮）
+    // 随机游荡锚点：全页面随机（避开最顶部导航条）
     function pickAnchor() {
-        var pw = panel.clientWidth;
-        var minX = Math.min(200, pw * 0.25);
-        var maxX = Math.max(minX + 60, pw - W - 120);
-        anchor.x = minX + Math.random() * (maxX - minX);
-        anchor.y = -56 + Math.random() * 34;   // 卡片上沿上方 22~56px
+        var vw = window.innerWidth, vh = window.innerHeight;
+        anchor.x = 40 + Math.random() * (vw - W - 80);
+        anchor.y = 80 + Math.random() * (vh - H - 140);   // 顶部 80px 留给导航
     }
-    // 主持人锚点：台顶正中央（主持人没有席位卡）
+    // 主持人锚点：页面中央偏上（主持人没有席位卡）
     function anchorHost() {
-        anchor.x = Math.max(20, (panel.clientWidth - W) / 2);
-        anchor.y = -60;
+        anchor.x = Math.max(20, (window.innerWidth - W) / 2);
+        anchor.y = 100;
     }
 
     // ===== 加权随机（对齐 madeline-core.weightedPick）=====
@@ -327,11 +360,16 @@
     }
 
     function ensureImg() {
-        if (img && img.isConnected && img.parentNode === panel) return;
+        if (img && img.isConnected) return;
         img = document.createElement('img');
         img.className = 'bird-sprite';
         img.alt = '';
-        panel.appendChild(img);
+        // 点击 → crow 鸣叫（音效文件由用户后续提供，先留接口）
+        img.addEventListener('click', function () {
+            if (mode === 'hidden' || mode === 'leave' || mode === 'perch' || opening) return;
+            enterMode('crow', performance.now(), true);
+        });
+        document.body.appendChild(img);   // fixed 定位挂 body，不受面板裁剪
     }
 
     function resetState() {
@@ -351,9 +389,9 @@
         warm();
         ensureImg();
         img.style.display = 'block';
-        // 开场：栖在卡片上沿中央
-        x = Math.max(20, (panel.clientWidth - W) / 2);
-        y = -26; face = 1;
+        // 开场：栖在页面中央偏上
+        x = Math.max(20, (window.innerWidth - W) / 2);
+        y = 90; face = 1;
         img.style.transform = 'translate(' + Math.round(x) + 'px,' + Math.round(y) + 'px)';
         mode = 'wander';           // 兜底模式，opening 结束后正式进 think
         opening = 'crow'; phaseT = 0;
@@ -466,7 +504,7 @@
         anim = 'hover'; idx = 0;
         applyFrame();
         face = 1;
-        x = Math.max(60, panel.clientWidth - W - 140); y = -40;
+        x = Math.max(60, window.innerWidth - W - 100); y = 60;
         img.style.transform = 'translate(' + Math.round(x) + 'px,' + Math.round(y) + 'px)';
     }
 

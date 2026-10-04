@@ -1,0 +1,32 @@
+{
+ "mad_idle": {
+  "src": "mad_idle.webp",
+  "cols": 4,
+  "rows": 7,
+  "frames": 27,
+  "frameW": 1152,
+  "frameH": 720,
+  "frameMs": 33.33,
+  "loop": true
+ },
+ "oshiro_move": {
+  "src": "oshiro_move.webp",
+  "cols": 4,
+  "rows": 8,
+  "frames": 30,
+  "frameW": 1152,
+  "frameH": 720,
+  "frameMs": 33.33,
+  "loop": false
+ },
+ "oshiro_idle": {
+  "src": "oshiro_idle.webp",
+  "cols": 4,
+  "rows": 7,
+  "frames": 26,
+  "frameW": 1152,
+  "frameH": 720,
+  "frameMs": 33.33,
+  "loop": true
+ }
+}
