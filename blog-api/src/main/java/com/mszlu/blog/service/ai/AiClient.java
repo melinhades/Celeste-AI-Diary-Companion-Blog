@@ -18,6 +18,7 @@ import org.springframework.web.client.RestTemplate;
 import javax.annotation.PostConstruct;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Component
 @Slf4j
@@ -56,6 +57,34 @@ public class AiClient {
     private long circuitOpenDurationMs;
 
     private RestTemplate restTemplate;
+
+    /** 全局两次 AI 请求的最小间隔（毫秒），防止触发上游限流（429） */
+    @Value("${ai.min-interval-ms:800}")
+    private long minIntervalMs;
+
+    /** 429 限流时的重试次数与退避基数（毫秒） */
+    @Value("${ai.rate-limit.retries:3}")
+    private int rateLimitRetries;
+
+    @Value("${ai.rate-limit.backoff-ms:2000}")
+    private long rateLimitBackoffMs;
+
+    private final AtomicLong lastRequestAt = new AtomicLong(0);
+
+    /** 全局限速：保证任意两次请求间隔 >= minIntervalMs */
+    private void throttle() {
+        long now = System.currentTimeMillis();
+        long prev = lastRequestAt.get();
+        long wait = prev + minIntervalMs - now;
+        if (wait > 0) {
+            try {
+                Thread.sleep(wait);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        lastRequestAt.set(System.currentTimeMillis());
+    }
 
     @PostConstruct
     public void init() {
@@ -108,6 +137,7 @@ public class AiClient {
     }
 
     public String chat(List<AiMessage> messages, boolean jsonMode) {
+        throttle();
         if (!tryAcquire()) {
             log.warn("AI 熔断器打开中，本次请求快速失败");
             return null;
@@ -165,11 +195,25 @@ public class AiClient {
                 onSuccess();
                 return content;
             } catch (HttpClientErrorException e) {
-                // 4xx：请求本身有问题（参数/鉴权/余额），重试无意义，直接失败
+                // 429 限流：可重试，指数退避
+                if (e.getStatusCode().value() == 429 && attempt < rateLimitRetries) {
+                    long wait = rateLimitBackoffMs * (1L << attempt);
+                    log.warn("AI 限流 429，{}ms 后重试（第 {}/{} 次）", wait, attempt + 1, rateLimitRetries);
+                    try {
+                        Thread.sleep(wait);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                    }
+                    continue;
+                }
+                // 其他 4xx：请求本身有问题（参数/鉴权/余额），重试无意义，直接失败
                 log.warn("AI 客户端错误 status={}, body={}", e.getStatusCode(), e.getResponseBodyAsString());
                 onFailure();
                 if (e.getStatusCode().value() == 402) {
                     return "AI 服务余额不足，请联系管理员充值";
+                }
+                if (e.getStatusCode().value() == 429) {
+                    return "AI 服务限流中，请稍后再试";
                 }
                 return "AI 服务调用失败: " + e.getMessage();
             } catch (HttpServerErrorException | ResourceAccessException e) {
