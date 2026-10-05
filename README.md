@@ -68,10 +68,13 @@ This dual-platform flow creates meaning: **intimate personal reflections in the 
 
 ## ✨ Core Features
 
+<div align="center">
+  <img src="blog-ui/celeste-gui/mountain-poster.png" alt="Discover Celeste Mountain" width="280">
+</div>
 
 | 🏷️ | Feature | Description | Status |
 |:---:|---------|-------------|:---:|
-| 🐦 | **AI Roundtable** | Madeline, Theo, Granny, Badeline & Oshiro debate your topic in-character until consensus — animated portraits, emotion voice blips, reactive bird host | ✅ |
+| 🐦 | **AI Roundtable** | Madeline, Theo, Granny, Badeline & Oshiro debate your topic until consensus — SSE streamed, idempotent reconnect, observe/participate modes, anti-repetition prompts, rate-limit guarded | ✅ |
 | <img src="blog-ui/celeste-icons/heartgem0.png" width="28"> | **AI Companionship** | Madeline provides intelligent, emotionally-aware interactions (7 emotion states) | ✅ |
 | <img src="blog-ui/celeste-collectables/cassette.png" width="28"> | **Memory System** | Daily postcards & monthly snapshot reflections (RAG-powered) | ✅ |
 | <img src="blog-ui/celeste-feather/feather0.png" width="28"> | **Feather Breathing Game** | Physics-based falling feather for anxiety relief | ✅ |
@@ -190,7 +193,16 @@ A Server-Sent-Events powered live chatroom with self/other message bubbles, an o
   <img src="docs/screenshots/roundtable.png" alt="AI Roundtable" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
 </p>
 
-The most fully-realized feature. Bring any dilemma to the table and **Madeline, Theo, Granny, Badeline and Oshiro** discuss it in-character — SSE-streamed dialogue with animated portrait frames, emotion-driven voice blips, and a bird host who flies between seats and grows restless as the debate heats up. Jump in anytime as yourself, or call on a character directly; rounds continue until the AI judge scores consensus, then the meeting closes with a final review and action items.
+The most fully-realized feature. Bring any dilemma to the table and **Madeline, Theo, Granny, Badeline and Oshiro** discuss it — SSE-streamed dialogue with animated portrait frames, emotion-driven voice blips, and a bird host who flies between seats and grows restless as the debate heats up. Jump in anytime as yourself (**interject**), or call on a character directly; rounds continue until the AI judge scores consensus, then the meeting closes with a final review and action items.
+
+**Reliability & UX engineering under the hood:**
+
+- **One meeting, one engine run** — the SSE endpoint is idempotent: reconnecting on the same topic reuses the live session (same user + topic + RUNNING + within 2h) instead of replaying the whole debate; the engine itself is guarded by a CAS single-start gate
+- **Connection generations + reconnect grace** — stale connections can't kill a reconnected owner, and a 3-second grace window buffers events while the browser retries, so no speech is lost or duplicated
+- **Observe / participate modes** — anyone can watch a live meeting (`observe/{id}` replays the transcript then tails live events); the owner gets a one-click **switch-to-participate** button that reattaches to the same session
+- **Anti-repetition, topic-first prompts** — slim persona prompts (~150 chars each) plus 8 overriding common rules: every turn must add new progress, restating others' views ≤10 chars, no in-character plot digressions, 1–3 sentences
+- **Upstream rate-limit protection** — global minimum request interval (800ms) across all AI calls, plus exponential-backoff retries on HTTP 429
+- Double-click the stage for fullscreen; the consensus panel tracks 2–4 points of agreement and 1–3 disagreements per meeting
 
 ---
 
@@ -342,6 +354,7 @@ blog/
 │       │   │   ├── PersonaController.java    # AI personas
 │       │   │   ├── ProactiveController.java  # Proactive AI
 │       │   │   ├── RegisterController.java   # Registration
+│       │   │   ├── RoundtableController.java  # AI roundtable SSE (stream/observe/interject/stop)
 │       │   │   ├── TagsController.java       # Tags
 │       │   │   ├── UploadController.java     # File upload (magic-number validated)
 │       │   │   └── UserController.java       # User profile
@@ -354,10 +367,19 @@ blog/
 │       │   │   └── LoginIntercepter.java       # JWT auth interceptor
 │       │   ├── impl/                    # Service implementations
 │       │   ├── service/                 # Service interfaces
-│       │   │   └── ai/
-│       │   │       ├── AiClient.java           # GLM-4 client (JSON mode)
-│       │   │       ├── PromptBuilder.java      # Centralized prompt engineering
-│       │   │       └── MemorySearchService.java
+│       │   │       ├── ai/
+│       │   │       │   ├── AiClient.java           # GLM-4 client (JSON mode, throttle, 429 retry, circuit breaker)
+│       │   │       │   ├── PromptBuilder.java      # Centralized prompt engineering
+│       │   │       │   ├── MemorySearchService.java
+│       │   │       │   └── roundtable/             # AI roundtable engine
+│       │   │       │       ├── RoundtableSession.java    # Session state, CAS start gate, owner generation
+│       │   │       │       ├── RoundtableEngine.java     # Turn loop, chunked SSE push, reconnect grace
+│       │   │       │       ├── RoundtablePersonas.java   # Slim topic-first persona prompts + common rules
+│       │   │       │       ├── SessionBus.java           # Per-subscriber SSE emitter fan-out
+│       │   │       │       ├── ConsensusTracker.java     # Agreement/disagreement extraction
+│       │   │       │       ├── TurnScheduler.java        # Next-speaker selection
+│       │   │       │       ├── RosterBuilder.java        # Character roster assembly
+│       │   │       │       └── RoundtableTopicService.java # Topic suggestions & parsing
 │       │   ├── utils/
 │       │   │   ├── JWTUtils.java               # JWT create/verify (env-configurable)
 │       │   │   └── UserThreadLocal.java        # Thread-local user context
@@ -522,6 +544,13 @@ ai.base-url=${AI_BASE_URL:https://api.siliconflow.cn/v1}
 ai.api-key=${AI_API_KEY:your-api-key}
 ai.model=${AI_MODEL:THUDM/GLM-4-9B-0414}
 ai.embedding-model=${AI_EMBEDDING_MODEL:BAAI/bge-m3}
+# AI resilience: global throttle, 429 backoff, circuit breaker
+ai.min-interval-ms=800          # min gap between any two AI requests
+ai.rate-limit.retries=3         # retries on HTTP 429
+ai.rate-limit.backoff-ms=2000   # exponential base: 2s, 4s, 8s
+ai.max-retries=1                # retries for 5xx / timeout
+ai.circuit.failure-threshold=5  # consecutive failures before opening
+ai.circuit.open-duration=30000  # open circuit cooldown (ms)
 
 # JWT (env-configurable)
 jwt.secret=${JWT_SECRET:123456Mszlu!@###$$}
@@ -632,6 +661,39 @@ logging:
 | **Dependencies** | Fastjson 1.2.101 (CVE fixes), MyBatis-Plus unified |
 | **Observability** | Actuator health/info/prometheus, Prometheus export |
 
+### 6. AI Roundtable Engine
+
+A five-character multi-agent debate over SSE, in `service/ai/roundtable/`.
+
+**Endpoints** (`RoundtableController`, base path `/roundtable`):
+
+| Method & Path | Role |
+|---|---|
+| GET `stream` | Owner's live channel (SSE). Idempotent — same user + topic + a RUNNING session under 2h reuses it; a reconnect attaches without replaying or restarting |
+| GET `observe/{id}` | Spectator channel — replays the transcript (`replay:true` events), then tails live events; meta carries `isOwner` so the UI can offer mode switching |
+| GET `live` | Live meeting list for the lobby |
+| GET `suggestions` | AI-generated topic suggestions |
+| POST `{id}/interject` | Owner interjection, drained into the debate at the next turn boundary |
+| POST `{id}/stop` | End the meeting and produce the final summary card |
+
+**Session & connection model:**
+
+- `RoundtableSession.tryStartEngine()` is a CAS gate — the engine runs at most once per session even if the endpoint is hit repeatedly
+- `attachOwner()/detachOwner(gen)` use connection generations so a stale connection's error callback can't kill a freshly reconnected owner
+- `RoundtableEngine.sendEvent()` is the single fan-out exit: if any subscriber's write fails, it waits a 3-second reconnect grace, replays the buffered event on recovery, and only terminates the run if the owner is truly gone
+- Speech is pushed as incremental chunks (~8 chars / 24ms); the frontend buffers them and renders at its own natural typing pace (30–52ms/char, 160–460ms pauses), decoupling network cadence from playback
+
+**Prompt discipline** (`RoundtablePersonas`): each persona is a slim ~150-char brief (who you are / tone / how to analyze the topic) with all plot-quote anchors removed; a block of 8 overriding rules sits at the end of every prompt — topic-first, every turn must add new progress, no verbatim or paraphrased repetition, 1–3 sentences, no character-backstory roleplay. The host pulls digressions back and interrupts repeated points. `ConsensusTracker` extracts 2–4 concrete agreements and 1–3 disagreements per pass.
+
+**AI gateway resilience** (`AiClient`):
+
+1. **Global throttle** — an `AtomicLong` enforces a minimum 800ms gap (`ai.min-interval-ms`) between any two outbound AI requests process-wide, preventing burst 429s during fast debates
+2. **429 exponential backoff** — rate-limit responses retry up to 3 times (2s → 4s → 8s) instead of failing like other 4xx errors
+3. **Circuit breaker** — 5 consecutive failures open the circuit for 30s with fast-fail, then a half-open probe
+4. **Selective retry** — only 5xx / network timeouts retry; 400/401/402 fail fast
+
+**Frontend** (`roundtable.html`): manual controlled SSE reconnect (up to 4 attempts with backoff, "网络抖动，正在回到同一场讨论") instead of native EventSource retries; a buffered sentence-aware typewriter with TextFx animations; interject input pinned under the stage; observer → participant reattachment for the owner; double-click stage for fullscreen.
+
 ---
 
 ## 📚 Technical Deep-Dive
@@ -647,6 +709,8 @@ logging:
 | `ThreadService` | Async view-count updates (CAS retry), proactive message scheduling |
 | `ArticleService` | Blog article CRUD, hot/new/archive lists, view counts |
 | `CategoryService` / `TagService` | Taxonomy management |
+| `RoundtableEngine` / `RoundtableSession` | Multi-agent debate loop, idempotent session lifecycle, chunked SSE fan-out with reconnect grace |
+| `ConsensusTracker` / `TurnScheduler` | Roundtable agreement extraction & next-speaker scheduling |
 
 ### Frontend Architecture
 
@@ -658,7 +722,7 @@ blog-ui/
 ├── internet_cafe.html  → Neon-sign scene with layered interior reveal
 ├── payphone.html       → Snow-night payphone: Madeline sings
 ├── realtime-chat.html  → SSE live chatroom + like/comment notifications
-├── roundtable.html     → Character roundtable with portraits & voices
+├── roundtable.html     → Character roundtable: SSE debate, idempotent reconnect, buffered typewriter
 ├── write.html          → Markdown editor + AI toolbar (Polish, Generate, Madeline)
 ├── shelf.html          → Dream world (Heart Door, mirror room, Badeline)
 ├── shop.html           → Oshiro Inn (dialogue, strawberry shop)
@@ -953,6 +1017,8 @@ git push origin feature/your-feature-name
 | `diarySaveCount` weird | 1. Check `localStorage` diary count logic |
 | Feather game unresponsive | 1. Browser console for JS errors |
 | Postcard generation fails | 1. Backend running?  2. Check logs for AI API errors |
+| Roundtable replays from start on reconnect | 1. Backend must run the idempotent build (session reuse requires a restart after the fix)  2. Same user + same topic reuses the RUNNING session; a different topic starts a new one |
+| AI errors under fast roundtable turns (429) | 1. `ai.min-interval-ms` throttles globally (raise it for stricter upstream limits)  2. 429 retries with exponential backoff are automatic  3. Circuit breaker fast-fails for 30s after 5 consecutive failures |
 | Prometheus empty | 1. `management.prometheus.metrics.export.enabled=true`  2. `/actuator/prometheus` accessible? |
 
 > See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for an exhaustive guide.
