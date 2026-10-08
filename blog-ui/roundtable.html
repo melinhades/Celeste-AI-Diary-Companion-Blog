@@ -85,13 +85,29 @@
         display:flex; flex-direction:column; gap:8px;
     }
     .sugg-card:hover { border-color:#ffe36d; transform:translateY(-2px); box-shadow:0 6px 18px rgba(0,0,0,.3); }
-    .sugg-card .src-tag {
-        align-self:flex-start; font-size:10px; padding:2px 8px; border-radius:20px;
-        background:rgba(255,227,109,.14); color:#ffe36d; border:1px solid rgba(255,227,109,.3);
+    /* 来源标签：个人素材 → PPT 同款思考小人 + 羊皮纸手写标签；通用话题 → 学霸鸟 */
+    .sugg-from { align-self:flex-start; display:inline-flex; align-items:center; gap:6px; }
+    .sugg-from img { width:auto; object-fit:contain; flex-shrink:0; }
+    .sugg-from .from-txt {
+        font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif;
+        font-weight:700; letter-spacing:.4px; white-space:nowrap;
     }
-    .sugg-card .src-tag.diary { background:rgba(255,107,107,.14); color:#ff8f8f; border-color:rgba(255,107,107,.3); }
-    .sugg-card .src-tag.mine  { background:rgba(95,211,141,.14); color:#8fe6b4; border-color:rgba(95,211,141,.3); }
-    .sugg-card .src-tag.liked { background:rgba(124,183,255,.14); color:#9cc8ff; border-color:rgba(124,183,255,.3); }
+    .sugg-from.person {
+        background:linear-gradient(180deg,#f7efdc 0%,#ecdfbe 100%);
+        border-radius:17px 21px 16px 22px / 21px 15px 22px 16px;
+        padding:2px 13px 2px 0;
+        box-shadow:0 2px 8px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.65);
+        transform:rotate(-1.2deg);
+        transition:transform .2s;
+    }
+    .sugg-from.person img { height:42px; margin:-3px 0 -3px -2px; }
+    .sugg-from.person .from-txt { font-size:13.5px; color:#43301b; }
+    .sugg-card:hover .sugg-from.person { transform:rotate(0deg); }
+    .sugg-from.bird img { height:38px; filter:drop-shadow(0 0 7px rgba(126,108,255,.55)); }
+    .sugg-from.bird .from-txt {
+        font-size:12.5px; color:#c3b2ff;
+        text-shadow:0 0 10px rgba(126,108,255,.45);
+    }
     .sugg-loading { font-size:12px; color:rgba(200,210,255,.4); padding:6px 2px 20px; }
 
     /* ===== 席位卡片（演播厅栅格子元素，margin 由 studio gap 接管） ===== */
@@ -619,11 +635,7 @@
                 </div>
             </div>
 
-            <div class="sugg-head">
-                <img src="Atlases/WaveDashing/Bird Clip Art.png" alt="" style="width:30px;height:30px;object-fit:contain;filter:drop-shadow(0 0 6px rgba(120,90,255,.6));">
-                <span class="sugg-title">推荐话题</span>
-                <span class="sugg-sub">根据你的日记、文章和点赞生成，点卡片直接开会</span>
-                <span style="flex:1"></span>
+            <div class="sugg-head" style="justify-content:flex-end; margin-bottom:10px;">
                 <button class="btn-ghost" id="suggRefresh" style="padding:6px 14px;">换一批</button>
             </div>
             <div id="suggList"><div class="sugg-loading">正在为你挑选话题…</div></div>
@@ -697,7 +709,7 @@
     </div>
 
 <script src="js/api.js?v=20261002"></script>
-<script src="js/text-fx.js?v=20261004a"></script>
+<script src="js/text-fx.js?v=20261005b"></script>
 <script src="js/auth.js?v=20261003b"></script>
 <script src="js/badeline-voice.js?v=20261002b"></script>
 <script src="js/roundtable-voice.js?v=20261004c"></script>
@@ -907,7 +919,14 @@ initHeader();
     }
 
     // ===== 推荐话题：拉取 / 渲染 / 点击直接开会 =====
-    const SRC_TAG = {diary:'日记里的纠结', mine:'我的文章', liked:'点赞的文章', default:'通用话题'};
+    // 个人素材（日记/我的文章/点赞）→ PPT 同款思考小人 Clip Art + 手写标签；
+    // 通用话题 → 学霸鸟 Clip Art + 标签名
+    const SUGG_FROM = {
+        diary:  { kind:'person', label:'日记中的纠结？' },
+        mine:   { kind:'person', label:'我的文章？' },
+        liked:  { kind:'person', label:'点赞的文章？' },
+        default:{ kind:'bird',   label:'通用话题' }
+    };
     let suggLoading = false;
     async function loadSuggestions() {
         if (suggLoading) return;
@@ -923,10 +942,15 @@ initHeader();
         }
         $('suggList').innerHTML = '';
         res.data.forEach(item => {
-            const src = SRC_TAG[item.source] ? item.source : 'default';
+            const from = SUGG_FROM[item.source] || SUGG_FROM.default;
+            const icon = from.kind === 'person'
+                ? 'Atlases/WaveDashing/Guy Clip Art.png'
+                : 'Atlases/WaveDashing/Bird Clip Art.png';
             const card = document.createElement('button');
             card.className = 'sugg-card';
-            card.innerHTML = '<span class="src-tag ' + src + '">' + SRC_TAG[src] + '</span>'
+            card.innerHTML = '<span class="sugg-from ' + from.kind + '">'
+                + '<img src="' + icon + '" alt="" loading="lazy">'
+                + '<span class="from-txt">' + from.label + '</span></span>'
                 + '<span class="sugg-fx">' + renderFxText(autoWrapWave(item.topic)) + '</span>';
             card.addEventListener('click', () => {
                 $('topicInput').value = item.topic;
@@ -1178,13 +1202,25 @@ initHeader();
         if (window.RoundtableBird && !replayMode) RoundtableBird.onEmotion(speakerId, emo);
     }
 
+    // 立即收尾一条仍在打字的发言：剩余缓冲一次性上屏 → 入 transcript → 复位席位/音效/头像。
+    // 若直接丢弃，旧席位会卡死在「发言中」、历史记录丢句，表现为说话顺序显示错乱。
+    function flushSpeech(b) {
+        if (b._timer) { clearTimeout(b._timer); b._timer = null; }
+        if (b._seg != null) { b._shownMarked += b._segMarked; b._seg = null; }
+        if (b._shownRaw.length < b._clean.length) {
+            const rest = b._clean.slice(b._shownRaw.length);
+            b._shownRaw = b._clean;
+            b._shownMarked += (b._meta.role === 'user') ? rest : markRound(rest);
+        }
+        b._ending = true;
+        finishSpeech(b);
+    }
+
     function beginSpeech(ev) {
         replayMode = ev && Object.prototype.hasOwnProperty.call(ev, 'replay') ? !!ev.replay : false;
-        // 上一条还没播完就被新发言顶替：停掉它的节拍器（气泡 DOM 马上会被清掉）
-        if (activeBubble && activeBubble._timer) {
-            clearTimeout(activeBubble._timer);
-            activeBubble._timer = null;
-            activeBubble._dead = true;
+        // 上一条还没播完就被新发言顶替：走 flushSpeech 正常收尾，保证顺序状态与历史完整
+        if (activeBubble && !activeBubble._dead) {
+            flushSpeech(activeBubble);
         }
         const sp = speakers.find(s => s.id === ev.speakerId)
             || {name: EN_NAME[ev.speakerId] || ev.name, color:ev.color || '#9aa7c7', human: ev.role === 'user'};
@@ -1551,6 +1587,10 @@ initHeader();
         es.addEventListener('turn_prepare', e => {
             const d = JSON.parse(e.data);
             if (d.replay) return;   // 快照只回放发言，不回放调度态
+            // 清掉其他席位残留的「准备发言」态（上一位被调度后生成失败跳过时会残留）
+            document.querySelectorAll('#seats .seat.prepare').forEach(el => {
+                if (el.id !== 'seat-' + d.speakerId) setSeatState(el.id.slice(5), 'idle');
+            });
             setSeatState(d.speakerId, 'prepare', d.publicNote || d.note || '');
             // 主持鸟飞到发言者席位上方凑近倾听
             if (window.RoundtableBird) RoundtableBird.focusSeat(d.speakerId);
@@ -1976,6 +2016,6 @@ initHeader();
         })();
     })();
 </script>
-<script src="js/seed.js?v=20261002d"></script>
+<script src="js/seed.js?v=20261005a"></script>
 </body>
 </html>

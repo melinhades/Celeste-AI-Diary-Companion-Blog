@@ -169,15 +169,15 @@
     @keyframes msgIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
     @keyframes riseIn { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:none} }
 
-    .chat-msg.other .av {
+    .chat-msg .av {
         width:32px; height:32px; border-radius:50%; flex-shrink:0;
         display:flex; align-items:center; justify-content:center;
         font-size:13px; font-weight:600; color:#fff;
         text-shadow:0 1px 2px rgba(0,0,0,.35); user-select:none;
     }
-    .chat-msg.other .av.placeholder { visibility:hidden; }
-    .chat-msg.other .av.bird { background:transparent !important; box-shadow:none; padding:0; }
-    .chat-msg.other .av.bird img {
+    .chat-msg .av.placeholder { visibility:hidden; }
+    .chat-msg .av.bird { background:transparent !important; box-shadow:none; padding:0; }
+    .chat-msg .av.bird img {
         width:100%; height:100%; object-fit:cover; border-radius:50%;
         background:#0e1c33; border:1.5px solid rgba(130,190,255,.5);
     }
@@ -186,11 +186,7 @@
         font-size:11px; color:var(--ink-3); margin:0 0 3px 4px;
         display:flex; align-items:center;
     }
-    .chat-msg .nm .bird-tag {
-        font-family:var(--font-en); font-size:8px; letter-spacing:.5px;
-        color:#8fd4ff; border:1px solid rgba(143,212,255,.45);
-        border-radius:4px; padding:1px 5px; margin-left:6px;
-    }
+    .chat-msg.me .nm { justify-content:flex-end; margin:0 4px 3px 0; }
     .chat-msg .bubble {
         padding:9px 15px; border-radius:22px 22px 22px 7px;
         font-size:14.5px; line-height:1.5; color:var(--ink);
@@ -466,6 +462,7 @@
         const statusText = document.getElementById('chatStatusText');
 
         let myUserId = null;
+        let myNickname = null;
         let loadedHistory = false;
         const seenIds = {};   // 简单去重（历史和实时推送可能重叠）
         let lastTs = 0, lastSender = null;   // 时间分组 + 连续消息合并
@@ -557,9 +554,17 @@
             const div = document.createElement('div');
             if (mine) {
                 div.className = 'chat-msg me';
+                const myName = myNickname || '我';
+                const myInitial = (myName[0] || '?').toUpperCase();
+                const myHue = hashHue(myUserId);
+                const myAv = sameChain
+                    ? '<div class="av placeholder"></div>'
+                    : '<div class="av" style="background:hsl(' + myHue + ' 52% 55%)">' + escHtml(myInitial) + '</div>';
+                const myNm = sameChain ? '' : '<div class="nm">' + escHtml(myName) + '</div>';
                 div.innerHTML =
+                    '<div class="body">' + myNm +
                     '<div class="bubble" title="' + escHtml(fmtFull(ts)) + '">' +
-                    renderChatContent(m.content || '') + '</div>';
+                    renderChatContent(m.content || '') + '</div></div>' + myAv;
             } else {
                 div.className = 'chat-msg other';
                 const name = m.name || '匿名';
@@ -571,14 +576,14 @@
                     : (isBird
                         ? '<div class="av bird"><img src="Atlases/WaveDashing/Bird%20Clip%20Art.png" alt="bird"></div>'
                         : '<div class="av" style="background:hsl(' + hue + ' 52% 55%)">' + escHtml(initial) + '</div>');
-                const nm = sameChain ? '' : '<div class="nm">' + escHtml(name) +
-                    (isBird ? '<span class="bird-tag">吉祥物</span>' : '') + '</div>';
+                const nm = sameChain ? '' : '<div class="nm">' + escHtml(name) + '</div>';
                 div.innerHTML = av +
                     '<div class="body">' + nm +
                     '<div class="bubble" title="' + escHtml(fmtFull(ts)) + '">' +
                     renderChatContent(m.content || '') + '</div></div>';
             }
             logEl.appendChild(div);
+            div.querySelectorAll('img.chat-emoji').forEach(img => EmojiAnim.add(img, img.dataset.series, img.dataset.emo));
             if (typingRow && typingRow.parentNode === logEl) logEl.appendChild(typingRow);
             if (stick) scrollToBottom();
         }
@@ -606,11 +611,82 @@
         const emojiPanel = document.getElementById('emojiPanel');
         const emojiGrid = document.getElementById('emojiGrid');
 
+        // ===== 表情包帧动画引擎：循环播放同一情绪的所有帧，做成动图 =====
+        // 帧数与 roundtable-portraits.js 一致（已按实际目录冻结）；
+        // 连续帧用数字 N（00..N-1），断号帧（如 granny creepA/B）用数组显式列出
+        const EMOJI_FRAMES = {
+            madeline: { angry:7, deadpan:9, determined:11, distracted:10, normal:7, panic:5, peaceful:4, sad:7, sadder:7, surprised:7, together:7, upset:7 },
+            ghost:    { angry:7, angryAlt:7, concerned:7, freakA:11, freakB:19, freakC:18, normal:7, sad:5, scoff:14, serious:30, sigh:14, upset:7, worried:7, worriedAlt:7, yell:7 },
+            granny:   { normal:15, laugh:4, mock:6, creepA:[0,4,5,6,7,8], creepB:[0,4,5,6,7,8] },
+            theo:     { normal:10, excited:7, nailedit:4, serious:7, thinking:7, worried:7, wtf:7, yolo:4 },
+            oshiro:   { normal:13, nervous:8, worried:8, serious:8, sidehappy:8, sidesuspicious:8, sideworried:9, drama:6, lostcontrol:6 }
+        };
+        const SERIES_DIR = { mad:'madeline', bade:'ghost', granny:'granny', theo:'theo', oshiro:'oshiro' };
+        const EmojiAnim = (() => {
+            const FRAME_MS = 110;
+            const BASE = 'Atlases/Portraits/';
+            const items = new Map();            // img -> state
+            const blobCache = new Map();        // src -> blobURL（切帧零网络，避免 ERR_ABORTED 闪烁）
+            const loading = new Set();
+            let raf = 0;
+            const pad2 = n => n < 10 ? '0' + n : '' + n;
+            const frameList = (dir, emo) => {
+                const v = EMOJI_FRAMES[dir] && EMOJI_FRAMES[dir][emo];
+                if (v == null) return null;
+                return Array.isArray(v) ? v : Array.from({ length: v }, (_, i) => i);
+            };
+            const frameSrc = (dir, emo, idx) => BASE + dir + '/' + emo + pad2(idx) + '.png';
+            const preload = src => {
+                if (blobCache.has(src) || loading.has(src)) return;
+                loading.add(src);
+                fetch(src).then(r => r.ok ? r.blob() : Promise.reject()).then(b => {
+                    blobCache.set(src, URL.createObjectURL(b));
+                    loading.delete(src);
+                }).catch(() => loading.delete(src));
+            };
+            const warm = (dir, emo) => {
+                const fl = frameList(dir, emo);
+                if (fl) fl.forEach(i => preload(frameSrc(dir, emo, i)));
+            };
+            const show = (img, st) => {
+                const src = frameSrc(st.dir, st.emo, st.frames[st.idx]);
+                const blob = blobCache.get(src);
+                if (blob) img.src = blob;
+                else preload(src);   // 未加载完保持上一帧，不切 src 避免破图
+            };
+            const loop = now => {
+                raf = 0;
+                for (const [img, st] of items) {
+                    if (!img.isConnected) { items.delete(img); continue; }
+                    if (now - st.last >= FRAME_MS) {
+                        st.last = now;
+                        st.idx = (st.idx + 1) % st.frames.length;
+                        show(img, st);
+                    }
+                }
+                if (items.size) raf = requestAnimationFrame(loop);
+            };
+            return {
+                add(img, series, emo) {
+                    const dir = SERIES_DIR[series];
+                    const frames = frameList(dir, emo);
+                    if (!frames) return;
+                    warm(dir, emo);
+                    const st = { dir, emo, frames, idx: 0, last: performance.now() };
+                    items.set(img, st);
+                    show(img, st);          // 若 00 帧已缓存则立刻换 blob URL
+                    if (!raf) raf = requestAnimationFrame(loop);
+                },
+                remove(img) { items.delete(img); }
+            };
+        })();
+
         function renderEmojiGrid() {
             const pack = EMOJI_PACKS[emojiSeries];
             emojiGrid.innerHTML = pack.names.map(n =>
-                `<button type="button" class="emoji-cell" data-mark="[${emojiSeries}:${n}]" title="${n}"><img loading="lazy" src="Atlases/Portraits/${pack.dir}/${n}00.png" alt="${n}" decoding="async"></button>`
+                `<button type="button" class="emoji-cell" data-mark="[${emojiSeries}:${n}]" title="${n}"><img loading="lazy" src="Atlases/Portraits/${pack.dir}/${n}00.png" alt="${n}" data-series="${emojiSeries}" data-emo="${n}" decoding="async"></button>`
             ).join('');
+            emojiGrid.querySelectorAll('img').forEach(img => EmojiAnim.add(img, img.dataset.series, img.dataset.emo));
         }
         renderEmojiGrid();
 
@@ -645,15 +721,18 @@
             s = s.replace(/\[(mad|bade|granny|theo|oshiro):([a-zA-Z]+)\]/g, (m, series, name) => {
                 const pack = EMOJI_PACKS[series];
                 return (pack && pack.names.includes(name))
-                    ? `<img class="chat-emoji" loading="lazy" src="Atlases/Portraits/${pack.dir}/${name}00.png" alt="${series}:${name}" decoding="async">`
+                    ? `<img class="chat-emoji" loading="lazy" src="Atlases/Portraits/${pack.dir}/${name}00.png" alt="${series}:${name}" data-series="${series}" data-emo="${name}" decoding="async">`
                     : m;
             });
             return s;
         }
 
-        // 当前用户 id（区分自己/他人气泡）
+        // 当前用户 id + 昵称（区分自己/他人气泡，渲染自己的头像与名字）
         api('/users/currentUser', 'GET').then(res => {
-            if (res.success && res.data) myUserId = res.data.id;
+            if (res.success && res.data) {
+                myUserId = res.data.id;
+                myNickname = res.data.nickname || res.data.account || '我';
+            }
         });
 
         /* ===== birdAI：群聊吉祥物小鸟 =====
@@ -925,6 +1004,6 @@
         })();
     })();
 </script>
-<script src="js/seed.js?v=20261002d"></script>
+<script src="js/seed.js?v=20261005a"></script>
 </body>
 </html>

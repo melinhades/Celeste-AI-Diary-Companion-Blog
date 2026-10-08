@@ -16,6 +16,11 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import javax.annotation.PostConstruct;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -230,6 +235,97 @@ public class AiClient {
 
     public String chat(List<AiMessage> messages) {
         return chat(messages, false);
+    }
+
+    /**
+     * 流式对话：上游 stream=true，逐 delta 回调 onDelta（边生成边推给客户端）。
+     * 返回完整文本；上游失败返回 null；客户端中途断开则中断流并返回 null（已收到的部分由调用方通过回调处理）。
+     * 流式不做重试（无法重试到中间帧），只保留全局限速和熔断。
+     */
+    public String streamChat(List<AiMessage> messages, java.util.function.Consumer<String> onDelta) {
+        throttle();
+        if (!tryAcquire()) {
+            log.warn("AI 熔断器打开中，流式请求快速失败");
+            return null;
+        }
+        JSONObject body = new JSONObject();
+        body.put("model", model);
+        body.put("messages", JSON.parseArray(JSON.toJSONString(messages)));
+        body.put("temperature", 0.8);
+        body.put("stream", true);
+
+        StringBuilder full = new StringBuilder();
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(baseUrl + "/chat/completions"))
+                    .timeout(Duration.ofMillis(Math.max(readTimeout * 2L, 60000L)))
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", "Bearer " + apiKey)
+                    .POST(HttpRequest.BodyPublishers.ofString(body.toJSONString()))
+                    .build();
+            HttpResponse<java.util.stream.Stream<String>> response = httpClient().send(
+                    request, HttpResponse.BodyHandlers.ofLines());
+            if (response.statusCode() != 200) {
+                log.warn("AI 流式响应异常 status={}", response.statusCode());
+                onFailure();
+                return null;
+            }
+            try (java.util.stream.Stream<String> lines = response.body()) {
+                lines.forEach(line -> {
+                    if (!line.startsWith("data:")) return;
+                    String payload = line.substring(5).trim();
+                    if (payload.isEmpty() || "[DONE]".equals(payload)) return;
+                    try {
+                        JSONObject chunk = JSON.parseObject(payload);
+                        JSONArray choices = chunk.getJSONArray("choices");
+                        if (choices == null || choices.isEmpty()) return;
+                        JSONObject delta = choices.getJSONObject(0).getJSONObject("delta");
+                        String piece = delta == null ? null : delta.getString("content");
+                        if (piece == null || piece.isEmpty()) return;
+                        full.append(piece);
+                        if (onDelta != null) {
+                            try {
+                                onDelta.accept(piece);
+                            } catch (Exception down) {
+                                // 下游写不进（客户端断开等）：中断整个流
+                                throw new RuntimeException(down);
+                            }
+                        }
+                    } catch (RuntimeException down) {
+                        throw down;
+                    } catch (Exception parse) {
+                        log.debug("忽略无法解析的流片段: {}", payload);
+                    }
+                });
+            }
+            onSuccess();
+            return full.toString();
+        } catch (Exception e) {
+            if (full.length() > 0) {
+                // 已收到部分内容后中断：多半是客户端断开，不算 AI 故障，不计熔断
+                log.warn("AI 流式传输中断（已收到 {} 字）: {}", full.length(), e.getMessage());
+                return null;
+            }
+            log.warn("AI 流式调用失败: {}", e.getMessage());
+            onFailure();
+            return null;
+        }
+    }
+
+    /** java.net.http.HttpClient 懒加载：RestTemplate 不支持流式响应，这里专用 */
+    private volatile java.net.http.HttpClient httpClient;
+
+    private java.net.http.HttpClient httpClient() {
+        if (httpClient == null) {
+            synchronized (this) {
+                if (httpClient == null) {
+                    httpClient = HttpClient.newBuilder()
+                            .connectTimeout(Duration.ofMillis(connectTimeout))
+                            .build();
+                }
+            }
+        }
+        return httpClient;
     }
 
     /**

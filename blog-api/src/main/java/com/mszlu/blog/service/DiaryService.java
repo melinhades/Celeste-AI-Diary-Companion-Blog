@@ -26,6 +26,9 @@ public interface DiaryService {
     /** 日记伴侣：根据草稿片段获得 Madeline 的反馈 */
     Result companion(String draftSnippet);
 
+    /** 日记伴侣流式版：Madeline 的反馈边生成边推给客户端（文本增量），收完才落库 */
+    void companionStream(String draftSnippet, javax.servlet.http.HttpServletResponse response);
+
     /** 获取日记详情 */
     Result getById(String diaryId);
 

@@ -185,7 +185,7 @@ A quiet snow-night scene under glowing pixel stars. Click the payphone: the rece
   <img src="docs/screenshots/realtime-chat.png" alt="Realtime Chatroom" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
 </p>
 
-A Server-Sent-Events powered live chatroom with self/other message bubbles, an online-presence badge, and a pixel-sticker emoji panel. The right-hand **notification column** gathers likes and comments on your writing in real time.
+A Server-Sent-Events (SSE) live chatroom — left rail switches between **山间聊天** (group chat) and **notify** (like/comment feed). Self/other message bubbles, a live **online-presence badge**, a typing indicator, and a pixel-sticker emoji panel. Messages are broadcast to all connected clients in real time; the notification column surfaces likes and comments on your writing as they happen.
 
 ### 🐦 AI Roundtable — *Five Celeste souls at the table, debating until consensus.*
 
@@ -352,9 +352,10 @@ blog/
 │       │   │   ├── MemoryController.java     # RAG memory
 │       │   │   ├── NotificationController.java # Notifications
 │       │   │   ├── PersonaController.java    # AI personas
-│       │   │   ├── ProactiveController.java  # Proactive AI
-│       │   │   ├── RegisterController.java   # Registration
-│       │   │   ├── RoundtableController.java  # AI roundtable SSE (stream/observe/interject/stop)
+│       │   │   ├── ProactiveController.java    # Proactive AI
+│       │   │   ├── RealtimeChatController.java # SSE live chatroom (stream/send/history/typing)
+│       │   │   ├── RegisterController.java     # Registration
+│       │   │   ├── RoundtableController.java   # AI roundtable SSE (stream/observe/interject/stop)
 │       │   │   ├── TagsController.java       # Tags
 │       │   │   ├── UploadController.java     # File upload (magic-number validated)
 │       │   │   └── UserController.java       # User profile
@@ -403,7 +404,7 @@ blog/
     ├── berryos.html                     # BerryOS retro desktop + monthly PPT player
     ├── internet_cafe.html               # Internet Cafe scene: neon animation & interior reveal
     ├── payphone.html                    # Snow-night payphone: Madeline sings
-    ├── realtime-chat.html               # SSE live chatroom + notification column
+    ├── messages.html                    # SSE live chatroom + like/comment notifications
     ├── roundtable.html                  # Character roundtable with voices
     ├── write.html                       # Writing editor (Markdown + AI tools)
     ├── shelf.html                       # Dream world: Heart Door & Badeline
@@ -694,6 +695,28 @@ A five-character multi-agent debate over SSE, in `service/ai/roundtable/`.
 
 **Frontend** (`roundtable.html`): manual controlled SSE reconnect (up to 4 attempts with backoff, "网络抖动，正在回到同一场讨论") instead of native EventSource retries; a buffered sentence-aware typewriter with TextFx animations; interject input pinned under the stage; observer → participant reattachment for the owner; double-click stage for fullscreen.
 
+### 7. Realtime Chatroom
+
+A human-to-human live chat over SSE (no AI) — `RealtimeChatController`, base path `/realtime-chat`.
+
+**Endpoints:**
+
+| Method & Path | Role |
+|---|---|
+| GET `stream?token=xxx` | SSE subscription. Token travels in the query string (`EventSource` cannot set headers); unauthenticated returns 401 JSON. Emits `chat`, `presence`, and `typing` events; a `: ping` comment frame every 25s keeps proxies from dropping the connection |
+| POST `send` | Send a message (`{content}`, max 500 chars). Stored in a bounded in-memory ring (100 messages, restart-cleared) and broadcast to every connected client |
+| GET `history` | Last 50 messages (old → new) |
+| POST `typing` | Broadcast a "X is typing…" hint (debounced client-side, not persisted) |
+
+**Design notes:**
+
+- **In-memory only** — history is kept in a `CopyOnWriteArrayList` capped at 100 entries; there is no DB persistence, so a restart wipes the transcript (acceptable for a casual mountain chat)
+- **Presence** — on connect each client immediately receives the current online count; joins/leaves rebroadcast it via a `presence` event
+- **Heartbeat & cleanup** — each emitter gets its own scheduled 25s heartbeat; `onCompletion/onTimeout/onError` all route through `removeClient`, which cancels the heartbeat and rebroadcasts presence after a 100ms coalescing delay
+- **30-min SSE timeout** — browsers auto-reconnect on `EventSource` error; the token is re-validated on each reconnect
+
+**Frontend** (`messages.html`): a two-pane layout — left rail toggles between **山间聊天** (chat) and **notify** (likes/comments feed); self/other bubbles, an online-count badge, a typing indicator, and a pixel-sticker emoji picker pulled from `Atlases/Portraits/`.
+
 ---
 
 ## 📚 Technical Deep-Dive
@@ -721,7 +744,7 @@ blog-ui/
 ├── berryos.html        → BerryOS retro desktop + monthly PPT player
 ├── internet_cafe.html  → Neon-sign scene with layered interior reveal
 ├── payphone.html       → Snow-night payphone: Madeline sings
-├── realtime-chat.html  → SSE live chatroom + like/comment notifications
+├── messages.html       → SSE live chatroom (group chat + notify column)
 ├── roundtable.html     → Character roundtable: SSE debate, idempotent reconnect, buffered typewriter
 ├── write.html          → Markdown editor + AI toolbar (Polish, Generate, Madeline)
 ├── shelf.html          → Dream world (Heart Door, mirror room, Badeline)

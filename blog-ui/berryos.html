@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -63,6 +63,8 @@
   }
   .deskicon .di-img { position: relative; width: var(--w); }
   .deskicon .di-img img { display: block; width: 100%; }
+  /* payphone 原图仅 45×64，放大后需保持像素边缘清晰 */
+  #icoSing .di-img img { image-rendering: pixelated; }
 
   .di-label {
     margin-top: 1.42cqw; /* 图标底到文字 36px @2540（实测） */
@@ -332,8 +334,14 @@
 
     <div class="deskicon" id="icoPpt" data-player="monthly"
          style="--x:31.236%;--y:40.38%;--w:6.672cqw;">
-      <div class="di-img"><img src="Atlases/WaveDashing/desktop/wavedashing_icon.png" alt="月度总结"></div>
+      <div class="di-img"><img src="Atlases/WaveDashing/desktop/wavedashing_icon.png" alt="凌波微步与我"></div>
       <span class="di-label" id="lblPpt"></span>
+    </div>
+
+    <div class="deskicon" id="icoSing" data-href="sing-test.html"
+         style="--x:45%;--y:40.38%;--w:4.69cqw;">
+      <div class="di-img"><img src="Atlases/Gameplay/scenery/payphone.png" alt="玛德琳唱歌"></div>
+      <span class="di-label">玛德琳唱歌</span>
     </div>
 
     <img id="icoRecycle" class="ico" src="Atlases/WaveDashing/desktop/recyclebin_icon.png" alt="回收站">
@@ -380,11 +388,9 @@
       playStartup();
     })();
 
-    // 月度总结标签：按当前日期生成，如 2026年9月 -> “26年9月总结.ppt”
+    // PPT 桌面文件名（固定）
     (function () {
-      var d = new Date();
-      document.getElementById('lblPpt').textContent =
-        String(d.getFullYear()).slice(2) + '年' + (d.getMonth() + 1) + '月总结.ppt';
+      document.getElementById('lblPpt').textContent = '凌波微步与我.ppt';
     })();
 
     // 任务栏时钟：实时同步，格式 5:09 PM（分钟变化时刷新）
@@ -497,9 +503,9 @@
         { kind: 'img', cls: 'anim-rise', d: 10.5, x: 63.90, y: 38.47, w: 35.21, src: 'Atlases/WaveDashing/Guy Clip Art.png' }
       ]},
       { bg: '#D9EAD3', tr: 'dissolve', dur: 10000, items: [
-        { cls: 't-head-en white', chars: true, stream: true, d: .5, x: 5.36, y: 11.47, w: 90, t: '介绍…凌波微步.ppt!!' },
+        { cls: 't-head-en white', chars: true, stream: true, d: .5, x: 5.36, y: 11.47, w: 90, t: '介绍…凌波微步与我.ppt!!' },
         { kind: 'ph', cls: 'anim-rise', d: 2.5, x: 29.63, y: 21.27, w: 40.76, ratio: 10.87/6.11, t: '本月配图位' },
-        { cls: 't-body anim-rise', d: 3.5, x: 34.43, y: 62.47, w: 33, t: '凌波微步.ppt 可以让你学习凌波微步，而且教程很详细！' },
+        { cls: 't-body anim-rise', d: 3.5, x: 34.43, y: 62.47, w: 33, t: '凌波微步与我.ppt 可以让你学习凌波微步，而且教程很详细！' },
         { cls: 't-big anim-whoosh', chars: true, center: true, d: 5.0, x: 15, y: 73.13, w: 70, t: '这很"简单"！' }
       ]},
       { bg: '#F4CCCC', tr: 'fade', dur: 10000, items: [
@@ -507,7 +513,7 @@
         { kind: 'ph', cls: 'anim-rise', d: .9, x: 29.29, y: 20.6, w: 41.4, ratio: 11.04/6.21, t: '本月配图位' },
         { cls: 't-body', chars: true, stream: true, d: 1.8, x: 7.58, y: 63.27, w: 27, t: '- 前往第九章' },
         { cls: 't-body', chars: true, stream: true, d: 3.5, x: 7.58, y: 70.5, w: 27, t: '- 来到视界线开头的这个场景' },
-        { cls: 't-body', chars: true, stream: true, d: 5.2, x: 7.58, y: 77.8, w: 27, t: '- 走到房间里观看凌波微步.ppt' },
+        { cls: 't-body', chars: true, stream: true, d: 5.2, x: 7.58, y: 77.8, w: 27, t: '- 走到房间里观看凌波微步与我.ppt' },
         { cls: 't-body', chars: true, stream: true, d: 6.9, x: 7.58, y: 85.1, w: 27, t: '- 学会了！（走你）' }
       ]},
       { bg: '#FFF2CC', tr: 'spin', dur: 8500, items: [
@@ -518,7 +524,7 @@
         { cls: 't-warn anim-rise', d: 1.9, x: 60.5, y: 63.6, w: 24, t: '如果你过不去前面的心门<br>请自行攒满15个心 或者学习跳过心门教程。' }
       ]},
       { bg: '#DBD8ED', tr: 'cube', dur: null, items: [
-        { cls: 't-end', chars: true, d: .25, x: 2.5, y: 10.4, w: 95, t: '凌波微步.ppt, 快乐的ppt!' },
+        { cls: 't-end', chars: true, d: .25, x: 2.5, y: 10.4, w: 95, t: '凌波微步与我.ppt, 快乐的ppt!' },
         { kind: 'img', cls: 'anim-zoom', d: 1.4, x: 30, y: 25, w: 40, src: 'Atlases/WaveDashing/Bird Clip Art.png' }
       ]}
     ];
@@ -842,6 +848,6 @@
       tryAuto();
     })();
   </script>
-<script src="js/seed.js?v=20261002d"></script>
+<script src="js/seed.js?v=20261005a"></script>
 </body>
 </html>

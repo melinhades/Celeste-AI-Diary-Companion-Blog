@@ -36,6 +36,13 @@ public class DiaryServiceImpl implements DiaryService {
     private static final int MAX_CONTENT_LENGTH = 5000;
     /** 列表分页单页最大条数，防止前端传超大 pageSize 拖垮查询 */
     private static final int MAX_PAGE_SIZE = 50;
+    /**
+     * 流式反馈行首情绪标记容错正则：
+     * 标准写法 [emotion:不安]，也兜住模型偶尔写错的 [不安] / [emotion：不安]。
+     * 只认伴侣专用的 7 种白名单情绪，避免误剥正文里的方括号内容。
+     */
+    private static final java.util.regex.Pattern STREAM_EMOTION_PREFIX = java.util.regex.Pattern.compile(
+            "^\\s*\\[\\s*(?:emotion\\s*[:：]\\s*)?(默认|不安|惊讶|怨恨|不开心|可爱|无语)\\s*\\]\\s*");
 
     @Autowired
     private DiaryMapper diaryMapper;
@@ -419,6 +426,190 @@ public class DiaryServiceImpl implements DiaryService {
         result.put("emotion", emotion);
         result.put("userEmotion", scanEmotion(draftSnippet));
         return Result.success(result);
+    }
+
+    /**
+     * 日记伴侣流式版：SSE（text/event-stream）边生成边推。
+     * 与 companion() 同一套 prompt 组装（人设+记忆+情绪画像），走上游 stream=true。
+     * 服务端剥离行首 [emotion:xxx] 标记，以独立 emotion 事件下发，正文走 delta 事件，
+     * 正常收完发 done 事件并落库 + 记忆维护，客户端断开则丢弃。
+     * 事件帧：emotion / delta / done；校验失败或上游空响应用 HTTP 状态码（400/503 JSON），
+     * 此时响应尚未提交，前端 fetch 可直接据 resp.ok 走整段回退。
+     */
+    @Override
+    public void companionStream(String draftSnippet, javax.servlet.http.HttpServletResponse response) {
+        SysUser user = UserThreadLocal.get();
+        if (user == null || draftSnippet == null || draftSnippet.trim().isEmpty()) {
+            try {
+                response.setStatus(400);
+                response.setContentType("application/json;charset=UTF-8");
+                response.getWriter().write("{\"success\":false,\"code\":400,\"msg\":\"草稿为空\"}");
+            } catch (Exception ignored) {
+            }
+            return;
+        }
+        String userId = user.getId();
+        String trimmedDraft = draftSnippet.trim();
+        // 不足 4 个字的碎片直接沉默，不调用 AI
+        if (trimmedDraft.length() < 4) {
+            response.setContentType("text/event-stream;charset=UTF-8");
+            response.setHeader("Cache-Control", "no-cache");
+            response.setHeader("X-Accel-Buffering", "no");
+            try {
+                sseEvent(response, "silent", "");
+                sseEvent(response, "done", "{\"silent\":true}");
+            } catch (Exception ignored) {
+            }
+            return;
+        }
+        Persona persona = personaService.getActive(userId);
+        List<Memory> memories = memoryService.getRelevant(userId, draftSnippet);
+        String emotionNote = recentEmotionNote(userId);
+        String prompt = PromptBuilder.diaryCompanion(persona, memories, draftSnippet, emotionNote, true);
+
+        response.setContentType("text/event-stream;charset=UTF-8");
+        response.setHeader("Cache-Control", "no-cache");
+        response.setHeader("X-Accel-Buffering", "no");
+
+        StringBuilder full = new StringBuilder();
+        StringBuilder headBuf = new StringBuilder(); // 情绪标记尚未确认前的缓冲（可能被网络分块切开）
+        boolean[] emotionEmitted = {false};
+        boolean[] silent = {false}; // 模型判断此刻不该开口：整段输出为 [沉默]
+        String[] emotion = {"默认"};
+        boolean[] aborted = {false};
+        String aiText = null;
+        try {
+            aiText = aiClient.streamChat(
+                    java.util.Collections.singletonList(new AiMessage("system", prompt)),
+                    delta -> {
+                        full.append(delta);
+                        if (silent[0]) return; // 已判定沉默，后续增量全部丢弃
+                        try {
+                            if (!emotionEmitted[0]) {
+                                headBuf.append(delta);
+                                String buf = headBuf.toString();
+                                if (buf.startsWith("[")) {
+                                    int close = buf.indexOf(']');
+                                    if (close != -1) {
+                                        if (buf.startsWith("[沉默]")) {
+                                            // 她选择不说话：发 silent 事件，正文不再下发
+                                            silent[0] = true;
+                                            sseEvent(response, "silent", "");
+                                            emotionEmitted[0] = true;
+                                            headBuf.setLength(0);
+                                            return;
+                                        }
+                                        // 情绪标记已收齐，尝试解析；非法则整段当正文
+                                        java.util.regex.Matcher em = STREAM_EMOTION_PREFIX.matcher(buf);
+                                        if (em.find()) {
+                                            emotion[0] = normalizeHerEmotion(em.group(1));
+                                            sseEvent(response, "emotion", emotion[0]);
+                                            String rest = buf.substring(em.end());
+                                            if (!rest.isEmpty()) {
+                                                sseEvent(response, "delta", rest);
+                                            }
+                                        } else {
+                                            sseEvent(response, "emotion", emotion[0]);
+                                            sseEvent(response, "delta", buf);
+                                        }
+                                        emotionEmitted[0] = true;
+                                        headBuf.setLength(0);
+                                    }
+                                    // 还没收到 ]，继续缓冲下一帧
+                                } else {
+                                    // 不以 [ 开头，模型没按约定加情绪标记
+                                    sseEvent(response, "emotion", emotion[0]);
+                                    sseEvent(response, "delta", buf);
+                                    emotionEmitted[0] = true;
+                                    headBuf.setLength(0);
+                                }
+                            } else {
+                                sseEvent(response, "delta", delta);
+                            }
+                        } catch (java.io.IOException io) {
+                            aborted[0] = true;
+                            throw new RuntimeException(io);
+                        }
+                    });
+        } catch (Exception e) {
+            log.warn("日记伴侣流式反馈中断 userId={}", userId, e);
+        }
+        // 客户端主动断开：不落库、不报错
+        if (aborted[0]) return;
+
+        // 她判断此刻不该开口：发 done(silent) 后直接结束，不落库、不维护记忆
+        if (silent[0]) {
+            try {
+                sseEvent(response, "done", "{\"silent\":true}");
+            } catch (java.io.IOException ignored) {
+            }
+            return;
+        }
+
+        // 流结束但情绪事件还没发（模型只吐了半截标记）：把缓冲当正文兜底发出去
+        if (!emotionEmitted[0] && headBuf.length() > 0) {
+            try {
+                sseEvent(response, "emotion", emotion[0]);
+                sseEvent(response, "delta", headBuf.toString());
+            } catch (java.io.IOException ignored) {
+            }
+            emotionEmitted[0] = true;
+        }
+
+        // 一个增量都没推给前端（熔断/限流/上游空响应）：此时尚未写任何帧，响应未提交，
+        // reset 后明确回 503 JSON，前端据 resp.ok 走整段回退
+        if (aiText == null || full.length() == 0) {
+            response.reset();
+            response.setStatus(503);
+            response.setContentType("application/json;charset=UTF-8");
+            try {
+                response.getWriter().write("{\"success\":false,\"code\":503,\"msg\":\"AI 暂时开小差，请稍后再试\"}");
+            } catch (Exception ignored) {
+            }
+            return;
+        }
+
+        String text = full.toString().trim();
+        java.util.regex.Matcher em = STREAM_EMOTION_PREFIX.matcher(text);
+        if (em.find()) {
+            emotion[0] = normalizeHerEmotion(em.group(1));
+            text = text.substring(em.end()).trim();
+        }
+        if (text.isEmpty()) return;
+
+        DiaryCompanion companion = new DiaryCompanion();
+        companion.setUserId(userId);
+        companion.setSuggestion(text);
+        companion.setCreateDate(System.currentTimeMillis());
+        diaryCompanionMapper.insert(companion);
+        memoryService.markMentioned(memories);
+        memoryService.extractAsync(userId, draftSnippet, text);
+
+        // 收尾事件（客户端已断开则忽略）
+        try {
+            sseEvent(response, "done",
+                    "{\"emotion\":\"" + emotion[0] + "\",\"len\":" + text.length() + "}");
+        } catch (java.io.IOException ignored) {
+        }
+    }
+
+    /** 写一个 SSE 事件帧：event: <name>\n[data: ...]\n\n。多行 data 自动按 \n 拆分，兼容 \r\n。 */
+    private void sseEvent(javax.servlet.http.HttpServletResponse response, String event, String data)
+            throws java.io.IOException {
+        java.io.PrintWriter w = response.getWriter();
+        w.write("event: ");
+        w.write(event);
+        w.write('\n');
+        if (data != null) {
+            String normalized = data.replace("\r\n", "\n").replace('\r', '\n');
+            for (String line : normalized.split("\n", -1)) {
+                w.write("data: ");
+                w.write(line);
+                w.write('\n');
+            }
+        }
+        w.write('\n');
+        w.flush();
     }
     private String scanEmotion(String draft) {
         String[][] table = {

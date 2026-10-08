@@ -241,13 +241,23 @@
         var origColor = cs.color;
         var origCaret = cs.caretColor;
 
-        /* 镜像与输入框完全对齐 */
+        /* 镜像与输入框完全对齐。
+           注意必须用 offset*（布局量，不受祖先 CSS transform 影响），
+           不能用 getBoundingClientRect：翻页时书页带 scale(.96) 动画，
+           动画中途取值会把缩放后的尺寸/偏移写死进镜像层，动画结束后错位（重影、光标偏一个字）。*/
         function syncBox() {
-            var box = input.getBoundingClientRect(), pb = parent.getBoundingClientRect();
-            mirror.style.left = (box.left - pb.left) + 'px';
-            mirror.style.top = (box.top - pb.top) + 'px';
-            mirror.style.width = box.width + 'px';
-            mirror.style.height = box.height + 'px';
+            if (mirror.offsetParent === input.offsetParent) {
+                mirror.style.left = input.offsetLeft + 'px';
+                mirror.style.top = input.offsetTop + 'px';
+                mirror.style.width = input.offsetWidth + 'px';
+                mirror.style.height = input.offsetHeight + 'px';
+            } else {
+                var box0 = input.getBoundingClientRect(), pb0 = parent.getBoundingClientRect();
+                mirror.style.left = (box0.left - pb0.left) + 'px';
+                mirror.style.top = (box0.top - pb0.top) + 'px';
+                mirror.style.width = box0.width + 'px';
+                mirror.style.height = box0.height + 'px';
+            }
             var c = getComputedStyle(input);
             mirror.style.font = c.font;
             mirror.style.letterSpacing = c.letterSpacing;
@@ -260,6 +270,9 @@
         }
 
         function renderMirror() {
+            // textarea 用 % 定位，书页图片加载/翻页后其像素尺寸会变；mirror 是内联 px，
+            // 每次渲染前先重新对齐，避免与真实文字产生水平错位（重影/光标偏一个字）
+            syncBox();
             var val = input.value;
             mirror.style.color = origColor;
             mirror.innerHTML = render(autoWrapWave(val, wordList))
@@ -291,12 +304,16 @@
         if (window.ResizeObserver) {
             new ResizeObserver(function () { syncBox(); renderMirror(); }).observe(input);
         }
+        /* 网络字体加载完成后字宽/行高才定型，需要再对齐一次 */
+        if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(function () { syncBox(); renderMirror(); });
+        }
 
         syncBox();
         applyTransparent();
         renderMirror();
 
-        /* 暴露刷新（外部赋值 value 后可手动调用） */
+        /* 暴露刷新（外部赋值 value 后、或翻页后可手动调用） */
         input.__tfxRefresh = function () { syncBox(); renderMirror(); };
     }
 

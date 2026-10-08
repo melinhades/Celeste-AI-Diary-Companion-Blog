@@ -318,6 +318,11 @@ public class PromptBuilder {
 
     /** 日记伴侣提示：根据人设、相关记忆和日记草稿片段，生成Madeline的旁白和情绪判断 */
     public static String diaryCompanion(Persona persona, List<Memory> memories, String draftSnippet, String emotionNote) {
+        return diaryCompanion(persona, memories, draftSnippet, emotionNote, false);
+    }
+
+    /** 流式版：streamMode=true 时输出改为纯文本 + 首行 [emotion:xxx] 标记（JSON 没法边生成边播） */
+    public static String diaryCompanion(Persona persona, List<Memory> memories, String draftSnippet, String emotionNote, boolean streamMode) {
         StringBuilder sb = new StringBuilder();
         sb.append(madelineCore()).append("\n");
 
@@ -354,11 +359,19 @@ public class PromptBuilder {
           .append("- 慢慢陪着往下想，绝不灌鸡汤、不喊口号、不说「一切都会好的」\n")
           .append("- 可以留半句不说完，可以停顿，可以只说一个「嗯」——留白也是一种回应\n")
           .append("- 关键：每次都必须根据她这次写的内容重新组织语言，严禁复用固定句子或套路开场\n\n")
-          .append(sharedSpeakingRules()).append("\n")
-          .append("【输出】\n")
-          .append("- reply 里只放纯对话，禁止出现（括号）里的动作、神态、旁白描写，不要前缀、不要格式标记\n")
-          .append("- 永远留在角色里：你就是 Madeline\n\n");
-        sb.append(EMOTION_TOOL);
+          .append(sharedSpeakingRules()).append("\n");
+        if (streamMode) {
+            sb.append("【输出格式（流式）】\n")
+              .append("- 第一行必须且只能是情绪标记，写法严格为 [emotion:情绪]（括号里必须有 emotion: 前缀，禁止写成 [不安] 这种省略形式）\n")
+              .append("- 情绪七选一：默认/不安/惊讶/怨恨/不开心/可爱/无语。正确示例：[emotion:不安]\n")
+              .append("- 第一行写完情绪标记后，紧跟正文；正文 1~2 句纯对话，禁止（括号）里的动作、神态、旁白描写，不要引号、不要任何其他格式标记\n")
+              .append("- 永远留在角色里：你就是 Madeline");
+        } else {
+            sb.append("【输出】\n")
+              .append("- reply 里只放纯对话，禁止出现（括号）里的动作、神态、旁白描写，不要前缀、不要格式标记\n")
+              .append("- 永远留在角色里：你就是 Madeline\n\n");
+            sb.append(EMOTION_TOOL);
+        }
 
         return sb.toString();
     }

@@ -28,6 +28,17 @@ public class DiaryController {
         return diaryService.companion(param.getDraft());
     }
 
+    /**
+     * 日记伴侣流式版：SSE（text/event-stream）边生成边推。
+     * 事件帧：emotion（情绪）/ delta（文本增量）/ done（结束，带元信息）/ error（异常）。
+     * 用 POST + body 传草稿，避免长草稿进 URL 被截断或进 access log。
+     */
+    @PostMapping(value = "companion/stream")
+    public void companionStream(@RequestBody CompanionParam param,
+                                javax.servlet.http.HttpServletResponse response) {
+        diaryService.companionStream(param.getDraft(), response);
+    }
+
     /** 获取日记列表（真分页）；type=day 普通日记 / type=dream 梦境日记，不传则全部 */
     @GetMapping("list")
     public Result list(@RequestParam(defaultValue = "1") int page,

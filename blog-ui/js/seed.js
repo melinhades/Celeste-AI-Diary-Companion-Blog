@@ -484,7 +484,6 @@
       if (typeof window.addBerries === 'function') {
         try { window.addBerries(1); } catch (e) {}
       }
-      seedToast('上次的草莓已补发 +1');
       saveState({ lastRefresh: Date.now(), seeds: [], credited: false });
       s = loadState();
     }

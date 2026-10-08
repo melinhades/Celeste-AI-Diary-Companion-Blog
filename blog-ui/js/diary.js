@@ -7,8 +7,7 @@
                 { kind: 'area', id: 'contentInput', x: .12, y: .225, w: .76, h: .56, ph: '从小步开始。今天发生了什么…' } ] },
         { src: 'Atlases/Journal/page.png', fields: [
                 { kind: 'area', x: .12, y: .13, w: .76, h: .26, ph: '把大目标拆成能做到的小步…' },
-                { kind: 'area', x: .12, y: .44, w: .76, h: .18, ph: '想起来会笑的回忆…' },
-                { kind: 'grid', x: .12, y: .67, w: .76, h: .2, cols: 14, rows: 4 } ] },
+                { kind: 'area', x: .12, y: .44, w: .76, h: .18, ph: '想起来会笑的回忆…' } ] },
         { src: 'Atlases/Journal/page.png', fields: [
                 { kind: 'area', x: .12, y: .13, w: .76, h: .26, ph: '想对自己慢慢说的话…' },
                 { kind: 'area', x: .12, y: .44, w: .76, h: .18, ph: '想谢的人、想谢的小事、想谢的自己…' },
@@ -206,6 +205,13 @@
             oldEl.style.position = ''; oldEl.style.opacity = '';
             oldEl.style.transform = ''; oldEl.style.zIndex = '';
             newEl.style.position = ''; newEl.style.zIndex = '';
+            // 翻页动画结束、布局复位后，重对齐新页文本框的 TextFx 镜像层
+            // （textarea 用 % 定位，隐藏期间镜像 px 值是旧的，不刷新会重影、光标错位）
+            requestAnimationFrame(() => {
+                newEl.querySelectorAll('textarea,input').forEach(n => {
+                    if (typeof n.__tfxRefresh === 'function') n.__tfxRefresh();
+                });
+            });
             bookBusy = false;
         }, 580);
     }
@@ -454,6 +460,96 @@
         gameDialogToken++;
         closeGameDialog();
     };
+
+    /**
+     * 流式说话控制器：AI 的 delta 一到就 append 进缓冲，打字机循环持续消费，
+     * 不等句号/逗号就开始逐字显示，实现真正的实时感。
+     * 返回 { append(text), finish(), done }；append 可在打字过程中随时追加。
+     */
+    function startStreamingMadeline(emotion) {
+        let pending = '';      // 待打字的字符缓冲（AI 原始文本）
+        let finished = false;  // 流是否已结束（不再有新 delta）
+        let typedCount = 0;    // 已打出的字符数
+        let resolveDone;
+        const done = new Promise(r => resolveDone = r);
+
+        msgQueue = msgQueue.then(async () => {
+            await waitUserPause(6000);
+            const myToken = gameDialogToken;
+            const useGameDialog = !chatOpen;
+            const gameDialogEl = document.getElementById('gameDialog');
+            if (useGameDialog) {
+                clearTimeout(gameDialogHideTimer);
+                openGameDialog(emotion);
+            }
+            const { bubble: histBubble } = newMadelineRow(emotion);
+            if (window.TextFx) { TextFx.set(histBubble, ''); histBubble.classList.add('tfx-typing'); }
+            else histBubble.textContent = '';
+            if (useGameDialog) {
+                if (window.TextFx) { TextFx.set(gameDialogText, ''); gameDialogEl.classList.add('tfx-typing'); }
+                else gameDialogText.textContent = '';
+            }
+
+            let speakCount = 0, sentenceBuf = '';
+            const aiLocked = !!(emotion && emotion !== '默认');
+            let voiceEmotion = aiLocked ? emotion : '默认';
+
+            // 打字机主循环：流未结束 或 缓冲还有字没打完 就继续
+            while (!finished || typedCount < pending.length) {
+                if (useGameDialog && myToken !== gameDialogToken) break; // 用户关了对话框：立即停
+                if (typedCount < pending.length) {
+                    const ch = pending[typedCount];
+                    typedCount++;
+                    const shown = pending.slice(0, typedCount);
+                    const marked = window.TextFx ? TextFx.autoMark(shown) : shown;
+                    if (window.TextFx) TextFx.set(histBubble, marked);
+                    else histBubble.textContent = shown;
+                    if (useGameDialog) {
+                        if (window.TextFx) TextFx.set(gameDialogText, marked);
+                        else gameDialogText.textContent = shown;
+                    }
+                    // 音效 + 句内情绪推断（复用 doAddMadelineMessage 的规则）
+                    if (/[。！？!?]/.test(ch)) {
+                        if (!aiLocked) {
+                            const inferred = inferSentenceEmotion(sentenceBuf);
+                            voiceEmotion = (inferred !== '默认') ? inferred : nextDefaultVoice();
+                        }
+                        sentenceBuf = '';
+                    } else if (!/[\s…，,、；;：:（）()*]/.test(ch)) {
+                        sentenceBuf += ch;
+                        speakCount++;
+                        if (speakCount % 3 === 1) playSpeakSound(voiceEmotion);
+                    }
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                    await sleep(45 + Math.random() * 20);
+                } else {
+                    await sleep(15); // 缓冲已打完，等下一帧 delta
+                }
+            }
+
+            // 收尾：补全完整文本、去掉打字态
+            const fullMarked = window.TextFx ? TextFx.autoMark(pending) : pending;
+            if (window.TextFx) { TextFx.set(histBubble, fullMarked); histBubble.classList.remove('tfx-typing'); }
+            else histBubble.textContent = pending;
+            if (useGameDialog) {
+                if (window.TextFx) { TextFx.set(gameDialogText, fullMarked); gameDialogEl.classList.remove('tfx-typing'); }
+                else gameDialogText.textContent = pending;
+            }
+            pmReactToEmotion(voiceEmotion);
+            if (useGameDialog && myToken === gameDialogToken) {
+                stopPortraitAnim();
+                scheduleGameDialogHide();
+            }
+            resolveDone();
+        }).catch(e => { console.warn('流式说话失败:', e); resolveDone(); });
+
+        return {
+            append(text) { if (text) pending += text; },
+            finish() { finished = true; },
+            done
+        };
+    }
+
     let lastUserInputTime = 0;
     async function waitUserPause(maxWait) {
         const start = Date.now();
@@ -1085,9 +1181,8 @@ function inferReplyEmotion(text) {
 
     // ===== 配置常量 =====
     const REALTIME_CONFIG = {
-        MIN_CHARS_FOR_AI: 8,
-        MIN_NEW_CHARS_FOR_AI: 30,
-        MIN_NEW_CHARS_FOR_QUICK: 18,
+        JUDGE_DEBOUNCE_MS: 700,
+        SILENCE_COOLDOWN: 8000,
         SENTENCE_ENDERS: ['。', '！', '？', '…', '...', '!', '?', '\n'],
         EMOTION_WORDS: {
             '不安': ['担心','焦虑','害怕','紧张','不安','忐忑','恐慌','患得患失','迷茫','彷徨','不知所措','心慌'],
@@ -1102,7 +1197,7 @@ function inferReplyEmotion(text) {
             '怨恨': '#FF4444', '不开心': '#9B59B6', '可爱': '#FF69B4', '无语': '#B0B0B0'
         },
         EMOTION_WEIGHTS: { '不安':1.2, '惊讶':1.0, '怨恨':1.3, '不开心':1.2, '可爱':1.0, '无语':0.8 },
-        COOLDOWN_AFTER_AI: 12000,
+        COOLDOWN_AFTER_AI: 45000,
         MAX_LOCAL_REACTIONS: 2,
         LOCAL_REACT_COOLDOWN: 20000
     };
@@ -1119,6 +1214,7 @@ function inferReplyEmotion(text) {
         emotionHistory: [],
         localReactionCount: 0,
         lastAiTime: 0,
+        lastJudgeTime: 0,
         isAiPending: false,
         isTyping: false,
         typeTimer: null,
@@ -1241,7 +1337,7 @@ function inferReplyEmotion(text) {
         spokenLines.push(String(line).trim());
         if (spokenLines.length > 8) spokenLines.shift();
     }
-    // ===== 触发 AI 分析 =====
+    // ===== 触发 AI 分析（真流式：边生成边逐句说；失败回退整段接口） =====
     async function triggerAiAnalysis(text, triggerType) {
         if (companionState.isAiPending) return;
         companionState.isAiPending = true;
@@ -1249,6 +1345,108 @@ function inferReplyEmotion(text) {
         companionState.lastAnalyzedLen = text.length;
         showPeeking(true);
 
+        const finishMeta = (userEmotion) => {
+            updateThemeByEmotion(userEmotion);
+            companionState.currentEmotion = userEmotion;
+            companionState.previousEmotion = userEmotion;
+            if (userEmotion === '不开心') pmComfort();
+            else if (isPositive(userEmotion)) pmBounce();
+            companionState.localReactionCount = 0;
+            companionState.lastAiTime = Date.now();
+            companionState.emotionHistory.push({
+                emotion: userEmotion, time: Date.now(), trigger: triggerType
+            });
+            if (companionState.emotionHistory.length > 50) {
+                companionState.emotionHistory = companionState.emotionHistory.slice(-50);
+            }
+        };
+
+        // —— 流式：POST + SSE（text/event-stream），按事件帧解析；情绪走 emotion 事件，正文走 delta ——
+        try {
+            const token = localStorage.getItem('token');
+            const resp = await fetch(BASE_URL + '/diary/companion/stream', {
+                method: 'POST',
+                headers: Object.assign(
+                    { 'Content-Type': 'application/json' },
+                    token ? { 'Authorization': token } : {}
+                ),
+                body: JSON.stringify({ draft: text })
+            });
+            if (!resp.ok || !resp.body) throw new Error('流式不可用 HTTP ' + resp.status);
+            const reader = resp.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let raw = '', emotion = '默认', firstSpoken = false, silent = false;
+            let streamer = null;
+            // SSE 帧解析：按 \n\n 切帧，每帧读 event: / data:（多行 data 按 \n 拼接，剥一个前导空格）
+            let frameBuf = '';
+            const sseField = (line, prefix) => {
+                let v = line.slice(prefix.length);
+                return v.charAt(0) === ' ' ? v.slice(1) : v;
+            };
+            const parseFrames = (chunk) => {
+                frameBuf += chunk;
+                let idx;
+                while ((idx = frameBuf.indexOf('\n\n')) !== -1) {
+                    const frame = frameBuf.slice(0, idx);
+                    frameBuf = frameBuf.slice(idx + 2);
+                    let event = 'message';
+                    const dataLines = [];
+                    for (const line of frame.split('\n')) {
+                        if (line.startsWith('event:')) event = sseField(line, 'event:').trim();
+                        else if (line.startsWith('data:')) dataLines.push(sseField(line, 'data:'));
+                    }
+                    const data = dataLines.join('\n');
+                    if (event === 'emotion') {
+                        emotion = data.trim() || '默认';
+                    } else if (event === 'silent') {
+                        // 她判断此刻不该开口：收起"正在看"，不落任何消息
+                        silent = true;
+                        showPeeking(false);
+                    } else if (event === 'delta') {
+                        raw += data;
+                        // 第一个 delta 到达就启动流式说话器（不等句号），立刻结束 peeking
+                        if (!streamer) {
+                            streamer = startStreamingMadeline(emotion);
+                            if (!firstSpoken) { showPeeking(false); firstSpoken = true; }
+                        }
+                        streamer.append(data);
+                    }
+                    // done / 其他事件忽略，流关闭即结束
+                }
+            };
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                parseFrames(decoder.decode(value, { stream: true }));
+            }
+            // 收尾：把最后不足一帧的残余解完（服务端每帧都以 \n\n 结尾，这里兜底）
+            parseFrames(decoder.decode());
+            // 她选择沉默：正常结束，不走整段回退、不更新 lastAiTime（8s 后内容再变可重新判断）
+            if (silent) {
+                companionState.isAiPending = false;
+                showPeeking(false);
+                return;
+            }
+            // 没收到任何 delta：当成失败走整段回退，而不是静默无反应
+            if (!raw.trim()) throw new Error('流式空响应');
+            // 流结束：通知打字机打完剩余缓冲并等待说完
+            if (streamer) {
+                streamer.finish();
+                await streamer.done;
+            }
+            if (!firstSpoken) showPeeking(false);
+            // 整段去重记录（流式显示已实时，这里只做记忆防复读）
+            const fullText = raw.trim();
+            if (fullText && !isRepeatedSpeech(fullText)) rememberSpeech(fullText);
+            const analysis = analyzeLocalEmotion(text);
+            finishMeta((analysis && analysis.emotion) || '默认');
+            companionState.isAiPending = false;
+            return;
+        } catch (e) {
+            console.warn('流式反馈失败，回退整段接口:', e);
+        }
+
+        // —— 回退：原整段接口 ——
         try {
             const res = await api('/diary/companion', 'POST', { draft: text });
             if (res.success && res.data) {
@@ -1256,23 +1454,8 @@ function inferReplyEmotion(text) {
                 const emotion = res.data.emotion || '默认';
                 const userEmotion = res.data.userEmotion || emotion;
                 showPeeking(false);
-                // Deleted:if (feedback) addMadelineMessage(feedback, emotion);
                 if (feedback && !isRepeatedSpeech(feedback)) { rememberSpeech(feedback); addMadelineMessage(feedback, emotion); }
-                updateThemeByEmotion(userEmotion);
-                companionState.currentEmotion = userEmotion;
-                companionState.previousEmotion = userEmotion;
-                if (userEmotion === '不开心') pmComfort();
-                else if (isPositive(userEmotion)) pmBounce();
-// ... existing code ...
-                companionState.localReactionCount = 0;
-                companionState.lastAiTime = Date.now();
-
-                companionState.emotionHistory.push({
-                    emotion: userEmotion, time: Date.now(), trigger: triggerType
-                });
-                if (companionState.emotionHistory.length > 50) {
-                    companionState.emotionHistory = companionState.emotionHistory.slice(-50);
-                }
+                finishMeta(userEmotion);
             } else {
                 showPeeking(false);
             }
@@ -1285,6 +1468,7 @@ function inferReplyEmotion(text) {
     }
 
     // ===== 核心：输入事件处理 =====
+    let aiJudgeTimer = null;
     contentInput.addEventListener('input', () => {
         lastUserInputTime = Date.now();
         const text = contentInput.value.trim();
@@ -1295,31 +1479,30 @@ function inferReplyEmotion(text) {
             companionState.isTyping = false;
         }, 500);
 
-        if (text.length < REALTIME_CONFIG.MIN_CHARS_FOR_AI) {
+        if (text.length === 0) {
+            showPeeking(false);
+            clearTimeout(aiJudgeTimer);
             return;
         }
 
-        const analysis = analyzeLocalEmotion(text);
+        // 她一直在看：从写下第一个字起
+        if (!companionState.isAiPending) showPeeking(true);
 
+        localReact(analyzeLocalEmotion(text), text);
 
-        const newSentences = getNewSentences(companionState.lastAnalyzedText, text);
-        const newChars = text.length - companionState.lastAnalyzedLen;
-        const hasSentenceEnd = newSentences.length > 0;
-        const quickTrigger = hasSentenceEnd && newChars >= REALTIME_CONFIG.MIN_NEW_CHARS_FOR_QUICK;
-        const longStretch = newChars >= 80;
-        const timeSinceLastAi = Date.now() - companionState.lastAiTime;
-        const pastCooldown = timeSinceLastAi > REALTIME_CONFIG.COOLDOWN_AFTER_AI;
-
-
-        localReact(analysis, text);
-
-
-        if (!companionState.isAiPending && pastCooldown) {
-            if (quickTrigger || longStretch) {
-
-                triggerAiAnalysis(text, hasSentenceEnd ? 'sentence' : 'threshold');
-            }
-        }
+        // 内容一有变化就请她判断要不要回应（防抖合并连续击键；由 AI 决定开口还是沉默）
+        clearTimeout(aiJudgeTimer);
+        aiJudgeTimer = setTimeout(() => {
+            const t = contentInput.value.trim();
+            if (t.length === 0) return;
+            if (t.length <= companionState.lastAnalyzedLen) return; // 没有新内容
+            if (companionState.isAiPending) return;
+            const now = Date.now();
+            if (now - companionState.lastAiTime <= REALTIME_CONFIG.COOLDOWN_AFTER_AI) return; // 她刚说过话
+            if (now - companionState.lastJudgeTime <= REALTIME_CONFIG.SILENCE_COOLDOWN) return; // 刚判断过（多半刚沉默）
+            companionState.lastJudgeTime = now;
+            triggerAiAnalysis(t, 'change');
+        }, REALTIME_CONFIG.JUDGE_DEBOUNCE_MS);
     });
     // ===== 保存特效：帧动画出现在日记本右下角 =====
     const SAVE_FRAMES = [];
