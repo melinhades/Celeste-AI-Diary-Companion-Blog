@@ -486,10 +486,18 @@
                 clearTimeout(gameDialogHideTimer);
                 openGameDialog(emotion);
             }
-            const { bubble: histBubble, avImg } = newMadelineRow(emotion);
-            rowAvatar = avImg;
-            if (window.TextFx) { TextFx.set(histBubble, ''); histBubble.classList.add('tfx-typing'); }
-            else histBubble.textContent = '';
+            // 长文本分段：与整段回退的 splitIntoMessages 对齐，凑够 45 字遇句末标点就换一条气泡接着说
+            let segStart = 0;
+            let histBubble = null, avImg = null;
+            let pendingNewRowEmo = null; // 待开新气泡的情绪：等下一位字符真正到来才建行，避免流尾出现永远空着的气泡
+            const newRow = (emo) => {
+                const r = newMadelineRow(emo);
+                histBubble = r.bubble; avImg = r.avImg; rowAvatar = r.avImg;
+                if (window.TextFx) { TextFx.set(histBubble, ''); histBubble.classList.add('tfx-typing'); }
+                else histBubble.textContent = '';
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            };
+            newRow(emotion);
             if (useGameDialog) {
                 if (window.TextFx) { TextFx.set(gameDialogText, ''); gameDialogEl.classList.add('tfx-typing'); }
                 else gameDialogText.textContent = '';
@@ -513,7 +521,9 @@
                         voiceEmotion = r.voice; segmentLocked = r.locked;
                         sentenceBuf = ''; // 新段落重新攒句，避免跨情绪误判
                     }
-                    const shown = pending.slice(0, typedCount);
+                    // 上一段已收尾：此刻真的有新字要打了，才创建下一条气泡
+                    if (pendingNewRowEmo !== null) { newRow(pendingNewRowEmo); pendingNewRowEmo = null; }
+                    const shown = pending.slice(segStart, typedCount); // 只打当前分段
                     const marked = window.TextFx ? TextFx.autoMark(shown) : shown;
                     if (window.TextFx) TextFx.set(histBubble, marked);
                     else histBubble.textContent = shown;
@@ -533,6 +543,16 @@
                         speakCount++;
                         if (speakCount % 3 === 1) playSpeakSound(voiceEmotion);
                     }
+                    // 凑够 45 字且落在句末标点（含省略号/换行）→ 收尾本段；新气泡推迟到下一位字符到来再建
+                    if (/[。！？!?…\n]/.test(ch) && typedCount - segStart >= 45) {
+                        if (window.TextFx) histBubble.classList.remove('tfx-typing');
+                        segStart = typedCount;
+                        pendingNewRowEmo = voiceEmotion || emotion || '默认';
+                        if (useGameDialog && myToken === gameDialogToken) {
+                            if (window.TextFx) { TextFx.set(gameDialogText, ''); gameDialogEl.classList.add('tfx-typing'); }
+                            else gameDialogText.textContent = '';
+                        }
+                    }
                     chatMessages.scrollTop = chatMessages.scrollHeight;
                     await sleep(45 + Math.random() * 20);
                 } else {
@@ -540,13 +560,21 @@
                 }
             }
 
-            // 收尾：补全完整文本、去掉打字态
-            const fullMarked = window.TextFx ? TextFx.autoMark(pending) : pending;
-            if (window.TextFx) { TextFx.set(histBubble, fullMarked); histBubble.classList.remove('tfx-typing'); }
-            else histBubble.textContent = pending;
+            // 收尾：补全最后一段文本、去掉打字态
+            // （分段点恰好在流末尾时 lastSeg 为空：histBubble 仍指向已完成的旧气泡，绝不能用空串覆盖它）
+            const lastSeg = pending.slice(segStart, typedCount);
+            if (lastSeg) {
+                const fullMarked = window.TextFx ? TextFx.autoMark(lastSeg) : lastSeg;
+                if (window.TextFx) { TextFx.set(histBubble, fullMarked); histBubble.classList.remove('tfx-typing'); }
+                else histBubble.textContent = lastSeg;
+            } else if (window.TextFx) {
+                histBubble.classList.remove('tfx-typing');
+            }
             if (useGameDialog) {
-                if (window.TextFx) { TextFx.set(gameDialogText, fullMarked); gameDialogEl.classList.remove('tfx-typing'); }
-                else gameDialogText.textContent = pending;
+                if (window.TextFx) {
+                    if (lastSeg) TextFx.set(gameDialogText, TextFx.autoMark(lastSeg));
+                    gameDialogEl.classList.remove('tfx-typing');
+                } else gameDialogText.textContent = lastSeg;
             }
             pmReactToEmotion(voiceEmotion);
             if (useGameDialog && myToken === gameDialogToken) {
@@ -1188,7 +1216,6 @@ function inferReplyEmotion(text) {
             '怨恨': '#FF4444', '不开心': '#9B59B6', '可爱': '#FF69B4', '无语': '#B0B0B0'
         },
         EMOTION_WEIGHTS: { '不安':1.2, '惊讶':1.0, '怨恨':1.3, '不开心':1.2, '可爱':1.0, '无语':0.8 },
-        COOLDOWN_AFTER_AI: 45000,
         MAX_LOCAL_REACTIONS: 2,
         LOCAL_REACT_COOLDOWN: 20000
     };
@@ -1204,7 +1231,6 @@ function inferReplyEmotion(text) {
         previousEmotion: '默认',
         emotionHistory: [],
         localReactionCount: 0,
-        lastAiTime: 0,
         lastJudgeTime: 0,
         isAiPending: false,
         isTyping: false,
@@ -1316,6 +1342,11 @@ function inferReplyEmotion(text) {
         spokenLines.push(String(line).trim());
         if (spokenLines.length > 8) spokenLines.shift();
     }
+    // ===== 强痛苦内容检测：AI 链路彻底失败时用本地兜底台词，保证这类内容一定会被看见 =====
+    const DISTRESS_WORDS = ['自杀','自伤','自残','不想活','活不下去','想死','撑不下去','熬不下去','了结','解脱','想消失','没有意义','万念俱灰'];
+    function isDistressText(t) {
+        return DISTRESS_WORDS.some(w => String(t || '').indexOf(w) !== -1);
+    }
     // ===== 触发 AI 分析（真流式：边生成边逐句说；失败回退整段接口） =====
     async function triggerAiAnalysis(text, triggerType) {
         if (companionState.isAiPending) return;
@@ -1330,7 +1361,6 @@ function inferReplyEmotion(text) {
             if (userEmotion === '不开心') pmComfort();
             else if (isPositive(userEmotion)) pmBounce();
             companionState.localReactionCount = 0;
-            companionState.lastAiTime = Date.now();
             companionState.emotionHistory.push({
                 emotion: userEmotion, time: Date.now(), trigger: triggerType
             });
@@ -1409,7 +1439,7 @@ function inferReplyEmotion(text) {
             }
             // 收尾：把最后不足一帧的残余解完（服务端每帧都以 \n\n 结尾，这里兜底）
             parseFrames(decoder.decode());
-            // 她选择沉默：正常结束，不走整段回退、不更新 lastAiTime（8s 后内容再变可重新判断）
+            // 她选择沉默：正常结束，不走整段回退（8s 后内容再变可重新判断）
             if (silent) {
                 companionState.isAiPending = false;
                 return;
@@ -1439,18 +1469,33 @@ function inferReplyEmotion(text) {
         // —— 回退：原整段接口 ——
         try {
             const res = await api('/diary/companion', 'POST', { draft: text });
+            let shown = false;
             if (res.success && res.data) {
                 const feedback = res.data.feedback || '';
                 const emotion = res.data.emotion || '默认';
                 const userEmotion = res.data.userEmotion || emotion;
-                if (feedback && !isRepeatedSpeech(feedback)) { rememberSpeech(feedback); addMadelineMessage(feedback, emotion); }
+                if (feedback && !isRepeatedSpeech(feedback)) { rememberSpeech(feedback); addMadelineMessage(feedback, emotion); shown = true; }
                 finishMeta(userEmotion);
             }
+            // AI 整条链路都没给出回应，而内容涉及痛苦：本地兜底一句，绝不能让人写进黑暗里没人应
+            if (!shown) localComfort(text);
         } catch (e) {
             console.warn('AI 分析失败:', e);
+            localComfort(text);
         } finally {
             companionState.isAiPending = false;
         }
+    }
+
+    // 强痛苦内容的本地兜底台词：流式与整段接口都失败时，至少让她说一句话
+    function localComfort(text) {
+        if (!isDistressText(text)) return;
+        const pool = [
+            '……我看到了。这段我认真读完了，我在这儿，哪也不去。',
+            '先别一个人扛着。跟我说说，你现在身边有人吗？',
+            '嗯……这一段我先收好了。你不用马上好起来，我先陪你把今天写完。'
+        ];
+        addMadelineMessage(pool[Math.floor(Math.random() * pool.length)], '不开心');
     }
 
     // ===== 核心：输入事件处理 =====
@@ -1479,8 +1524,8 @@ function inferReplyEmotion(text) {
             if (t.length === 0) return;
             if (t.length <= companionState.lastAnalyzedLen) return; // 没有新内容
             if (companionState.isAiPending) return;
+            // 不设说话冷却：开不开口完全交给 AI 判断；仅保留沉默后 8s 间隔防请求轰炸
             const now = Date.now();
-            if (now - companionState.lastAiTime <= REALTIME_CONFIG.COOLDOWN_AFTER_AI) return; // 她刚说过话
             if (now - companionState.lastJudgeTime <= REALTIME_CONFIG.SILENCE_COOLDOWN) return; // 刚判断过（多半刚沉默）
             companionState.lastJudgeTime = now;
             triggerAiAnalysis(t, 'change');
@@ -1670,13 +1715,16 @@ function inferReplyEmotion(text) {
                 if (companionRes.success && companionRes.data) {
                     const feedback = companionRes.data.feedback || '';
                     const emotion = companionRes.data.emotion || '默认';
-                    if (feedback && !isRepeatedSpeech(feedback)) { rememberSpeech(feedback); addMadelineMessage(feedback, emotion); }
+                    // 保存总结是本次日记的收尾话，必须说出来：不做防复读吞没
+                    // （吞没会让总结凭空消失，只剩金羽毛过渡，观感上像羽毛抢了话）
+                    let summarySpoken = null;
+                    if (feedback) { rememberSpeech(feedback); summarySpoken = addMadelineMessage(feedback, emotion); }
                     updateThemeByEmotion(emotion);
 
-                    // 金羽毛触发统一走 FeatherTrigger 工具类：
-                    // 情绪低落 → Madeline 说完反馈后接着说羽毛建议（排队不打断），再淡入呼吸游戏；
-                    // 情绪尚可 → 稍后弹羽毛随笔；中性情绪不打扰
-                    if (emotion !== '默认' && window.featherTrigger) {
+                    // 金羽毛过渡严格排在总结说完之后：await 说话队列再触发
+                    // （suggestThenOpen 内部的建议台词也走同一队列，不会打断任何在说的话）
+                    if (window.featherTrigger && window.featherTrigger.isBadMood(emotion)) {
+                        try { if (summarySpoken) await summarySpoken; } catch (e) {}
                         window.featherTrigger.requestFromSave(emotion);
                     }
                 }
