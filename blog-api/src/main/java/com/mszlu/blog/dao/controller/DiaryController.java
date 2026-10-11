@@ -130,4 +130,10 @@ public class DiaryController {
     public Result badelineChat(@RequestBody BadelineChatParam param) {
         return diaryService.badelineChat(param.getMessage(), param.getHistory(), param.getHearts());
     }
+
+    /** 情绪统计：各情绪分布 + 按月趋势 */
+    @GetMapping("emotion-stats")
+    public Result emotionStats() {
+        return diaryService.emotionStats();
+    }
 }

@@ -275,15 +275,16 @@
     </div>
 </header>
 
-<div class="container write-layout">
-    <input class="write-title-input" type="text" id="articleTitle" placeholder="Article title...">
+<div class="container write-layout" id="writeApp">
+    <input class="write-title-input" type="text" id="articleTitle" placeholder="Article title..." v-model="title">
 
     <div class="write-meta">
-        <select id="categorySelect">
+        <select id="categorySelect" v-model="categoryId">
             <option value="">Select category</option>
+            <option v-for="c in categories" :key="c.id" :value="String(c.id)">{{ c.categoryName || c.name }}</option>
         </select>
-        <input type="text" id="tagsInput" placeholder="Tags, comma separated: Java,Spring">
-        <input type="text" id="summaryInput" placeholder="Summary (optional)">
+        <input type="text" id="tagsInput" placeholder="Tags, comma separated: Java,Spring" v-model="tagsRaw">
+        <input type="text" id="summaryInput" placeholder="Summary (optional)" v-model="summary">
     </div>
 
     <div class="write-toolbar">
@@ -299,7 +300,7 @@
         <button class="toolbar-btn" id="toolbarPolishBtn" style="border-color:rgba(255,227,109,.5);color:#ffe36d;"><img src="celeste-icons/beat.png" alt="" loading="lazy" decoding="async">润色</button>
         <button class="toolbar-btn" id="toolbarGenBtn" style="border-color:rgba(120,220,255,.5);color:#78dcff;"><img src="celeste-collectables/cassette.png" alt="" loading="lazy" decoding="async">生成文章</button>
     </div>
-    <textarea class="write-body" id="articleBody" placeholder="Start writing... Markdown supported" oninput="updateCount()"></textarea>
+    <textarea class="write-body" id="articleBody" placeholder="Start writing... Markdown supported" v-model="body"></textarea>
     <script>
     // 微软拼音插入历史文本后，强制重绘让 Renogare 立即生效
     (function() {
@@ -313,8 +314,10 @@
         }
     })();
     </script>
-    <div class="char-count" id="charCount">0 chars</div>
-    <div id="imgPreviewBar" style="display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 10px;"></div>
+    <div class="char-count" id="charCount">{{ body.length }} chars</div>
+    <div id="imgPreviewBar" style="display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 10px;">
+        <img v-for="(s, ii) in imgSrcs" :key="s + '-' + ii" :src="s" style="max-height:84px;max-width:140px;object-fit:contain;border-radius:6px;border:1px solid rgba(138,43,226,.35);background:rgba(30,27,75,.4);" loading="lazy" decoding="async">
+    </div>
 
     <div class="write-footer">
         <button class="btn btn-outline" onclick="history.back()">Cancel</button>
@@ -350,6 +353,7 @@
 <footer class="footer"> <div class="container">© 2024 Celeste Blog · Explore the stars</div> </footer>
 <script src="js/api.js?v=20261002"></script>
 <script src="js/text-fx.js?v=20261005b"></script>
+<script src="js/vue.global.prod.js?v=20261008a"></script>
 <script src="js/auth.js?v=20261003b"></script>
 <script src="js/madeline-core.js?v=20261002"></script>
 <script src="js/write-madeline.js?v=20261004a"></script>
@@ -553,6 +557,7 @@
         const lines = text.split('\n');
         if (!title && lines[0] && lines[0].startsWith('#')) {
             titleEl.value = lines[0].replace(/^#+\s*/, '');
+            titleEl.dispatchEvent(new Event('input'));
             text = lines.slice(1).join('\n').replace(/^\s*\n/, '');
         }
 
@@ -614,19 +619,42 @@
         setTimeout(() => location.href = 'login.html', 800);
     }
     initHeader();
-    loadCategories();
 
+    // ===== Vue 接管编辑表单：标题/正文/分类/标签/摘要/字数/图片预览 =====
+    // insertMd / AI 生成 / 上传 / edit 预填等 vanilla 流程在直接改完 .value 后
+    // dispatch 一个 input 事件，v-model 即同步；字数、图片预览由 computed 驱动。
+    const { createApp, ref, computed, onMounted } = Vue;
+    const title = ref('');
+    const body = ref('');
+    const summary = ref('');
+    const tagsRaw = ref('');
+    const categoryId = ref('');
+    const categories = ref([]);
+    const imgSrcs = computed(() => {
+        const srcs = [];
+        const re = /<img[^ loading="lazy" decoding="async">]+src="([^"]+)"/g;
+        let m;
+        while ((m = re.exec(body.value)) !== null) srcs.push(m[1]);
+        return srcs;
+    });
     function loadCategories() {
         api('/categorys', 'GET').then(res => {
             if (!res.success) return;
-            const sel = document.getElementById('categorySelect');
-            (res.data || []).forEach(c => {
-                const opt = document.createElement('option');
-                opt.value = c.id;
-                opt.textContent = c.categoryName || c.name;
-                sel.appendChild(opt);
-            });
+            categories.value = res.data || [];
         });
+    }
+    createApp({
+        setup() {
+            onMounted(loadCategories);
+            return { title, body, summary, tagsRaw, categoryId, categories, imgSrcs };
+        }
+    }).mount('#writeApp');
+
+    // vanilla 预填后同步 v-model
+    function setVal(id, val) {
+        const el = document.getElementById(id);
+        el.value = val;
+        el.dispatchEvent(new Event('input'));
     }
 
     function insertMd(before, after) {
@@ -641,23 +669,9 @@
         updateCount();
     }
 
+    // 兼容旧调用：派发 input 让 v-model 刷新（字数/图片预览随之响应式更新）
     function updateCount() {
-        const len = document.getElementById('articleBody').value.length;
-        document.getElementById('charCount').textContent = `${len} chars`;
-        refreshImgPreview();
-    }
-
-    function refreshImgPreview() {
-        const bar = document.getElementById('imgPreviewBar');
-        if (!bar) return;
-        const txt = document.getElementById('articleBody').value;
-        const srcs = [];
-        const re = /<img[^ loading="lazy" decoding="async">]+src="([^"]+)"/g;
-        let m;
-        while ((m = re.exec(txt)) !== null) srcs.push(m[1]);
-        bar.innerHTML = srcs.map(s =>
-            '<img src="' + s + '" style="max-height:84px;max-width:140px;object-fit:contain;border-radius:6px;border:1px solid rgba(138,43,226,.35);background:rgba(30,27,75,.4);" loading="lazy" decoding="async">'
-        ).join('');
+        document.getElementById('articleBody').dispatchEvent(new Event('input'));
     }
 
     // edit mode: write.html?edit=articleId
@@ -666,19 +680,13 @@
         api('/articles/article/view/' + EDIT_ID, 'POST').then(res => {
             if (!res.success || !res.data) { showToast('文章不存在', 'error'); return; }
             const a = res.data;
-            document.getElementById('articleTitle').value = a.title || '';
-            document.getElementById('articleBody').value = (a.body && a.body.content) || '';
-            document.getElementById('summaryInput').value = a.summary || '';
-            document.getElementById('tagsInput').value = (a.tags || []).map(t => t.tagName || t.name).join(',');
-            if (a.category && a.category.id) {
-                (function waitCat(id) {
-                    const sel = document.getElementById('categorySelect');
-                    if ([...sel.options].some(o => o.value === id)) { sel.value = id; }
-                    else { setTimeout(() => waitCat(id), 300); }
-                })(a.category.id);
-            }
+            setVal('articleTitle', a.title || '');
+            setVal('articleBody', (a.body && a.body.content) || '');
+            setVal('summaryInput', a.summary || '');
+            setVal('tagsInput', (a.tags || []).map(t => t.tagName || t.name).join(','));
+            // v-model 保留待选值，分类选项异步加载完会自动选中，无需轮询
+            if (a.category && a.category.id) categoryId.value = String(a.category.id);
             document.getElementById('publishBtn').textContent = 'Save Changes';
-            updateCount();
         });
     }
 

@@ -121,7 +121,16 @@ public class TurnScheduler {
             Map<String, Object> m = t.get(i);
             user.append("【").append(m.get("name")).append("】").append(m.get("content")).append("\n");
         }
-        user.append("请选出下一位发言者。");
+        // 发言次数统计：帮调度器平衡发言机会，别让有人被晾一整场
+        Map<String, Integer> counts = new HashMap<>();
+        for (String id : AI_IDS) counts.put(id, 0);
+        for (Map<String, Object> m : t) {
+            String rid = (String) m.get("speakerId");
+            if (counts.containsKey(rid)) counts.put(rid, counts.get(rid) + 1);
+        }
+        user.append("全场发言次数：");
+        for (String id : AI_IDS) user.append(id).append("=").append(counts.get(id)).append(" ");
+        user.append("\n请选出下一位发言者：优先让观点还没展开、发言少的人补位；也别机械轮换，谁最适合接当前话头就选谁。");
         msgs.add(new AiMessage("user", user.toString()));
         return msgs;
     }

@@ -108,7 +108,25 @@
         font-size:12.5px; color:#c3b2ff;
         text-shadow:0 0 10px rgba(126,108,255,.45);
     }
-    .sugg-loading { font-size:12px; color:rgba(200,210,255,.4); padding:6px 2px 20px; }
+    .sugg-loading { display:flex; flex-direction:column; align-items:center; gap:12px; font-size:12px; color:rgba(200,210,255,.4); padding:14px 2px 22px; }
+    /* 推荐话题加载：Madeline 跑步动画（与登录加载同款 9 帧） */
+    .sugg-running {
+        width:72px; height:72px;
+        background-size:100% 100%; background-repeat:no-repeat; background-position:center;
+        image-rendering:pixelated;
+        animation:suggRun 0.72s steps(9) infinite;
+    }
+    @keyframes suggRun {
+        0%   { background-image:url('celeste-gui/loading/00.png'); }
+        11%  { background-image:url('celeste-gui/loading/01.png'); }
+        22%  { background-image:url('celeste-gui/loading/02.png'); }
+        33%  { background-image:url('celeste-gui/loading/03.png'); }
+        44%  { background-image:url('celeste-gui/loading/04.png'); }
+        55%  { background-image:url('celeste-gui/loading/05.png'); }
+        66%  { background-image:url('celeste-gui/loading/06.png'); }
+        77%  { background-image:url('celeste-gui/loading/07.png'); }
+        88%  { background-image:url('celeste-gui/loading/08.png'); }
+    }
 
     /* ===== 席位卡片（演播厅栅格子元素，margin 由 studio gap 接管） ===== */
     .seats { display:grid; grid-template-columns:repeat(6,1fr); gap:10px; align-content:start; }
@@ -602,12 +620,12 @@
 
     <div class="rt-wrap">
         <!-- 未登录 -->
-        <div class="rt-login-tip" id="loginTip" style="display:none;">
+        <div class="rt-login-tip" id="loginTip" v-if="!loggedIn">
             请先<a href="login.html" style="color:#ffe36d">登录</a>，才能召开 AI 圆桌会议。
         </div>
 
         <!-- 视图 1：创建会议 -->
-        <div class="view" id="setupView">
+        <div class="view" id="setupView" :class="{on: loggedIn && view === 'setup'}">
             <div class="rt-title">🪑 AI 圆桌会议 <span style="font-size:12px;color:rgba(200,210,255,.4);font-weight:400;">demo</span></div>
             <div class="rt-sub">抛出一个议题，让 Madeline、Theo、Granny、Badeline 和 Oshiro 围坐讨论，你来插话——散场时，众人会按这场讨论的成色端出一盘「成果派」。</div>
 
@@ -623,11 +641,11 @@
 
             <div class="rt-panel">
                 <div class="rt-label" style="margin-bottom:8px;">今天想讨论什么议题？</div>
-                <textarea id="topicInput" maxlength="200" placeholder="例如：我手里有两个 offer，一个稳定但无聊，一个有风险但成长快，该怎么选？"></textarea>
+                <textarea id="topicInput" maxlength="200" placeholder="例如：我手里有两个 offer，一个稳定但无聊，一个有风险但成长快，该怎么选？" v-model="topic" @keydown.ctrl.enter="start" @keydown.meta.enter="start"></textarea>
                 <div class="rt-row">
                     <span class="rt-label" style="color:rgba(200,210,255,.55);font-size:12px;">自动讨论至众人形成共识，可随时结束</span>
                     <span style="flex:1"></span>
-                    <button class="btn-primary" id="startBtn">召开会议</button>
+                    <button class="btn-primary" id="startBtn" @click="start">召开会议</button>
                 </div>
                 <div style="margin-top:14px;">
                     <span class="rt-label">出席席位：</span>
@@ -638,16 +656,16 @@
             <div class="sugg-head" style="justify-content:flex-end; margin-bottom:10px;">
                 <button class="btn-ghost" id="suggRefresh" style="padding:6px 14px;">换一批</button>
             </div>
-            <div id="suggList"><div class="sugg-loading">正在为你挑选话题…</div></div>
+            <div id="suggList"><div class="sugg-loading"><div class="sugg-running"></div>正在为你挑选话题…</div></div>
 
             <div class="hist-title" id="histTitle">📜 历史会议（本机记录）</div>
             <div id="histList"><div class="hist-empty">还没有会议记录。</div></div>
         </div>
 
         <!-- 视图 2：会议进行 / 回放 -->
-        <div class="view" id="stageView">
+        <div class="view" id="stageView" :class="{on: view === 'stage'}">
             <span class="back-link" id="backLink"><img src="Atlases/Gui/menu/exit.png" alt="返回"></span>
-            <div class="studio" id="studio" data-tab="main">
+            <div class="studio" id="studio" :data-tab="tab">
                 <div class="studio-topic">
                     <div class="stage-head">
                         <div style="min-width:0;">
@@ -690,9 +708,9 @@
                 </div>
             </div>
             <div class="studio-tabs" id="studioTabs">
-                <button type="button" data-tab="seats">席位</button>
-                <button type="button" data-tab="main" class="on">现场</button>
-                <button type="button" data-tab="side">共识</button>
+                <button type="button" data-tab="seats" :class="{on: tab === 'seats'}" @click="tab = 'seats'">席位</button>
+                <button type="button" data-tab="main" :class="{on: tab === 'main'}" @click="tab = 'main'">现场</button>
+                <button type="button" data-tab="side" :class="{on: tab === 'side'}" @click="tab = 'side'">共识</button>
             </div>
         </div>
     </div>
@@ -717,6 +735,28 @@
 <script src="js/roundtable-bird.js?v=20261004f"></script>
 <script src="js/felt-piano.js?v=20261003"></script>
 <script src="js/roundtable-scenes.js?v=20261004"></script>
+<script src="js/vue.global.prod.js?v=20261008a"></script>
+<script>
+// 视图切换 / 窄屏标签 / 议题输入由 Vue 持有；
+// 演出管线（席位、transcript、场景画布、共识雷达、历史弹层）仍由下方原生命令式 IIFE 驱动
+(function () {
+    const { createApp, ref } = Vue;
+    const isMock = new URLSearchParams(location.search).has('mock');
+    const loggedIn = ref(!!(localStorage.getItem('token') || isMock));
+    const view = ref('setup');   // setup | stage
+    const tab = ref('main');     // seats | main | side
+    const topic = ref('');
+    window.__rtUI = { loggedIn, view, tab };
+    createApp({
+        setup() {
+            return {
+                loggedIn, view, tab, topic,
+                start: () => { if (typeof window.__rtStart === 'function') window.__rtStart(); }
+            };
+        }
+    }).mount('.rt-wrap');
+})();
+</script>
 <script>
 initHeader();
 
@@ -748,39 +788,31 @@ initHeader();
     const rtWrap = document.querySelector('.rt-wrap');
     // mock 模式（?mock=1）无需登录即可验证前端演出管线
     const isMock = new URLSearchParams(location.search).has('mock');
-    if (!token && !isMock) { loginTip.style.display = ''; return; }
-    setupView.classList.add('on');
+    if (!token && !isMock) return;   // 登录提示与 setup 视图显隐由 Vue 负责
 
     // ===== 视图切换：setup ⇄ stage（stage 进入固定视口演播厅模式） =====
     function enterStageMode() {
-        setupView.classList.remove('on');
-        stageView.classList.add('on');
+        window.__rtUI.view.value = 'stage';
         document.body.classList.add('rt-stage-on');
         document.documentElement.classList.add('rt-stage-lock');
         rtWrap.classList.add('stage-mode');
         // 窄屏标签默认回「现场」
-        const studio = $('studio');
-        if (studio) studio.dataset.tab = 'main';
-        document.querySelectorAll('#studioTabs button').forEach(b =>
-            b.classList.toggle('on', b.dataset.tab === 'main'));
+        window.__rtUI.tab.value = 'main';
         resetPulsePanel();
     }
     function leaveStageMode() {
-        stageView.classList.remove('on');
-        setupView.classList.add('on');
+        window.__rtUI.view.value = 'setup';
         document.body.classList.remove('rt-stage-on');
         document.documentElement.classList.remove('rt-stage-lock');
         rtWrap.classList.remove('stage-mode');
         if (window.RoundtableScenes) RoundtableScenes.stop();
     }
 
-    // 窄屏（≤768）标签切换：席位 / 现场 / 共识
+    // 窄屏（≤768）标签切换：席位 / 现场 / 共识（按钮高亮由 Vue 绑定）
     document.getElementById('studioTabs').addEventListener('click', e => {
         const btn = e.target.closest('button[data-tab]');
         if (!btn) return;
-        $('studio').dataset.tab = btn.dataset.tab;
-        document.querySelectorAll('#studioTabs button').forEach(b =>
-            b.classList.toggle('on', b === btn));
+        window.__rtUI.tab.value = btn.dataset.tab;
     });
 
     // ===== 共识雷达面板 =====
@@ -846,10 +878,8 @@ initHeader();
     }
     renderSeatPreview();
 
-    $('startBtn').addEventListener('click', startMeeting);
-    $('topicInput').addEventListener('keydown', e => {
-        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) startMeeting();
-    });
+    // 召开按钮 / Ctrl+Enter 由 Vue 模板绑定，这里把入口挂到 window 供其调用
+    window.__rtStart = startMeeting;
 
     function startMeeting() {
         const topic = $('topicInput').value.trim();
@@ -931,7 +961,7 @@ initHeader();
     async function loadSuggestions() {
         if (suggLoading) return;
         suggLoading = true;
-        $('suggList').innerHTML = '<div class="sugg-loading">正在为你挑选话题…</div>';
+        $('suggList').innerHTML = '<div class="sugg-loading"><div class="sugg-running"></div>正在为你挑选话题…</div>';
         let res;
         try {
             res = await api('/roundtable/suggestions', 'GET', null, 30000);
@@ -954,6 +984,7 @@ initHeader();
                 + '<span class="sugg-fx">' + renderFxText(autoWrapWave(item.topic)) + '</span>';
             card.addEventListener('click', () => {
                 $('topicInput').value = item.topic;
+                $('topicInput').dispatchEvent(new Event('input'));   // 同步 v-model
                 startMeeting();
             });
             $('suggList').appendChild(card);
@@ -1876,14 +1907,36 @@ initHeader();
         downloadBlob('roundtable-' + m.id + '.txt', lines.join('\n'), 'text/plain;charset=utf-8');
     }
 
-    // ===== 历史（localStorage） =====
-    function loadHistory() {
+    // ===== 历史（服务端落库优先，localStorage 兜底） =====
+    let serverHistCache = null;   // 服务端历史缓存：散会/删除后置空重拉
+    function localHistory() {
         try { return JSON.parse(localStorage.getItem(HIST_KEY)) || []; }
         catch (e) { return []; }
     }
+    async function loadHistory() {
+        try {
+            const res = await api('/roundtable/history', 'GET', null, 8000);
+            if (res && res.success && Array.isArray(res.data)) {
+                serverHistCache = res.data.map(x => ({
+                    id: x.id, topic: x.topic, rounds: x.rounds || 0,
+                    ts: x.ts || Date.now(),
+                    grade: x.score ? x.score.grade : undefined,
+                    avg: x.score ? x.score.avg : undefined,
+                    transcript: x.transcript || [], score: x.score || null,
+                    server: true
+                }));
+                return serverHistCache;
+            }
+        } catch (e) { /* 未登录 / 网络失败：回落本机 */ }
+        if (serverHistCache === null) {
+            serverHistCache = localHistory().map(x => Object.assign({}, x, { server: false }));
+        }
+        return serverHistCache;
+    }
     function saveHistory(m) {
         if (!m || !m.score) return;
-        const list = loadHistory();
+        serverHistCache = null;   // 服务端已由引擎落库，本地只留备份并在下次重拉
+        const list = localHistory();
         list.unshift({
             id: m.id, topic: m.topic, rounds: m.rounds,
             ts: m.finishedAt || Date.now(),
@@ -1892,9 +1945,10 @@ initHeader();
         });
         localStorage.setItem(HIST_KEY, JSON.stringify(list.slice(0, 20)));
     }
-    function renderHistory() {
-        const list = loadHistory();
+    async function renderHistory() {
+        const list = await loadHistory();
         const box = $('histList');
+        if (!box) return;
         if (!list.length) { box.innerHTML = '<div class="hist-empty">还没有会议记录。</div>'; return; }
         box.innerHTML = '';
         list.forEach((item, idx) => {
@@ -1913,12 +1967,19 @@ initHeader();
             box.appendChild(d);
         });
         box.querySelectorAll('button').forEach(btn => {
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', async () => {
                 const idx = parseInt(btn.dataset.idx, 10);
-                const list2 = loadHistory();
+                const list2 = await loadHistory();
                 if (btn.dataset.act === 'del') {
-                    list2.splice(idx, 1);
-                    localStorage.setItem(HIST_KEY, JSON.stringify(list2));
+                    const victim = list2[idx];
+                    if (victim && victim.server) {
+                        await api('/roundtable/history/' + victim.id, 'DELETE');
+                    } else {
+                        const local = localHistory();
+                        local.splice(idx, 1);
+                        localStorage.setItem(HIST_KEY, JSON.stringify(local));
+                    }
+                    serverHistCache = null;
                     renderHistory();
                 } else {
                     replayMeeting(list2[idx]);

@@ -40,7 +40,6 @@
     <button id="homePosterBtn" title="回到主页 · My Mountain" onclick="location.href='index.html'">
         <img src="celeste-gui/mymountain_icon.png" alt="My Mountain" loading="lazy" decoding="async">
     </button>
-    <button id="journalBackBtn" onclick="location.href='index.html'"><span class="x">✕</span>返回</button>
     <!-- 金羽毛游戏入口（右上角） -->
     <img id="pixelMadeline" src="celeste-gui/bounceline.gif" alt="Madeline" title="点我聊天" loading="lazy" decoding="async">
     <div id="gameDialog">
@@ -50,25 +49,27 @@
             <div id="gameDialogText"></div>
         </div>
     </div>
-    <button id="featherGameBtn" title="金羽毛" style="position:fixed; top:14px; right:16px; z-index:900; width:64px; height:64px; padding:0; background:transparent; border:none; cursor:pointer; transition:transform .3s ease, filter .3s ease; filter:drop-shadow(0 4px 12px rgba(255,170,60,.6));">
+    <div id="featherApp" style="display:contents">
+    <button id="featherGameBtn" title="金羽毛" style="position:fixed; top:14px; right:16px; z-index:900; width:64px; height:64px; padding:0; background:transparent; border:none; cursor:pointer; transition:transform .3s ease, filter .3s ease; filter:drop-shadow(0 4px 12px rgba(255,170,60,.6));" @click="onFeatherBtn">
         <img src="celeste-gui/loop.gif" alt="金羽毛" style="width:100%; height:100%; object-fit:contain; display:block;" loading="lazy" decoding="async">
     </button>
     <!-- 羽毛随笔弹框 -->
-    <div id="featherNoteBox" style="display:none; position:fixed; top:84px; right:12px; z-index:901; width:280px; padding:22px 20px 18px;">
+    <div id="featherNoteBox" v-show="boxOpen" :class="{'slide-in': slideIn}" style="position:fixed; top:84px; right:12px; z-index:901; width:280px; padding:22px 20px 18px;">
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
             <span style="font-size:18px; filter:drop-shadow(0 1px 2px rgba(0,0,0,.15));">🪶</span>
             <span style="color:#5a3e36; font-size:13px; font-family:'Renogare','CelesteZH',sans-serif; letter-spacing:.06em;">Leave a feather</span>
         </div>
-        <input id="featherInput" type="text" maxlength="100" placeholder="一句话，轻轻放下..." style="width:100%; padding:9px 12px; border:1px solid #b8a08a; border-radius:4px; background:rgba(255,252,245,.88); color:#3a2018; font-size:13px; outline:none; font-family:'Renogare','CelesteZH',sans-serif; box-shadow:inset 0 1px 3px rgba(90,62,54,.15); transition:border-color .2s, box-shadow .2s;">
-        <div id="featherChar" style="color:#8a6f5c; font-size:11px; text-align:right; margin-top:4px; font-family:'Renogare','CelesteZH',sans-serif;">0 / 100</div>
+        <input id="featherInput" type="text" maxlength="100" placeholder="一句话，轻轻放下..." v-model="featherText" @keydown="onFeatherKey" style="width:100%; padding:9px 12px; border:1px solid #b8a08a; border-radius:4px; background:rgba(255,252,245,.88); color:#3a2018; font-size:13px; outline:none; font-family:'Renogare','CelesteZH',sans-serif; box-shadow:inset 0 1px 3px rgba(90,62,54,.15); transition:border-color .2s, box-shadow .2s;">
+        <div id="featherChar" style="color:#8a6f5c; font-size:11px; text-align:right; margin-top:4px; font-family:'Renogare','CelesteZH',sans-serif;">{{ featherText.length }} / 100</div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
             <div style="color:#8a6f5c; font-size:11px; font-family:'Renogare','CelesteZH',sans-serif; opacity:.7;">每根羽毛都是一念</div>
             <div style="display:flex; gap:8px;">
-                <button id="featherCancel" style="padding:5px 14px; border:1px solid #b8a08a; border-radius:4px; background:rgba(255,248,240,.5); color:#7a5e4c; cursor:pointer; font-size:12px; font-family:'Renogare','CelesteZH',sans-serif; transition:all .15s;">取消</button>
-                <button id="featherSave" style="padding:5px 16px; border:2px solid #c4a882; border-radius:4px; background:rgba(255,248,240,.9); color:#5a3e36; cursor:pointer; font-size:12px; font-weight:bold; font-family:'Renogare','CelesteZH',sans-serif; transition:all .15s;">放下 ✨</button>
+                <button id="featherCancel" style="padding:5px 14px; border:1px solid #b8a08a; border-radius:4px; background:rgba(255,248,240,.5); color:#7a5e4c; cursor:pointer; font-size:12px; font-family:'Renogare','CelesteZH',sans-serif; transition:all .15s;" @click="closeBox">取消</button>
+                <button id="featherSave" style="padding:5px 16px; border:2px solid #c4a882; border-radius:4px; background:rgba(255,248,240,.9); color:#5a3e36; cursor:pointer; font-size:12px; font-weight:bold; font-family:'Renogare','CelesteZH',sans-serif; transition:all .15s;" :disabled="saving" @click="saveFeather">放下 ✨</button>
             </div>
         </div>
-        <div id="featherToast" style="display:none; color:#5a3e36; font-size:12px; text-align:center; margin-top:10px; font-family:'Renogare','CelesteZH',sans-serif;">🪶 羽毛已飘走～</div>
+        <div id="featherToast" v-if="toast" :style="{color: toastError ? '#c0392b' : '#5a3e36'}" style="font-size:12px; text-align:center; margin-top:10px; font-family:'Renogare','CelesteZH',sans-serif;">{{ toast }}</div>
+    </div>
     </div>
     <!-- BGM 播放器（隐藏，自动播放） -->
     <audio id="bgmPlayer" loop autoplay>
@@ -121,17 +122,13 @@
         </div>
     </div>
 
-    <div id="madeline-peeking">
-        <span>Madeline 正在看...</span>
-        <div class="peeking-dots"><span></span><span></span><span></span></div>
-    </div>
-
     <script src="js/api.js?v=20261002"></script>
     <script src="js/text-fx.js?v=20261005b"></script>
     <script src="js/feather-game.js"></script>
     <script src="js/feather-trigger.js"></script>
     <script src="js/madeline-core.js?v=20261002"></script>
-    <script src="js/diary.js?v=20261007a"></script>
+    <script src="js/madeline-mood.js?v=20261009a"></script>
+    <script src="js/diary.js?v=20261009a"></script>
     <script src="js/detect.js"></script>
     <script>
     // TextFx：日记本输入框里命中的情绪关键词 → 波浪动画 + 情绪色（仅第一种效果）
@@ -157,94 +154,106 @@
     })();
     </script>
     <script src="js/pptgen.js"></script>
-    <script>
+<script src="js/vue.global.prod.js?v=20261008a"></script>
+<script>
+    // 羽毛随笔弹框：开合/字数/保存状态交 Vue；FeatherGame 全局流程保持不变
     (function() {
-        var btn = document.getElementById('featherGameBtn');
-        var box = document.getElementById('featherNoteBox');
-        var input = document.getElementById('featherInput');
-        var toast = document.getElementById('featherToast');
+        const { createApp, ref, nextTick } = Vue;
 
-        function isBadMood() {
-            var emo = (typeof currentEmotion !== 'undefined') ? currentEmotion : (localStorage.getItem('lastEmotion') || '默认');
+        function currentMood() {
+            return localStorage.getItem('lastEmotion') || '默认';
+        }
+        function isBadMood(emo) {
             return ['悲伤', '孤独', '不开心', '不安', '愤怒', '怨恨'].indexOf(emo) !== -1;
         }
-        btn.addEventListener('click', function() {
-            var emo = (typeof currentEmotion !== 'undefined') ? currentEmotion : (localStorage.getItem('lastEmotion') || '默认');
-            if (isBadMood()) {
-                // 情绪不好：Madeline 先说一句羽毛建议，再淡入金羽毛游戏（过渡自然）
-                window._featherBadMood = true;
-                if (window.FeatherGame) {
-                    if (window.FeatherGame.suggestThenOpen) window.FeatherGame.suggestThenOpen(emo);
-                    else window.FeatherGame.open(emo);
+
+        createApp({
+            setup() {
+                const boxOpen = ref(false);
+                const slideIn = ref(false);
+                const featherText = ref('');
+                const toast = ref('');
+                const toastError = ref(false);
+                const saving = ref(false);
+
+                function openBox() {
+                    boxOpen.value = true;
+                    slideIn.value = false;
+                    featherText.value = '';
+                    toast.value = '';
+                    // 与原实现一致：先显示无 slide-in 态，强制重排后再加 class 重放滑入
+                    nextTick(() => requestAnimationFrame(() => requestAnimationFrame(() => {
+                        slideIn.value = true;
+                        const inp = document.getElementById('featherInput');
+                        if (inp) inp.focus();
+                    })));
                 }
-            } else {
-                // 情绪好：先随笔，右下角羽毛按钮点击才游戏
-                if (box.style.display === 'none' || !box.style.display) {
-                    box.style.display = 'block';
-                    box.classList.remove('slide-in');
-                    void box.offsetWidth;
-                    box.classList.add('slide-in');
-                    input.value = '';
-                    toast.style.display = 'none';
-                    input.focus();
-                } else {
-                    box.style.display = 'none';
-                    box.classList.remove('slide-in');
+                function closeBox() {
+                    slideIn.value = false;
+                    boxOpen.value = false;
                 }
-            }
-        });
+                // diary.js 在坏心情金羽毛落地后会调 window.showFeatherNote
+                window.showFeatherNote = openBox;
 
-        document.getElementById('featherCancel').addEventListener('click', function() {
-            box.style.display = 'none';
-            box.classList.remove('slide-in');
-        });
-
-        document.getElementById('featherSave').addEventListener('click', saveFeather);
-        input.addEventListener('input', function() {
-            var ch = document.getElementById('featherChar');
-            if (ch) ch.textContent = input.value.length + ' / 100';
-        });
-        input.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') saveFeather();
-        });
-
-        function saveFeather() {
-            var val = input.value.trim();
-            if (!val) return;
-            var saveBtn = document.getElementById('featherSave');
-            if (saveBtn) saveBtn.disabled = true;
-            api('/feather', 'POST', { content: val }).then(function(res) {
-                if (saveBtn) saveBtn.disabled = false;
-                if (res && res.success) {
-                    toast.textContent = '羽毛已飘走～';
-                    toast.style.color = '#5a3e36';
-                    toast.style.display = 'block';
-                    input.value = '';
-                    setTimeout(function() {
-                        box.style.display = 'none';
-                        box.classList.remove('slide-in');
-                        toast.style.display = 'none';
-                    }, 1200);
-                    // 情绪好时：随笔写完 → 开游戏（Madeline 在游戏内陪伴）
-                    if (!isBadMood()) {
-                        setTimeout(function() {
-                            if (window.FeatherGame) window.FeatherGame.open();
-                        }, 800);
+                function onFeatherBtn() {
+                    const emo = currentMood();
+                    if (isBadMood(emo)) {
+                        // 情绪不好：Madeline 先说一句羽毛建议，再淡入金羽毛游戏（过渡自然）
+                        window._featherBadMood = true;
+                        if (window.FeatherGame) {
+                            if (window.FeatherGame.suggestThenOpen) window.FeatherGame.suggestThenOpen(emo);
+                            else window.FeatherGame.open(emo);
+                        }
+                    } else {
+                        // 情绪好：先随笔，右下角羽毛按钮点击才游戏
+                        if (boxOpen.value) closeBox();
+                        else openBox();
                     }
-                } else {
-                    toast.textContent = (res && res.msg) ? res.msg : '没存上，再试一次吧';
-                    toast.style.color = '#c0392b';
-                    toast.style.display = 'block';
                 }
-            }).catch(function() {
-                if (saveBtn) saveBtn.disabled = false;
-                toast.textContent = '网络不太顺，再试一次吧';
-                toast.style.color = '#c0392b';
-                toast.style.display = 'block';
-            });
-        }
+
+                function onFeatherKey(e) {
+                    if (e.key === 'Enter') saveFeather();
+                }
+
+                function saveFeather() {
+                    const val = featherText.value.trim();
+                    if (!val) return;
+                    saving.value = true;
+                    api('/feather', 'POST', { content: val }).then(function(res) {
+                        saving.value = false;
+                        if (res && res.success) {
+                            toastError.value = false;
+                            toast.value = '羽毛已飘走～';
+                            featherText.value = '';
+                            setTimeout(function() {
+                                closeBox();
+                                toast.value = '';
+                            }, 1200);
+                            // 情绪好时：随笔写完 → 开游戏（Madeline 在游戏内陪伴）
+                            if (!isBadMood(currentMood())) {
+                                setTimeout(function() {
+                                    if (window.FeatherGame) window.FeatherGame.open();
+                                }, 800);
+                            }
+                        } else {
+                            toastError.value = true;
+                            toast.value = (res && res.msg) ? res.msg : '没存上，再试一次吧';
+                        }
+                    }).catch(function() {
+                        saving.value = false;
+                        toastError.value = true;
+                        toast.value = '网络不太顺，再试一次吧';
+                    });
+                }
+
+                return {
+                    boxOpen, slideIn, featherText, toast, toastError, saving,
+                    onFeatherBtn, closeBox, onFeatherKey, saveFeather
+                };
+            }
+        }).mount('#featherApp');
     })();
-    </script>
+</script>
 <script src="js/seed.js?v=20261005a"></script>
 </body>
 </html>

@@ -33,6 +33,17 @@ public class PromptBuilder {
         "等你说完再淡入呼吸游戏。平时一律 \"feather\": false；一次对话最多提议一次，别反复。\n" +
         "JSON 格式：{\"reply\": \"你要说的话\", \"emotion\": \"标签\", \"feather\": false}\n";
 
+    /** 提醒工具（仅主对话）：对方托你记一件事时，通过 JSON 字段设置提醒，到期由系统派发 */
+    private static final String REMINDER_TOOL =
+        "【提醒工具】\n" +
+        "当对方明确要你记住一件事、到某个时间提醒 TA（比如「明早九点提醒我交作业」「三小时后叫我喝水」），\n" +
+        "你在 JSON 里加 \"reminder\": {\"at\": \"yyyy-MM-dd HH:mm\", \"text\": \"要提醒的事\"}。\n" +
+        "- \"at\" 必须是完整的未来时间，年月日时分都写全；「明天/后天/今晚」等相对说法按当前时间推算成绝对时间；\n" +
+        "  推算不出具体时间（比如「回头」「有空时」）就不要设提醒，口头接住就好。\n" +
+        "- \"text\" 是到点要说的那件事，10 个字以内，别加语气词。\n" +
+        "- reply 里像朋友间答应事情那样自然确认（「行，明早九点我叫你」），别复述技术细节。\n" +
+        "- 没有托付就一律不带 reminder 字段。一次最多设一个。\n";
+
     /**
      * 玛德琳人设核心：身份、性格、情感基线、与暗面琳的关系、语言风格、行为与应对。
      * 主对话与日记伴侣共用，保证两处人设不漂移。内容严格对齐《蔚蓝》角色研究文档。
@@ -178,6 +189,7 @@ public class PromptBuilder {
         }
         sb.append(EMOTION_TOOL);
         sb.append(FEATHER_TOOL);
+        sb.append(REMINDER_TOOL);
         return sb.toString();
     }
 
@@ -365,6 +377,10 @@ public class PromptBuilder {
               .append("- 第一行必须且只能是情绪标记，写法严格为 [emotion:情绪]（括号里必须有 emotion: 前缀，禁止写成 [不安] 这种省略形式）\n")
               .append("- 情绪七选一：默认/不安/惊讶/怨恨/不开心/可爱/无语。正确示例：[emotion:不安]\n")
               .append("- 第一行写完情绪标记后，紧跟正文；正文 1~2 句纯对话，禁止（括号）里的动作、神态、旁白描写，不要引号、不要任何其他格式标记\n")
+              .append("【句内情绪切换】\n")
+              .append("- 你的语气在同一段话里可以变化：比如先愣住、再心疼；或先替她生气、说着说着又软下来。只有当语气真的发生明显转折时，才在转折处插入一个切换标记 [m:情绪]，写法示例：[m:可爱]、[m:默认]\n")
+              .append("- 切换标记是给系统的舞台指示，她看不到；标记必须独占在两句话之间，前面那句话说完、标点之后再插\n")
+              .append("- 克制使用：整段最多 1 个切换标记（语气从头到尾没变就不要插）；开头不要插（开头情绪由第一行标记负责）；不要连续插两个；不要切到和第一行相同的情绪\n")
               .append("- 永远留在角色里：你就是 Madeline");
         } else {
             sb.append("【输出】\n")
@@ -771,6 +787,23 @@ public class PromptBuilder {
              + "{\"scores\":{\"conclusion\":0,\"evidence\":0,\"diversity\":0,\"focus\":0,\"interaction\":0,\"practical\":0},"
              + "\"comment\":\"...\",\"todos\":[\"...\"]}\n\n"
              + "逐字稿：\n" + transcriptText;
+    }
+
+    /** 圆桌滚动摘要：把掉出滑动窗口的旧发言压成短摘要，挂在后续发言的 prompt 头部 */
+    public static String roundtableSummaryPrompt(String topic, String olderDiscussion) {
+        return "圆桌议题：「" + topic + "」。下面是这场讨论较早一段的发言记录，"
+             + "请压缩成不超过 120 字的客观摘要：保留已亮出的核心观点、彼此的分歧点和已排除的方案，"
+             + "删掉客套、重复和寒暄。只输出摘要本身，不要任何前缀。\n\n"
+             + "发言记录：\n" + olderDiscussion;
+    }
+
+    /** 圆桌散会记忆提取：把共识/关键决定沉淀成可长期检索的记忆条目 */
+    public static String roundtableMemoryPrompt(String topic, String transcriptDigest) {
+        return "下面是一场帮用户想清楚「" + topic + "」的圆桌讨论逐字稿。"
+             + "请从中提取 1~3 条值得长期记住的结论，每条一句话（不超过 40 字），"
+             + "只记「用户自己的处境、决定、打算」，不记谁的发言风格。没有值得记的就给空数组。\n"
+             + "严格返回 JSON：{\"memories\":[{\"content\":\"...\",\"importance\":1到10}]}，不要其他内容。\n\n"
+             + "逐字稿：\n" + transcriptDigest;
     }
 
     private static String typeName(String type) {

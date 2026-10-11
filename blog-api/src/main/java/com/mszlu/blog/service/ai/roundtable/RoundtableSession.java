@@ -84,6 +84,15 @@ public class RoundtableSession {
     /** 最近一次共识/分歧 pulse payload */
     private volatile Map<String, Object> lastPulse;
 
+    /**
+     * 滚动摘要（运行时，不落库）：掉出滑动窗口的旧发言被压缩成的短摘要，
+     * 拼在每次发言 prompt 的讨论记录之前，让第 30 条发言还记得第 3 条立过的论点。
+     */
+    private volatile String rollingSummary = "";
+
+    /** 已被摘要覆盖的 transcript 前缀长度（摘要只补增量，不重复压同一段） */
+    private volatile int summarizedUpTo = 0;
+
     public void addSpeech(String speakerId, String name, String color, String role, String content) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("speakerId", speakerId);

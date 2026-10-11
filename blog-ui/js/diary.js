@@ -231,21 +231,12 @@
         '无语': 'celeste-portraits/madeline/deadpan00.png'
     };
     const PORTRAIT_FRAMES = { normal: 7, panic: 5, surprised: 7, angry: 7, sad: 7, peaceful: 4, deadpan: 9 };
-    let portraitAnimTimer = null;
+    // 立绘帧循环统一交给 MadelineMood 工具类（句内情绪切换时要随时换帧序）
     function startPortraitAnim(emotion) {
-        clearInterval(portraitAnimTimer);
-        const src = avatarMap[emotion] || avatarMap['默认'];
-        const stem = src.split('/').pop().replace(/00\.png$/, '');
-        const n = PORTRAIT_FRAMES[stem] || 1;
-        if (n <= 1) { gameDialogPortraitImg.src = src; return; }
-        let fi = 0;
-        gameDialogPortraitImg.src = 'Atlases/Portraits/madeline/' + stem + '00.png';
-        portraitAnimTimer = setInterval(() => {
-            fi = (fi + 1) % n;
-            gameDialogPortraitImg.src = 'Atlases/Portraits/madeline/' + stem + String(fi).padStart(2, '0') + '.png';
-        }, 120);
+        if (window.MadelineMood) MadelineMood.startPortrait(gameDialogPortraitImg, emotion);
+        else gameDialogPortraitImg.src = avatarMap[emotion] || avatarMap['默认'];
     }
-    function stopPortraitAnim() { clearInterval(portraitAnimTimer); portraitAnimTimer = null; }
+    function stopPortraitAnim() { if (window.MadelineMood) MadelineMood.stopPortrait(); }
     const emotionBgMap = {
         '默认': 'celeste-areas/bg_default.webp',
         '平静': 'celeste-areas/bg_calm.webp',
@@ -467,22 +458,36 @@
      * 返回 { append(text), finish(), done }；append 可在打字过程中随时追加。
      */
     function startStreamingMadeline(emotion) {
-        let pending = '';      // 待打字的字符缓冲（AI 原始文本）
+        let pending = '';      // 待打字的字符缓冲（已剥离情绪标记的纯文本）
         let finished = false;  // 流是否已结束（不再有新 delta）
         let typedCount = 0;    // 已打出的字符数
         let resolveDone;
         const done = new Promise(r => resolveDone = r);
+        // AI 内联情绪切换队列：{pos: 纯文本字符位置, emo: 情绪}，打字打到位置才变脸
+        let moodQueue = [];
+        let rowAvatar = null;
+        let useGameDialog = false, myToken = -1;
+
+        // 真正执行一次情绪切换：立绘帧 + 气泡头像 + 像素小人 + 后续音色
+        function applyMood(emo) {
+            emo = window.MadelineMood ? MadelineMood.normalize(emo) : (emo || '默认');
+            if (useGameDialog && myToken === gameDialogToken) startPortraitAnim(emo);
+            if (rowAvatar && window.MadelineMood) rowAvatar.src = MadelineMood.avatarSrc(emo);
+            pmReactToEmotion(emo);
+            return { voice: emo, locked: emo !== '默认' };
+        }
 
         msgQueue = msgQueue.then(async () => {
             await waitUserPause(6000);
-            const myToken = gameDialogToken;
-            const useGameDialog = !chatOpen;
+            myToken = gameDialogToken;
+            useGameDialog = !chatOpen;
             const gameDialogEl = document.getElementById('gameDialog');
             if (useGameDialog) {
                 clearTimeout(gameDialogHideTimer);
                 openGameDialog(emotion);
             }
-            const { bubble: histBubble } = newMadelineRow(emotion);
+            const { bubble: histBubble, avImg } = newMadelineRow(emotion);
+            rowAvatar = avImg;
             if (window.TextFx) { TextFx.set(histBubble, ''); histBubble.classList.add('tfx-typing'); }
             else histBubble.textContent = '';
             if (useGameDialog) {
@@ -491,8 +496,9 @@
             }
 
             let speakCount = 0, sentenceBuf = '';
-            const aiLocked = !!(emotion && emotion !== '默认');
-            let voiceEmotion = aiLocked ? emotion : '默认';
+            // 首行情绪即第一个显式段落；显式非默认情绪期间，本地语义推断让位
+            let segmentLocked = !!(emotion && emotion !== '默认');
+            let voiceEmotion = segmentLocked ? emotion : '默认';
 
             // 打字机主循环：流未结束 或 缓冲还有字没打完 就继续
             while (!finished || typedCount < pending.length) {
@@ -500,6 +506,13 @@
                 if (typedCount < pending.length) {
                     const ch = pending[typedCount];
                     typedCount++;
+                    // 到点的 AI 情绪切换：表情/头像/像素小人立刻换，音色后续按新情绪走
+                    while (moodQueue.length && moodQueue[0].pos <= typedCount) {
+                        const sw = moodQueue.shift();
+                        const r = applyMood(sw.emo);
+                        voiceEmotion = r.voice; segmentLocked = r.locked;
+                        sentenceBuf = ''; // 新段落重新攒句，避免跨情绪误判
+                    }
                     const shown = pending.slice(0, typedCount);
                     const marked = window.TextFx ? TextFx.autoMark(shown) : shown;
                     if (window.TextFx) TextFx.set(histBubble, marked);
@@ -508,9 +521,9 @@
                         if (window.TextFx) TextFx.set(gameDialogText, marked);
                         else gameDialogText.textContent = shown;
                     }
-                    // 音效 + 句内情绪推断（复用 doAddMadelineMessage 的规则）
+                    // 音效 + 句内情绪推断（仅在「默认」段生效；AI 显式情绪优先）
                     if (/[。！？!?]/.test(ch)) {
-                        if (!aiLocked) {
+                        if (!segmentLocked) {
                             const inferred = inferSentenceEmotion(sentenceBuf);
                             voiceEmotion = (inferred !== '默认') ? inferred : nextDefaultVoice();
                         }
@@ -545,6 +558,8 @@
 
         return {
             append(text) { if (text) pending += text; },
+            /** AI 内联情绪切换（位置基于剥离标记后的纯文本，由 MadelineMood.feeder 给出） */
+            queueMoods(list) { if (list && list.length) moodQueue = moodQueue.concat(list); },
             finish() { finished = true; },
             done
         };
@@ -571,25 +586,47 @@
         }
         let lastMsgEmotion = emotion || '默认';
         const gameDialogEl = document.getElementById('gameDialog');
-        for (const msg of messages) {
+        for (const rawMsg of messages) {
             if (useGameDialog && myToken !== gameDialogToken) return; // 已被用户关闭，放弃后面还没说的话
+            // 剥离 AI 内联情绪标记，得到纯文本 + 切换点（无标记时退化为原文）
+            const plan = window.MadelineMood
+                ? MadelineMood.parsePlan(rawMsg)
+                : { clean: rawMsg, switches: [] };
+            const msg = plan.clean;
+            if (!msg) continue;
+            const moodQueue = plan.switches.slice();
             const fmsg = window.TextFx ? TextFx.autoMark(msg) : msg;   // 无标记台词自动补三种动画
-            const { bubble: histBubble } = newMadelineRow(emotion);
+            const { bubble: histBubble, avImg } = newMadelineRow(emotion);
             if (window.TextFx) TextFx.set(histBubble, fmsg); else histBubble.textContent = msg;
             let sentenceBuf = '';
-            const aiLocked = !!(emotion && emotion !== '默认');
-            let voiceEmotion = aiLocked ? emotion : inferReplyEmotion(msg);
+            // 首情绪锁定规则与流式一致：显式非默认情绪期间不做本地推断
+            let segmentLocked = !!(emotion && emotion !== '默认');
+            let voiceEmotion = segmentLocked ? emotion : inferReplyEmotion(msg);
+            // 到点的 AI 句内情绪切换：立绘 + 头像 + 像素小人 + 后续音色
+            const applyMood = (emo) => {
+                emo = window.MadelineMood ? MadelineMood.normalize(emo) : (emo || '默认');
+                if (useGameDialog && myToken === gameDialogToken) startPortraitAnim(emo);
+                if (window.MadelineMood) avImg.src = MadelineMood.avatarSrc(emo);
+                pmReactToEmotion(emo);
+                voiceEmotion = emo;
+                segmentLocked = emo !== '默认';
+                sentenceBuf = '';
+            };
             if (useGameDialog) {
                 if (window.TextFx) { TextFx.set(gameDialogText, ''); gameDialogEl.classList.add('tfx-typing'); }
                 else gameDialogText.textContent = '';
                 let speakCount = 0, ci = 0;
                 for (const ch of msg) {
                     if (myToken !== gameDialogToken) return; // 用户中途关闭：立刻停下，不再隐形说话
-                    if (window.TextFx) TextFx.set(gameDialogText, fmsg.slice(0, ++ci));
-                    else gameDialogText.textContent += ch;
+                    ci++;
+                    while (moodQueue.length && moodQueue[0].pos <= ci) applyMood(moodQueue.shift().emo);
+                    if (window.TextFx) TextFx.set(gameDialogText, fmsg.slice(0, ci));
+                    else gameDialogText.textContent = msg.slice(0, ci);
                     if (/[。！？!?]/.test(ch)) {
-                        const inferred = inferSentenceEmotion(sentenceBuf);
-                        voiceEmotion = (inferred !== '默认') ? inferred : nextDefaultVoice();
+                        if (!segmentLocked) {
+                            const inferred = inferSentenceEmotion(sentenceBuf);
+                            voiceEmotion = (inferred !== '默认') ? inferred : nextDefaultVoice();
+                        }
                         sentenceBuf = '';
                     } else if (!/[\s…，,、；;：:（）()*]/.test(ch)) {
                         sentenceBuf += ch;
@@ -605,11 +642,13 @@
                 else histBubble.textContent = '';
                 let speakCount = 0, typeI = 0;
                 for (const ch of msg) {
-                    if (window.TextFx) TextFx.set(histBubble, fmsg.slice(0, ++typeI));
-                    else histBubble.textContent += ch;
+                    typeI++;
+                    while (moodQueue.length && moodQueue[0].pos <= typeI) applyMood(moodQueue.shift().emo);
+                    if (window.TextFx) TextFx.set(histBubble, fmsg.slice(0, typeI));
+                    else histBubble.textContent = msg.slice(0, typeI);
                     if (typeI % 3 === 0) chatMessages.scrollTop = chatMessages.scrollHeight;
                     if (/[。！？!?]/.test(ch)) {
-                        if (!aiLocked) {
+                        if (!segmentLocked) {
                             const inferred = inferSentenceEmotion(sentenceBuf);
                             voiceEmotion = (inferred !== '默认') ? inferred : nextDefaultVoice();
                         }
@@ -1011,58 +1050,10 @@
 
 
 
-    const VOICE_DIRS = {
-        '默认': 'determined',
-        '不安': 'upset',
-        '惊讶': 'surprised',
-        '怨恨': 'angry',
-        '不开心': Math.random() < 0.5 ? 'sad' : 'sadder',
-        '可爱': 'determined',
-        '无语': 'deadpan',
-        '冒泡': 'distracted'
-    };
-    const VOICE_VARIANTS = ['mid_A', 'mid_B', 'mid_C', 'per'];
-
-    const VOICE_RATE = {
-        '默认': [0.92, 1.06],
-        '不安': [0.88, 1.0],
-        '惊讶': [1.0, 1.18],
-        '怨恨': [0.95, 1.12],
-        '不开心': [0.82, 0.94],
-        '可爱': [0.96, 1.1],
-        '无语': [0.85, 0.95],
-        '冒泡': [0.9, 1.05]
-    };
-    const VOICE_VOL = {
-        '默认': 0.75, '不安': 0.65, '惊讶': 0.85,
-        '怨恨': 0.85, '不开心': 0.55, '可爱': 0.8,
-        '无语': 0.6, '冒泡': 0.7
-    };
-
-    let speakSeq = 0;
-    const blipAudio = new Audio();
+    // 语气采样（目录/语速/音量）统一收口在 MadelineMood 工具类，
+    // 句内情绪切换时音色跟着标记走；window.playSpeakSound 保留给羽毛游戏等旧调用
     function playSpeakSound(emotion) {
-        if (!window.__audioGestured) return;
-        let voice = VOICE_DIRS[emotion] || VOICE_DIRS['冒泡'];
-        if (emotion === '不开心') voice = Math.random() < 0.5 ? 'sad' : 'sadder';
-        speakSeq++;
-        let variant;
-        if (speakSeq % 7 === 0) {
-            variant = 'per';
-        } else {
-            variant = VOICE_VARIANTS[speakSeq % 3];
-        }
-        const num = String(Math.floor(Math.random() * 10) + 1).padStart(2, '0');
-        const src = 'celeste-sounds/madeline/' + voice + '/' + variant + '/' + voice + '_' + variant + '_' + num + '.wav';
-        try {
-            const a = blipAudio;
-            a.src = src;
-            const rateRange = VOICE_RATE[emotion] || VOICE_RATE['默认'];
-            a.playbackRate = rateRange[0] + Math.random() * (rateRange[1] - rateRange[0]);
-            a.volume = (VOICE_VOL[emotion] || 0.75) + (Math.random() - 0.5) * 0.1;
-            a.currentTime = 0;
-            a.play().catch(() => {});
-        } catch (e) { /* 无声降级 */ }
+        if (window.MadelineMood) MadelineMood.blip(emotion);
     }
     window.playSpeakSound = playSpeakSound;
 // ===== 回复语气推理：从她说的话推断语气，逐句切换音色 =====
@@ -1223,9 +1214,6 @@ function inferReplyEmotion(text) {
         lastLocalReactTime: 0,
         lastReactionLine: ''
     };
-    // ===== DOM 引用 =====
-    const peekingEl = document.getElementById('madeline-peeking');
-
     // ===== 本地快速情绪分析（每次输入都触发） =====
     function analyzeLocalEmotion(text) {
         const scores = {};
@@ -1278,15 +1266,6 @@ function inferReplyEmotion(text) {
             }
         }
         return sentences;
-    }
-
-    // ===== 显示 "Madeline 正在看..." =====
-    function showPeeking(show) {
-        if (show) {
-            peekingEl.classList.add('show');
-        } else {
-            peekingEl.classList.remove('show');
-        }
     }
 
     // ===== 本地快速反应（不等 AI，即时反馈） =====
@@ -1343,7 +1322,6 @@ function inferReplyEmotion(text) {
         companionState.isAiPending = true;
         companionState.lastAnalyzedText = text;
         companionState.lastAnalyzedLen = text.length;
-        showPeeking(true);
 
         const finishMeta = (userEmotion) => {
             updateThemeByEmotion(userEmotion);
@@ -1377,6 +1355,8 @@ function inferReplyEmotion(text) {
             const decoder = new TextDecoder('utf-8');
             let raw = '', emotion = '默认', firstSpoken = false, silent = false;
             let streamer = null;
+            // AI 句内情绪标记剥离器：delta 进去，纯文本 + 切换点出来（跨分块安全）
+            const moodFeeder = window.MadelineMood ? MadelineMood.feeder() : null;
             // SSE 帧解析：按 \n\n 切帧，每帧读 event: / data:（多行 data 按 \n 拼接，剥一个前导空格）
             let frameBuf = '';
             const sseField = (line, prefix) => {
@@ -1399,17 +1379,25 @@ function inferReplyEmotion(text) {
                     if (event === 'emotion') {
                         emotion = data.trim() || '默认';
                     } else if (event === 'silent') {
-                        // 她判断此刻不该开口：收起"正在看"，不落任何消息
+                        // 她判断此刻不该开口：安静陪着，不落任何消息
                         silent = true;
-                        showPeeking(false);
                     } else if (event === 'delta') {
-                        raw += data;
-                        // 第一个 delta 到达就启动流式说话器（不等句号），立刻结束 peeking
+                        // 剥离 AI 内联情绪标记 [m:情绪]：标记本身不显示，切换点排队等打字机到点变脸
+                        let cleanText = data;
+                        let moods = null;
+                        if (moodFeeder) {
+                            const r = moodFeeder.feed(data);
+                            cleanText = r.text;
+                            moods = r.moods;
+                        }
+                        raw += cleanText;
+                        // 第一个 delta 到达就启动流式说话器（不等句号）
                         if (!streamer) {
                             streamer = startStreamingMadeline(emotion);
-                            if (!firstSpoken) { showPeeking(false); firstSpoken = true; }
+                            firstSpoken = true;
                         }
-                        streamer.append(data);
+                        if (cleanText) streamer.append(cleanText);
+                        if (moods && moods.length) streamer.queueMoods(moods);
                     }
                     // done / 其他事件忽略，流关闭即结束
                 }
@@ -1424,17 +1412,19 @@ function inferReplyEmotion(text) {
             // 她选择沉默：正常结束，不走整段回退、不更新 lastAiTime（8s 后内容再变可重新判断）
             if (silent) {
                 companionState.isAiPending = false;
-                showPeeking(false);
                 return;
             }
             // 没收到任何 delta：当成失败走整段回退，而不是静默无反应
             if (!raw.trim()) throw new Error('流式空响应');
-            // 流结束：通知打字机打完剩余缓冲并等待说完
+            // 流结束：吐出可能卡在分块边界的残余纯文本，再通知打字机打完
+            if (streamer && moodFeeder) {
+                const tail = moodFeeder.flush();
+                if (tail) { streamer.append(tail); raw += tail; }
+            }
             if (streamer) {
                 streamer.finish();
                 await streamer.done;
             }
-            if (!firstSpoken) showPeeking(false);
             // 整段去重记录（流式显示已实时，这里只做记忆防复读）
             const fullText = raw.trim();
             if (fullText && !isRepeatedSpeech(fullText)) rememberSpeech(fullText);
@@ -1453,15 +1443,11 @@ function inferReplyEmotion(text) {
                 const feedback = res.data.feedback || '';
                 const emotion = res.data.emotion || '默认';
                 const userEmotion = res.data.userEmotion || emotion;
-                showPeeking(false);
                 if (feedback && !isRepeatedSpeech(feedback)) { rememberSpeech(feedback); addMadelineMessage(feedback, emotion); }
                 finishMeta(userEmotion);
-            } else {
-                showPeeking(false);
             }
         } catch (e) {
             console.warn('AI 分析失败:', e);
-            showPeeking(false);
         } finally {
             companionState.isAiPending = false;
         }
@@ -1480,13 +1466,9 @@ function inferReplyEmotion(text) {
         }, 500);
 
         if (text.length === 0) {
-            showPeeking(false);
             clearTimeout(aiJudgeTimer);
             return;
         }
-
-        // 她一直在看：从写下第一个字起
-        if (!companionState.isAiPending) showPeeking(true);
 
         localReact(analyzeLocalEmotion(text), text);
 

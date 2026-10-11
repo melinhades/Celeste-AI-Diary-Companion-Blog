@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="icon/OIP.webp" type="image/webp">
 <title>Celeste · Madeline Singing</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -112,10 +113,13 @@
   </div>
 
   <!-- 可点击的 payphone 精灵 -->
-  <div id="payphoneHotspot" class="px" tabindex="0" role="button" aria-label="Play payphone animation">
+  <div id="payphoneHotspot" class="px" tabindex="0" role="button" aria-label="Play payphone animation"
+       :class="{played: started}" @click="start"
+       @keydown.enter.prevent="start" @keydown.space.prevent="start">
     <div class="receiver"></div>
   </div>
 
+<script src="js/vue.global.prod.js?v=20261008a"></script>
 <script>
 /* ============================================================
    1. 镜子房间同款星点：停留 + 闪烁（铺满屏幕，不下坠）
@@ -187,26 +191,22 @@
 /* ============================================================
    2. payphone 点击：背景视频播放一次并停在最终帧；
       按钮图层沉到视频下面（动画在背景发生）
+      —— 仅 played 一个交互状态，交 Vue；视频控制仍为原生 API
    ============================================================ */
-(function wirePayphone() {
-  var pp = document.getElementById('payphoneHotspot');
-  var v = document.getElementById('skyVideo');
-  var started = false;
-
-  function start() {
-    if (started) return;
-    started = true;
-    pp.classList.add('played');   // 图层下沉到视频之下
-    v.muted = false;              // 用户点击手势内解除静音，听 Madeline 唱歌
-    var p = v.play();             // 无 loop：播完自动停在最终帧
-    if (p && p.catch) p.catch(function () {});
+Vue.createApp({
+  setup() {
+    const started = Vue.ref(false);
+    function start() {
+      if (started.value) return;
+      started.value = true;          // 图层下沉到视频之下
+      const v = document.getElementById('skyVideo');
+      v.muted = false;               // 用户点击手势内解除静音，听 Madeline 唱歌
+      const p = v.play();            // 无 loop：播完自动停在最终帧
+      if (p && p.catch) p.catch(function () {});
+    }
+    return { started, start };
   }
-
-  pp.addEventListener('click', start);
-  pp.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); start(); }
-  });
-})();
+}).mount('#payphoneHotspot');
 </script>
 <script src="js/api.js?v=20261002"></script>
 <script src="js/seed.js?v=20261005a"></script>

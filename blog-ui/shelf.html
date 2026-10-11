@@ -53,6 +53,9 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 }
 /* 纸页暗角已删：纸张自带折痕阴影，矩形 inset 阴影会与不规则毛边冲突 */
 /* 旧的盖 logo 补丁与卡片暗角均已删：新纸张自带透明毛边与折痕阴影 */
+/* #cards 内两个槽位：#snapSlot 留 vanilla 插快照卡，#diaryVue 交 Vue 渲染日记行；
+   display:contents 让槽位本身从布局消失，子元素直接成为 .cards 的 flex 项 */
+#snapSlot, #diaryVue { display: contents; }
 .shelf-row {
     position:relative; display:flex; align-items:center; gap:14px;
     background:transparent; border:none; border-bottom:1px dashed rgba(163,129,47,.18);
@@ -895,7 +898,35 @@ body:has(.ds-world.panned) #strawberryBonfire { opacity:0; pointer-events:none; 
     <!-- 第一幕：书架（仅展示内容，dream 元素已搬到 #dreamScene） -->
     <section id="shelfView" class="view">
         <div class="wrap">
-            <div id="cards" class="cards"></div>
+            <div id="cards" class="cards">
+                <!-- 快照卡槽：保留 vanilla insertAdjacentHTML（情绪聚合 IIFE 维护） -->
+                <div id="snapSlot"></div>
+                <!-- 日记列表：Vue 接管渲染（loading/empty/error/head+月份分隔+日记行） -->
+                <div id="diaryVue">
+                    <div v-if="status==='loading'" class="empty"><span class="em">📖</span>正在搬书……</div>
+                    <div v-else-if="status==='empty'" class="empty"><svg class="empty-pix" viewBox="0 0 32 24" shape-rendering="crispEdges" aria-hidden="true">
+                        <rect x="5" y="3" width="1" height="1" fill="#ffe66d"/><rect x="16" y="4" width="1" height="1" fill="#a78bfa"/><rect x="27" y="5" width="1" height="1" fill="#ffe66d"/><rect x="3" y="7" width="1" height="1" fill="#ffffff"/>
+                        <rect x="10" y="6" width="1" height="1" fill="#ffffff"/><rect x="9" y="7" width="3" height="1" fill="#ffffff"/>
+                        <rect x="8" y="8" width="1" height="1" fill="#e8ecff"/><rect x="9" y="8" width="3" height="1" fill="#56508f"/><rect x="12" y="8" width="1" height="1" fill="#e8ecff"/>
+                        <rect x="8" y="9" width="5" height="1" fill="#56508f"/><rect x="7" y="10" width="7" height="1" fill="#4a4580"/><rect x="6" y="11" width="9" height="1" fill="#413c72"/><rect x="5" y="12" width="11" height="1" fill="#3a3665"/>
+                        <rect x="22" y="9" width="1" height="1" fill="#ffffff"/><rect x="21" y="10" width="3" height="1" fill="#dfe6ff"/><rect x="20" y="11" width="5" height="1" fill="#4a4580"/><rect x="19" y="12" width="7" height="1" fill="#3a3665"/><rect x="18" y="13" width="9" height="1" fill="#322f58"/>
+                        <rect x="2" y="14" width="28" height="1" fill="#2a2848"/><rect x="2" y="15" width="28" height="1" fill="#232242"/><rect x="2" y="16" width="28" height="6" fill="#1b1c38"/>
+                    </svg>书架还空着。<br>写下第一篇，它就有了位置。</div>
+                    <div v-else-if="status==='error'" class="empty"><span class="em">🌫️</span>书架暂时打不开（{{ errMsg }}）</div>
+                    <template v-else>
+                        <div class="cards-head"><div class="ch-title"><span class="ch-en">Memory Index</span><span class="ch-cn">记忆目录</span></div><span class="ch-stat">共 <b>{{ totalPosts }}</b> 篇 · <b>{{ totalDays }}</b> 天</span></div>
+                        <template v-for="g in viewGroups" :key="g.key">
+                            <div v-if="g.divider" class="month-divider"><span class="md-name">{{ g.monEn }} {{ g.year }}</span><span class="md-cn">{{ g.monCn }}</span><span class="md-line"></span><span class="md-cnt">{{ g.monthCnt }} 篇</span></div>
+                            <div class="shelf-row" :data-i="g.i">
+                                <span class="row-icowrap"><img class="row-icon" src="namespace/cassette.png" alt="" loading="lazy" decoding="async"><i v-if="g.mood" class="row-mood" :style="{background: g.mood.color}" :title="g.mood.name"></i></span>
+                                <div class="row-main"><div class="row-title">{{ g.title }}</div>
+                                    <div v-if="g.snip" class="row-snip">{{ g.snip }}</div></div>
+                                <div class="row-date">{{ g.enDate }}<span v-if="g.multi" class="row-count">×{{ g.entryCount }}</span></div>
+                            </div>
+                        </template>
+                    </template>
+                </div>
+            </div>
             <div id="detail" class="detail">
                 <button class="back">← 返回列表</button>
                 <div class="detail-nav"><button class="prev-e" title="同日上一篇">←</button><span class="pos"></span><button class="next-e" title="同日下一篇">→</button></div>
@@ -931,6 +962,7 @@ body:has(.ds-world.panned) #strawberryBonfire { opacity:0; pointer-events:none; 
 <script src="js/api.js?v=20261002"></script>
 <script src="js/text-fx.js?v=20261005b"></script>
 <script src="js/badeline-voice.js"></script>
+<script src="js/vue.global.prod.js?v=20261008a"></script>
 <script>
     // ===== 雪花动画（mountainSnow 原版贴图） =====
     (function () {
@@ -1324,55 +1356,69 @@ function stopPeSnow() {
         clearTimeout(_fitT);
         _fitT = setTimeout(fitPaper, 150);
     });
+    // ===== Vue 接管日记列表渲染（#diaryVue）；详情/翻页/快照/游戏场景仍为 vanilla =====
+    const vRef = Vue.ref, vNextTick = Vue.nextTick;
+    const status = vRef('loading');   // loading | empty | error | ok
+    const errMsg = vRef('未知错误');
+    const totalPosts = vRef(0);
+    const totalDays = vRef(0);
+    const viewGroups = vRef([]);
+
+    function buildViewGroups() {
+        // 每月篇数统计（月份分隔条用）
+        const monthCountMap = new Map();
+        for (const g of groups) {
+            const d = toDateObj(g.date);
+            const mk = d.getFullYear() + '-' + d.getMonth();
+            monthCountMap.set(mk, (monthCountMap.get(mk) || 0) + g.entries.length);
+        }
+        let lastMonth = null;
+        viewGroups.value = groups.map((g, i) => {
+            const d = toDateObj(g.date);
+            const mk = d.getFullYear() + '-' + d.getMonth();
+            const divider = mk !== lastMonth;
+            lastMonth = mk;
+            const first = g.entries[0];
+            const title = (first.title && first.title.trim()) ? first.title.trim()
+                : (g.entries.length > 1 ? g.entries.length + ' 篇日记' : '无题');
+            const snip = String(first.content || '').replace(/\s+/g, ' ').trim().slice(0, 96);
+            return {
+                key: i, i,
+                divider,
+                monEn: MONTHS_EN[d.getMonth()].toUpperCase(),
+                year: d.getFullYear(),
+                monCn: CN_MONTHS[d.getMonth()],
+                monthCnt: monthCountMap.get(mk),
+                title, snip,
+                mood: moodOf(first),
+                enDate: fmtEn(g.date),
+                multi: g.entries.length > 1,
+                entryCount: g.entries.length
+            };
+        });
+        totalPosts.value = data.length;
+        totalDays.value = groups.length;
+    }
+
+    Vue.createApp({
+        setup() { return { status, errMsg, totalPosts, totalDays, viewGroups }; }
+    }).mount('#diaryVue');
+
     async function load() {
-        cards.innerHTML = '<div class="empty"><span class="em">📖</span>正在搬书……</div>';
+        status.value = 'loading';
         const res = await api('/diary/list?page=1&pageSize=50&type=day', 'GET');
         if (res.success && res.data && Array.isArray(res.data.list)) {
             data = res.data.list;
             if (window.__setDoorProgress) window.__setDoorProgress(data.length);
-            if (!data.length) { cards.innerHTML = '<div class="empty"><svg class="empty-pix" viewBox="0 0 32 24" shape-rendering="crispEdges" aria-hidden="true">' +
-                '<rect x="5" y="3" width="1" height="1" fill="#ffe66d"/><rect x="16" y="4" width="1" height="1" fill="#a78bfa"/><rect x="27" y="5" width="1" height="1" fill="#ffe66d"/><rect x="3" y="7" width="1" height="1" fill="#ffffff"/>' +
-                '<rect x="10" y="6" width="1" height="1" fill="#ffffff"/><rect x="9" y="7" width="3" height="1" fill="#ffffff"/>' +
-                '<rect x="8" y="8" width="1" height="1" fill="#e8ecff"/><rect x="9" y="8" width="3" height="1" fill="#56508f"/><rect x="12" y="8" width="1" height="1" fill="#e8ecff"/>' +
-                '<rect x="8" y="9" width="5" height="1" fill="#56508f"/><rect x="7" y="10" width="7" height="1" fill="#4a4580"/><rect x="6" y="11" width="9" height="1" fill="#413c72"/><rect x="5" y="12" width="11" height="1" fill="#3a3665"/>' +
-                '<rect x="22" y="9" width="1" height="1" fill="#ffffff"/><rect x="21" y="10" width="3" height="1" fill="#dfe6ff"/><rect x="20" y="11" width="5" height="1" fill="#4a4580"/><rect x="19" y="12" width="7" height="1" fill="#3a3665"/><rect x="18" y="13" width="9" height="1" fill="#322f58"/>' +
-                '<rect x="2" y="14" width="28" height="1" fill="#2a2848"/><rect x="2" y="15" width="28" height="1" fill="#232242"/><rect x="2" y="16" width="28" height="6" fill="#1b1c38"/>' +
-                '</svg>书架还空着。<br>写下第一篇，它就有了位置。</div>'; return; }
+            if (!data.length) { status.value = 'empty'; return; }
             buildGroups();
-            // 每月篇数统计（月份分隔条用）
-            const monthCountMap = new Map();
-            for (const g of groups) {
-                const d = toDateObj(g.date);
-                const mk = d.getFullYear() + '-' + d.getMonth();
-                monthCountMap.set(mk, (monthCountMap.get(mk) || 0) + g.entries.length);
-            }
-            let html = '<div class="cards-head"><div class="ch-title"><span class="ch-en">Memory Index</span><span class="ch-cn">记忆目录</span></div><span class="ch-stat">共 <b>' + data.length + '</b> 篇 · <b>' + groups.length + '</b> 天</span></div>';
-            let lastMonth = null;
-            groups.forEach((g, i) => {
-                const d = toDateObj(g.date);
-                const mk = d.getFullYear() + '-' + d.getMonth();
-                if (mk !== lastMonth) {
-                    html += '<div class="month-divider"><span class="md-name">' + MONTHS_EN[d.getMonth()].toUpperCase() + ' ' + d.getFullYear() + '</span><span class="md-cn">' + CN_MONTHS[d.getMonth()] + '</span><span class="md-line"></span><span class="md-cnt">' + monthCountMap.get(mk) + ' 篇</span></div>';
-                    lastMonth = mk;
-                }
-                const first = g.entries[0];
-                const title = (first.title && first.title.trim()) ? first.title.trim()
-                    : (g.entries.length > 1 ? g.entries.length + ' 篇日记' : '无题');
-                const snip = String(first.content || '').replace(/\s+/g, ' ').trim().slice(0, 96);
-                const cnt = g.entries.length > 1 ? '<span class="row-count">×' + g.entries.length + '</span>' : '';
-                const mood = moodOf(first);
-                const moodHtml = mood ? '<i class="row-mood" style="background:' + mood.color + '" title="' + escHtml(mood.name) + '"></i>' : '';
-                html += '<div class="shelf-row" data-i="' + i + '">' +
-                    '<span class="row-icowrap"><img class="row-icon" src="namespace/cassette.png" alt="" loading="lazy" decoding="async">' + moodHtml + '</span>' +
-                    '<div class="row-main"><div class="row-title">' + escHtml(title) + '</div>' +
-                    (snip ? '<div class="row-snip">' + escHtml(snip) + '</div>' : '') + '</div>' +
-                    '<div class="row-date">' + fmtEn(g.date) + cnt + '</div>' +
-                    '</div>';
-            });
-            cards.innerHTML = html;
+            buildViewGroups();
+            status.value = 'ok';
         } else {
-            cards.innerHTML = '<div class="empty"><span class="em">🌫️</span>书架暂时打不开（' + escHtml(res.msg || '未知错误') + '）</div>';
+            errMsg.value = res.msg || '未知错误';
+            status.value = 'error';
         }
+        await vNextTick();
         observeShelfRows();
         fitPaper();
     }
@@ -1578,10 +1624,11 @@ function stopPeSnow() {
                 '</div>';
         }
         function renderSnapCards() {
-            cards.querySelectorAll('.shelf-row.snapshot').forEach(el => el.remove());
+            const snapSlot = document.getElementById('snapSlot');
+            snapSlot.querySelectorAll('.shelf-row.snapshot').forEach(el => el.remove());
             const snaps = getSnaps();
             if (!snaps.length) return;
-            cards.insertAdjacentHTML('afterbegin', snaps.map(snapCardHtml).join(''));
+            snapSlot.innerHTML = snaps.map(snapCardHtml).join('');
             observeShelfRows();
         }
 
@@ -2649,26 +2696,31 @@ function stopPeSnow() {
             if (playing) return;                  // 防重复触发
             playing = true;
             waking = false;
-            document.body.classList.add('dream-active');   // 激活心门 + 镜之房间 + Badeline
-            if (dsMadeline) {                      // Madeline 回到围炉睡觉态（缓存重播，无 ?t= 网络请求）
+            // 先淡入极光场景，让玩家看到 Madeline 完整的入睡动画，定格后再激活 dream 模式
+            scene.classList.add('show');
+            if (dsMadeline) {
                 dsMadeline.classList.remove('waking');
                 madelineIntent = SLEEP_GIF;
                 replayGif(dsMadeline, SLEEP_GIF);
-                // sleep.gif 播一次后停在最后一帧静态 PNG，不再循环
-                clearTimeout(sleepTimer);
-                sleepTimer = setTimeout(function () {
-                    if (!waking) { madelineIntent = SLEEP_LAST; dsMadeline.src = SLEEP_LAST; }
-                }, SLEEP_MS);
             }
-            scene.classList.add('show');          // 直接淡入极光场景（跳过点燃过程）
-            // 帧预载就绪后再切 src，避免冷开立即入梦时火焰闪白/缺帧（门控自带 800ms 超时）
-            framesReady.then(function () {
-                if (!scene.classList.contains('show')) return;   // 等待期间已离梦则放弃
-                dsFire.src = FRAMES[8];               // 篝火直接全燃
-                playSeq(FRAMES.slice(2), 130, true);  // 立即进入火焰摇曳小循环
-            });
-            spawnFeathers();                      // 金羽毛：按随笔数量散布天空
-            djStart();                            // dream BGM：Starjump 0–34s 循环
+            // sleep.gif 播完整后定格到最后一帧，再过渡到完整 dream 模式
+            clearTimeout(sleepTimer);
+            sleepTimer = setTimeout(function () {
+                if (waking) return;
+                if (dsMadeline) { madelineIntent = SLEEP_LAST; dsMadeline.src = SLEEP_LAST; }
+                // 定格停留片刻后激活心门 + 镜之房间 + 篝火全燃 + 金羽毛 + BGM
+                setTimeout(function () {
+                    if (waking) return;
+                    document.body.classList.add('dream-active');
+                    framesReady.then(function () {
+                        if (!scene.classList.contains('show')) return;
+                        dsFire.src = FRAMES[8];               // 篝火直接全燃
+                        playSeq(FRAMES.slice(2), 130, true);  // 立即进入火焰摇曳小循环
+                    });
+                    spawnFeathers();                      // 金羽毛：按随笔数量散布天空
+                    djStart();                            // dream BGM：Starjump 0–34s 循环
+                }, 400);
+            }, SLEEP_MS);
         });
 
         // ===== 金羽毛：天上散布 ≤6 根，点击 → flash → 大球飞 → 键盘控制 =====

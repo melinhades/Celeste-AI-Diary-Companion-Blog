@@ -146,7 +146,29 @@
 
 <div class="container archives-layout">
     <div class="archives-title"> Archives</div>
-    <div id="archiveContent"><div class="loading">Loading...</div></div>
+    <div id="archiveContent">
+        <div v-if="!groups.length" class="loading">Loading...</div>
+        <div v-else v-for="(yg, yi) in groups" :key="yg.year" class="year-group">
+            <div class="year-label">{{ yg.year }} <span class="archive-count">{{ yg.posts }} posts</span></div>
+            <div v-for="m in yg.months" :key="m.m" class="month-block" :class="{collapsed: m.collapsed}">
+                <div class="month-row" role="button" @click="toggleMonth(m)">
+                    <span class="month-caret">▾</span>
+                    <span class="archive-count">{{ m.items.length }} posts</span>
+                    <span class="month-name">{{ m.enMonth }}</span>
+                    <div class="month-icon">
+                        <div class="month-frame"></div>
+                        <img class="month-cover" :src="ARC_DIR + m.cover + '.png'" alt="" loading="lazy" decoding="async">
+                    </div>
+                </div>
+                <div class="month-posts">
+                    <div v-for="(item, i) in m.items" :key="i" class="archive-item" @click="goArticle(item, demo)">
+                        <span class="archive-date">{{ item.month ? yg.year + '-' + m.mm : formatDate(item.createDate) }}</span>
+                        <span class="archive-title">{{ item.title || '未命名文章' }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <footer class="footer">
@@ -156,8 +178,9 @@
 <script src="js/api.js?v=20261002"></script>
 <script src="js/text-fx.js?v=20261005b"></script>
 <script src="js/auth.js?v=20261003b"></script>
+<script src="js/vue.global.prod.js?v=20261008a"></script>
 <script>
-    // ===== 雪花粒子系统（与 index 同款） =====
+    // ===== 雪花粒子系统（与 index 同款，vanilla 保留） =====
     const snowCanvas = document.getElementById('snowCanvas');
     const snowCtx = snowCanvas.getContext('2d');
     let snowflakes = [];
@@ -224,6 +247,9 @@
 
     initHeader();
 
+    // ===== Vue 应用：接管归档列表数据驱动部分（#archiveContent） =====
+    const { createApp, ref, onMounted, nextTick, onUnmounted } = Vue;
+
     // 离线演示数据：后端不可达时也能看到月份横线结构（不跳转文章）
     const DEMO_ARCHIVES = [
         { id: -1, title: '山顶的呼吸练习', year: 2026, month: 9, createDate: '2026-09-10' },
@@ -233,116 +259,146 @@
         { id: -1, title: '塞莱斯特的雪', year: 2025, month: 12, createDate: '2025-12-31' }
     ];
 
-    api('/articles/listArchives', 'POST').then(res => {
-        if (res.success && res.data && res.data.length) renderArchives(res.data, false);
-        else renderArchives(DEMO_ARCHIVES, true);
-    });
+    const ARC_DIR = 'celeste-gui/archive/';
+    const MONTH_COVERS = ['intro', 'city', 'oldsite', 'cliffside', 'resort', 'temple', 'reflection', 'Summit', 'core', 'pico8', 'lock', 'farewell'];
+    const EN_MONTH = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
 
-    function renderArchives(list, demo) {
-        // 按年份分组
-        const groups = {};
-        list.forEach(item => {
-            const year = item.year || (item.createDate ? new Date(item.createDate).getFullYear() : '未知');
-            if (!groups[year]) groups[year] = [];
-            groups[year].push(item);
-        });
+    createApp({
+        setup() {
+            const groups = ref([]);
+            const demo = ref(false);
+            const totalPosts = ref(0);
 
-        // 月份横线素材：每月一张章节封面；hover.png 为包裹框架，章节图嵌在框内
-        const ARC_DIR = 'celeste-gui/archive/';
-        const MONTH_COVERS = ['intro', 'city', 'oldsite', 'cliffside', 'resort', 'temple', 'reflection', 'Summit', 'core', 'pico8', 'lock', 'farewell'];
-        const EN_MONTH = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
-        const seenCovers = {};
-        MONTH_COVERS.forEach(c => {
-            if (!seenCovers[c]) {
-                seenCovers[c] = true;
-                const pre = new Image();
-                pre.decoding = 'async';
-                pre.src = ARC_DIR + c + '.png';
+            let io = null;
+
+            function formatDate(d) {
+                if (!d) return '';
+                const dt = new Date(d);
+                if (isNaN(dt)) return String(d);
+                return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
             }
-        });
 
-        const years = Object.keys(groups).sort((a, b) => b - a);
-        const totalPosts = list.length;
-        document.querySelector('.archives-title').innerHTML = demo
-            ? ' Archives <span class="archive-count">offline demo · 后端未连接</span>'
-            : ' Archives <span class="archive-count">' + totalPosts + ' posts total</span>';
-
-        // 我的文章数（数据隔离：只算当前用户写的）
-        if (localStorage.getItem('token')) {
-            api('/articles/myCount', 'GET').then(r => {
-                if (r.success && r.data != null) {
-                    const mine = document.createElement('span');
-                    mine.className = 'archive-count';
-                    mine.style.marginLeft = '8px';
-                    mine.textContent = '你写了 ' + r.data + ' 篇';
-                    document.querySelector('.archives-title').appendChild(mine);
-                }
-            }).catch(() => {});
-        }
-
-        let html = '';
-        years.forEach((year, yi) => {
-            const items = groups[year];
-            // 年份内按月分组：每个月一条横线（月份图 + hover 覆盖层 + 可折叠文章列表）
-            const monthMap = {};
-            items.forEach(it => {
-                const m = it.month || (it.createDate ? new Date(it.createDate).getMonth() + 1 : 1);
-                (monthMap[m] = monthMap[m] || []).push(it);
-            });
-            const months = Object.keys(monthMap).sort((a, b) => b - a);
-            html += `<div class="year-group">
-                <div class="year-label">${year} <span class="archive-count">${items.length} posts</span></div>`;
-            months.forEach(m => {
-                const mItems = monthMap[m];
-                const cover = MONTH_COVERS[m - 1] || 'intro';
-                const mm = String(m).padStart(2, '0');
-                html += `<div class="month-block">
-                    <div class="month-row" role="button" data-m="${m}">
-                        <span class="month-caret">▾</span>
-                        <span class="archive-count">${mItems.length} posts</span>
-                        <span class="month-name">${EN_MONTH[m - 1] || ''}</span>
-                        <div class="month-icon">
-                            <div class="month-frame"></div>
-                            <img class="month-cover" src="${ARC_DIR}${cover}.png" alt="" loading="lazy" decoding="async">
-                        </div>
-                    </div>
-                    <div class="month-posts">`;
-                mItems.forEach(item => {
-                    const dmonth = item.month ? String(item.month).padStart(2, '0') : '';
-                    html += `<div class="archive-item"${demo ? '' : ` onclick="location.href='article.html?id=${item.id}'"`}>
-                        <span class="archive-date">${dmonth ? year + '-' + dmonth : formatDate(item.createDate)}</span>
-                        <span class="archive-title">${escHtml(item.title || '未命名文章')}</span>
-                    </div>`;
+            function buildGroups(list) {
+                // 按年份分组
+                const g = {};
+                list.forEach(item => {
+                    const year = item.year || (item.createDate ? new Date(item.createDate).getFullYear() : '未知');
+                    if (!g[year]) g[year] = [];
+                    g[year].push(item);
                 });
-                html += `</div></div>`;
-            });
-            html += '</div>';
-        });
-        document.getElementById('archiveContent').innerHTML = html;
-
-        // hover.png 已作为 month-frame 背景，不再需要单独探测 -hover.png 变体
-
-        // 月份横线折叠/展开 + 时间轴渐入动画
-        document.getElementById('archiveContent').addEventListener('click', e => {
-            const row = e.target.closest('.month-row');
-            if (row) {
-                e.stopPropagation();
-                row.closest('.month-block').classList.toggle('collapsed');
+                const years = Object.keys(g).sort((a, b) => b - a);
+                return years.map(year => {
+                    const items = g[year];
+                    // 年份内按月分组
+                    const monthMap = {};
+                    items.forEach(it => {
+                        const m = it.month || (it.createDate ? new Date(it.createDate).getMonth() + 1 : 1);
+                        (monthMap[m] = monthMap[m] || []).push(it);
+                    });
+                    const months = Object.keys(monthMap).sort((a, b) => b - a).map(m => {
+                        const mItems = monthMap[m];
+                        const cover = MONTH_COVERS[m - 1] || 'intro';
+                        const mm = String(m).padStart(2, '0');
+                        return {
+                            m: Number(m),
+                            items: mItems,
+                            collapsed: false,
+                            cover,
+                            mm,
+                            enMonth: EN_MONTH[m - 1] || ''
+                        };
+                    });
+                    return { year, posts: items.length, months };
+                });
             }
-        });
-        const io = new IntersectionObserver(entries => {
-            entries.forEach(en => {
-                if (en.isIntersecting) { en.target.classList.add('in-view'); io.unobserve(en.target); }
+
+            function toggleMonth(m) {
+                m.collapsed = !m.collapsed;
+            }
+
+            function goArticle(item, isDemo) {
+                if (isDemo || item.id < 0) return;
+                location.href = 'article.html?id=' + item.id;
+            }
+
+            onMounted(async () => {
+                // 预加载月份封面
+                MONTH_COVERS.forEach(c => {
+                    const pre = new Image();
+                    pre.decoding = 'async';
+                    pre.src = ARC_DIR + c + '.png';
+                });
+
+                // 拉取归档数据
+                try {
+                    const res = await api('/articles/listArchives', 'POST');
+                    if (res.success && res.data && res.data.length) {
+                        groups.value = buildGroups(res.data);
+                        totalPosts.value = res.data.length;
+                        demo.value = false;
+                    } else {
+                        groups.value = buildGroups(DEMO_ARCHIVES);
+                        totalPosts.value = DEMO_ARCHIVES.length;
+                        demo.value = true;
+                    }
+                } catch (e) {
+                    groups.value = buildGroups(DEMO_ARCHIVES);
+                    totalPosts.value = DEMO_ARCHIVES.length;
+                    demo.value = true;
+                }
+
+                // 更新标题（.archives-title 在 Vue 挂载区外，vanilla DOM 更新）
+                const titleEl = document.querySelector('.archives-title');
+                if (titleEl) {
+                    titleEl.innerHTML = demo.value
+                        ? ' Archives <span class="archive-count">offline demo · 后端未连接</span>'
+                        : ' Archives <span class="archive-count">' + totalPosts.value + ' posts total</span>';
+                }
+
+                // 我的文章数（数据隔离：只算当前用户写的）
+                if (localStorage.getItem('token')) {
+                    try {
+                        const r = await api('/articles/myCount', 'GET');
+                        if (r.success && r.data != null && titleEl) {
+                            const mine = document.createElement('span');
+                            mine.className = 'archive-count';
+                            mine.style.marginLeft = '8px';
+                            mine.textContent = '你写了 ' + r.data + ' 篇';
+                            titleEl.appendChild(mine);
+                        }
+                    } catch (e) {}
+                }
+
+                // IntersectionObserver：等 Vue 渲染完成后再扫描 .year-group
+                await nextTick();
+                io = new IntersectionObserver(entries => {
+                    entries.forEach(en => {
+                        if (en.isIntersecting) {
+                            en.target.classList.add('in-view');
+                            io.unobserve(en.target);
+                        }
+                    });
+                }, { threshold: 0.12 });
+                const yearGroups = document.querySelectorAll('.year-group');
+                yearGroups.forEach((g, i) => {
+                    g.style.transitionDelay = (i * 0.08) + 's';
+                    io.observe(g);
+                });
             });
-        }, { threshold: 0.12 });
-        document.querySelectorAll('.year-group').forEach((g, i) => {
-            g.style.transitionDelay = (i * 0.08) + 's';
-            io.observe(g);
-        });
-    }
+
+            onUnmounted(() => {
+                if (io) io.disconnect();
+            });
+
+            return {
+                groups, demo, totalPosts, ARC_DIR,
+                formatDate, toggleMonth, goArticle
+            };
+        }
+    }).mount('#archiveContent');
 </script>
 <script>
-// ================= 像素 Madeline 行为树 + 点击彩蛋 =================
+// ================= 像素 Madeline 行为树 + 点击彩蛋（vanilla 保留，独立于 Vue 挂载区） =================
 (function () {
     const SRC = {
         move: 'celeste-gui/madeline-move.gif',

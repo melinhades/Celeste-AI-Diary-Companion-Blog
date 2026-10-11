@@ -181,53 +181,61 @@
     }
     </script>
 <div class="login-box">
-    <img class="login-madeline" src="celeste-portraits/madeline/normal00.png" alt="Madeline" id="madelineAvatar" loading="lazy" decoding="async">
+    <img class="login-madeline" :src="avatarSrc" alt="Madeline" ref="madelineAvatar" loading="lazy" decoding="async">
     <h2>WELCOME BACK</h2>
     <p class="sub">This is Madeline. Let's climb together.</p>
-    <form id="loginForm" autocomplete="on" novalidate>
+    <form id="loginForm" autocomplete="on" novalidate @submit.prevent="submit">
         <div class="form-group">
             <label for="account">Account</label>
             <input class="form-control" type="text" id="account" name="account"
                    placeholder="Enter your account" autocomplete="username"
-                   maxlength="64" autofocus required>
+                   maxlength="64" autofocus required
+                   v-model="account"
+                   @input="onAccountInput"
+                   :class="{valid: account.trim() && !accountError, error: accountError}"
+                   ref="accountInput">
         </div>
         <div class="form-group">
             <label for="password">Password</label>
-            <input class="form-control" type="password" id="password" name="password"
+            <input class="form-control" :type="showPw ? 'text' : 'password'" id="password" name="password"
                    placeholder="Enter your password" autocomplete="current-password"
-                   maxlength="128" required>
-            <button type="button" class="toggle-pw" id="togglePw" tabindex="-1" aria-label="Toggle password visibility">👁</button>
-            <div class="caps-warning" id="capsWarning">⚠ Caps Lock is ON</div>
+                   maxlength="128" required
+                   v-model="password"
+                   @keyup="onPwKeyup"
+                   @blur="onPwBlur"
+                   :class="{error: pwError}"
+                   ref="pwInput">
+            <button type="button" class="toggle-pw" tabindex="-1" aria-label="Toggle password visibility" @click="togglePw">
+                {{ showPw ? '🙈' : '👁' }}
+            </button>
+            <div class="caps-warning" :class="{show: capsOn}">⚠ Caps Lock is ON</div>
         </div>
-        <div class="form-error" id="errMsg"></div>
+        <div v-if="errShow" :key="errKey" class="form-error show">{{ errMsg }}</div>
         <div class="remember-row">
-            <label><input type="checkbox" id="rememberMe"> Remember me</label>
+            <label><input type="checkbox" v-model="rememberMe"> Remember me</label>
         </div>
-        <button class="btn btn-primary" type="submit" id="loginBtn">
+        <button class="btn btn-primary" type="submit" id="loginBtn" :class="{loading: loading}" :disabled="loading">
             <span class="btn-spinner"></span>
-            <span class="btn-text">Log In</span>
+            <span class="btn-text">{{ loading ? 'Logging in...' : 'Log In' }}</span>
         </button>
     </form>
     <div class="login-footer">No account yet? <a href="register.html">Sign up</a></div>
 </div>
 <script src="js/api.js?v=20261002"></script>
+<script src="js/vue.global.prod.js?v=20261008a"></script>
 <script src="js/snow-bgm.js"></script>
 <script>
+    // 已登录直接跳转（在 Vue 挂载前执行，避免无谓渲染）
     if (localStorage.getItem('token')) location.href = 'index.html';
 
-    // 记住我：回填账号
-    const savedAccount = localStorage.getItem('savedAccount');
-    if (savedAccount) {
-        document.getElementById('account').value = savedAccount;
-        document.getElementById('rememberMe').checked = true;
-    }
-
-    // 明信片同款出场
+    // 记住我：回填账号（初始值传入 Vue setup）
+    // 明信片同款出场（Vue 不接管 .login-box 根的 class 属性，vanilla 操作仍生效）
     requestAnimationFrame(() => requestAnimationFrame(() => {
-        document.querySelector('.login-box').classList.add('slide-in');
+        const box = document.querySelector('.login-box');
+        if (box) box.classList.add('slide-in');
     }));
 
-    // ===== 音效 =====
+    // ===== 音效（vanilla 保留）=====
     function playSfx(name) {
         try {
             const a = new Audio('celeste-sounds/' + name);
@@ -244,97 +252,122 @@
         });
     })();
 
-    // ===== 密码可见切换 =====
-    const pwInput = document.getElementById('password');
-    const togglePw = document.getElementById('togglePw');
-    togglePw.addEventListener('click', () => {
-        const isPw = pwInput.type === 'password';
-        pwInput.type = isPw ? 'text' : 'password';
-        togglePw.textContent = isPw ? '🙈' : '👁';
-        pwInput.focus();
-    });
+    // ===== Vue 应用：接管表单状态与提交逻辑 =====
+    const { createApp, ref, computed, nextTick } = Vue;
 
-    // ===== Caps Lock 检测 =====
-    const capsWarning = document.getElementById('capsWarning');
-    pwInput.addEventListener('keyup', (e) => {
-        if (e.getModifierState && e.getModifierState('CapsLock')) {
-            capsWarning.classList.add('show');
-        } else {
-            capsWarning.classList.remove('show');
-        }
-    });
-    pwInput.addEventListener('blur', () => capsWarning.classList.remove('show'));
+    createApp({
+        setup() {
+            // ===== 状态 =====
+            const account = ref(localStorage.getItem('savedAccount') || '');
+            const password = ref('');
+            const showPw = ref(false);
+            const capsOn = ref(false);
+            const errMsg = ref('');
+            const errShow = ref(false);
+            const errKey = ref(0);
+            const loading = ref(false);
+            const avatarSrc = ref('celeste-portraits/madeline/normal00.png');
+            const rememberMe = ref(!!localStorage.getItem('savedAccount'));
+            const accountError = ref(false);
+            const pwError = ref(false);
 
-    // ===== 实时校验 =====
-    const accountInput = document.getElementById('account');
-    accountInput.addEventListener('input', () => {
-        accountInput.classList.remove('error', 'valid');
-        if (accountInput.value.trim()) accountInput.classList.add('valid');
-    });
+            // ===== DOM 模板引用 =====
+            const madelineAvatar = ref(null);
+            const accountInput = ref(null);
+            const pwInput = ref(null);
 
-    // ===== 表单提交 =====
-    const form = document.getElementById('loginForm');
-    const errEl = document.getElementById('errMsg');
-    const btn = document.getElementById('loginBtn');
-    const madelineAvatar = document.getElementById('madelineAvatar');
-
-    function showErr(msg) {
-        errEl.textContent = msg;
-        errEl.classList.remove('show');
-        void errEl.offsetWidth; // 重置动画
-        errEl.classList.add('show');
-        madelineAvatar.src = 'celeste-portraits/madeline/sad00.png';
-        madelineAvatar.style.transform = 'scale(1.05)';
-        setTimeout(() => madelineAvatar.style.transform = '', 300);
-    }
-
-    function setLoading(loading) {
-        btn.disabled = loading;
-        btn.classList.toggle('loading', loading);
-        btn.querySelector('.btn-text').textContent = loading ? 'Logging in...' : 'Log In';
-    }
-
-    form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        doLogin();
-    });
-
-    function doLogin() {
-        const account = accountInput.value.trim();
-        const password = pwInput.value;
-        errEl.classList.remove('show');
-
-        if (!account) { accountInput.classList.add('error'); accountInput.focus(); showErr('Please enter your account'); return; }
-        if (!password) { pwInput.classList.add('error'); pwInput.focus(); showErr('Please enter your password'); return; }
-
-        accountInput.classList.remove('error');
-        pwInput.classList.remove('error');
-        setLoading(true);
-        madelineAvatar.src = 'celeste-portraits/madeline/determined00.png';
-
-        api('/login', 'POST', { account, password }).then(res => {
-            setLoading(false);
-            if (res.success) {
-                const d = res.data;
-                const token = typeof d === 'string' ? d : d.token;
-                const nickname = typeof d === 'string' ? account : (d.nickname || d.account || account);
-                localStorage.setItem('token', token);
-                localStorage.setItem('nickname', nickname);
-                // 记住我
-                if (document.getElementById('rememberMe').checked) {
-                    localStorage.setItem('savedAccount', account);
-                } else {
-                    localStorage.removeItem('savedAccount');
+            // ===== 错误提示（:key 变更触发元素重建，重启 shake 动画）=====
+            function showErr(msg) {
+                errMsg.value = msg;
+                errKey.value++;
+                errShow.value = true;
+                avatarSrc.value = 'celeste-portraits/madeline/sad00.png';
+                if (madelineAvatar.value) {
+                    madelineAvatar.value.style.transform = 'scale(1.05)';
+                    setTimeout(() => { if (madelineAvatar.value) madelineAvatar.value.style.transform = ''; }, 300);
                 }
-                try { sessionStorage.setItem('justLoggedIn', '1'); } catch (e) {}
-                document.querySelector('.login-box').style.display = 'none';
-                document.getElementById('loginLoadingOverlay').classList.add('show');
-                setTimeout(() => { location.href = 'index.html'; }, 1200);
-            } else {
-                showErr(res.msg || 'Wrong account or password');
             }
-        });
-    }
+
+            // ===== 密码可见切换 =====
+            function togglePw() {
+                showPw.value = !showPw.value;
+                if (pwInput.value) pwInput.value.focus();
+            }
+
+            // ===== Caps Lock 检测 =====
+            function onPwKeyup(e) {
+                capsOn.value = !!(e.getModifierState && e.getModifierState('CapsLock'));
+            }
+            function onPwBlur() {
+                capsOn.value = false;
+            }
+
+            // ===== 实时校验：输入时清掉错误态 =====
+            function onAccountInput() {
+                accountError.value = false;
+            }
+
+            // ===== 表单提交 =====
+            async function submit() {
+                const acc = account.value.trim();
+                const pw = password.value;
+                errShow.value = false;
+
+                if (!acc) {
+                    accountError.value = true;
+                    if (accountInput.value) accountInput.value.focus();
+                    showErr('Please enter your account');
+                    return;
+                }
+                if (!pw) {
+                    pwError.value = true;
+                    if (pwInput.value) pwInput.value.focus();
+                    showErr('Please enter your password');
+                    return;
+                }
+
+                accountError.value = false;
+                pwError.value = false;
+                loading.value = true;
+                avatarSrc.value = 'celeste-portraits/madeline/determined00.png';
+
+                try {
+                    const res = await api('/login', 'POST', { account: acc, password: pw });
+                    loading.value = false;
+                    if (res.success) {
+                        const d = res.data;
+                        const token = typeof d === 'string' ? d : d.token;
+                        const nickname = typeof d === 'string' ? acc : (d.nickname || d.account || acc);
+                        localStorage.setItem('token', token);
+                        localStorage.setItem('nickname', nickname);
+                        if (rememberMe.value) {
+                            localStorage.setItem('savedAccount', acc);
+                        } else {
+                            localStorage.removeItem('savedAccount');
+                        }
+                        try { sessionStorage.setItem('justLoggedIn', '1'); } catch (e) {}
+                        const box = document.querySelector('.login-box');
+                        if (box) box.style.display = 'none';
+                        const ov = document.getElementById('loginLoadingOverlay');
+                        if (ov) ov.classList.add('show');
+                        setTimeout(() => { location.href = 'index.html'; }, 1200);
+                    } else {
+                        showErr(res.msg || 'Wrong account or password');
+                    }
+                } catch (e) {
+                    loading.value = false;
+                    showErr('Network error, please try again');
+                }
+            }
+
+            return {
+                account, password, showPw, capsOn, errMsg, errShow, errKey, loading, avatarSrc, rememberMe,
+                accountError, pwError,
+                madelineAvatar, accountInput, pwInput,
+                showErr, togglePw, onPwKeyup, onPwBlur, onAccountInput, submit
+            };
+        }
+    }).mount('.login-box');
 </script>
 </body>
 </html>

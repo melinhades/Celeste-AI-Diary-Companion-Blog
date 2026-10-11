@@ -364,7 +364,9 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
         <span class="chat-title">Oshiro</span>
         <button class="close-btn" id="ochCloseBtn">✕</button>
     </div>
-    <div id="oshiroChatMessages"></div>
+    <div id="oshiroChatMessages">
+        <div v-for="(m, mi) in ochMessages" :key="mi" :class="'och-msg ' + m.role">{{ m.text }}</div>
+    </div>
     <div class="chat-input">
         <input type="text" id="ochInput" placeholder="跟 Oshiro 说点什么...">
         <button id="ochSendBtn">Send</button>
@@ -388,6 +390,7 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 
 <script src="js/api.js?v=20261002"></script>
 <script src="js/text-fx.js?v=20261005b"></script>
+<script src="js/vue.global.prod.js?v=20261008a"></script>
 <script>
     // ===== 音频手势解锁（修复音效不生效） =====
     ['pointerdown', 'keydown'].forEach(function(ev) {
@@ -938,9 +941,13 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
         toggleOshiroChat();
     });
 
-    // ===== 聊天历史框 =====
+    // ===== 聊天历史框（消息列表交 Vue v-for，滚动/输入仍为 vanilla） =====
     var oshiroChatDialog = document.getElementById('oshiroChatDialog');
     var oshiroChatMessages = document.getElementById('oshiroChatMessages');
+    const ochMessages = Vue.ref([]);
+    Vue.createApp({
+        setup() { return { ochMessages }; }
+    }).mount('#oshiroChatMessages');
     document.getElementById('ochCloseBtn').addEventListener('click', function() {
         oshiroChatDialog.classList.remove('show');
     });
@@ -952,11 +959,8 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
         }
     }
     function appendOchMsg(role, text) {
-        var div = document.createElement('div');
-        div.className = 'och-msg ' + role;
-        div.textContent = text;
-        oshiroChatMessages.appendChild(div);
-        oshiroChatMessages.scrollTop = oshiroChatMessages.scrollHeight;
+        ochMessages.value.push({ role: role, text: text });
+        Vue.nextTick(function () { oshiroChatMessages.scrollTop = oshiroChatMessages.scrollHeight; });
     }
     document.getElementById('ochSendBtn').addEventListener('click', function() {
         sendChat();

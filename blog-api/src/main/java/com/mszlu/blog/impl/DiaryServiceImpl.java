@@ -43,6 +43,12 @@ public class DiaryServiceImpl implements DiaryService {
      */
     private static final java.util.regex.Pattern STREAM_EMOTION_PREFIX = java.util.regex.Pattern.compile(
             "^\\s*\\[\\s*(?:emotion\\s*[:：]\\s*)?(默认|不安|惊讶|怨恨|不开心|可爱|无语)\\s*\\]\\s*");
+    /**
+     * 正文里的句内情绪切换标记（AI 自行判断插入）：[m:不安] / [m：不安]，
+     * 兼容模型误写成 [emotion:不安] 的情况。落库与记忆提取前必须剥掉，用户永远看不到。
+     */
+    private static final java.util.regex.Pattern INLINE_MOOD_MARKER = java.util.regex.Pattern.compile(
+            "\\[\\s*(?:m|emotion)\\s*[:：]\\s*(默认|不安|惊讶|怨恨|不开心|可爱|无语)\\s*\\]");
 
     @Autowired
     private DiaryMapper diaryMapper;
@@ -414,6 +420,8 @@ public class DiaryServiceImpl implements DiaryService {
         } catch (Exception e) {
             emotion = "默认";
         }
+        // 防御：JSON 模式下模型理论上不写内联标记，若误写则剥离（前端也能识别，这里保证落库干净）
+        feedback = INLINE_MOOD_MARKER.matcher(feedback).replaceAll("").trim();
 
         DiaryCompanion companion = new DiaryCompanion();
         companion.setUserId(userId);
@@ -575,6 +583,8 @@ public class DiaryServiceImpl implements DiaryService {
             emotion[0] = normalizeHerEmotion(em.group(1));
             text = text.substring(em.end()).trim();
         }
+        // 剥掉正文中的句内情绪切换标记 [m:情绪]，落库与记忆提取只留她真正说出口的话
+        text = INLINE_MOOD_MARKER.matcher(text).replaceAll("").trim();
         if (text.isEmpty()) return;
 
         DiaryCompanion companion = new DiaryCompanion();
@@ -1096,5 +1106,53 @@ public class DiaryServiceImpl implements DiaryService {
         java.util.Map<String, Object> data = new java.util.HashMap<>();
         data.put("keyword", reply != null ? reply.trim().replaceAll("[\\s\\n]+", "") : null);
         return Result.success(data);
+    }
+
+    /** 情绪统计：各情绪出现次数 + 按月趋势（仅普通日记，排除梦境） */
+    @Override
+    public Result emotionStats() {
+        SysUser user = UserThreadLocal.get();
+        if (user == null) return Result.fail(403, "未登录");
+        String userId = user.getId();
+
+        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Diary> wrapper =
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
+        wrapper.eq(Diary::getUserId, userId);
+        wrapper.eq(Diary::getType, "day");
+        wrapper.isNotNull(Diary::getEmotion);
+        wrapper.select(Diary::getEmotion, Diary::getCreateDate);
+        wrapper.orderByDesc(Diary::getCreateDate);
+        List<Diary> diaries = diaryMapper.selectList(wrapper);
+
+        // 各情绪总分布
+        java.util.Map<String, Integer> distribution = new java.util.LinkedHashMap<>();
+        // 按月趋势：{ "2026-03": { "开心": 3, "平静": 2, ... }, ... }
+        java.util.Map<String, java.util.Map<String, Integer>> monthly = new java.util.TreeMap<>();
+
+        java.text.SimpleDateFormat monthFmt = new java.text.SimpleDateFormat("yyyy-MM");
+        for (Diary d : diaries) {
+            String emo = d.getEmotion();
+            if (emo == null || emo.trim().isEmpty()) continue;
+            emo = emo.trim();
+            distribution.merge(emo, 1, Integer::sum);
+            String month = monthFmt.format(d.getCreateDate());
+            monthly.computeIfAbsent(month, k -> new java.util.HashMap<>()).merge(emo, 1, Integer::sum);
+        }
+
+        // 按时间正序排月（TreeMap 默认升序）
+        java.util.List<java.util.Map<String, Object>> timeline = new java.util.ArrayList<>();
+        for (java.util.Map.Entry<String, java.util.Map<String, Integer>> e : monthly.entrySet()) {
+            java.util.Map<String, Object> item = new java.util.HashMap<>();
+            item.put("month", e.getKey());
+            item.put("emotions", e.getValue());
+            timeline.add(item);
+        }
+
+        int total = diaries.size();
+        java.util.Map<String, Object> result = new java.util.HashMap<>();
+        result.put("total", total);
+        result.put("distribution", distribution);
+        result.put("timeline", timeline);
+        return Result.success(result);
     }
 }

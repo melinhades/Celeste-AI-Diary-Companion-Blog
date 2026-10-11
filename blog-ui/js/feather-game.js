@@ -170,7 +170,6 @@
         overlay.innerHTML =
             '<canvas id="featherCanvas"></canvas>' +
             '<div class="feather-header">' +
-            '  <span class="feather-title">GOLDEN FEATHER · 跟着羽毛呼吸</span>' +
             '  <button id="featherCloseBtn">✕</button>' +
             '</div>' +
             '<div class="feather-madeline">' +
@@ -180,8 +179,7 @@
             '    <div class="feather-madeline-text" id="featherMadelineText"></div>' +
             '  </div>' +
             '</div>' +
-            '<div class="feather-caption"></div>' +
-            '<div class="feather-hint">按住 ↑ 让羽毛上升 · 松开它会慢慢落下 · Esc 随时离开</div>';
+            '<div class="feather-caption"></div>';
         const style = document.createElement('style');
         style.textContent =
             '#feather-overlay{position:fixed;inset:0;opacity:0;pointer-events:none;background:radial-gradient(ellipse at 50% 32%, rgba(64,36,66,.5), rgba(8,7,16,.97) 78%);z-index:1200;transition:opacity .7s ease;}' +

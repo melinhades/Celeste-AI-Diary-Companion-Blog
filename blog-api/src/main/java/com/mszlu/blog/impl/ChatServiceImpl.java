@@ -2,10 +2,13 @@ package com.mszlu.blog.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.mszlu.blog.dao.mapper.ChatMessageMapper;
+import com.mszlu.blog.dao.mapper.ReminderMapper;
 import com.mszlu.blog.dao.pojo.ChatMessage;
 import com.mszlu.blog.dao.pojo.Memory;
 import com.mszlu.blog.dao.pojo.Persona;
+import com.mszlu.blog.dao.pojo.Reminder;
 import com.mszlu.blog.dao.pojo.SysUser;
+import com.mszlu.blog.service.AgentTraceService;
 import com.mszlu.blog.service.ChatService;
 import com.mszlu.blog.service.DiaryService;
 import com.mszlu.blog.service.MemoryService;
@@ -17,6 +20,7 @@ import com.mszlu.blog.utils.UserThreadLocal;
 import com.mszlu.blog.vo.Result;
 import com.mszlu.blog.vo.params.ChatMessageVo;
 import com.mszlu.blog.vo.params.ChatParam;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -25,6 +29,7 @@ import java.util.Collections;
 import java.util.List;
 
 @Service
+@Slf4j
 public class ChatServiceImpl implements ChatService {
 
     /** 短期记忆：带入最近几轮对话 */
@@ -32,6 +37,10 @@ public class ChatServiceImpl implements ChatService {
 
     @Autowired
     private ChatMessageMapper chatMessageMapper;
+    @Autowired
+    private ReminderMapper reminderMapper;
+    @Autowired
+    private AgentTraceService agentTraceService;
     @Autowired
     private PersonaService personaService;
     @Autowired
@@ -93,6 +102,8 @@ public class ChatServiceImpl implements ChatService {
             }
             // AI 主动发起金羽毛呼吸邀请（提示词约束为低情绪漩涡场景才 true）
             feather = obj.getBooleanValue("feather");
+            // 提醒工具：对方托付了"到点叫我"就落 reminder 表，到期由定时任务派发
+            saveReminderIfAny(userId, obj, content);
         } catch (Exception e) {
             // JSON 解析失败：当作纯文本回复，情绪回落默认
         }
@@ -166,6 +177,41 @@ public class ChatServiceImpl implements ChatService {
         List<ChatMessage> list = chatMessageMapper.selectList(wrapper);
         Collections.reverse(list);
         return list;
+    }
+
+    /** 解析 AI 回复里的 reminder 工具字段并落库；解析失败静默跳过（提醒永远不能弄丢对话） */
+    private void saveReminderIfAny(String userId, com.alibaba.fastjson.JSONObject obj, String userContent) {
+        long t0 = System.currentTimeMillis();
+        try {
+            com.alibaba.fastjson.JSONObject rm = obj.getJSONObject("reminder");
+            if (rm == null) return;
+            String at = rm.getString("at");
+            String text = rm.getString("text");
+            if (at == null || text == null || text.isBlank()) return;
+            java.time.LocalDateTime due;
+            try {
+                due = java.time.LocalDateTime.parse(at.trim(),
+                        java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+            } catch (Exception parseError) {
+                agentTraceService.record("chat", null, userId, "tool_reminder",
+                        "user=" + userContent, "时间解析失败: " + at, System.currentTimeMillis() - t0);
+                return;
+            }
+            long dueMs = due.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+            if (dueMs <= System.currentTimeMillis()) return; // 过去时间不设
+            Reminder reminder = new Reminder();
+            reminder.setUserId(userId);
+            reminder.setContent(text.trim());
+            reminder.setRemindAt(dueMs);
+            reminder.setStatus(0);
+            reminder.setCreateDate(System.currentTimeMillis());
+            reminderMapper.insert(reminder);
+            agentTraceService.record("chat", null, userId, "tool_reminder",
+                    "user=" + userContent, "set at=" + at + " text=" + text.trim(),
+                    System.currentTimeMillis() - t0);
+        } catch (Exception e) {
+            log.warn("提醒工具解析失败（忽略）: {}", e.getMessage());
+        }
     }
 
     private void saveMessage(String userId, String role, String content, long createDate) {

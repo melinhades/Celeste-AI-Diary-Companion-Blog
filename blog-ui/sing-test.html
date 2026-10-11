@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="icon/OIP.webp" type="image/webp">
 <title>Madeline 唱 AI 的话 · 逐字变调</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -57,20 +58,22 @@
 
   <div id="lyric">…</div>
 
+  <div id="singApp" style="display:contents">
   <div class="inputrow">
-    <input id="prompt" placeholder="写一句词，Madeline 复读唱出来（回车发送）" maxlength="60">
+    <input id="prompt" placeholder="写一句词，Madeline 复读唱出来（回车发送）" maxlength="60"
+           v-model="prompt" @keydown.enter="runAi">
   </div>
   <div class="actions">
-    <button id="aiBtn">AI 复读唱出</button>
-    <button id="directBtn">直接唱输入框文字</button>
-    <button id="origBtn">听原版对比</button>
+    <button id="aiBtn" :disabled="aiBusy" @click="runAi">AI 复读唱出</button>
+    <button id="directBtn" :disabled="directBusy" @click="runDirect">直接唱输入框文字</button>
+    <button id="origBtn" :disabled="origBusy" @click="runOrig">听原版对比</button>
   </div>
   <div class="actions">
-    <button id="stage1Btn" class="stageBtn">① 对话原声</button>
-    <button id="stage2Btn" class="stageBtn">② 变调歌唱</button>
+    <button id="stage1Btn" class="stageBtn" :disabled="s1Busy" @click="runStage(1)">① 对话原声</button>
+    <button id="stage2Btn" class="stageBtn" :disabled="s2Busy" @click="runStage(2)">② 变调歌唱</button>
   </div>
   <label style="font-size:13px;color:#9fb0d8;display:flex;align-items:center;gap:6px;cursor:pointer">
-    <input type="checkbox" id="concatMode" checked style="accent-color:#ff5a78">
+    <input type="checkbox" id="concatMode" v-model="concat" checked style="accent-color:#ff5a78">
     拼接模式：步骤1 自动听参考音频识别音高/旋律/节奏，步骤2 一字一音贴旋律节奏、精确变调+字尾滑音（机器测频校验音头，不准则自动修正），关掉则是乐句单声源
   </label>
   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center">
@@ -80,12 +83,14 @@
       <input type="number" id="refStart" value="0" min="0" step="1" style="width:56px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:6px;color:#fff;padding:3px 6px">
     </label>
   </div>
+  </div>
   <div class="emoinfo" id="emoinfo"></div>
   <div class="status" id="status"></div>
   <div class="hint">演唱情绪固定为生气（唯一池，调音与听感最佳）· 选声与 diary 一致（第 7 声 per + A/B/C 轮转）<br>
   带伴奏的歌转谱易混入乐器音：建议先用 Demucs 等工具分离出纯人声再喂，识别会准很多</div>
 
 <script src="./js/blip_data.js"></script>
+<script src="./js/vue.global.prod.js?v=20261008a"></script>
 <script>
 // ===== 步骤1：自动"听"参考音频，识别音高 / 旋律 / 节奏（YIN 基频检测） =====
 // 简谱数字 → MIDI（五声，本地兜底旋律用）
@@ -97,14 +102,16 @@ function yinFrame(d, i0, frame, lo, hi, sr) {
   const span = frame - hi;
   const cmnd = new Float32Array(hi + 1);
   let run = 0;
-  for (let tau = lo; tau <= hi; tau++) {
+  // 标准 YIN：cmnd[τ] = d(τ) / ((1/τ) Σ_{j=1..τ} d(j))，run 必须从 τ=1 累积，
+  // 否则两端谷值的 0.15 阈值含义不一致（lo 端被压低、hi 端被抬高）
+  for (let tau = 1; tau <= hi; tau++) {
     let s = 0;
     for (let j = 0; j < span; j += 2) {
       const x = d[i0 + j] - d[i0 + j + tau];
       s += x * x;
     }
     run += s;
-    cmnd[tau] = s * tau / run;
+    if (tau >= lo) cmnd[tau] = s * tau / run;
   }
   // 绝对阈值 0.15：第一个越过阈值的 tau，再沿下降沿走到局部极小
   let tau = lo;
@@ -222,7 +229,8 @@ function analyzeAudioNotes(buf) {
     }
   }
   const notes = work.map(n => ({ t: n.t, dur: Math.max(0.05, n.endT - n.t), midi: n.midi, f0: m2f(n.midi) }));
-  const span = notes.length > 1 ? notes[notes.length - 1].t - notes[0].t : notes[0]?.dur || 0.5;
+  // span 必须包含末音 dur，否则第二轮字头会和第一轮末音尾巴重叠（"抢拍"）
+  const span = notes.length > 1 ? notes[notes.length - 1].t + notes[notes.length - 1].dur - notes[0].t : notes[0]?.dur || 0.5;
   return { notes, span };
 }
 
@@ -346,7 +354,7 @@ function rebuildCustomRef(prefix) {
     status.textContent = `转谱失败：${startSec}s 起的区间没识别到音符，调「起始秒」跳到人声段再试`;
     return;
   }
-  REF = { notes, span: notes[notes.length - 1].t - notes[0].t, name: customRefName };
+  REF = { notes, span: notes[notes.length - 1].t + notes[notes.length - 1].dur - notes[0].t, name: customRefName };
   REF_LOADING = null;
   const preview = notes.slice(0, 24).map(n => n.midi).join(' ') + (notes.length > 24 ? ' …' : '');
   status.textContent = `${prefix}「${customRefName}」· 转谱完成 ${notes.length} 音 · 音高「${preview}」· 填歌词点 ② 演唱`;
@@ -381,7 +389,7 @@ async function ensureReference() {
         notes = measureGrid(buf, NOTES);
         if (!notes.length) throw new Error('no notes recognized');
       }
-      const span = notes[notes.length - 1].t - notes[0].t;
+      const span = notes[notes.length - 1].t + notes[notes.length - 1].dur - notes[0].t;
       REF = { notes, span, name: customRefName || 'wow 彩蛋' };
       return REF;
     })();
@@ -433,7 +441,7 @@ const lyricEl = document.getElementById("lyric");
 /* ===== 唱歌情绪：固定生气池（听感与调音最佳） =====
    生气池 blip 基频清晰、最像原版；其他池不直接演唱，仅先验展示 */
 const SING_POOLS = ['angry'];
-const bannedBlips = new Set();   // 唱歌修正中发现烘焙基频严重失真的 blip，禁用于演唱选声
+// bannedBlips 是 singConcat 内的局部 Set（跨歌永久拉黑会误伤下一首），不再模块级声明
 // 非演唱情绪 → 生气（全部归一）
 const PRIOR_MAP = {
   angry:'angry', deadpan:'angry', determined:'angry',
@@ -642,6 +650,7 @@ function pickDiarySeq(poolKey, n, targetMidis = null) {
     const arr0 = byGroup[g].length ? byGroup[g] : items;
     const pitchedArr = arr0.filter(x => x.pitched);   // 气声 blip 变调后不成调，唱歌优先有基频的
     const arr = pitchedArr.length ? pitchedArr : arr0;
+    if (!arr.length) return null;   // 池加载失败/该组为空 → 让上层走兜底，避免 reduce 抛
     let it;
     if (targetMidis) {
       const tf = m2f(targetMidis[i]);
@@ -670,7 +679,12 @@ function textToUnits(text) {
       else units.push({ ch, speak: true, word: true });
     }
   }
-  return units.slice(0, 44);
+  if (units.length > 44) {
+    // wow 旋律只有 44 个音，超过的字会被直接丢弃 → 提示用户控制字数
+    status && (status.textContent = `歌词超过 44 字，已截前 44 字（旋律只有 44 个音）`);
+    return units.slice(0, 44);
+  }
+  return units;
 }
 
 // 音高同步重叠拼接长音垫：重叠窗口=1个周期、片段长取整周期 → 相位对齐，无梳状滤波金属声
@@ -703,13 +717,14 @@ function makePad(buf, seconds, f0) {
 
 const m2f = m => 440 * Math.pow(2, (m - 69) / 12);
 let stopAll = null;
+let singGen = 0;   // singText 代际号：快速连点新歌时让旧 setTimeout 回调失活，避免字幕/嘴型互相打架
 
 /* ===== TD-PSOLA 歌声合成核心：变调只移基频，声道音色（共振峰）保留 =====
    playbackRate 重采样的根本缺陷：变调必变共振峰 → 变调率大就"花栗鼠"，颤音/滑音连音色一起抖。
    PSOLA 把 blip 按基频周期重排：音高走任意目标轨迹（fFn），谱包络近似不动 → 真人换音高的质感。
    it: blip（f0/loopStart/loopEnd）；span: 本声时长(s)；fFn(τ): 瞬时频率函数（含变调/滑音/颤音/scoop） */
 function psolaVoice(it, span, fFn) {
-  const sr = 48000;
+  const sr = ctx.sampleRate;   // 跟随 AudioContext 实际采样率，避免 44.1k 设备上多一道 SRC 磨掉相位一致性
   const inp = it.buf.getChannelData(0), israte = it.buf.sampleRate, ilen = inp.length;
   const rs = sr / israte;                       // 输入域→输出域采样位置换算
   const N = Math.ceil(span * sr);
@@ -831,7 +846,7 @@ function planSpeech(units) {
 }
 
 async function renderSpeech(units, picks, plan, noteRates = null, glideRates = null, expr = null, fFns = null) {
-  const sr = 48000;
+  const sr = ctx.sampleRate;   // 与 psolaVoice 一致；OfflineAudioContext 支持任意 rate，重采样多一道会磨 PSOLA 相位
   const { sounds, speechLen } = plan;
   const dur = speechLen + 0.7;   // 尾声自然衰减余量（最低变调率 0.5，最长 blip 也放得下）
   const off = new OfflineAudioContext(1, Math.ceil(dur * sr), sr);
@@ -1007,6 +1022,8 @@ async function singConcat(units, boosted, t0, srcs, stage = 2) {
   const poolKey = SING_POOLS.includes(boosted) ? boosted : 'determined';
   let picks, rates = null, glideRates = null, pitchReport = null;
   if (stage >= 2) {
+    // 本场演唱的局部拉黑表：发现烘焙基频严重失真的 blip 禁用于本场后续选声；下一首歌新开 Set
+    const bannedBlips = new Set();
     // ===== 步骤1：识别参考音频（YIN），失败走本地兜底 =====
     status.textContent = `正在听参考音频，识别音高与节奏…`;
     let ref = null;
@@ -1041,6 +1058,7 @@ async function singConcat(units, boosted, t0, srcs, stage = 2) {
     // ===== 步骤2b：选声 + 选调 =====
     // 先按未移调目标选声，用于估算整首该唱什么调
     picks = pickDiarySeq(poolKey, nSnd, midis);
+    if (!picks) { status.textContent = "声音池未准备好，等加载完再试"; return null; }
     let f0eff = picks.map(p => p.it.f0 * p.playRate);
     // 选调：整首移调 key 半音（音程轮廓严格不变，= 真人换到适合自己的调），
     // ±12 半音全搜索，代价 = 钳制 [0.7,1.4] 后的实际音高误差（音分）——保证选出的调
@@ -1143,12 +1161,14 @@ async function singConcat(units, boosted, t0, srcs, stage = 2) {
     }
     pitchReport = {
       source: ref ? 'audio' : 'fallback', recognized: ref?.notes.length || 0, refName: ref?.name || '',
-      midis: tMidis, key: bestKey, cents: vrep.cents, maxCents: vrep.maxCents, rounds
+      midis: tMidis, key: bestKey, cents: vrep.cents, validCount: vrep.cents.filter(c => c !== null).length,
+      maxCents: vrep.maxCents, rounds
     };
-    status.textContent = `选调 ${bestKey > 0 ? '+' : ''}${bestKey} 半音 · 音高校验（${vrep.cents.filter(c => c !== null).length}/${vrep.cents.length} 可测，最大偏差 ${vrep.maxCents} 音分）`;
+    status.textContent = `选调 ${bestKey > 0 ? '+' : ''}${bestKey} 半音 · 音高校验（${pitchReport.validCount}/${vrep.cents.length} 可测，最大偏差 ${vrep.maxCents} 音分）`;
     var finalBuf = rendered.buf, speechLen = rendered.speechLen, sounds = rendered.sounds;
   } else {
     picks = pickDiarySeq(poolKey, plan.sounds.length);
+    if (!picks) { status.textContent = "声音池未准备好，等加载完再试"; return null; }
   }
   // 5) 对话态（①）直接渲染；歌唱态（②）用校验后的成品
   if (stage < 2) {
@@ -1172,6 +1192,7 @@ async function singText(text, boosted, stage = 3) {
   // 卡拉 OK 字幕（含标点占位）
   lyricEl.innerHTML = units.map(u => `<span>${u.ch === ' ' ? '&nbsp;' : u.ch.replace(/</g,'&lt;')}</span>`).join('');
   const spans = lyricEl.querySelectorAll('span');
+  const myGen = ++singGen;   // 这次演唱的代际号，旧 setTimeout 回调检测到不匹配立即返回
 
   if (stopAll) { stopAll(); stopAll = null; }
   const t0 = ctx.currentTime + 0.15;
@@ -1257,18 +1278,22 @@ async function singText(text, boosted, stage = 3) {
   units.forEach((u, i) => {
     const t = charTimes[i];
     setTimeout(() => {
+      if (myGen !== singGen) return;   // 旧定时器（已被新歌取代）不再操作 DOM
       spans.forEach((s, j) => s.className = j < i ? 'done' : (j === i ? 'now' : ''));
     }, Math.max(0, (t - ctx.currentTime) * 1000));
   });
   soundTimes.forEach(t => {
     setTimeout(() => {
+      if (myGen !== singGen) return;   // 旧定时器不再改嘴型，避免和当前演唱的嘴型回调互相打架
       mouth.style.height = "14px"; mouth.style.marginBottom = "-3px"; mouth.style.borderRadius = "50%";
-      setTimeout(() => { mouth.style.height = "4px"; mouth.style.marginBottom = "0"; mouth.style.borderRadius = "0 0 6px 6px"; },
-        Math.min(mouthDur, 0.35) * 900);
+      setTimeout(() => {
+        if (myGen !== singGen) return;
+        mouth.style.height = "4px"; mouth.style.marginBottom = "0"; mouth.style.borderRadius = "0 0 6px 6px";
+      }, Math.min(mouthDur, 0.35) * 900);
     }, Math.max(0, (t - ctx.currentTime) * 1000));
   });
 
-  stopAll = () => srcs.forEach(s => { try { s.stop(); } catch {} });
+  stopAll = () => { singGen++; srcs.forEach(s => { try { s.stop(); } catch {} }); };
   return new Promise(res => setTimeout(() => res(pitchReport), totalDur * 1000 + 300));
 }
 
@@ -1278,7 +1303,6 @@ const promptEl = document.getElementById("prompt");
 
 async function aiSing() {
   const q = promptEl.value.trim() || "我要一步一步爬到山顶";
-  aiBtn.disabled = true;
   try {
     // 不调 AI 回话：直接复读输入框的词并唱出
     const emo = pickSingEmotion(q);
@@ -1292,13 +1316,11 @@ async function aiSing() {
     console.error(err);
     status.textContent = "出错：" + (err && err.message);
   }
-  aiBtn.disabled = false;
 }
 
 async function directSing() {
   const text = promptEl.value.trim();
   if (!text) { status.textContent = "先在输入框写点字"; return; }
-  directBtn.disabled = true;
   try {
     const emo = pickSingEmotion(text);
     showEmotionInfo(emo.probs, emo.poolKey, emo.prior);
@@ -1311,19 +1333,15 @@ async function directSing() {
     console.error(err);
     status.textContent = "出错：" + (err && err.message);
   }
-  directBtn.disabled = false;
 }
 
-aiBtn.addEventListener("click", () => { ctx.resume(); aiSing(); });
-directBtn.addEventListener("click", () => { ctx.resume(); directSing(); });
-promptEl.addEventListener("keydown", e => { if (e.key === "Enter") { ctx.resume(); aiSing(); } });
+// 按钮事件由 Vue 绑定（见脚本末尾）
 
 // 分步试听：① 对话原声 ② 变调歌唱，唱的都是输入框文字
 const STAGE_NAME = { 1: "① 对话原声（不变调）", 2: "② 自动识别 · 滑音歌唱" };
 async function stageSing(stage, btn) {
   const text = promptEl.value.trim();
   if (!text) { status.textContent = "先在输入框写点字"; return; }
-  btn.disabled = true;
   try {
     const emo = pickSingEmotion(text);
     showEmotionInfo(emo.probs, emo.poolKey, emo.prior);
@@ -1332,18 +1350,13 @@ async function stageSing(stage, btn) {
     status.textContent = `演唱中 · ${STAGE_NAME[stage]}…`;
     const pitchReport = await singText(text, emo.poolKey, stage);
     status.textContent = pitchReport
-      ? `唱完了 · ${POOL_LABEL[emo.poolKey]} · 自动识别（${pitchReport.source === 'audio' ? `参考「${pitchReport.refName}」${pitchReport.recognized} 音` : '兜底旋律'}）· 用到音高「${pitchReport.midis.join(' ')}」· 音高校验 ${pitchReport.cents.length}/${pitchReport.cents.length}（最大偏差 ${pitchReport.maxCents} 音分，${pitchReport.rounds} 轮）`
+      ? `唱完了 · ${POOL_LABEL[emo.poolKey]} · 自动识别（${pitchReport.source === 'audio' ? `参考「${pitchReport.refName}」${pitchReport.recognized} 音` : '兜底旋律'}）· 用到音高「${pitchReport.midis.join(' ')}」· 音高校验 ${pitchReport.validCount}/${pitchReport.cents.length}（最大偏差 ${pitchReport.maxCents} 音分，${pitchReport.rounds} 轮）`
       : `唱完了（${STAGE_NAME[stage]}）`;
   } catch (err) {
     console.error(err);
     status.textContent = "出错：" + (err && err.message);
   }
-  btn.disabled = false;
 }
-[["stage1Btn", 1], ["stage2Btn", 2]].forEach(([id, st]) => {
-  const btn = document.getElementById(id);
-  btn.addEventListener("click", () => { ctx.resume(); stageSing(st, btn); });
-});
 
 // 初始化：未输入文本时只展示先验状态
 (() => {
@@ -1356,14 +1369,54 @@ async function stageSing(stage, btn) {
 // 调试探针：供自动化测试量化分析渲染产物（峰值/时长等）
 window.__dbg = { renderSpeech, planSpeech, pickBlip, pickDiarySeq, ensurePools, textToUnits, pool, singConcat, ensureReference, analyzeAudioNotes, emotionProbabilities, pickSingEmotion };
 
-// 原版对比
+// 原版对比音频（按钮由 Vue 绑定）
 const orig = new Audio("celeste-sounds/wow_so_secret.wav");
-const origBtn = document.getElementById("origBtn");
-origBtn.addEventListener("click", () => {
-  orig.currentTime = 0; orig.play().catch(() => {});
-  origBtn.disabled = true;
-  setTimeout(() => origBtn.disabled = false, 16000);
-});
+</script>
+
+<script>
+// 控制区（输入框 / 拼接模式 / 按钮禁用态）由 Vue 持有；
+// 演唱引擎、#status、#emoinfo、#lyric 逐字 span、#mouth 保持原生命令式驱动
+(function () {
+  const { createApp, ref } = Vue;
+  createApp({
+    setup() {
+      const prompt = ref('');
+      const concat = ref(true);
+      const aiBusy = ref(false), directBusy = ref(false),
+            s1Busy = ref(false), s2Busy = ref(false), origBusy = ref(false);
+
+      function runAi() {
+        if (aiBusy.value) return;
+        ctx.resume();
+        aiBusy.value = true;
+        Promise.resolve(aiSing()).finally(() => { aiBusy.value = false; });
+      }
+      function runDirect() {
+        if (directBusy.value) return;
+        ctx.resume();
+        directBusy.value = true;
+        Promise.resolve(directSing()).finally(() => { directBusy.value = false; });
+      }
+      function runStage(stage) {
+        const busy = stage === 1 ? s1Busy : s2Busy;
+        if (busy.value) return;
+        ctx.resume();
+        busy.value = true;
+        Promise.resolve(stageSing(stage)).finally(() => { busy.value = false; });
+      }
+      function runOrig() {
+        if (origBusy.value) return;
+        orig.currentTime = 0; orig.play().catch(() => {});
+        origBusy.value = true;
+        setTimeout(() => { origBusy.value = false; }, 16000);
+      }
+      return {
+        prompt, concat, aiBusy, directBusy, s1Busy, s2Busy, origBusy,
+        runAi, runDirect, runStage, runOrig
+      };
+    }
+  }).mount('#singApp');
+})();
 </script>
 </body>
 </html>

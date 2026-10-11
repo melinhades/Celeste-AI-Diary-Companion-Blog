@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="icon/OIP.webp" type="image/webp">
 <title>Felt Piano · 打字音效测试台</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -133,31 +134,32 @@
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="wrap" id="app" @click="activate">
   <header>
     <div>
       <h1>Felt <span>Piano</span> 打字音效测试台</h1>
       <div class="sub">原版毛毡钢琴采样 · 聚焦/失焦/打字/Send · 调好后把下方代码接进 messages.html</div>
     </div>
-    <span class="badge" id="ctxStatus">点击页面激活音频</span>
+    <span class="badge" id="ctxStatus" :style="{ color: activated ? '#7dffb0' : '' }">{{ activated ? '音频已激活' : '点击页面激活音频' }}</span>
   </header>
 
   <div class="grid">
     <!-- 左：打字区 + Send -->
     <div class="card">
       <div class="type-label">在此打字试听 ↓（聚焦=开始音，点框外=暂停音）</div>
-      <textarea id="box" placeholder="点我会响一声开始音，打字每个键随机一个音符，点外面会响暂停音……"></textarea>
+      <textarea id="box" placeholder="点我会响一声开始音，打字每个键随机一个音符，点外面会响暂停音……"
+                @focus="playCat('start')" @blur="playCat('stop')" @keydown="onBoxKey"></textarea>
       <div class="type-meta">
-        <span>已触发 <b id="count">0</b> 次</span>
-        <span>当前音效 <b id="curNote">—</b></span>
+        <span>已触发 <b>{{ count }}</b> 次</span>
+        <span>当前音效 <b>{{ note }}</b></span>
       </div>
       <div class="send-row">
         <span class="send-hint">Send 按钮随机播放 send 文件夹（accept + 5 个 space）</span>
-        <button class="send-btn" id="sendBtn">SEND</button>
+        <button class="send-btn" id="sendBtn" @click.stop="playCat('send')">SEND</button>
       </div>
       <div class="viz">
         <canvas id="wave"></canvas>
-        <div class="note-chip" id="chip">—</div>
+        <div class="note-chip" :class="{on: chipKey > 0}" :key="chipKey">{{ note }}</div>
       </div>
     </div>
 
@@ -166,20 +168,17 @@
       <h2>全局</h2>
       <div class="row">
         <label>音量</label>
-        <input type="range" id="volume" min="0" max="1" step="0.01" value="0.5">
-        <span class="val" id="volumeV">0.50</span>
+        <input type="range" id="volume" min="0" max="1" step="0.01" v-model.number="volume" @input="onVolume">
+        <span class="val" id="volumeV">{{ volume.toFixed(2) }}</span>
       </div>
 
       <h2>分类试听</h2>
       <div class="try-grid">
-        <button class="try-btn" data-cat="start">开始输入</button>
-        <button class="try-btn" data-cat="stop">暂停输入</button>
-        <button class="try-btn" data-cat="type">打字音 ×1</button>
-        <button class="try-btn" data-cat="send">Send 音 ×1</button>
+        <button class="try-btn" v-for="c in cats" :key="c.cat" :data-cat="c.cat" @click.stop="playCat(c.cat)">{{ c.label }}</button>
       </div>
 
       <h2>随机音池</h2>
-      <div class="pool-note" id="poolNote"></div>
+      <div class="pool-note" id="poolNote" v-html="poolHtml"></div>
     </div>
   </div>
 
@@ -187,14 +186,15 @@
   <div class="card" style="margin-top:18px">
     <div class="export-head">
       <h3>复制到 messages.html 的代码</h3>
-      <button class="copy-btn" id="copyBtn">复制</button>
+      <button class="copy-btn" id="copyBtn" @click.stop="copyCode" :style="{ color: copied ? '#7dffb0' : '' }">{{ copied ? '已复制 ✓' : '复制' }}</button>
     </div>
-    <pre id="code"></pre>
+    <pre id="code">{{ codeText }}</pre>
   </div>
 </div>
 
+<script src="js/vue.global.prod.js?v=20261008a"></script>
 <script>
-/* ===================== 采样音效播放器 ===================== */
+/* ===================== 采样音效播放器（vanilla 引擎，Vue 只驱动 UI 状态） ===================== */
 const DIR = 'feltpianotyping/';
 const CHAR_NOTES = ['A6_01','A7_01','A7_02','B6_02','C6_01','D6_01','D6_02','E6_01','E6_02','Fs6_01','G6_01'];
 const SEND_NOTES = ['accept','space_01','space_02','space_03','space_04','space_05'];
@@ -275,51 +275,9 @@ const SFX = {
   }
 };
 
-/* ===================== UI 绑定 ===================== */
-const chip = document.getElementById('chip');
-const curNote = document.getElementById('curNote');
-const countEl = document.getElementById('count');
-let count = 0;
+/* ===================== UI 绑定由下方 Vue 应用负责 ===================== */
 
-function showNote(name) {
-  curNote.textContent = name;
-  chip.textContent = name;
-  chip.classList.remove('on'); void chip.offsetWidth; chip.classList.add('on');
-}
-
-const box = document.getElementById('box');
-box.addEventListener('focus', () => SFX.play('start').then(f => showNote(SFX.label(f))));
-box.addEventListener('blur',  () => SFX.play('stop'));
-const TYPING_RE = /^(Key[A-Z]|Digit\d|Numpad\d|Space|Enter|NumpadEnter|Backspace)$/;
-box.addEventListener('keydown', e => {
-  // 按物理键判断：中文输入法下 e.key 是 "Process"，但 e.code 仍是 KeyA 等
-  if (!TYPING_RE.test(e.code || '')) return;
-  SFX.play('type').then(f => {
-    showNote(SFX.label(f));
-    count++; countEl.textContent = count;
-  });
-});
-
-document.getElementById('sendBtn').addEventListener('click', () =>
-  SFX.play('send').then(f => showNote(SFX.label(f)))
-);
-
-document.querySelectorAll('.try-btn').forEach(b =>
-  b.addEventListener('click', () => SFX.play(b.dataset.cat).then(f => showNote(SFX.label(f))))
-);
-
-document.getElementById('volume').addEventListener('input', e => {
-  document.getElementById('volumeV').textContent = (+e.target.value).toFixed(2);
-  if (SFX.master) SFX.master.gain.value = +e.target.value;
-});
-
-// 音池说明
-document.getElementById('poolNote').innerHTML =
-  `打字 <b>${POOLS.type.length}</b> 个：${CHAR_NOTES.map(n=>n.replace(/_\d$/,'')).join('、')}<br>` +
-  `Send <b>${POOLS.send.length}</b> 个：accept、space×5<br>` +
-  `开始/暂停各 <b>1</b> 个，均随机/固定触发`;
-
-// 波形循环
+// 波形循环（canvas 保持 vanilla）
 const waveCanvas = document.getElementById('wave');
 function loop() {
   if (SFX.analyser) {
@@ -344,17 +302,12 @@ function loop() {
 }
 requestAnimationFrame(loop);
 
-// 首次点击激活
-function unlock() {
-  SFX.init();
-  const s = document.getElementById('ctxStatus');
-  s.textContent = '音频已激活'; s.style.color = '#7dffb0';
-}
-document.addEventListener('click', unlock, { once:true });
+/* ===================== Vue UI ===================== */
+(function () {
+  const { createApp, ref } = Vue;
+  const TYPING_RE = /^(Key[A-Z]|Digit\d|Numpad\d|Space|Enter|NumpadEnter|Backspace)$/;
 
-/* ===================== 代码导出 ===================== */
-const codeEl = document.getElementById('code');
-codeEl.textContent = `/* ===== Felt Piano 打字音效（原版采样版）=====
+  const EXPORT_CODE = `/* ===== Felt Piano 打字音效（原版采样版）=====
 放进 messages.html 的 <script> 顶部；路径以 html 所在目录为基准。 */
 (function(){
   const DIR = 'feltpianotyping/';
@@ -397,18 +350,69 @@ codeEl.textContent = `/* ===== Felt Piano 打字音效（原版采样版）=====
   sendButton.addEventListener('click', feltPianoSend);
 */`;
 
-document.getElementById('copyBtn').addEventListener('click', async () => {
-  try {
-    await navigator.clipboard.writeText(codeEl.textContent);
-  } catch {
-    const ta = document.createElement('textarea');
-    ta.value = codeEl.textContent; document.body.appendChild(ta); ta.select();
-    document.execCommand('copy'); ta.remove();
-  }
-  const b = document.getElementById('copyBtn');
-  const old = b.textContent; b.textContent = '已复制 ✓'; b.style.color = '#7dffb0';
-  setTimeout(() => { b.textContent = old; b.style.color = ''; }, 1400);
-});
+  createApp({
+    setup() {
+      const activated = ref(false);
+      const count = ref(0);
+      const note = ref('—');
+      const chipKey = ref(0);
+      const volume = ref(0.5);
+      const copied = ref(false);
+      const codeText = ref(EXPORT_CODE);
+      const cats = [
+        { cat: 'start', label: '开始输入' },
+        { cat: 'stop',  label: '暂停输入' },
+        { cat: 'type',  label: '打字音 ×1' },
+        { cat: 'send',  label: 'Send 音 ×1' }
+      ];
+      const poolHtml =
+        `打字 <b>${POOLS.type.length}</b> 个：${CHAR_NOTES.map(n=>n.replace(/_\d$/,'')).join('、')}<br>` +
+        `Send <b>${POOLS.send.length}</b> 个：accept、space×5<br>` +
+        `开始/暂停各 <b>1</b> 个，均随机/固定触发`;
+
+      function activate() {
+        if (activated.value) return;
+        SFX.init();
+        activated.value = true;
+      }
+      function showNote(name) {
+        note.value = name;
+        chipKey.value++;          // :key 变化重建 chip 元素，重放入场动画
+      }
+      function playCat(cat) {
+        return SFX.play(cat).then(f => showNote(SFX.label(f)));
+      }
+      function onBoxKey(e) {
+        // 按物理键判断：中文输入法下 e.key 是 "Process"，但 e.code 仍是 KeyA 等
+        if (!TYPING_RE.test(e.code || '')) return;
+        SFX.play('type').then(f => {
+          showNote(SFX.label(f));
+          count.value++;
+        });
+      }
+      function onVolume(e) {
+        if (SFX.master) SFX.master.gain.value = +e.target.value;
+      }
+      let copyTimer = null;
+      async function copyCode() {
+        try {
+          await navigator.clipboard.writeText(EXPORT_CODE);
+        } catch {
+          const ta = document.createElement('textarea');
+          ta.value = EXPORT_CODE; document.body.appendChild(ta); ta.select();
+          document.execCommand('copy'); ta.remove();
+        }
+        copied.value = true;
+        clearTimeout(copyTimer);
+        copyTimer = setTimeout(() => { copied.value = false; }, 1400);
+      }
+      return {
+        activated, count, note, chipKey, volume, copied, codeText,
+        cats, poolHtml, activate, playCat, onBoxKey, onVolume, copyCode
+      };
+    }
+  }).mount('#app');
+})();
 </script>
 </body>
 </html>

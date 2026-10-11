@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
+    <link rel="icon" href="icon/OIP.webp" type="image/webp">
     <title>Celeste Journal · Demo</title>
     <style>
         @font-face { font-family:'Renogare'; src:url('celeste-font-en/Renogare-Regular.otf') format('opentype'); font-display:swap; }
@@ -66,27 +67,34 @@
 </head>
 <body>
 <h1>CELESTE JOURNAL</h1>
+<div id="journalApp" style="display:contents">
 <div class="stage" id="stage">
     <div class="book" id="book"></div>
     <div class="nav">
-        <button id="prevBtn">◀</button>
-        <div class="dots" id="dots"></div>
-        <button id="nextBtn">▶</button>
+        <button id="prevBtn" @click="goto(cur - 1, -1)">◀</button>
+        <div class="dots" id="dots">
+            <span v-for="(p, i) in pages" :key="i" :class="{on: cur === i}" @click="goto(i, i > cur ? 1 : -1)"></span>
+        </div>
+        <button id="nextBtn" @click="goto(cur + 1, 1)">▶</button>
     </div>
 </div>
 <div class="panel">
-    <div class="row"><label>本子大小</label><input type="range" id="sizeR" min="0" max="100" value="40"></div>
+    <div class="row"><label>本子大小</label><input type="range" id="sizeR" min="0" max="100" v-model.number="sizeVal"></div>
     <div class="row" style="padding-top:6px; border-top:1px dashed rgba(255,227,109,.25);">
         <label>调框</label>
-        <select id="fieldSel"></select>
-        <button id="copyCfg" class="mini">复制配置</button>
+        <select id="fieldSel" v-model.number="sel">
+            <option v-for="(f, i) in fieldOpts" :key="i" :value="i">字段{{ i + 1 }} · {{ f.kind }}</option>
+        </select>
+        <button id="copyCfg" class="mini" @click="copyCfg">{{ copyText }}</button>
     </div>
-    <div class="row"><label>X</label><input type="range" id="fX" min="0" max="95"></div>
-    <div class="row"><label>Y</label><input type="range" id="fY" min="0" max="95"></div>
-    <div class="row"><label>宽</label><input type="range" id="fW" min="2" max="95"></div>
-    <div class="row"><label>高</label><input type="range" id="fH" min="1" max="90"></div>
-    <div class="row"><span id="cfgOut"></span></div>
+    <div class="row"><label>X</label><input type="range" id="fX" min="0" max="95" v-model.number="fx" @input="onFieldSlide"></div>
+    <div class="row"><label>Y</label><input type="range" id="fY" min="0" max="95" v-model.number="fy" @input="onFieldSlide"></div>
+    <div class="row"><label>宽</label><input type="range" id="fW" min="2" max="95" v-model.number="fw" @input="onFieldSlide"></div>
+    <div class="row"><label>高</label><input type="range" id="fH" min="1" max="90" v-model.number="fh" @input="onFieldSlide"></div>
+    <div class="row"><span id="cfgOut">{{ cfgText }}</span></div>
 </div>
+</div>
+<script src="js/vue.global.prod.js?v=20261008a"></script>
 <script>
     const PAGES = [
         { src: 'celeste-journal/spread1.jpg', crop: { x: 0, y: 0, w: 1, h: 1 },
@@ -113,20 +121,11 @@
             ] }
     ];
 
-    const book = document.getElementById('book');
-    const dotsEl = document.getElementById('dots');
-    let cur = 0, busy = false, pageEl = null;
+    const { createApp, ref, computed, watch, onMounted } = Vue;
+
+    const cur = ref(0);
+    let busy = false, pageEl = null;
     const imgCache = {};
-
-    PAGES.forEach((_, i) => {
-        const d = document.createElement('span');
-        d.addEventListener('click', () => goto(i, i > cur ? 1 : -1));
-        dotsEl.appendChild(d);
-    });
-
-    function updateNav() {
-        [...dotsEl.children].forEach((d, i) => d.classList.toggle('on', i === cur));
-    }
 
     function loadImage(src) {
         return new Promise((res) => {
@@ -151,8 +150,8 @@
         return cv.toDataURL('image/png');
     }
 
-    function buildField(f, fi) {
-        const key = 'jd-' + cur + '-' + fi;
+    function buildField(f, fi, idx) {
+        const key = 'jd-' + idx + '-' + fi;
         const common = el => {
             el.style.left = (f.x * 100) + '%';
             el.style.top = (f.y * 100) + '%';
@@ -205,17 +204,15 @@
         const img = document.createElement('img');
         img.src = cropToDataURL(imgCache[p.src], p.crop);
         el.appendChild(img);
-        p.fields.forEach((f, fi) => el.appendChild(buildField(f, fi)));
+        p.fields.forEach((f, fi) => el.appendChild(buildField(f, fi, idx)));
         return el;
     }
 
     async function goto(idx, dir) {
-        if (busy || idx === cur || idx < 0 || idx >= PAGES.length) return;
+        if (!pageEl || busy || idx === cur.value || idx < 0 || idx >= PAGES.length) return;
         busy = true;
         const oldEl = pageEl;
-        cur = idx;
-        updateNav();
-        rebuildFieldSel();
+        cur.value = idx; // 圆点高亮由 Vue 接管
         const newEl = await buildPage(idx);
         newEl.style.position = 'absolute';
         newEl.style.top = '0'; newEl.style.left = '0'; newEl.style.width = '100%';
@@ -242,84 +239,81 @@
         }, 580);
     }
 
-    const sizeR = document.getElementById('sizeR');
-    const stage = document.getElementById('stage');
-    function applySize() {
-        stage.style.width = 'min(94vw, ' + (520 + sizeR.value * 8) + 'px)';
-    }
-    sizeR.addEventListener('input', applySize);
-    applySize();
+    // ===== 调框面板状态交 Vue，实际定位仍写 PAGES + 字段元素样式 =====
+    const sizeVal = ref(40);
+    const sel = ref(0);
+    const fx = ref(0), fy = ref(0), fw = ref(2), fh = ref(1);
+    const cfgText = ref('');
+    const copyText = ref('复制配置');
+    const fieldOpts = computed(() => PAGES[cur.value].fields);
+    let stage = null, book = null;
 
-    const fieldSel = document.getElementById('fieldSel');
-    const fX = document.getElementById('fX'), fY = document.getElementById('fY'),
-        fW = document.getElementById('fW'), fH = document.getElementById('fH');
-    const cfgOut = document.getElementById('cfgOut');
-    let sel = 0;
+    function applySize() {
+        stage.style.width = 'min(94vw, ' + (520 + sizeVal.value * 8) + 'px)';
+    }
+    watch(sizeVal, applySize);
 
     function fieldEl(i) { return pageEl ? pageEl.children[1 + i] : null; }
 
     function syncFieldSliders() {
-        const f = PAGES[cur].fields[sel];
+        const f = PAGES[cur.value].fields[sel.value];
         if (!f) return;
-        fX.value = Math.round(f.x * 100);
-        fY.value = Math.round(f.y * 100);
-        fW.value = Math.round(f.w * 100);
-        fH.value = Math.round((f.h || .036) * 100);
-        cfgOut.textContent = 'x:' + f.x.toFixed(3) + ' y:' + f.y.toFixed(3) + ' w:' + f.w.toFixed(3) + ' h:' + (f.h || .036).toFixed(3);
+        fx.value = Math.round(f.x * 100);
+        fy.value = Math.round(f.y * 100);
+        fw.value = Math.round(f.w * 100);
+        fh.value = Math.round((f.h || .036) * 100);
+        cfgText.value = 'x:' + f.x.toFixed(3) + ' y:' + f.y.toFixed(3) + ' w:' + f.w.toFixed(3) + ' h:' + (f.h || .036).toFixed(3);
     }
-
-    function rebuildFieldSel() {
-        fieldSel.innerHTML = '';
-        PAGES[cur].fields.forEach((f, i) => {
-            const o = document.createElement('option');
-            o.value = String(i);
-            o.textContent = '字段' + (i + 1) + ' · ' + f.kind;
-            fieldSel.appendChild(o);
-        });
-        sel = 0;
-        syncFieldSliders();
-    }
+    watch(cur, () => { sel.value = 0; syncFieldSliders(); });
+    watch(sel, syncFieldSliders);
 
     function onFieldSlide() {
-        const f = PAGES[cur].fields[sel];
+        const f = PAGES[cur.value].fields[sel.value];
         if (!f) return;
-        f.x = fX.value / 100; f.y = fY.value / 100;
-        f.w = fW.value / 100; f.h = fH.value / 100;
-        const el = fieldEl(sel);
+        f.x = fx.value / 100; f.y = fy.value / 100;
+        f.w = fw.value / 100; f.h = fh.value / 100;
+        const el = fieldEl(sel.value);
         if (el) {
             el.style.left = (f.x * 100) + '%';
             el.style.top = (f.y * 100) + '%';
             el.style.width = (f.w * 100) + '%';
             el.style.height = (f.h * 100) + '%';
         }
-        cfgOut.textContent = 'x:' + f.x.toFixed(3) + ' y:' + f.y.toFixed(3) + ' w:' + f.w.toFixed(3) + ' h:' + f.h.toFixed(3);
+        cfgText.value = 'x:' + f.x.toFixed(3) + ' y:' + f.y.toFixed(3) + ' w:' + f.w.toFixed(3) + ' h:' + f.h.toFixed(3);
     }
-    [fX, fY, fW, fH].forEach(r => r.addEventListener('input', onFieldSlide));
-    fieldSel.addEventListener('change', () => { sel = parseInt(fieldSel.value, 10); syncFieldSliders(); });
 
-    document.getElementById('copyCfg').addEventListener('click', () => {
+    function copyCfg() {
         navigator.clipboard.writeText(JSON.stringify(PAGES.map(p => p.fields), null, 1)).then(() => {
-            const btn = document.getElementById('copyCfg');
-            btn.textContent = '已复制!';
-            setTimeout(() => { btn.textContent = '复制配置'; }, 1200);
+            copyText.value = '已复制!';
+            setTimeout(() => { copyText.value = '复制配置'; }, 1200);
         });
-    });
+    }
 
-    document.getElementById('prevBtn').addEventListener('click', () => goto(cur - 1, -1));
-    document.getElementById('nextBtn').addEventListener('click', () => goto(cur + 1, 1));
-    window.addEventListener('keydown', e => {
+    function onKey(e) {
         const t = document.activeElement && document.activeElement.tagName;
         if (t === 'TEXTAREA' || t === 'INPUT') return;
-        if (e.key === 'ArrowLeft') goto(cur - 1, -1);
-        if (e.key === 'ArrowRight') goto(cur + 1, 1);
-    });
+        if (e.key === 'ArrowLeft') goto(cur.value - 1, -1);
+        if (e.key === 'ArrowRight') goto(cur.value + 1, 1);
+    }
 
-    (async function init() {
-        updateNav();
-        pageEl = await buildPage(0);
-        book.appendChild(pageEl);
-        rebuildFieldSel();
-    })();
+    createApp({
+        setup() {
+            onMounted(async () => {
+                stage = document.getElementById('stage');
+                book = document.getElementById('book');
+                applySize();
+                syncFieldSliders();
+                window.addEventListener('keydown', onKey);
+                pageEl = await buildPage(0);
+                book.appendChild(pageEl);
+            });
+            return {
+                pages: PAGES, cur, goto,
+                sizeVal, sel, fieldOpts, copyCfg, copyText,
+                fx, fy, fw, fh, onFieldSlide, cfgText
+            };
+        }
+    }).mount('#journalApp');
 </script>
 <script src="js/seed.js?v=20261005a"></script>
 </body>

@@ -63,4 +63,7 @@ public interface DiaryService {
 
     /** 心之水晶：按近期日记情绪定色，AI 生成名称与描述 */
     Result heartCrystal();
+
+    /** 情绪统计：各情绪出现次数 + 按月趋势（仅普通日记） */
+    Result emotionStats();
 }

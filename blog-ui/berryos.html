@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="icon/OIP.webp" type="image/webp">
 <title>BerryOS Demo</title>
 <style>
   @font-face {
@@ -325,23 +326,13 @@
 </style>
 </head>
 <body>
-  <div id="stage">
-    <div class="deskicon" id="icoMountain" data-href="index.html"
-         style="--x:8.319%;--y:5.206%;--w:6.690cqw;">
-      <div class="di-img"><img src="Atlases/WaveDashing/desktop/mymountain_icon.png" alt="我的大山"></div>
-      <span class="di-label">我的大山</span>
-    </div>
-
-    <div class="deskicon" id="icoPpt" data-player="monthly"
-         style="--x:31.236%;--y:40.38%;--w:6.672cqw;">
-      <div class="di-img"><img src="Atlases/WaveDashing/desktop/wavedashing_icon.png" alt="凌波微步与我"></div>
-      <span class="di-label" id="lblPpt"></span>
-    </div>
-
-    <div class="deskicon" id="icoSing" data-href="sing-test.html"
-         style="--x:45%;--y:40.38%;--w:4.69cqw;">
-      <div class="di-img"><img src="Atlases/Gameplay/scenery/payphone.png" alt="玛德琳唱歌"></div>
-      <span class="di-label">玛德琳唱歌</span>
+  <div id="stage" @click="onStageClick">
+    <div class="deskicon" v-for="ic in icons" :key="ic.id" :id="ic.id"
+         :data-href="ic.href" :data-player="ic.player"
+         :class="{ selected: selected === ic.id }"
+         :style="'--x:' + ic.x + '%;--y:' + ic.y + '%;--w:' + ic.w + 'cqw;'">
+      <div class="di-img"><img :src="ic.img" :alt="ic.label"></div>
+      <span class="di-label">{{ ic.label }}</span>
     </div>
 
     <img id="icoRecycle" class="ico" src="Atlases/WaveDashing/desktop/recyclebin_icon.png" alt="回收站">
@@ -351,7 +342,7 @@
     <div id="startBtn"></div>
     <img id="startBerry" src="Atlases/WaveDashing/desktop/startberry.png" alt="BerryOS">
     <div id="startText" class="tasktext">BerryOS</div>
-    <div id="clock" class="tasktext">5:09 PM</div>
+    <div id="clock" class="tasktext">{{ clockText }}</div>
 
     <img id="bird" src="Atlases/WaveDashing/desktop/cursor.png" alt="cursor">
 
@@ -362,6 +353,58 @@
     </div>
   </div>
 
+<script src="js/vue.global.prod.js?v=20261008a"></script>
+<script>
+  // 桌面图标（选中/进入）与任务栏时钟由 Vue 持有；
+  // 光标、音效、BerryPPT 播放器（window.BerryPPT 全局，供 pptgen.js 调用）仍由下方原生命令式 IIFE 驱动
+  (function () {
+    var createApp = Vue.createApp, ref = Vue.ref, onMounted = Vue.onMounted, onUnmounted = Vue.onUnmounted;
+    var ICONS = [
+      { id: 'icoMountain', href: 'index.html', player: null, x: 8.319,  y: 5.206, w: 6.690, img: 'Atlases/WaveDashing/desktop/mymountain_icon.png', label: '我的大山' },
+      { id: 'icoPpt',      href: null,     player: 'monthly', x: 31.236, y: 40.38, w: 6.672, img: 'Atlases/WaveDashing/desktop/wavedashing_icon.png', label: '凌波微步与我.ppt' },
+      { id: 'icoSing',     href: 'sing-test.html', player: null, x: 45, y: 40.38, w: 4.69,  img: 'Atlases/Gameplay/scenery/payphone.png', label: '玛德琳唱歌' }
+    ];
+    createApp({
+      setup: function () {
+        var selected = ref(null);
+        var clockText = ref('');
+        var alignTimer = null, tickTimer = null;
+        function tick() {
+          var d = new Date();
+          var h = d.getHours() % 12 || 12;
+          var m = String(d.getMinutes()).padStart(2, '0');
+          clockText.value = h + ':' + m + (d.getHours() < 12 ? ' AM' : ' PM');
+        }
+        // 图标第一次点击仅选中，再次点击同一图标才进入；点空白处取消选中（与原事件委托规则一致）
+        function onStageClick(e) {
+          var icon = e.target.closest ? e.target.closest('.deskicon') : null;
+          if (!icon) { selected.value = null; return; }
+          if (selected.value === icon.id) {
+            var player = icon.getAttribute('data-player');
+            if (player) { window.BerryPPT.open(player); return; }
+            var href = icon.getAttribute('data-href');
+            if (href) window.location.href = href;
+          } else {
+            selected.value = icon.id;
+          }
+        }
+        onMounted(function () {
+          tick();
+          // 对齐到下一个整分钟，之后每 30s 兜底刷新
+          alignTimer = setTimeout(function () {
+            tick();
+            tickTimer = setInterval(tick, 30000);
+          }, (60 - new Date().getSeconds()) * 1000);
+        });
+        onUnmounted(function () {
+          clearTimeout(alignTimer);
+          clearInterval(tickTimer);
+        });
+        return { icons: ICONS, selected: selected, clockText: clockText, onStageClick: onStageClick };
+      }
+    }).mount('#stage');
+  })();
+</script>
 <script>
   (function () {
     var stage = document.getElementById('stage');
@@ -388,27 +431,7 @@
       playStartup();
     })();
 
-    // PPT 桌面文件名（固定）
-    (function () {
-      document.getElementById('lblPpt').textContent = '凌波微步与我.ppt';
-    })();
-
-    // 任务栏时钟：实时同步，格式 5:09 PM（分钟变化时刷新）
-    (function () {
-      var el = document.getElementById('clock');
-      function tick() {
-        var d = new Date();
-        var h = d.getHours() % 12 || 12;
-        var m = String(d.getMinutes()).padStart(2, '0');
-        el.textContent = h + ':' + m + (d.getHours() < 12 ? ' AM' : ' PM');
-      }
-      tick();
-      // 对齐到下一个整分钟，之后每 30s 兜底刷新
-      setTimeout(function () {
-        tick();
-        setInterval(tick, 30000);
-      }, (60 - new Date().getSeconds()) * 1000);
-    })();
+    // PPT 桌面文件名由 Vue 图标数据渲染；任务栏时钟由 Vue 驱动
 
     function move(clientX, clientY) {
       var r = stage.getBoundingClientRect();
@@ -419,26 +442,7 @@
     }
     window.addEventListener('mousemove', function (e) { move(e.clientX, e.clientY); });
 
-    // 图标选中/进入：事件委托，之后动态生成的 .deskicon 自动生效
-    // 规则：第一次点击仅选中（白实线框+深色文字），再次点击同一图标才进入；点空白处取消选中
-    var selected = null;
-    stage.addEventListener('click', function (e) {
-      var icon = e.target.closest('.deskicon');
-      if (!icon) {
-        if (selected) { selected.classList.remove('selected'); selected = null; }
-        return;
-      }
-      if (icon === selected) {
-        var player = icon.getAttribute('data-player');
-        if (player) { PPT.open(player); return; }
-        var href = icon.getAttribute('data-href');
-        if (href) { window.location.href = href; }
-      } else {
-        if (selected) { selected.classList.remove('selected'); }
-        selected = icon;
-        icon.classList.add('selected');
-      }
-    });
+    // 图标选中/进入由 Vue 事件处理（#stage @click）；这里只保留光标与音效
 
     /* ============== PPT 播放器（内容数据与渲染/播放分离，AI 以后只替换 SLIDES） ============== */
     var SD = 'Atlases/WaveDashing/sound/';
