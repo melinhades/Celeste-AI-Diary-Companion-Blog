@@ -68,9 +68,6 @@ This dual-platform flow creates meaning: **intimate personal reflections in the 
 
 ## ✨ Core Features
 
-<div align="center">
-  <img src="blog-ui/celeste-gui/mountain-poster.png" alt="Discover Celeste Mountain" width="280">
-</div>
 
 | 🏷️ | Feature | Description | Status |
 |:---:|---------|-------------|:---:|
