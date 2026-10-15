@@ -1,0 +1,56 @@
+* { box-sizing:border-box; margin:0; padding:0; }
+@font-face { font-family:'Renogare'; src:url('../celeste-font-en/Renogare-Regular.otf') format('opentype'); font-display:swap; }
+@font-face { font-family:'CelesteZH'; src:url('../fonts/NotoSansCJKsc-Medium.otf') format('opentype'); font-display:swap; }
+body { min-height:100vh; background:url('../celeste-gui/me-bg.webp') center/cover no-repeat fixed; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; }
+/* 冰山返回主页按钮（同 diary/shop 的 #homePosterBtn） */
+#homePosterBtn { position:fixed; top:16px; left:16px; z-index:900; width:96px; height:96px; padding:0; border:none; background:transparent; cursor:pointer; filter:drop-shadow(1px 0 0 #10101c) drop-shadow(-1px 0 0 #10101c) drop-shadow(0 1px 0 #10101c) drop-shadow(0 -1px 0 #10101c); transition:transform .2s, filter .2s; }
+#homePosterBtn img { width:100%; height:100%; object-fit:contain; display:block; }
+#homePosterBtn:hover { transform:translateY(-2px) scale(1.05); filter:drop-shadow(1px 0 0 #10101c) drop-shadow(-1px 0 0 #10101c) drop-shadow(0 1px 0 #10101c) drop-shadow(0 -1px 0 #10101c) drop-shadow(0 0 10px rgba(200,235,255,1)) drop-shadow(0 0 24px rgba(120,190,255,.8)); }
+.wrap { max-width:680px; margin:0 auto; padding:118px 20px 40px; }
+.empty { color:rgba(255,255,255,.45); text-align:center; padding:20px; }
+
+/* ===== Celeste 存档卡 + 票根：同尺寸，票根在卡片下方，两侧圆弧露出 ===== */
+.meCombo { position:relative; max-width:560px; margin:0 auto 24px; cursor:pointer; user-select:none; }
+.meCombo .meCard { position:relative; z-index:2; transition:transform .4s cubic-bezier(.2,.85,.3,1.15); }
+.meCombo .meCard img.cardBase, .meCombo .meCard img.cardShine { display:block; width:100%; height:auto; }
+.meCombo .meCard img.cardShine { position:absolute; left:0; top:0; opacity:0; pointer-events:none; }
+.cePortraitWrap { position:absolute; left:4%; top:50%; transform:translateY(-50%); width:33%; aspect-ratio:1/1; z-index:1; }
+.ceAvatar { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:70%; height:70%; object-fit:cover; image-rendering:pixelated; }
+.cePortrait { position:absolute; left:0; top:0; width:100%; height:100%; image-rendering:pixelated; pointer-events:none; }
+.ceStamps { position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; z-index:2; }
+.ceStamps img { position:absolute; left:0; top:0; width:100%; height:100%; }
+.ceTicketInfo { position:absolute; left:10%; top:25%; width:80%; z-index:3; text-align:center; }
+.ceTicketName { font-family:'Renogare','CelesteZH',sans-serif; font-size:26px; color:#35312a; margin-bottom:6px; letter-spacing:1px; }
+.ceTicketBerry { display:flex; align-items:center; justify-content:center; gap:6px; }
+.ceTicketBerry img { width:24px; height:24px; image-rendering:pixelated; }
+.ceCassetteWrap { position:relative; display:inline-block; width:24px; height:24px; }
+.ceCassetteWrap img { width:24px; height:24px; image-rendering:pixelated; }
+.ceCassetteOutline { position:absolute; left:0; top:0; }
+.ceTicketBerry span { font-family:'renogare',monospace; font-size:22px; color:#35312a; }
+.meCombo:hover .meCard, .meCombo.open .meCard { transform:translateX(-50%); }
+.meCombo .meTicket { position:absolute; left:50%; top:0; transform:translateX(-50%); width:110%; z-index:1; transition:transform .4s cubic-bezier(.2,.85,.3,1.15); }
+.meCombo .meTicket img.ticketBase, .meCombo .meTicket img.ticketShine { display:block; width:100%; height:auto; }
+.meCombo .meTicket img.ticketShine { position:absolute; left:0; top:0; opacity:0; pointer-events:none; }
+.meCombo:hover .meTicket, .meCombo.open .meTicket { transform:translateX(-50%) translateX(50%); }
+.cePoemPage { position:relative; max-width:520px; margin:0 auto 24px; text-align:center; cursor:pointer; }
+.cePoemPage img { display:block; width:100%; height:auto; }
+.cePoemPage span { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-size:15px; color:#35312a; max-width:75%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cePoemPage input { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-size:15px; color:#35312a; background:transparent; border:none; border-bottom:1px dashed rgba(53,49,42,.4); text-align:center; width:75%; outline:none; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; }
+
+/* ===== 情绪图谱 ===== */
+.emoChart { position:relative; max-width:520px; margin:0 auto 32px; padding:20px 24px 24px; background:linear-gradient(135deg, rgba(20,28,52,.92), rgba(14,18,36,.95)); border:1px solid rgba(120,160,220,.18); border-radius:6px; box-shadow:0 4px 24px rgba(0,0,0,.4), inset 0 1px 0 rgba(120,160,220,.08); }
+.emoChart .emoHeader { display:flex; align-items:center; gap:8px; margin-bottom:14px; }
+.emoChart .emoHeader img { width:22px; height:22px; image-rendering:pixelated; }
+.emoChart .emoTitle { font-size:13px; color:rgba(220,230,255,.9); letter-spacing:1px; text-transform:uppercase; }
+.emoChart .emoSub { font-size:11px; color:rgba(150,170,200,.6); margin-left:auto; }
+.emoChart .emoBars { display:flex; flex-direction:column; gap:6px; }
+.emoChart .emoBar { display:flex; align-items:center; gap:8px; }
+.emoChart .emoBar .emoLabel { width:44px; flex-shrink:0; font-size:12px; color:rgba(200,215,235,.8); text-align:right; }
+.emoChart .emoBar .emoTrack { flex:1; height:14px; background:rgba(255,255,255,.06); border-radius:3px; overflow:hidden; position:relative; }
+.emoChart .emoBar .emoFill { height:100%; border-radius:3px; transition:width .5s cubic-bezier(.2,.85,.3,1); image-rendering:pixelated; }
+.emoChart .emoBar .emoCount { width:28px; flex-shrink:0; font-size:12px; color:rgba(180,200,220,.7); text-align:left; }
+.emoChart .emoEmpty { text-align:center; padding:24px 0; color:rgba(150,170,200,.4); font-size:13px; }
+.emoChart .emoMonthRow { margin-top:14px; padding-top:12px; border-top:1px solid rgba(120,160,220,.1); }
+.emoChart .emoMonthLabel { font-size:11px; color:rgba(150,170,200,.5); margin-bottom:6px; }
+.emoChart .emoDots { display:flex; flex-wrap:wrap; gap:3px; }
+.emoChart .emoDot { width:12px; height:12px; border-radius:2px; image-rendering:pixelated; cursor:default; }

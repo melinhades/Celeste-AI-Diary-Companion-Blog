@@ -1,0 +1,242 @@
+#wpGameDialogText, .msg-bubble { --c:#F94A4A; }
+
+    /* 暗色配色方案：输入法合成/插入区、选区、滚动条都走暗色，防止插入历史文本时露白底 */
+    :root { color-scheme: dark; }
+    .nav-diary-btn {
+        display:inline-block;
+        cursor:pointer;
+        transition:transform .2s, filter .2s;
+        vertical-align:middle;
+    }
+    .nav-diary-btn:hover {
+        transform:scale(1.15);
+    }
+    .nav-diary-btn img {
+        height:36px;
+        width:auto;
+        display:block;
+        filter:drop-shadow(0 0 10px rgba(255,235,59,0.7));
+    }
+    .write-layout { padding: 20px; max-width: 900px; margin: 0 auto; position: relative; z-index: 1; }
+    .write-title-input {
+        width: 100%; font-size: 26px; font-weight: 700; border: none; outline: none;
+        padding: 16px 0; border-bottom: 2px solid rgba(138, 43, 226, 0.3); margin-bottom: 16px;
+        background: transparent; font-family: inherit; color: #e8e8f0;
+    }
+    .write-title-input::placeholder { color: #6b6b80; }
+    .write-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; align-items: center; }
+    .toolbar-btn {
+        padding: 6px 12px; border: 1px solid rgba(138, 43, 226, 0.3);
+        background: rgba(30, 27, 75, 0.6); backdrop-filter: blur(10px);
+        border-radius: 6px; cursor: pointer; font-size: 13px; color: #b8b8d0;
+        transition: all 0.3s;
+    }
+    .toolbar-btn:hover { border-color: #a78bfa; color: #a78bfa; background: rgba(138, 43, 226, 0.2); box-shadow: 0 0 10px rgba(138, 43, 226, 0.3); }
+    .toolbar-btn img { height: 15px; width: auto; vertical-align: -2px; margin-right: 4px; image-rendering: pixelated; }
+    .write-body {
+        width: 100%; min-height: 420px; padding: 16px;
+        border: 1px solid rgba(138, 43, 226, 0.3);
+        border-radius: 10px; font-size: 15px; outline: none; resize: vertical;
+        font-family: 'Renogare', 'CelesteZH', 'Microsoft YaHei', sans-serif; line-height: 1.8; color: #e8e8f0;
+        background: rgba(30, 27, 75, 0.4); transition: all 0.3s;
+    }
+    .write-body:focus { border-color: #a78bfa; background: rgba(30, 27, 75, 0.6); box-shadow: 0 0 15px rgba(138, 43, 226, 0.3); }
+    .write-meta { display: flex; gap: 16px; margin: 16px 0; flex-wrap: wrap; }
+    .write-meta select, .write-meta input {
+        padding: 9px 14px; border: 1px solid rgba(138, 43, 226, 0.3); border-radius: 8px;
+        font-size: 14px; outline: none; background: rgba(30, 27, 75, 0.4);
+        color: #e8e8f0; font-family: inherit;
+        transition: all 0.3s;
+    }
+    .write-meta select:focus, .write-meta input:focus { border-color: #a78bfa; background: rgba(30, 27, 75, 0.6); box-shadow: 0 0 15px rgba(138, 43, 226, 0.3); }
+    .write-meta select { min-width: 140px; }
+    .write-meta input { flex: 1; min-width: 200px; }
+    .write-footer { display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(138, 43, 226, 0.2); }
+    .char-count { font-size: 12px; color: #8b8ba0; text-align: right; margin-top: 6px; }
+    body { background: url('../celeste-areas/Summit-ch7-complete.png') center center / cover no-repeat fixed; background-color: #0b0c22; }
+
+    /* ===== 历史记录框（与 diary 页完全一致，card.png 素材） ===== */
+    #madeline-chat-dialog {
+        position: fixed; bottom: 12px; right: 12px;
+        width: 420px;
+        height: 500px;
+        background: url('../celeste-gui/card.webp') top / 100% 123% no-repeat;
+        border: none;
+        border-radius: 0;
+        display: flex; flex-direction: column;
+        opacity: 0; pointer-events: none;
+        transform: perspective(1200px) rotateY(32deg) rotateX(8deg) scale(0.85);
+        transform-origin: 100% 100%;
+        transition: opacity .3s ease, transform .45s cubic-bezier(0.34,1.3,0.64,1);
+        z-index: 1000;
+        box-shadow: 0 10px 30px rgba(0,0,0,.35);
+        overflow: hidden;
+    }
+    #madeline-chat-dialog.show {
+        opacity: 1; pointer-events: all;
+        transform: perspective(1200px) rotateY(0) rotateX(0) scale(1);
+    }
+    .chat-header {
+        padding: 14px 16px 8px 42px;
+        display: flex; align-items: center; gap: 10px;
+        border-bottom: none;
+        background: url('../celeste-gui/card-top.webp') center / 100% 100% no-repeat;
+        flex-shrink: 0;
+    }
+    #chat-madeline-avatar-wrap {
+        width: 32px; height: 32px; border-radius: 50%; overflow: hidden;
+        border: 2px solid #2b2018; flex-shrink: 0; display: block;
+    }
+    #chat-madeline-avatar-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .chat-header .chat-title {
+        font-family: 'Press Start 2P', monospace;
+        font-size: 12px;
+        color: #2b2018;
+        flex: 1;
+    }
+    .chat-header .close-btn {
+        width: 24px; height: 24px;
+        border: none; border-radius: 50%;
+        background: transparent;
+        color: rgba(43,32,24,.55);
+        font-size: 16px;
+        cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+        transition: color .2s;
+    }
+    .chat-header .close-btn:hover { color: #2b2018; }
+    .chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 14px 16px 10px 42px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-height: 0;
+    }
+    .chat-messages::-webkit-scrollbar { width: 4px; }
+    .chat-messages::-webkit-scrollbar-thumb { background: rgba(58,46,42,.4); border-radius: 2px; }
+    .msg-row {
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+        max-width: 90%;
+        transform-origin: top center;
+        animation: wpPageIn .4s ease-out;
+    }
+    @keyframes wpPageIn {
+        from { transform: perspective(800px) rotateX(-38deg) translateY(-8px); opacity: 0; }
+        to { transform: none; opacity: 1; }
+    }
+    .msg-row.madeline-row { align-self: flex-start; }
+    .msg-row.user-row { align-self: flex-end; }
+    .msg-avatar-wrap {
+        width: 28px; height: 28px; border-radius: 50%; overflow: hidden;
+        border: 1px solid #FFEB3B; flex-shrink: 0; display: block;
+    }
+    .msg-avatar-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .msg-bubble {
+        padding: 8px 12px;
+        border-radius: 12px;
+        font-family: 'Renogare', 'CelesteZH', 'Microsoft YaHei', sans-serif;
+        font-size: 13px;
+        line-height: 1.6;
+        word-break: break-word;
+        max-width: 260px;
+    }
+    .msg-row.madeline-row .msg-bubble {
+        background: transparent;
+        border: none;
+        padding: 4px 6px;
+        color: #3a2e2a;
+        box-shadow: none;
+        max-width: 300px;
+    }
+    .msg-row.user-row .msg-bubble {
+        background: rgba(74,144,226,.14);
+        color: #2b3a52;
+        border: 1px solid rgba(74,144,226,.4);
+    }
+
+    /* ===== 输入区 ===== */
+    .chat-input {
+        margin-top: auto;
+        display: flex; gap: 8px;
+        padding: 8px 10px 5px 10px;
+        border-bottom: 1px dashed rgba(58,46,42,.35);
+        background: transparent;
+        flex-shrink: 0;
+    }
+    .chat-input input {
+        flex: 1;
+        padding: 8px 10px;
+        border-radius: 6px;
+        background: rgba(125,207,255,.18);
+        color: #2b3a52;
+        border: 1px solid rgba(125,207,255,.5);
+        font-family: 'Renogare', 'CelesteZH', 'Microsoft YaHei', sans-serif;
+        font-size: 13px;
+        outline: none;
+        transition: all .2s;
+    }
+    .chat-input input:focus { border-color: #7DCFFF; background: rgba(125,207,255,.3); box-shadow: 0 0 8px rgba(125,207,255,.35); }
+    .chat-input input::placeholder { color: rgba(43,58,82,.45); }
+    .chat-input button {
+        padding: 8px 14px;
+        border: none; border-radius: 6px;
+        background: #FFEB3B; color: #111;
+        font-family: 'Renogare', sans-serif;
+        font-size: 14px;
+        letter-spacing: 1px;
+        cursor: pointer;
+        box-shadow: inset 0 -2px #111111;
+        transition: background .2s;
+        flex-shrink: 0;
+    }
+    .chat-input button:hover:not(:disabled) { background: #ffeb85; }
+    .chat-input button:disabled { background: #555; color: #999; cursor: not-allowed; }
+
+
+    /* ===== 游戏对话框 ===== */
+    #wpGameDialog {
+        position: fixed;
+        left: 50%;
+        bottom: 26px;
+        transform: translateX(-50%) translateY(24px);
+        width: min(94vw, 900px);
+        min-height: 128px;
+        z-index: 950;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 20px 30px;
+        background: url('../celeste-portraits/textbox/madeline.webp') center / 100% 100% no-repeat;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .25s ease, transform .25s ease;
+    }
+    #wpGameDialog.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+    #wpGameDialog.portrait-right { flex-direction: row-reverse; }
+    #wpGameDialogPortrait {
+        width: 84px; height: 84px;
+        flex-shrink: 0;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    #wpGameDialogPortrait img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    #wpGameDialogBody { flex: 1; min-width: 0; }
+    #wpGameDialogName {
+        font-family: 'Press Start 2P', monospace;
+        color: #FFEB3B;
+        font-size: 13px;
+        margin-bottom: 5px;
+    }
+    #wpGameDialogText {
+        font-family: 'Renogare', 'CelesteZH', 'Microsoft YaHei', sans-serif;
+        color: #fff;
+        font-size: 14px;
+        line-height: 1.7;
+        word-break: break-word;
+    }
+    

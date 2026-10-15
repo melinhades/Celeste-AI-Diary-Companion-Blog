@@ -6,30 +6,10 @@
     <link rel="icon" href="icon/OIP.webp" type="image/webp">
     <title>Madeline - 写日记</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Patrick+Hand&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/diary.css?v=20261005a">
+    <link rel="stylesheet" href="css/diary.css?v=20261013a">
     <link rel="stylesheet" href="css/text-fx.css?v=20261004a">
-    <style>
-        /* TextFx：Madeline 对话框内动画词的默认专属色（普通文字仍为原色） */
-        #gameDialogText, .chat-messages .msg-bubble { --c:#F94A4A; }
-        /* 输入框文字透明后，placeholder 保持独立可见（不被 -webkit-text-fill-color 带走） */
-        .book-page textarea::placeholder, .book-page input::placeholder { -webkit-text-fill-color:rgba(64,58,66,.3); }
-    </style>
-    <style>
-        /* ===== 羽毛随笔弹框：poempage 纸页 + 登录页同款滑入动画 ===== */
-        #featherNoteBox {
-            background:url('celeste-gui/poempage.webp') center/100% 100% no-repeat;
-            border:none;
-            border-radius:0;
-            filter:drop-shadow(0 8px 32px rgba(0,0,0,.6));
-            opacity:0;
-            transform:translateX(calc(-100vw - 100%)) rotate(-8deg);
-            transition:opacity .8s ease, transform 1s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
-        #featherNoteBox.slide-in { opacity:1; transform:translateX(0) rotate(0deg); }
-        #featherSave:hover { background:#c4a882 !important; color:#fff !important; }
-        #featherCancel:hover { background:rgba(180,160,140,.25) !important; border-color:#a89080 !important; }
-        #featherInput:focus { border-color:#c4a882 !important; box-shadow:inset 0 1px 3px rgba(90,62,54,.15), 0 0 0 2px rgba(196,168,130,.2) !important; }
-    </style>
+    <link rel="stylesheet" href="css/diary-inline.css?v=20261015a">
+    
 
 </head>
 <body>
@@ -128,132 +108,12 @@
     <script src="js/feather-trigger.js"></script>
     <script src="js/madeline-core.js?v=20261002"></script>
     <script src="js/madeline-mood.js?v=20261009a"></script>
-    <script src="js/diary.js?v=20261011e"></script>
+    <script src="js/diary.js?v=20261013a"></script>
     <script src="js/detect.js"></script>
-    <script>
-    // TextFx：日记本输入框里命中的情绪关键词 → 波浪动画 + 情绪色（仅第一种效果）
-    (function () {
-        function boot() {
-            if (!window.TextFx || !window.__DIARY_EMOTION_WORDS) return;
-            var words = window.__DIARY_EMOTION_WORDS, colors = window.__DIARY_EMOTION_COLORS || {};
-            var palette = {}, wordArr = [];
-            Object.keys(words).forEach(function (emo) {
-                words[emo].forEach(function (w) {
-                    if (w.length < 2) return;            // 单字（恨/甜/哭）太容易误伤，跳过
-                    palette[w] = colors[emo] || '#FF6B6B';
-                    wordArr.push(w);
-                });
-            });
-            TextFx.setPalette(palette);
-            document.querySelectorAll('#journalBook textarea, #titleInput').forEach(function (el) {
-                TextFx.attachTextarea(el, wordArr);
-            });
-        }
-        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
-        else boot();
-    })();
-    </script>
+    <script src="js/diary-1.js?v=20261015a"></script>
     <script src="js/pptgen.js"></script>
 <script src="js/vue.global.prod.js?v=20261008a"></script>
-<script>
-    // 羽毛随笔弹框：开合/字数/保存状态交 Vue；FeatherGame 全局流程保持不变
-    (function() {
-        const { createApp, ref, nextTick } = Vue;
-
-        function currentMood() {
-            return localStorage.getItem('lastEmotion') || '默认';
-        }
-        function isBadMood(emo) {
-            return ['悲伤', '孤独', '不开心', '不安', '愤怒', '怨恨'].indexOf(emo) !== -1;
-        }
-
-        createApp({
-            setup() {
-                const boxOpen = ref(false);
-                const slideIn = ref(false);
-                const featherText = ref('');
-                const toast = ref('');
-                const toastError = ref(false);
-                const saving = ref(false);
-
-                function openBox() {
-                    boxOpen.value = true;
-                    slideIn.value = false;
-                    featherText.value = '';
-                    toast.value = '';
-                    // 与原实现一致：先显示无 slide-in 态，强制重排后再加 class 重放滑入
-                    nextTick(() => requestAnimationFrame(() => requestAnimationFrame(() => {
-                        slideIn.value = true;
-                        const inp = document.getElementById('featherInput');
-                        if (inp) inp.focus();
-                    })));
-                }
-                function closeBox() {
-                    slideIn.value = false;
-                    boxOpen.value = false;
-                }
-                // diary.js 在坏心情金羽毛落地后会调 window.showFeatherNote
-                window.showFeatherNote = openBox;
-
-                function onFeatherBtn() {
-                    const emo = currentMood();
-                    if (isBadMood(emo)) {
-                        // 情绪不好：Madeline 先说一句羽毛建议，再淡入金羽毛游戏（过渡自然）
-                        window._featherBadMood = true;
-                        if (window.FeatherGame) {
-                            if (window.FeatherGame.suggestThenOpen) window.FeatherGame.suggestThenOpen(emo);
-                            else window.FeatherGame.open(emo);
-                        }
-                    } else {
-                        // 情绪好：先随笔，右下角羽毛按钮点击才游戏
-                        if (boxOpen.value) closeBox();
-                        else openBox();
-                    }
-                }
-
-                function onFeatherKey(e) {
-                    if (e.key === 'Enter') saveFeather();
-                }
-
-                function saveFeather() {
-                    const val = featherText.value.trim();
-                    if (!val) return;
-                    saving.value = true;
-                    api('/feather', 'POST', { content: val }).then(function(res) {
-                        saving.value = false;
-                        if (res && res.success) {
-                            toastError.value = false;
-                            toast.value = '羽毛已飘走～';
-                            featherText.value = '';
-                            setTimeout(function() {
-                                closeBox();
-                                toast.value = '';
-                            }, 1200);
-                            // 情绪好时：随笔写完 → 开游戏（Madeline 在游戏内陪伴）
-                            if (!isBadMood(currentMood())) {
-                                setTimeout(function() {
-                                    if (window.FeatherGame) window.FeatherGame.open();
-                                }, 800);
-                            }
-                        } else {
-                            toastError.value = true;
-                            toast.value = (res && res.msg) ? res.msg : '没存上，再试一次吧';
-                        }
-                    }).catch(function() {
-                        saving.value = false;
-                        toastError.value = true;
-                        toast.value = '网络不太顺，再试一次吧';
-                    });
-                }
-
-                return {
-                    boxOpen, slideIn, featherText, toast, toastError, saving,
-                    onFeatherBtn, closeBox, onFeatherKey, saveFeather
-                };
-            }
-        }).mount('#featherApp');
-    })();
-</script>
-<script src="js/seed.js?v=20261005a"></script>
+<script src="js/diary-2.js?v=20261015a"></script>
+<script src="js/seed.js?v=20261011a"></script>
 </body>
 </html>

@@ -56,6 +56,8 @@ public class WebMVCConfig implements WebMvcConfigurer {
                 .addPathPatterns("/roundtable/*/interject")
                 .addPathPatterns("/roundtable/*/stop")
                 .addPathPatterns("/roundtable/suggestions")
+                // Madeline agent：fetch POST 带 Header，走登录拦截器
+                .addPathPatterns("/agent/**")
                 .excludePathPatterns("/chat/test-ai");
     }
 

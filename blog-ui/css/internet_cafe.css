@@ -1,0 +1,141 @@
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+
+  /* === neon 招牌位置/大小（固定值，已对齐背景） === */
+  :root {
+    --neon-x: 52.6%;    /* 左偏移（招牌中心 X） */
+    --neon-y: 20.6%;    /* 顶部偏移（招牌顶部 Y） */
+    --neon-w: 39.47%;   /* 宽度（占视口宽度） */
+    --neon-h: 46.8%;    /* 高度（占视口高度） */
+    --neon-bright: 1.35; /* 亮度 */
+    --int-x: 3%;        /* 内部图水平平移（固定值） */
+    --int-y: -6.3%;     /* 内部图垂直平移（固定值） */
+    --int-s: 0.4;       /* 内部图缩放（固定值） */
+  }
+
+  /* === 背景截图充满全屏（新外观图） === */
+  #sky {
+    position: absolute; inset: 0;
+    background: url('../Atlases/Gameplay/scenery/internet_cafe_bg2.png') center/cover no-repeat;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+  }
+
+  /* === 镜头：内外两层共同的父容器；整体 scale 即镜头向近靠（两层同步缩放，相对位置不变） === */
+  #world {
+    position: fixed; inset: 0;
+    transform-origin: 51% 42%;   /* 对准穹顶建筑中心 */
+    transition: transform 2.0s cubic-bezier(.55,0,.8,.35) .1s;
+  }
+  #world.zoomed { transform: scale(1.22); }
+
+  /* === 外观表层：z-index 高于内部层；点击建筑物后透明化，显露出叠在下方的内部 === */
+  #camera {
+    position: absolute; inset: 0;
+    z-index: 2;
+    transition: opacity 1.1s ease;
+  }
+  #camera.entered { opacity: 0; pointer-events: none; }
+
+  /* 建筑物点击热区（穹顶） */
+  #buildHotspot {
+    position: absolute;
+    left: 36%; top: 17%;
+    width: 30%; height: 49%;
+    z-index: 12; cursor: pointer;
+    border-radius: 40% 40% 12% 12%;
+  }
+  #buildHotspot::after {
+    content: '点击进入';
+    position: absolute; bottom: -24px; left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Courier New', monospace;
+    font-size: 11px; letter-spacing: 1px;
+    color: rgba(200,230,255,.85);
+    background: rgba(0,0,0,.6);
+    padding: 2px 8px; border-radius: 3px;
+    opacity: 0; transition: opacity .2s;
+    pointer-events: none; white-space: nowrap;
+  }
+  #buildHotspot:hover::after { opacity: 1; }
+
+  /* === 内部层：叠在外观表层下方并全屏铺满；表层透明化后直接显露，无四周黑边 === */
+  #interior {
+    position: absolute; inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    /* 内部图对齐：平移（视口百分比）+ 缩放，用左下角「调整内部图」面板调 */
+    transform: translate(var(--int-x), var(--int-y)) scale(var(--int-s));
+    transform-origin: 50% 50%;
+  }
+  #interior.show { pointer-events: auto; }
+  #interiorStage {
+    position: absolute; inset: 0;
+  }
+  #interiorImg {
+    display: block; width: 100%; height: 100%;
+    object-fit: cover;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+  }
+  /* 电视屏区域（图内像素 x44-75 y40-57 → 百分比） */
+  #noiseBox {
+    position: absolute;
+    left: 36.7%; top: 50.6%;
+    width: 25.9%; height: 21.6%;
+    cursor: pointer;
+    overflow: hidden;
+  }
+  #noiseBox canvas {
+    display: block; width: 100%; height: 100%;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+  }
+  #noiseBox:hover { outline: 1px solid rgba(150,220,255,.55); outline-offset: 1px; }
+
+  /* === 招牌周围漂浮粒子（canvas 是替换元素，inset:0 不会拉伸，必须显式 100%） === */
+  #sparkleCanvas {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    z-index: 8;
+    pointer-events: none;
+  }
+
+  /* === 霓虹招牌逐帧动画 === */
+  #neonSign {
+    position: absolute;
+    left: var(--neon-x);
+    top: var(--neon-y);
+    width: var(--neon-w);
+    height: var(--neon-h);
+    transform: translateX(-50%);
+    z-index: 10;
+    pointer-events: none;
+  }
+  #neonSign canvas {
+    display: block; width: 100%; height: 100%;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    /* 调亮 + 饱和 + 霓虹辉光（双层光晕：青+品红） */
+    filter:
+      brightness(var(--neon-bright))
+      saturate(1.25)
+      drop-shadow(0 0 3px rgba(80,255,225,.55))
+      drop-shadow(0 0 7px rgba(255,80,210,.30));
+  }
+
+  /* === TV 热区已并入内部层 #noiseBox === */
+
+  /* === 环境均匀压暗层：亮度逐渐调低至 30%（全屏均匀，不做四周黑角、不完全黑） === */
+  #dimLayer {
+    position: fixed; inset: 0;
+    z-index: 15; pointer-events: none;
+    background: #000;
+    opacity: 0;
+    transition: opacity 1.4s ease;
+  }
+  #dimLayer.show { opacity: .3; }

@@ -1,0 +1,107 @@
+    /* ===== index 同款背景 + 雪带 ===== */
+    body::after {
+        content:'';
+        position:fixed; left:0; right:0; top:0; bottom:-12%; /* 底边下移：素材图底部自带白色条带，cover 缩放后会露出在视口底部 */
+        background:url('../celeste-areas/ForsakenCity01.webp') center/cover no-repeat;
+        opacity:0.3;
+        pointer-events:none;
+        z-index:0;
+    }
+    .snow-strip {
+        position:fixed; left:0; right:0; bottom:0;
+        height:80px;
+        background:url('../celeste-areas/snow-front.webp') repeat-x bottom/220px auto;
+        animation:snowDrift 45s linear infinite;
+        pointer-events:none;
+        z-index:2;
+        opacity:.5;
+    }
+    @keyframes snowDrift { from{background-position-x:0} to{background-position-x:-440px} }
+
+    .nav-diary-btn {
+        display:inline-block;
+        cursor:pointer;
+        transition:transform .2s, filter .2s;
+        vertical-align:middle;
+    }
+    .nav-diary-btn:hover {
+        transform:scale(1.15);
+    }
+    .nav-diary-btn img {
+        height:36px;
+        width:auto;
+        display:block;
+        filter:drop-shadow(0 0 10px rgba(255,235,59,0.7));
+    }
+    .archives-layout { padding: 24px 20px; position: relative; z-index: 3; }
+        .archives-title { font-size: 22px; font-weight: 700; color: #e8e8f0; margin-bottom: 24px; }
+        .year-group { margin-bottom: 32px; }
+        .year-label { font-size: 20px; font-weight: 700; color: #a78bfa; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; text-shadow: 0 0 10px rgba(138, 43, 226, 0.5); }
+        .archive-item {
+            display: flex; align-items: center; gap: 16px;
+            padding: 12px 20px; background: rgba(30, 27, 75, 0.6); border-radius: 8px;
+            margin-bottom: 8px; cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            transition: all 0.3s; border-left: 3px solid transparent;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(138, 43, 226, 0.2);
+        }
+        .archive-item:hover { border-left-color: #a78bfa; transform: translateX(8px); box-shadow: 0 4px 20px rgba(138, 43, 226, 0.4); }
+        .archive-date { font-size: 13px; color: #8b8ba0; width: 80px; flex-shrink: 0; }
+        .archive-title { font-size: 15px; color: #e8e8f0; flex: 1; transition: all 0.3s; }
+        .archive-item:hover .archive-title { color: #a78bfa; text-shadow: 0 0 10px rgba(138, 43, 226, 0.5); }
+        .archive-count { font-size: 12px; color: #a78bfa; background: rgba(138, 43, 226, 0.2); padding: 2px 8px; border-radius: 10px; border: 1px solid rgba(138, 43, 226, 0.3); }
+        .year-group { opacity: 0; transform: translateY(24px); transition: opacity 0.6s ease, transform 0.6s ease; }
+        .year-group.in-view { opacity: 1; transform: translateY(0); }
+        /* ===== 月份横线：每月一条分组行（月份图 + hover.png 底部覆盖层） ===== */
+        .month-block { margin: 0 0 18px; }
+        .month-row {
+            position: relative; display: flex; align-items: center; gap: 12px;
+            padding: 14px 8px; overflow: visible;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            transition: transform .3s;
+        }
+        .month-row:hover { transform: translateX(6px); }
+        /* 月份图标：hover.png 做框架，章节图嵌在框内窗口 */
+        .month-icon {
+            position: relative;
+            width: 80px; height: 105px;          /* 234×306 ≈ 0.765 比例 */
+            flex-shrink: 0;
+            margin-left: auto;
+            image-rendering: pixelated;
+        }
+        .month-frame {
+            position: absolute; inset: 0;
+            background: url('../celeste-gui/archive/hover.png') center/contain no-repeat;
+            pointer-events: none;
+            transition: transform .35s cubic-bezier(.2,.9,.25,1.2);
+        }
+        .month-cover {
+            position: absolute;
+            top: 14px; left: 50%;
+            transform: translateX(-50%);
+            width: 56px; height: 56px;
+            object-fit: cover;
+            image-rendering: pixelated;
+            border-radius: 4px;
+            box-shadow: 0 1px 4px rgba(0,0,0,.5);
+            transition: transform .35s ease, filter .3s;
+        }
+        .month-row:hover .month-frame { transform: scale(1.08); }
+        .month-row:hover .month-cover { transform: translateX(-50%) scale(1.04); filter: brightness(1.15) drop-shadow(0 0 8px rgba(138,43,226,.6)); }
+        .month-name { font-size: 16px; font-weight: 700; color: #e8e8f0; transition: color .3s; letter-spacing: .04em; }
+        .month-row:hover .month-name { color: #a78bfa; text-shadow: 0 0 10px rgba(138, 43, 226, 0.5); }
+        .month-caret { color: #8b8ba0; font-size: 12px; transition: transform .3s; flex-shrink: 0; }
+        .month-block.collapsed .month-caret { transform: rotate(-90deg); }
+        .month-posts { padding: 6px 0 0 8px; }
+        .month-block.collapsed .month-posts { display: none; }
+        @media (max-width: 640px) {
+            .month-icon { width: 62px; height: 81px; }
+            .month-cover { width: 42px; height: 42px; top: 10px; }
+            .month-posts { padding-left: 20px; }
+        }
+        /* 底部透明化：消除白色带 */
+        .footer { background:transparent; border:none; backdrop-filter:none; }
+    

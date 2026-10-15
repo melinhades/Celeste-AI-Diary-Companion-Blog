@@ -1,8 +1,9 @@
-/* ===== 草莓籽收集系统（全局） =====
-   - 每 6 小时刷新 3-5 颗草莓籽到页面随机位置
-   - 鼠标点击后跟随鼠标走，表示收集到了
-   - 收集完全部刷新的草莓籽后，旋转 + 音效组合成一颗草莓
-   - 状态持久化 localStorage，跨页面一致
+/* ===== 草莓籽收集系统（全局·跨页面分布） =====
+   - 每 6 小时刷新 3-5 颗草莓籽，每颗绑定一个不同页面（排除 berryos/demo），
+     只在它所属的页面出现；去哪些页面找，由 diary 页 Madeline 聊天给线索
+   - 鼠标点击后跟随鼠标走，表示收集到了；收集状态持久化，切页面保留
+   - 在任意页面集齐最后一颗 → 其他页面已收集的籽以视觉粒子方式临时归场，
+     旋转汇聚 + 音效组合成一颗草莓
    - 自包含：不依赖 api.js/auth.js，无 api 时降级（无 berry 入账） */
 (function () {
   'use strict';
@@ -22,7 +23,34 @@
   var BERRY_FRAME_COUNT = 62;
   var BERRY_FRAME_MS = 1000 / 24;   // 24fps 播放成形闪光
   var REFRESH_INTERVAL = 6 * 60 * 60 * 1000;  // 6 小时
-  var STORAGE_KEY = 'seedState_v1';
+  var STORAGE_KEY = 'seedState_v2';   // v2：seed 增加 page 字段，v1 旧状态自然作废重刷
+
+  // ===== 页面注册表：草莓籽可散落的页面（刻意排除 berryos 与各类 demo） =====
+  // name 用于 diary 线索播报；id 与文件名对应
+  var PAGES = [
+    { id: 'index',        file: 'index.html',        name: '我的大山' },
+    { id: 'diary',        file: 'diary.html',        name: '日记本' },
+    { id: 'messages',     file: 'messages.html',     name: '山间聊天' },
+    { id: 'article',      file: 'article.html',      name: '文章' },
+    { id: 'write',        file: 'write.html',        name: '写文章' },
+    { id: 'archives',     file: 'archives.html',     name: '归档' },
+    { id: 'me',           file: 'me.html',           name: '我的空间' },
+    { id: 'shop',         file: 'shop.html',         name: '商店' },
+    { id: 'roundtable',   file: 'roundtable.html',   name: '圆桌会议' },
+    { id: 'shelf',        file: 'shelf.html',        name: '回忆书架' },
+    { id: 'payphone',     file: 'payphone.html',     name: '电话亭' },
+    { id: 'internet_cafe',file: 'internet_cafe.html',name: '网吧' }
+  ];
+  function currentPageId() {
+    var file = location.pathname.split('/').pop() || 'index.html';
+    for (var i = 0; i < PAGES.length; i++) if (PAGES[i].file === file) return PAGES[i].id;
+    return '';  // 未注册页面（berryos/demo 等）：不渲染任何籽
+  }
+  function pageName(id) {
+    for (var i = 0; i < PAGES.length; i++) if (PAGES[i].id === id) return PAGES[i].name;
+    return '别处';
+  }
+  var PAGE_ID = currentPageId();
 
   // ===== 状态持久化 =====
   function loadState() {
@@ -44,15 +72,23 @@
     return Date.now() - s.lastRefresh >= REFRESH_INTERVAL;
   }
 
-  // 生成 3-5 个随机位置（百分比，跨分辨率自适应）
+  // 生成 3-5 颗籽：每颗绑定一个互不重复的页面，位置为该页内的随机点（百分比）
   function genSeeds() {
     var n = 3 + Math.floor(Math.random() * 3);  // 3,4,5
+    n = Math.min(n, PAGES.length);
+    // Fisher-Yates 洗牌页面池，取前 n 个 → 籽天然分散到 3-5 个不同页面
+    var pool = PAGES.slice();
+    for (var i = pool.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+    }
     var arr = [];
-    for (var i = 0; i < n; i++) {
+    for (var k = 0; k < n; k++) {
       arr.push({
-        id: 'sd_' + Date.now().toString(36) + '_' + i,
-        x: 4 + Math.random() * 90,    // 4%-94%
-        y: 12 + Math.random() * 80,  // 12%-92%（避开顶部 header）
+        id: 'sd_' + Date.now().toString(36) + '_' + k,
+        page: pool[k].id,
+        x: 5 + Math.random() * 88,    // 5%-93%
+        y: 14 + Math.random() * 76,   // 14%-90%（避开顶部 header）
         collected: false
       });
     }
@@ -67,15 +103,15 @@
       '.seed-item{position:absolute;pointer-events:auto;cursor:pointer;' +
         'width:52px;height:52px;image-rendering:pixelated;image-rendering:crisp-edges;' +
         'filter:drop-shadow(0 2px 4px rgba(0,0,0,.55));' +
-        'transform:translate(-50%,-50%);will-change:transform;animation:seedBob 2.6s ease-in-out infinite;}' +
-      '.seed-item.follow,.seed-item.merge{pointer-events:none;animation:none;transition:none;z-index:99998;left:0!important;top:0!important;}' +
+        /* 待机漂浮/弹入全部由 rAF 写 transform，避免 CSS keyframe 全员同步的僵硬感 */
+        'transform:translate(-50%,-50%);will-change:transform;opacity:0;}' +
+      '.seed-item.follow,.seed-item.merge{pointer-events:none;transition:none;z-index:99998;left:0!important;top:0!important;opacity:1;}' +
       /* 成形草莓：wrapper 负责定位/弹入缩放（transform 合成层），内层 img 负责上下漂浮 */
       '.seed-berry-wrap{position:fixed;left:0;top:0;pointer-events:none;z-index:99999;' +
         'opacity:0;will-change:transform,opacity;transform:translate3d(0,0,0) translate(-50%,-50%) scale(.2);}' +
       '.seed-berry{width:120px;height:120px;image-rendering:pixelated;image-rendering:crisp-edges;' +
         'filter:drop-shadow(0 0 14px rgba(255,220,140,.95)) drop-shadow(0 0 34px rgba(255,120,90,.55));' +
         'animation:seedBerryBob 2.2s ease-in-out infinite;}' +
-      '@keyframes seedBob{0%,100%{transform:translate(-50%,-50%) translateY(0)}50%{transform:translate(-50%,-50%) translateY(-4px)}}' +
       '@keyframes seedBerryBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}';
     var st = document.createElement('style');
     st.id = 'seedStyle';
@@ -115,7 +151,8 @@
   function render() {
     var s = loadState();
     if (!s.seeds.length) return;
-    var pending = s.seeds.filter(function (x) { return !x.collected; });
+    // 只渲染「绑定当前页面」且未收集的籽：同一时刻一个页面最多出现本页那几颗
+    var pending = s.seeds.filter(function (x) { return !x.collected && x.page === PAGE_ID; });
     if (!pending.length) return;
     var layer = ensureLayer();
     pending.forEach(function (seed) {
@@ -132,9 +169,25 @@
         collect(seed);
       });
       layer.appendChild(el);
-      itemEls[seed.id] = { el: el, seed: seed, follow: false, followDelay: 0, cur: null };
+      itemEls[seed.id] = {
+        el: el, seed: seed, follow: false, followDelay: 0, cur: null,
+        base: seedBasePx(seed),        // 待机漂浮的像素锚点
+        phase: Math.random() * Math.PI * 2,  // 每颗籽独立相位，晃动不同步
+        born: performance.now()       // 弹入起点
+      };
     });
   }
+
+  // vw/vh → 当前分辨率下的像素锚点（窗口 resize 时重算）
+  function seedBasePx(seed) {
+    return { x: seed.x / 100 * window.innerWidth, y: seed.y / 100 * window.innerHeight };
+  }
+  window.addEventListener('resize', function () {
+    Object.keys(itemEls).forEach(function (id) {
+      var e = itemEls[id];
+      if (e && e.seed) e.base = seedBasePx(e.seed);
+    });
+  });
 
   // ===== 收集 =====
   function collect(seed) {
@@ -200,7 +253,23 @@
     var tSec = now / 1000;
     Object.keys(itemEls).forEach(function (id) {
       var entry = itemEls[id];
-      if (!entry || !entry.follow) return;
+      if (!entry || entry.merging) return;
+      if (!entry.follow) {
+        // 待机漂浮：双频正弦叠加 → 轨迹不重复不机械；上下 5px + 左右 ~4px + ±4° 自转，
+        // 每颗籽随机相位各自漂；初次出现带一次 overshoot 弹入
+        if (!entry.base) return;
+        var popT = Math.min(1, (now - entry.born) / 450);
+        var pop = popT >= 1 ? 1 : easeOutBack(popT);
+        entry.el.style.opacity = String(Math.min(1, popT * 2.2));
+        var ph0 = entry.phase;
+        var ix = entry.base.x + Math.sin(tSec * 1.35 + ph0) * 3 + Math.sin(tSec * 0.62 + ph0 * 2.1) * 1.4;
+        var iy = entry.base.y + Math.sin(tSec * 1.72 + ph0 * 1.3) * 5;
+        var irot = Math.sin(tSec * 1.08 + ph0 * 0.7) * 4;
+        entry.el.style.transform =
+          'translate3d(' + ix.toFixed(1) + 'px,' + iy.toFixed(1) + 'px,0) ' +
+          'translate(-50%,-50%) rotate(' + irot.toFixed(2) + 'deg) scale(' + pop.toFixed(3) + ')';
+        return;
+      }
       var idx = entry.followDelay || 0;
       if (!entry.cur) entry.cur = { x: mouse.x, y: mouse.y };
       if (!entry.vel) entry.vel = { x: 0, y: 0 };
@@ -290,19 +359,41 @@
     var cx = window.innerWidth / 2;
     var cy = window.innerHeight / 2;
 
-    // 从当前跟随位置接管，为每颗籽生成独立螺旋参数
+    // 为「全套籽」生成独立螺旋参数：
+    //  - 本页已收集、正在跟随的籽：从其当前位置接管
+    //  - 其他页面收集的籽（本页无 DOM）：在屏幕外围一圈临时"归场"，淡入后参与汇聚
+    var state = loadState();
+    var layer = ensureLayer();
     var parts = [];
-    Object.keys(itemEls).forEach(function (id) {
-      var entry = itemEls[id];
-      if (!entry || !entry.follow) return;
-      entry.follow = false;
-      entry.el.classList.add('merge');
-      var pos = entry.cur || { x: cx, y: cy };
+    state.seeds.forEach(function (seed, i) {
+      var entry = itemEls[seed.id];
+      var el, pos, spawned = false;
+      if (entry && entry.follow) {
+        entry.follow = false;
+        entry.merging = true;
+        el = entry.el;
+        el.classList.add('merge');
+        pos = entry.cur || { x: cx, y: cy };
+      } else {
+        // 跨页归场：屏幕外围随机角度生成一颗视觉籽
+        el = document.createElement('img');
+        el.src = IMG_URL;
+        el.className = 'seed-item merge';
+        layer.appendChild(el);
+        var ringR = Math.min(window.innerWidth, window.innerHeight) * (0.30 + Math.random() * 0.16);
+        var ang = (i / state.seeds.length) * Math.PI * 2 + Math.random() * 0.9;
+        pos = { x: cx + Math.cos(ang) * ringR, y: cy + Math.sin(ang) * ringR * 0.9 };
+        el.style.left = '0px';
+        el.style.top = '0px';
+        el.style.opacity = '0';
+        spawned = true;
+      }
       var dx = pos.x - cx, dy = pos.y - cy;
       var base = Math.atan2(dy, dx);
       var r0 = Math.max(60, Math.sqrt(dx * dx + dy * dy) * 0.5);   // 起始旋转半径：距中心的一半，圆明显收小
       parts.push({
-        el: entry.el,
+        el: el,
+        spawned: spawned,
         base: base,
         r0: r0,
         // 接管偏移：籽当前位置与螺旋起点的差值，动画前 18% 内衰减到 0，避免半径减半后瞬移
@@ -419,7 +510,10 @@
         var y = cy + Math.sin(ang) * rad * 0.92 + p.oy * offK;   // 略扁，视觉更像聚拢
         var spin = p.dir * p.spin * (now - t0) / 1000;
         var sc = 1;                              // 旋转过程大小不变，只做旋转+汇聚
-        var op = t > 0.86 ? Math.max(0, 1 - (t - 0.86) / 0.14) : 1;  // 末段融进草莓
+        // 跨页归场的籽前 13% 淡入；全体在末段融进草莓
+        var fadeIn = p.spawned ? Math.min(1, t / 0.13) : 1;
+        var fadeOut = t > 0.86 ? Math.max(0, 1 - (t - 0.86) / 0.14) : 1;
+        var op = fadeIn * fadeOut;
         p.el.style.opacity = String(op);
         p.el.style.transform =
           'translate3d(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px,0) translate(-50%,-50%) ' +
@@ -439,25 +533,18 @@
     requestAnimationFrame(step);
   }
 
-  // ===== 新籽位置提示：diary 页由 Madeline 在聊天中自然说出，其他页走 toast =====
-  function seedDirText(x, y) {
-    var v = y < 35 ? '上' : (y > 65 ? '下' : '');
-    var h = x < 35 ? '左' : (x > 65 ? '右' : '');
-    if (h && v) return h + v + '角';        // 左上角 / 右下角…
-    if (v) return v === '上' ? '上方' : '下方';
-    if (h) return h === '左' ? '左侧' : '右侧';
-    return '正中间';
-  }
+  // ===== 新籽位置提示：diary 页由 Madeline 在聊天中自然说出「散落在哪些页面」 =====
   function buildSeedHint(seeds) {
-    var seen = {}, dirs = [];
+    // 按籽的页面去重、保持生成顺序，线索只报页面名（每颗籽一个不同页面）
+    var seen = {}, names = [];
     seeds.forEach(function (sd) {
-      var d = seedDirText(sd.x, sd.y);
-      if (!seen[d]) { seen[d] = 1; dirs.push(d); }
+      if (!seen[sd.page]) { seen[sd.page] = 1; names.push('「' + pageName(sd.page) + '」'); }
     });
-    var where = dirs.length <= 2 ? dirs.join('和') : dirs.slice(0, 2).join('、') + '……还有别的地方';
+    var where = names.join('、');
     var templates = [
-      '诶？我感觉到这个页面有草莓籽的气息……好像在' + where + '附近闪着光。一共 ' + seeds.length + ' 颗，找找看？',
-      '刚刚有什么东西闪了一下！' + where + '……好像藏着 ' + seeds.length + ' 颗草莓籽，去看看？'
+      '诶？我感觉到 ' + seeds.length + ' 颗草莓籽散落到山的各处去了——' + where + '，每个地方藏着一颗。到处转转，把它们找齐？',
+      '刚刚有好几道微光从窗边飘出去了！' + where + '……一共 ' + seeds.length + ' 颗草莓籽，去这些地方找找看？',
+      '草莓籽不肯老老实实待在日记里啦。我数到 ' + seeds.length + ' 颗，分别飘去了' + where + '。帮我捡回来嘛。'
     ];
     return templates[Math.floor(Math.random() * templates.length)];
   }

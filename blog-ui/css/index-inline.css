@@ -1,0 +1,96 @@
+        * {
+            margin:0;
+            padding:0;
+            box-sizing:border-box;
+        }
+        audio {
+            display:none;
+        }
+        body {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        main {
+            flex: 1;
+        }
+    body::after {
+        content:'';
+        position:fixed; left:0; right:0; top:0; bottom:-12%; /* 底边下移：素材图底部自带白色条带，cover 缩放后会露出在视口底部，向下延伸将其移出屏幕 */
+        background:url('../celeste-areas/ForsakenCity01.webp') center/cover no-repeat;
+        opacity:0.3;
+        pointer-events:none;
+        z-index:0;
+    }
+    .snow-strip {
+        position:fixed; left:0; right:0; bottom:0;
+        height:80px;
+        background:url('../celeste-areas/snow-front.webp') repeat-x bottom/220px auto;
+        animation:snowDrift 45s linear infinite;
+        pointer-events:none;
+        z-index:2;
+        opacity:.5; /* 与 archives 一致：降低雪地前景层不透明度，消除底部白色条带 */
+    }
+    @keyframes snowDrift { from{background-position-x:0} to{background-position-x:-440px} }
+    .nav-diary-btn {
+        display:inline-block;
+        cursor:pointer;
+        transition:transform .2s, filter .2s;
+        vertical-align:middle;
+    }
+    .nav-diary-btn:hover {
+        transform:scale(1.15);
+    }
+    .nav-diary-btn img {
+        height:36px;
+        width:auto;
+        display:block;
+        filter:drop-shadow(0 0 10px rgba(255,235,59,0.7));
+    }
+    .meta-icon { height:14px; width:auto; vertical-align:-2px; margin-right:4px; opacity:.9; filter:drop-shadow(0 0 3px rgba(255,235,59,.35)); }
+    .meta-author-img { width:18px; height:18px; border-radius:50%; vertical-align:-4px; margin-right:5px; border:1px solid rgba(255,235,59,.6); }
+    .hot-rank { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .hot-rank img { width:22px; height:22px; object-fit:contain; filter:drop-shadow(0 0 4px rgba(255,235,59,.5)); }
+    .tag-link.tag-on { background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); color:#fff; box-shadow:0 0 10px rgba(138,43,226,.5); }
+    .article-card { animation: cardIn .5s ease both; }
+    @keyframes cardIn { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:none; } }
+    .search-bar { display:flex; gap:10px; margin-bottom:16px; position:relative; z-index:1; }
+    .search-bar .form-control { flex:1; }
+    .card-thumbs { display:flex; gap:10px; margin:12px 0 6px; flex-wrap:wrap; }
+    .card-thumbs img { max-width:200px; max-height:140px; height:auto; border-radius:8px; border:1px solid rgba(255,235,59,.35); }
+    /* 底部透明化：消除白色带 */
+    footer {
+        background:transparent;
+        border:none;
+        backdrop-filter:none;
+        margin: 0;
+        padding: 4px 0;
+    }
+    /* === 左下角 neon 按钮（网咖入口，纯动画无边框无文字） === */
+    #neonBtn {
+        position: fixed;
+        left: 17px;
+        bottom: 17px;
+        width: 127px;
+        height: 84px;
+        padding: 0;
+        border: none;
+        background: transparent;
+        box-shadow: none;
+        cursor: pointer;
+        text-decoration: none;
+        z-index: 10;
+        transition: transform .2s ease, filter .2s ease;
+        display: block;
+    }
+    #neonBtn:hover {
+        transform: scale(1.08);
+        filter: brightness(1.3) drop-shadow(0 0 14px rgba(255, 122, 217, 0.7));
+    }
+    #neonBtn canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+        image-rendering: pixelated;
+    }
+    

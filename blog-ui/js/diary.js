@@ -757,6 +757,161 @@
     let nightCareSaid = false;
 
     // ===== 聊天发送 =====
+    // 普通聊天链路（/chat 整段回复），agent 链路失败时也回退到这里
+    async function replyViaChat(text) {
+        try {
+            const res = await api('/chat', 'POST', { content: text });
+            if (res.success && res.data) {
+                addMadelineMessage(res.data.content || '...', res.data.emotion || '默认');
+                // AI 主动发起金羽毛：排队等当前回复说完，对正在进行的对话零打断
+                if (res.data.feather && window.featherTrigger) {
+                    window.featherTrigger.requestFromAI(res.data.emotion || '不安');
+                }
+            } else {
+                addMadelineMessage('Hmm... I didn\'t catch that. Say it again?', '默认');
+            }
+        } catch (e) {
+            addMadelineMessage('Network issue... try again?', '默认');
+        }
+    }
+
+    // ===== Madeline agent 模式（任务意图：润色/评估文字，一期工具 polishText） =====
+    // 意图识别：带任务关键词且消息够长（大概率含原文）才进 agent 链路；闲聊仍走 /chat
+    function isAgentTaskIntent(text) {
+        return /润色|帮我改|改一下|改改|评估|斧正|帮我看看这/.test(text) && text.length >= 30;
+    }
+
+    let agentStepRow = null; // 步骤播报行：同一时刻只保留一条，新 step 替换旧的
+    function showAgentStep(say, mood) {
+        // 情绪联动：像素小人/立绘立刻反应（与 [m:情绪] 标记同通道的效果）
+        if (window.MadelineMood && mood) pmReactToEmotion(MadelineMood.normalize(mood));
+        if (!agentStepRow) {
+            agentStepRow = document.createElement('div');
+            agentStepRow.className = 'agent-step';
+            chatMessages.appendChild(agentStepRow);
+        }
+        agentStepRow.textContent = '';
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        // 快速打字机（20ms/字）；token 防止上一条的定时器串到下一条
+        const token = agentStepRow._token = (agentStepRow._token || 0) + 1;
+        let i = 0;
+        (function tick() {
+            if (!agentStepRow || agentStepRow._token !== token) return;
+            if (i < say.length) {
+                agentStepRow.textContent = say.slice(0, ++i);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                setTimeout(tick, 20);
+            }
+        })();
+    }
+    function clearAgentStep() {
+        if (agentStepRow) { agentStepRow.remove(); agentStepRow = null; }
+    }
+
+    // polish 对照卡片：原文 | 修改后 双栏 + 四维问题清单 + 改动说明；[[ ]] 标记渲染为高亮
+    function renderPolishCard(data) {
+        const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const hl = s => esc(s).replace(/\[\[(.+?)\]\]/gs, '<span class="pc-hl">$1</span>').replace(/\n/g, '<br>');
+        const card = document.createElement('div');
+        card.className = 'polish-card';
+        let issuesHtml = '';
+        (data.issues || []).forEach(it => {
+            issuesHtml += '<div class="pc-issue"><span class="pc-dim">' + esc(it.dim) + '</span>' + esc(it.note) + '</div>';
+        });
+        card.innerHTML =
+            '<div class="pc-cols">' +
+              '<div class="pc-col"><div class="pc-head">原文</div><div class="pc-body">' + esc(data.original).replace(/\n/g, '<br>') + '</div></div>' +
+              '<div class="pc-col pc-col-new"><div class="pc-head">修改后</div><div class="pc-body">' + hl(data.polished) + '</div></div>' +
+            '</div>' +
+            (issuesHtml ? '<div class="pc-issues">' + issuesHtml + '</div>' : '') +
+            (data.changeNote ? '<div class="pc-note">✎ ' + esc(data.changeNote) + '</div>' : '');
+        chatMessages.appendChild(card);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // agent 流式：POST /agent/madeline/stream，事件帧 step/emotion/delta/result/done/error
+    async function runAgentStream(text) {
+        const token = localStorage.getItem('token');
+        const resp = await fetch(BASE_URL + '/agent/madeline/stream', {
+            method: 'POST',
+            headers: Object.assign(
+                { 'Content-Type': 'application/json' },
+                token ? { 'Authorization': token } : {}
+            ),
+            body: JSON.stringify({ message: text })
+        });
+        if (!resp.ok || !resp.body) throw new Error('agent 流式不可用 HTTP ' + resp.status);
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let raw = '', emotion = '默认', streamer = null, polishData = null, serverError = false;
+        // AI 句内情绪标记剥离器：delta 进去，纯文本 + 切换点出来（跨分块安全）
+        const moodFeeder = window.MadelineMood ? MadelineMood.feeder() : null;
+        let frameBuf = '';
+        const sseField = (line, prefix) => {
+            let v = line.slice(prefix.length);
+            return v.charAt(0) === ' ' ? v.slice(1) : v;
+        };
+        const parseFrames = (chunk) => {
+            frameBuf += chunk;
+            let idx;
+            while ((idx = frameBuf.indexOf('\n\n')) !== -1) {
+                const frame = frameBuf.slice(0, idx);
+                frameBuf = frameBuf.slice(idx + 2);
+                let event = 'message';
+                const dataLines = [];
+                for (const line of frame.split('\n')) {
+                    if (line.startsWith('event:')) event = sseField(line, 'event:').trim();
+                    else if (line.startsWith('data:')) dataLines.push(sseField(line, 'data:'));
+                }
+                const data = dataLines.join('\n');
+                if (event === 'step') {
+                    try { const s = JSON.parse(data); showAgentStep(s.say || '', s.mood); } catch (e) { /* 步骤播报解析失败就跳过 */ }
+                } else if (event === 'emotion') {
+                    emotion = data.trim() || '默认';
+                } else if (event === 'delta') {
+                    let cleanText = data, moods = null;
+                    if (moodFeeder) {
+                        const r = moodFeeder.feed(data);
+                        cleanText = r.text;
+                        moods = r.moods;
+                    }
+                    raw += cleanText;
+                    // 第一个 delta 到达就启动流式说话器（不等句号），步骤播报同时撤下
+                    if (!streamer) {
+                        clearAgentStep();
+                        streamer = startStreamingMadeline(emotion);
+                    }
+                    if (cleanText) streamer.append(cleanText);
+                    if (moods && moods.length) streamer.queueMoods(moods);
+                } else if (event === 'result') {
+                    try { polishData = JSON.parse(data); } catch (e) { /* 卡片数据坏了就不要卡片 */ }
+                } else if (event === 'error') {
+                    serverError = true;
+                }
+            }
+        };
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            parseFrames(decoder.decode(value, { stream: true }));
+        }
+        parseFrames(decoder.decode());
+        // 服务端明确报错或一帧正文都没有：抛给外层走 /chat 回退，不静默无反应
+        if (serverError || !raw.trim()) throw new Error('agent 流式空响应');
+        if (streamer && moodFeeder) {
+            const tail = moodFeeder.flush();
+            if (tail) { streamer.append(tail); raw += tail; }
+        }
+        if (streamer) {
+            streamer.finish();
+            await streamer.done;
+        }
+        clearAgentStep();
+        if (polishData && polishData.tool === 'polishText') renderPolishCard(polishData);
+        const fullText = raw.trim();
+        if (fullText && !isRepeatedSpeech(fullText)) rememberSpeech(fullText);
+    }
+
     async function sendChatMessage() {
         const text = chatInput.value.trim();
         if (!text || isTyping) return;
@@ -770,21 +925,19 @@
         isTyping = true;
         chatSendBtn.disabled = true;
 
-        try {
-            const res = await api('/chat', 'POST', { content: text });
-            if (res.success && res.data) {
-                const reply = res.data.content || '...';
-                addMadelineMessage(reply, res.data.emotion || '默认');
-                // AI 主动发起金羽毛（见 sendQuickMessage 注释）：排队等当前回复说完
-                if (res.data.feather && window.featherTrigger) {
-                    window.featherTrigger.requestFromAI(res.data.emotion || '不安');
-                }
-            } else {
-                addMadelineMessage('Hmm... I didn\'t catch that. Say it again?', '默认');
+        // 任务意图（润色/评估）进 agent 工具循环；链路失败回退普通聊天，保证她一定回话
+        if (isAgentTaskIntent(text)) {
+            try {
+                await runAgentStream(text);
+                isTyping = false;
+                chatSendBtn.disabled = false;
+                return;
+            } catch (e) {
+                console.warn('agent 链路失败，回退 /chat:', e);
+                clearAgentStep();
             }
-        } catch (e) {
-            addMadelineMessage('Network issue... try again?', '默认');
         }
+        await replyViaChat(text);
         isTyping = false;
         chatSendBtn.disabled = false;
     }

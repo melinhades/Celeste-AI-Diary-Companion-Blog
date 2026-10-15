@@ -1,0 +1,301 @@
+#gameDialogText { --c:#7BD838; }
+
+* { box-sizing:border-box; margin:0; padding:0; }
+@font-face { font-family:'Renogare'; src:url('../celeste-font-en/Renogare-Regular.otf') format('opentype'); font-display:swap; }
+@font-face { font-family:'CelesteZH'; src:url('../fonts/NotoSansCJKsc-Medium.otf') format('opentype'); font-display:swap; }
+body { min-height:100vh; background:url('../celeste-gui/resort-room-native.png') center/cover no-repeat fixed; image-rendering:pixelated; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; overflow-x:hidden; }
+.topbar { position:fixed; top:14px; left:16px; z-index:20; }
+.topbar a { display:inline-block; padding:8px 14px; background:rgba(22,34,60,.88); color:#ffe36d; border:2px solid #ffe36d; border-radius:6px; text-decoration:none; font-size:13px; box-shadow:0 0 10px rgba(255,230,109,.35); }
+/* 冰山返回主页按钮（同 diary 的 #homePosterBtn） */
+#homePosterBtn {
+    position:fixed; top:16px; left:16px; z-index:900;
+    width:96px; height:96px; padding:0; border:none; background:transparent; cursor:pointer;
+    transition:transform .2s, filter .2s;
+}
+#homePosterBtn img { width:100%; height:100%; object-fit:contain; display:block; }
+#homePosterBtn:hover {
+    transform:translateY(-2px) scale(1.05);
+    filter:
+        drop-shadow(1px 0 0 #10101c) drop-shadow(-1px 0 0 #10101c)
+        drop-shadow(0 1px 0 #10101c) drop-shadow(0 -1px 0 #10101c)
+        drop-shadow(0 0 10px rgba(200,235,255,1)) drop-shadow(0 0 24px rgba(120,190,255,.8));
+}
+h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family:'Press Start 2P',monospace; font-size:14px; color:#ffe36d; text-shadow:0 2px 0 rgba(0,0,0,.6); letter-spacing:2px; z-index:20; }
+.wrap { max-width:760px; margin:0 auto; padding:86px 20px 160px; }
+.oshiro-wrap { text-align:center; margin-bottom:16px; }
+.oshiro-wrap img { width:92px; height:92px; object-fit:cover; border-radius:8px; border:2px solid rgba(255,230,109,.5); box-shadow:0 0 16px rgba(255,230,109,.3); }
+.balance { display:flex; align-items:center; gap:10px; justify-content:center; margin-bottom:26px; }
+.balance img { width:34px; height:34px; image-rendering:pixelated; filter:drop-shadow(0 0 6px rgba(255,107,138,.6)); }
+.balance .num { font-family:'Press Start 2P',monospace; font-size:20px; color:#ff6b8a; text-shadow:0 2px 0 rgba(0,0,0,.6); }
+.balance .tip { color:rgba(255,255,255,.55); font-size:12px; }
+.items { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:16px; }
+.item { background:rgba(22,34,60,.88); border:2px solid rgba(255,230,109,.4); border-radius:8px; padding:16px; display:flex; align-items:center; gap:14px; transition:transform .15s, border-color .15s; }
+.item:hover { transform:translateY(-3px); border-color:#ffe36d; }
+.item img { width:44px; height:44px; image-rendering:pixelated; object-fit:contain; flex-shrink:0; }
+.item .info { flex:1; min-width:0; }
+.item .name { color:#fff; font-size:15px; margin-bottom:4px; }
+.item .desc { color:rgba(255,255,255,.55); font-size:12px; line-height:1.6; }
+.item .buy { padding:8px 14px; border:2px solid #ffe36d; border-radius:6px; background:rgba(22,34,60,.9); color:#ffe36d; cursor:pointer; font-size:13px; white-space:nowrap; flex-shrink:0; transition:background .2s; }
+.item .buy:hover:not(:disabled) { background:rgba(255,227,109,.25); }
+.item .buy:disabled { opacity:.45; cursor:not-allowed; }
+.item.owned { border-color:rgba(255,230,109,.75); }
+.item.owned .buy { border-color:#7dcf7d; color:#a5e8a5; }
+.oshiro-say { margin-top:26px; text-align:center; color:rgba(255,227,109,.85); font-size:13px; min-height:22px; }
+#shopMemo { position:fixed; inset:0; z-index:999; background:rgba(4,4,16,.96); display:flex; align-items:center; justify-content:center; flex-direction:column; cursor:pointer; opacity:0; pointer-events:none; transition:opacity .6s ease; }
+#shopMemo.show { opacity:1; pointer-events:auto; }
+#shopMemo img { max-width:min(92vw,560px); max-height:72vh; border-radius:6px; box-shadow:0 10px 50px rgba(0,0,0,.7); transform:scale(.94); transition:transform .8s cubic-bezier(.2,.8,.3,1); }
+#shopMemo.show img { transform:scale(1); }
+#shopMemo .memo-card {
+    position:relative; max-width:min(92vw,560px); max-height:72vh;
+    border-radius:6px; overflow:hidden; box-shadow:0 10px 50px rgba(0,0,0,.7);
+    transform:scale(.94); transition:transform .8s cubic-bezier(.2,.8,.3,1);
+}
+#shopMemo.show .memo-card { transform:scale(1); }
+#shopMemo .memo-card img { width:100%; height:100%; display:block; box-shadow:none; border-radius:0; }
+#shopMemo .memo-text {
+    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:10% 12%; text-align:center; color:#1a1a1a;
+    font-family:'Renogare','CelesteZH',sans-serif; line-height:1.9;
+    text-shadow:0 1px 1px rgba(255,255,255,.3);
+}
+#shopMemo .memo-text .m-line1 { font-size:clamp(14px,2.2vmin,20px); letter-spacing:.08em; }
+#shopMemo .memo-text .m-line2 { font-size:clamp(13px,1.8vmin,17px); letter-spacing:.04em; opacity:.92; }
+#shopMemo .memo-text .m-line3 { font-size:clamp(13px,1.8vmin,17px); letter-spacing:.04em; opacity:.92; }
+#shopMemo .memo-text .m-sign { font-size:clamp(12px,1.6vmin,15px); margin-top:14px; opacity:.82; letter-spacing:.06em; }
+#shopMemo .memo-tip { position:absolute; bottom:26px; left:50%; transform:translateX(-50%); color:rgba(255,230,109,.6); font-size:12px; letter-spacing:2px; }
+
+/* ===== Oshiro 对话框（遮罩 fill 铺满） ===== */
+#gameDialog {
+    position: fixed;
+    left: 50%;
+    bottom: 66px;
+    transform: translateX(-50%) translateY(24px);
+    width: min(94vw, 900px);
+    min-height: 128px;
+    z-index: 950;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 20px 30px;
+    background: url('../Atlases/Portraits/textbox/oshiro.png') center / 100% 100% no-repeat;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s ease, transform .25s ease;
+}
+#gameDialog.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+#gameDialogOverlay { position:absolute; left:0; top:0; width:100%; height:100%; object-fit:fill; pointer-events:none; z-index:1; }
+#gameDialogPortrait { width:92px; height:92px; flex-shrink:0; border-radius:6px; overflow:hidden; z-index:2; }
+#gameDialogPortrait img { width:100%; height:100%; object-fit:cover; display:block; }
+#gameDialogBody { flex:1; min-width:0; z-index:2; }
+#gameDialogName { font-family:'Press Start 2P',monospace; color:#ffe36d; font-size:13px; margin-bottom:5px; }
+#gameDialogText { font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; color:#fff; font-size:14px; line-height:1.7; word-break:break-word; }
+
+/* ===== 像素 Oshiro ===== */
+#pixelOshiro {
+    position: fixed;
+    top: 60px;
+    left: 40px;
+    width: 512px;
+    height: 512px;
+    object-fit: contain;
+    object-position: center bottom;
+    image-rendering: pixelated;
+    z-index: 945;
+    cursor: pointer;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,.5));
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+/* ===== Oshiro 聊天历史框（双击打开） ===== */
+#oshiroChatDialog {
+    position: fixed;
+    right: 12px;
+    bottom: 12px;
+    width: 380px;
+    max-width: 92vw;
+    height: 480px;
+    z-index: 955;
+    background: url('../celeste-gui/card_golden.webp') top / 100% 123% no-repeat;
+    border: none;
+    border-radius: 0;
+    display: none;
+    flex-direction: column;
+    box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    overflow: hidden;
+}
+#oshiroChatDialog.show { display: flex; }
+#oshiroChatDialog .chat-header {
+    display:flex; align-items:center; gap:10px;
+    padding:14px 16px 8px 42px;
+    border-bottom:none;
+    background:url('../celeste-gui/cardtop_golden.webp') center / 100% 100% no-repeat;
+    flex-shrink:0;
+}
+#oshiroChatDialog .chat-header img { width:36px; height:36px; object-fit:cover; border-radius:6px; }
+#oshiroChatDialog .chat-title { flex:1; color:#2b2018; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; font-size:18px; letter-spacing:1px; }
+#oshiroChatDialog .close-btn { background:none; border:none; color:rgba(43,32,24,.55); font-size:16px; cursor:pointer; }
+#oshiroChatDialog .close-btn:hover { color:#2b2018; }
+#oshiroChatMessages { flex:1; overflow-y:auto; padding:14px 16px 10px 42px; display:flex; flex-direction:column; gap:10px; min-height:0; }
+.och-msg { max-width:85%; padding:8px 12px; border-radius:10px; font-size:13px; line-height:1.6; word-break:break-word; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; }
+.och-msg.user { align-self:flex-end; background:rgba(74,144,226,.14); color:#2b3a52; border:1px solid rgba(74,144,226,.4); }
+.och-msg.assistant { align-self:flex-start; background:transparent; border:none; padding:4px 6px; color:#3a2e2a; }
+#oshiroChatDialog .chat-input { display:flex; gap:8px; padding:8px 12px 6px 12px; border-top:1px dashed rgba(58,46,42,.35); flex-shrink:0; }
+#oshiroChatDialog .chat-input input { flex:1; padding:8px 10px; border:1px solid rgba(125,207,255,.5); border-radius:6px; background:rgba(125,207,255,.18); color:#2b3a52; font-size:13px; outline:none; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; }
+#oshiroChatDialog .chat-input input:focus { border-color:#7DCFFF; background:rgba(125,207,255,.3); }
+#oshiroChatDialog .chat-input input::placeholder { color:rgba(43,58,82,.45); }
+#oshiroChatDialog .chat-input button { padding:8px 14px; border:none; border-radius:6px; background:#FFEB3B; color:#111; cursor:pointer; font-size:14px; letter-spacing:1px; font-family:'Renogare','CelesteZH',sans-serif; box-shadow:inset 0 -2px #111111; }
+#oshiroChatDialog .chat-input button:hover { background:#ffeb85; }
+
+/* ===== 两侧烟囱烟雾（环境层，位于一切交互元素之下） ===== */
+#chimneySmoke { position:fixed; inset:0; pointer-events:none; z-index:1; overflow:hidden; }
+#chimneySmoke img {
+    position:absolute; image-rendering:pixelated;
+    will-change: transform, opacity;
+}
+
+/* ===== 煤球精灵（dustCreature 图层叠加） ===== */
+#dustSprite {
+    position: fixed;
+    left: 140px;
+    top: 320px;
+    z-index: 935;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-drag: none;
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,.45));
+}
+#dustSprite .dust-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transform-origin: 50% 100%;
+    transition: transform .15s ease;
+    animation: dustIdle 2.4s ease-in-out infinite;
+}
+#dustSprite.moving .dust-inner { animation: dustHop .45s ease-in-out infinite; }
+#dustSprite.squish .dust-inner { animation: none; transform: scale(1.3, .55); }
+#dustSprite img {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    image-rendering: pixelated;
+    pointer-events: none;
+}
+@keyframes dustIdle { 0%,100% { transform: scale(1,1); } 50% { transform: scale(1.05,.95); } }
+@keyframes dustHop { 0%,100% { transform: translateY(0) scale(1,1); } 50% { transform: translateY(-7px) scale(.95,1.06); } }
+
+/* ===== 心之水晶（默认空心 → 兑换出彩色水晶心） ===== */
+.heart-loop {
+    animation: heartBob 2.6s ease-in-out infinite;
+    filter: drop-shadow(0 0 10px var(--hg-glow, rgba(120,190,255,.78)));
+}
+@keyframes heartBob { 0%,100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-5px) rotate(2.5deg); } }
+
+/* 获取仪式全屏：暗场 + 放射光 + 心落定 + 命名牌 */
+#heartGet {
+    position:fixed; inset:0; z-index:2000; display:none;
+    align-items:center; justify-content:center; flex-direction:column;
+    background:radial-gradient(120% 120% at 50% 45%, #141628 0%, #0a0b18 55%, #04040c 100%);
+    opacity:0; transition:opacity .45s ease; cursor:pointer; overflow:hidden;
+}
+#heartGet.show { display:flex; }
+#heartGet.vis { opacity:1; }
+#heartGet .hg-rays {
+    position:absolute; left:50%; top:50%; width:170vmax; height:170vmax;
+    transform:translate(-50%,-50%);
+    background:repeating-conic-gradient(from 0deg, rgba(150,200,255,.15) 0deg 4deg, transparent 4deg 14deg);
+    -webkit-mask-image:radial-gradient(closest-side, transparent 12%, #000 30%, transparent 72%);
+    mask-image:radial-gradient(closest-side, transparent 12%, #000 30%, transparent 72%);
+    animation:hgRaySpin 26s linear infinite;
+    opacity:0; transition:opacity 1.2s ease 1.75s; pointer-events:none;
+}
+#heartGet.vis .hg-rays { opacity:1; }
+@keyframes hgRaySpin { to { transform:translate(-50%,-50%) rotate(360deg); } }
+
+/* 像素假心：仪式开场先跳动，破成碎片后真心才坠落（位置由 JS 对齐 .hg-heart） */
+#hgFakeHeart {
+    position:absolute; width:60px; height:60px; image-rendering:pixelated;
+    opacity:0; z-index:3; filter:drop-shadow(0 0 10px rgba(160,220,255,.7));
+    transform:translate(-50%,-50%);
+}
+#heartGet.vis #hgFakeHeart { animation:hgFakePulse .42s ease-in-out infinite alternate; }
+#heartGet.vis #hgFakeHeart.breaking { animation:hgFakeBreak .2s ease-in forwards; }
+@keyframes hgFakePulse {
+    from { opacity:1; transform:translate(-50%,-50%) scale(.94); }
+    to   { opacity:1; transform:translate(-50%,-50%) scale(1.08); }
+}
+@keyframes hgFakeBreak {
+    0%  { opacity:1; transform:translate(-50%,-50%) scale(1); }
+    100% { opacity:0; transform:translate(-50%,-50%) scale(1.35); filter:brightness(3) drop-shadow(0 0 18px rgba(200,240,255,1)); }
+}
+#hgFakeHeart.gone { display:none; }
+/* 碎片层 */
+#hgShards { position:absolute; inset:0; overflow:visible; pointer-events:none; z-index:3; }
+#hgShards img {
+    position:absolute; image-rendering:pixelated;
+    filter:drop-shadow(0 0 4px rgba(170,225,255,.85));
+    will-change:transform,opacity;
+}
+
+#heartGet .hg-heart {
+    position:relative; width:112px; height:112px; image-rendering:pixelated; z-index:2;
+    opacity:0; transform:scale(.15);
+    filter:drop-shadow(0 0 26px var(--hg-glow, rgba(120,190,255,.8))) brightness(1.15);
+}
+/* 破心（~1.95s）后真心才坠落 */
+#heartGet.vis .hg-heart { animation:hgHeartIn .85s cubic-bezier(.2,1.15,.3,1) 1.95s forwards; }
+@keyframes hgHeartIn {
+    0%   { opacity:0; transform:scale(.15) rotate(-30deg); }
+    70%  { opacity:1; transform:scale(1.22) rotate(4deg); }
+    100% { opacity:1; transform:scale(1) rotate(0deg); }
+}
+#heartGet.vis.shake { animation:hgShake .35s linear; }
+@keyframes hgShake { 0%,100% { transform:translate(0,0); } 20% { transform:translate(-7px,4px); } 40% { transform:translate(6px,-4px); } 60% { transform:translate(-4px,-3px); } 80% { transform:translate(4px,3px); } }
+#heartGet .hg-flash { position:absolute; inset:0; background:#dfe9ff; opacity:0; pointer-events:none; }
+#heartGet.vis .hg-flash { animation:hgFlash .5s ease-out 2.45s; }
+@keyframes hgFlash { 0% { opacity:.85; } 100% { opacity:0; } }
+#heartGet .hg-title {
+    margin-top:34px; z-index:2; color:#e8f1ff;
+    font-size:clamp(22px, 4.6vw, 34px); letter-spacing:3px;
+    text-shadow:0 0 18px var(--hg-glow, rgba(120,190,255,.9)), 0 2px 0 rgba(0,0,0,.7);
+    opacity:0; transform:translateY(10px);
+    transition:opacity .8s ease 2.75s, transform .8s ease 2.75s;
+}
+#heartGet .hg-desc {
+    margin-top:12px; z-index:2; color:rgba(214,228,255,.72);
+    font-size:14px; letter-spacing:2px;
+    opacity:0; transition:opacity .8s ease 3.15s;
+}
+#heartGet.vis .hg-title { opacity:1; transform:translateY(0); }
+#heartGet.vis .hg-desc { opacity:1; }
+#heartGet .hg-tip {
+    position:absolute; bottom:30px; left:50%; transform:translateX(-50%);
+    color:rgba(255,230,109,.55); font-size:12px; letter-spacing:3px;
+    opacity:0; transition:opacity .6s ease 3.5s;
+}
+#heartGet.vis .hg-tip { opacity:1; }
+
+/* ===== 悬停提示按钮：idle 指针呼吸，hover 切换图示（右=highlight 左=resort 挂牌） ===== */
+.dot-bubble {
+    position:fixed; z-index:940; padding:0; border:none; background:transparent;
+    cursor:pointer; user-select:none; -webkit-user-drag:none;
+}
+.dot-bubble .dot-layer {
+    position:absolute; display:block; pointer-events:none;
+}
+.dot-bubble .dot-hover { opacity:0; transition:opacity .15s ease; }
+.dot-bubble:hover .dot-idle { opacity:0; }
+.dot-bubble:hover .dot-hover { opacity:1; }
+/* idle 黑色指针在深墙上加白色光晕，呼吸 = 缩放 + 光晕起伏，锚点为三个黑点(49.6%,71.5%) */
+.dot-bubble .dot-idle {
+    transform-origin:49.6% 71.5%;
+    animation:dotBreathe 2.2s ease-in-out infinite;
+    will-change:transform,filter;
+}
+@keyframes dotBreathe {
+    0%,100% { transform:scale(1);     filter:drop-shadow(0 0 1px rgba(255,255,255,.65)); }
+    50%     { transform:scale(1.13);  filter:drop-shadow(0 0 4px rgba(255,255,255,.95)); }
+}
+#dotRight .dot-idle { animation-duration:2.7s; }
