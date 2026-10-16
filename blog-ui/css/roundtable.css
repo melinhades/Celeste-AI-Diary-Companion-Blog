@@ -585,4 +585,31 @@
     .back-link { font-size:15px; color:rgba(200,210,255,.55); cursor:pointer; margin-bottom:12px; display:inline-flex; align-items:center; gap:6px; flex:none; }
     .back-link:hover { color:#ffe36d; }
     .back-link img { width:48px; height:48px; image-rendering:pixelated; display:block; }
-    
+
+    /* ===== 全屏观演模式：点击画面空白处进入；UA 会把全屏元素强制铺满（!important），
+       所以全屏的是外层空壳 .scene-fs-host，舞台 .scene-wrap 作为普通子元素锁 1152×720
+       后整体 scale 居中适配——canvas、逐字稿气泡、插话行全部等比放大，不重排不裁剪 ===== */
+    .scene-fs-host { position:relative; flex:none; margin:auto 0; width:100%; }
+    .scene-wrap { cursor:zoom-in; }
+    #transcript, .interject-row { cursor:auto; }
+    .scene-fs-host:fullscreen { background:#05070f; overflow:hidden; }
+    .scene-fs-host:fullscreen::backdrop { background:#05070f; }
+    .scene-fs-host:fullscreen .scene-wrap {
+        position:absolute; left:50%; top:50%; margin:0;
+        width:1152px; height:720px;
+        transform-origin:center center;
+        background:#0b0f22;
+        cursor:default;
+        box-shadow:0 0 120px rgba(0,0,0,.8);
+    }
+    .rt-fs-exit {
+        position:absolute; top:14px; right:14px; z-index:10;
+        padding:7px 16px; font-size:12px; letter-spacing:1px;
+        color:rgba(220,228,255,.85); background:rgba(10,14,30,.55);
+        border:1px solid rgba(160,175,220,.35); border-radius:6px;
+        cursor:pointer; backdrop-filter:blur(4px);
+        display:none;
+    }
+    .scene-fs-host:fullscreen .rt-fs-exit { display:block; }
+    .rt-fs-exit:hover { color:#ffe36d; border-color:rgba(255,227,109,.7); background:rgba(20,26,50,.78); }
+

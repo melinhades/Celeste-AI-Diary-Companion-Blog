@@ -124,6 +124,7 @@ initHeader();
     function startMeeting() {
         const topic = $('topicInput').value.trim();
         if (!topic) { showToast('先写一个议题吧', 'info'); return; }
+        if (window.FeltPiano) FeltPiano.send(); // 与实时聊天发送键同款音效
         replayMode = false;
         observerMode = false;
         openStage({topic, speakers});
@@ -1015,6 +1016,7 @@ initHeader();
         const transcript = $('transcript');
         // 页面高度已解锁（可滚动）：wrap 直接吃满卡片宽度，高度由 aspect-ratio 8:5 推出
         function fitWrap() {
+            if (document.fullscreenElement) return; // 全屏观演中：舞台由全屏逻辑接管，不同步侧栏
             wrap.style.width = '100%';
             syncSideToWrap();
         }
@@ -1036,6 +1038,45 @@ initHeader();
         window.addEventListener('resize', fitWrap);
         // 暴露给 openStage：舞台从 display:none 显示后必须重算（隐藏时量出的尺寸是 0）
         window.rtSyncSide = fitWrap;
+    })();
+
+    // ===== 全屏观演模式：点击画面空白处进入；UA 对全屏元素强制铺满（!important），
+    // 所以全屏的是外层空壳 host，舞台 wrap 作为普通子元素锁 1152×720 后整体 scale，对话等比放大 =====
+    (function () {
+        const wrap = document.getElementById('sceneWrap');
+        const host = document.getElementById('sceneFsHost');
+        const fsExit = document.getElementById('fsExit');
+        const BASE_W = 1152, BASE_H = 720;
+        const REST_TRANSFORM = 'translateY(3%)'; // 与上方布局 IIFE 内联值保持一致
+        if (!wrap || !host || !fsExit || !host.requestFullscreen) return;
+
+        function applyScale() {
+            const s = Math.min(window.innerWidth / BASE_W, window.innerHeight / BASE_H);
+            wrap.style.transform = 'translate(-50%,-50%) scale(' + s.toFixed(4) + ')';
+        }
+
+        wrap.addEventListener('click', e => {
+            if (document.fullscreenElement === host) return; // 全屏中点击画面不动作，退出走按钮/Esc
+            if (e.target.closest('#transcript, .interject-row, #resultArea, .rt-fs-exit')) return;
+            host.requestFullscreen().catch(() => {});
+        });
+        fsExit.addEventListener('click', () => { if (document.fullscreenElement) document.exitFullscreen(); });
+
+        document.addEventListener('fullscreenchange', () => {
+            if (document.fullscreenElement === host) {
+                // 锁回原始坐标系：内联样式压过布局 IIFE 写入的 width:100% / translateY(3%)
+                wrap.style.width = BASE_W + 'px';
+                wrap.style.height = BASE_H + 'px';
+                applyScale();
+            } else {
+                wrap.style.height = '';
+                wrap.style.transform = REST_TRANSFORM;
+                if (window.rtSyncSide) window.rtSyncSide(); // 恢复 width:100% 并重算侧栏同步
+            }
+        });
+        window.addEventListener('resize', () => {
+            if (document.fullscreenElement === host) applyScale();
+        });
     })();
     $('historyMask').addEventListener('click', e => { if (e.target.id === 'historyMask') hideHistory(); });
     document.addEventListener('keydown', e => { if (e.key === 'Escape') hideHistory(); });
