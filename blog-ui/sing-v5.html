@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Sing v5 · Madeline 歌声深度迭代</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { background:#14101c; color:#e8def7; font:14px/1.6 "Microsoft YaHei",sans-serif; margin:0; padding:18px; }
+  h1 { font-size:18px; margin:0 0 4px; }
+  .sub { color:#9a8cba; font-size:12px; margin-bottom:14px; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:8px 0; }
+  button { background:#3a2d5c; color:#fff; border:1px solid #6b57a0; border-radius:6px; padding:7px 12px; cursor:pointer; font-size:13px; }
+  button:hover { background:#4a3a73; }
+  button:disabled { opacity:.45; cursor:wait; }
+  select,input[type=text] { background:#221a36; color:#e8def7; border:1px solid #6b57a0; border-radius:6px; padding:6px 8px; font-size:13px; }
+  input[type=text] { width:300px; }
+  pre { background:#0d0a16; border:1px solid #332949; border-radius:8px; padding:12px; max-height:420px; overflow:auto; font-size:12px; white-space:pre-wrap; }
+  canvas { background:#0d0a16; border:1px solid #332949; border-radius:8px; margin-top:8px; }
+  .tag { display:inline-block; background:#2e2447; border-radius:4px; padding:1px 7px; margin-right:6px; font-size:12px; }
+  .ok { color:#89e089; } .warn { color:#e0c46a; } .bad { color:#e08989; }
+</style>
+</head>
+<body>
+<h1>Sing v5 · 库存审计 → 双链路合成 → 独立验证</h1>
+<div class="sub">第零部分 双池审计（去重/覆盖/音色门） · 第一部分 TD-PSOLA v5 vs LPC 源-滤波 · 第二部分 wow 真唱表情拟合 · 第三部分 倒谱独立裁判</div>
+
+<div class="row">
+  <button id="btnAudit">① 库存审计（angry + determined）</button>
+  <button id="btnFit">② 拟合 wow 真唱表情</button>
+  <button id="btnWow">③ 唱 wow（双链路 A/B）</button>
+  <button id="btnReport">④ 全量验证报告</button>
+  <button id="btnExport">导出 JSON</button>
+</div>
+<div class="row">
+  <span class="tag">池策略</span>
+  <select id="strategy"><option value="cross">cross（按数据跨池）</option><option value="angry">angry</option><option value="determined">determined</option></select>
+  <span class="tag">歌词</span>
+  <input type="text" id="lyric" value="" placeholder="留空=整曲无词 wow 真值测试；填词=一字一音">
+  <button id="btnPlayPsola">▶ PSOLA</button>
+  <button id="btnPlayLpc">▶ LPC</button>
+  <button id="btnPlayWow">▶ wow 原版</button>
+</div>
+<canvas id="cv" width="1160" height="280"></canvas>
+<pre id="log">准备就绪。所有按钮首次点击会解锁音频。建议顺序：① → ② → ③ 试听 → ④ 出报告。</pre>
+
+<script src="js/sing-v5.js"></script>
+<script>
+let ctx = null, eng = null, lastProf = null, lastPlan = null, bufPsola = null, bufLpc = null, full = null;
+const $ = id => document.getElementById(id), logEl = $('log');
+function log(s) { logEl.textContent += '\n' + s; logEl.scrollTop = logEl.scrollHeight; }
+async function ensureEngine() {
+  if (!ctx) { ctx = new (window.AudioContext || window.webkitAudioContext)(); eng = SingV5.create(ctx); }
+  if (ctx.state === 'suspended') await ctx.resume();
+  return eng;
+}
+function play(buf) {
+  if (!buf) return;
+  const s = ctx.createBufferSource(); s.buffer = buf; s.connect(ctx.destination); s.start();
+}
+function download(name, obj) {
+  const blob = new Blob([JSON.stringify(obj, (k, v) => (k === 'd' || k === 'buf' || k === 'marksA' || k === 'mfcc') ? undefined : v, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+}
+
+// ---------- ① 库存审计 ----------
+$('btnAudit').onclick = async function () {
+  const e = await ensureEngine();
+  this.disabled = true; log('开始审计：80 文件 + 镜像哈希核对 + 逐文件测量…');
+  const t0 = performance.now();
+  const a = await e.runAudit((i, n, url) => { if (i % 10 === 0 || i === n) log(`  ${i}/${n} ${url.split('/').slice(-2).join('/')}`); });
+  log(`审计完成（${((performance.now() - t0) / 1000).toFixed(1)}s）`);
+  const d = a.dedup;
+  log(`去重：列出 ${d.filesListed}，存在 ${d.filesPresent}，唯一哈希 ${d.uniqueHashes}，池内重复 ${d.intraDuplicates}；` +
+      `镜像核对 ${d.mirrorChecked}（一致 ${d.mirrorSame}，不一致 ${d.mirrorDiff}）`);
+  for (const p of e.POOLS) {
+    const r = a.pools[p];
+    log(`【${p}】n=${r.n} 准入=${r.admissible} f0中位=${r.f0MedianHz.toFixed(1)}Hz 浊音率中位=${r.voicedRatioMed.toFixed(2)} ` +
+        `HNR中位=${r.hnrDbMed.toFixed(1)}dB 稳态中位=${(r.steadyMed * 1000).toFixed(0)}ms mark不一致=${r.markMismatchMed.toFixed(2)} 拉黑=${r.banned.length}`);
+    r.banned.slice(0, 6).forEach(b => log(`    ✗ ${b.file} 浊音${b.voicedRatio} HNR${b.hnrDb}dB 稳态${(b.steady * 1000)|0}ms mark${b.markMis}`));
+  }
+  log(`两池 MFCC 余弦=${a.mfccSim.toFixed(3)} → ${a.crossPoolAllowed ? '允许跨池' : '低于门限 0.90：句内锁池，仅乐句边界可切池'}`);
+  drawCoverage(a);
+};
+
+function drawCoverage(a) {
+  const cv = $('cv'), g = cv.getContext('2d');
+  g.clearRect(0, 0, cv.width, cv.height);
+  const x0 = 50, y0 = 240, w = cv.width - 80, h = 200;
+  g.strokeStyle = '#444'; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x0 + w, y0); g.stroke();
+  // 安全变调带 ±480 音分
+  g.fillStyle = 'rgba(110,200,120,.08)'; g.fillRect(x0, y0 - h * 480 / 800, w, h * 960 / 800);
+  g.fillStyle = '#777'; g.font = '11px sans-serif'; g.fillText('+480', 6, y0 - h * 480 / 800 + 4); g.fillText('0', 30, y0 + 4); g.fillText('-480', 2, y0 + h * 480 / 800 + 4);
+  const cov = a.coverage;
+  cov.forEach((c, i) => {
+    const x = x0 + i * w / (cov.length - 1);
+    g.strokeStyle = '#555'; g.beginPath(); g.moveTo(x, y0 - 3); g.lineTo(x, y0 + 3); g.stroke();
+    if (c.cents == null) return;
+    const y = y0 - clamp(c.cents, -800, 800) * h / 800;
+    g.fillStyle = c.pool === 'angry' ? '#e08989' : '#89b4e0';
+    g.beginPath(); g.arc(x, y, c.inSafe ? 4 : 2.5, 0, 7); g.fill();
+    if (i % 4 === 0) { g.fillStyle = '#999'; g.fillText(c.midi, x - 6, y0 + 18); }
+  });
+  g.fillStyle = '#e08989'; g.fillText('● angry', x0, 20);
+  g.fillStyle = '#89b4e0'; g.fillText('● determined', x0 + 70, 20);
+  g.fillStyle = '#777'; g.fillText('纵轴=最近准入单元的自然音高差（音分），绿带=变调率 0.7~1.4 安全区', x0 + 220, 20);
+}
+
+// ---------- ② 表情拟合 ----------
+$('btnFit').onclick = async function () {
+  const e = await ensureEngine();
+  const wow = await e.loadWow();
+  if (!wow) { log('wow 参考音频加载失败（celeste-sounds/wow_so_secret.wav）'); return; }
+  const fit = e.fitExpression(wow);
+  lastProf = fit.profile;
+  log('wow 表情拟合（' + fit.perNote.length + ' 音）：');
+  log(`  scoop=${lastProf.scoopCents.toFixed(0)}音分/${lastProf.scoopMs}ms  overshoot=${lastProf.overshootCents.toFixed(0)}音分  ` +
+      `颤音=${lastProf.vibRate.toFixed(2)}Hz / ${lastProf.vibDepth.toFixed(0)}音分 / 起振点=${lastProf.vibOnsetFrac.toFixed(2)}`);
+  log('  （以上数值替换 v4 的 1.5 半音/45ms、5.8~6.5Hz/18~32 音分硬编码）');
+};
+
+// ---------- ③ 双链路 A/B ----------
+async function renderBoth() {
+  const e = await ensureEngine();
+  if (!e.getAudit()) { log('请先跑 ① 库存审计'); return null; }
+  if (!lastProf) { const wow = await e.loadWow(); lastProf = wow ? e.fitExpression(wow).profile : null; }
+  const lyric = $('lyric').value.trim();
+  const strat = $('strategy').value;
+  lastPlan = e.plan(e.WOW_NOTES, lyric || null, strat);
+  const t1 = performance.now(); bufPsola = e.renderTrack(lastPlan, 'psola', lastProf);
+  const t2 = performance.now(); bufLpc = e.renderTrack(lastPlan, 'lpc', lastProf);
+  const t3 = performance.now();
+  log(`渲染 ${lastPlan.voices.length} 音（${lyric ? '填词：' + lyric : '无词 wow 真值'}，策略 ${strat}）：` +
+      `PSOLA ${(t2 - t1).toFixed(0)}ms，LPC ${(t3 - t2).toFixed(0)}ms`);
+  return e;
+}
+$('btnWow').onclick = async function () { this.disabled = true; await renderBoth(); this.disabled = false; log('可点 ▶PSOLA / ▶LPC 盲听对比。'); };
+$('btnPlayPsola').onclick = () => play(bufPsola);
+$('btnPlayLpc').onclick = () => play(bufLpc);
+$('btnPlayWow').onclick = async function () {
+  const e = await ensureEngine(); const b = await e.loadWow(); play(b);
+};
+
+// ---------- ④ 全量报告 ----------
+$('btnReport').onclick = async function () {
+  const e = await ensureEngine();
+  this.disabled = true;
+  try {
+    full = await e.fullReport(log);
+    log('──────── 验证汇总 ────────');
+    for (const s of ['angry', 'determined', 'cross']) {
+      const r = full.strategies[s];
+      const line = (c) => `${c}: RMSE=${r[c].rmseCents}音分 粗错=${(r[c].grossRate * 100).toFixed(0)}% V/UV漏=${(r[c].vuvMiss * 100).toFixed(0)}% click=${r[c].clicks}`;
+      log(`【${s}】${line('psola')} ｜ ${line('lpc')}`);
+    }
+    log(`恒等 null 残差：PSOLA ${full.identity.psola.medDb.toFixed(1)}dB，LPC ${full.identity.lpc.medDb.toFixed(1)}dB（LPC 为建模残差，天然偏大）`);
+    log(`F1/F2 漂移中位比：PSOLA ${full.formants.psola.medRatio.toFixed(3)}，LPC ${full.formants.lpc.medRatio.toFixed(3)}（理想 1.000）`);
+    log('判定：'); full.verdict.forEach(v => log('  ✓ ' + v));
+  } catch (err) { log('报告失败：' + err.message); }
+  this.disabled = false;
+};
+$('btnExport').onclick = () => {
+  const e = eng;
+  download('sing-v5-report.json', { report: full, audit: e && e.getAudit(), expression: lastProf });
+  log('已导出（含每音明细；缓冲波形字段已剔除）');
+};
+window.__dbg = { get eng() { return eng; }, get full() { return full; } };
+</script>
+</body>
+</html>

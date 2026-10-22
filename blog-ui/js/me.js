@@ -63,51 +63,8 @@
             const sigDraft = ref('');
             const sigInput = ref(null);
 
-            // ===== 情绪图谱 =====
-            const EMO_COLORS = {
-                '开心': '#ffd966', '平静': '#7ec0ee', '期待': '#ff9a3c', '满足': '#a8d8a8',
-                '不安': '#b48cff', '悲伤': '#5a8dc4', '孤独': '#8ca0c4', '愤怒': '#ff5a5a',
-                '惊讶': '#ffe36d', '疲惫': '#9a9a9a'
-            };
-            const emoLoaded = ref(false);
-            const emoTotal = ref(0);
-            const emoDist = ref({});
-            const emoTimeline = ref([]);
-
             // ===== 印章：每写一篇解锁一枚，最多 6 枚 =====
             const stamps = computed(() => CARD_STAMPS.slice(0, Math.min(diaryCount.value, CARD_STAMPS.length)));
-
-            // 情绪图谱：按出现次数降序，带百分比和颜色
-            const emoBars = computed(() => {
-                const entries = Object.entries(emoDist.value);
-                if (!entries.length) return [];
-                const max = Math.max(...entries.map(e => e[1]));
-                return entries
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([name, count]) => ({
-                        name, count,
-                        pct: max > 0 ? Math.round(count / max * 100) : 0,
-                        color: EMO_COLORS[name] || '#888'
-                    }));
-            });
-
-            // 月度趋势点：把 timeline 展平为 [month, name, color] 数组
-            const emoTimelineDots = computed(() => {
-                const dots = [];
-                for (const t of emoTimeline.value) {
-                    const emotions = t.emotions || {};
-                    for (const [name, count] of Object.entries(emotions)) {
-                        for (let i = 0; i < count; i++) {
-                            dots.push({
-                                month: t.month,
-                                name,
-                                color: EMO_COLORS[name] || '#888'
-                            });
-                        }
-                    }
-                }
-                return dots;
-            });
 
             // 头像框：日记<10 普通，≥10 金色
             watch(diaryCount, (n) => {
@@ -192,22 +149,11 @@
                 api('/feather/count', 'GET').then(res => {
                     if (res.success && res.data != null) featherCount.value = res.data.count;
                 });
-
-                // 情绪图谱
-                api('/diary/emotion-stats', 'GET').then(res => {
-                    emoLoaded.value = true;
-                    if (res.success && res.data) {
-                        emoTotal.value = res.data.total || 0;
-                        emoDist.value = res.data.distribution || {};
-                        emoTimeline.value = res.data.timeline || [];
-                    }
-                }).catch(() => { emoLoaded.value = true; });
             });
 
             return {
                 nickname, avatarUrl, portraitSrc, berryCount, diaryCount, featherCount,
                 serverSignature, editing, sigDraft, sigInput, stamps,
-                emoLoaded, emoTotal, emoBars, emoTimeline, emoTimelineDots,
                 onPortraitError, startEdit, saveSig
             };
         }

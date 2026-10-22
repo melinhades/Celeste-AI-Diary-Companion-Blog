@@ -1,0 +1,400 @@
+/* cassette.exe · 磁带机环境混音台
+   实体硬件方向：深夜蓝金属拉丝面板 + 内嵌磁带窗 + 粉/琥珀指示灯色。
+   在 common.css 之后加载：覆盖背景，保留其星空 ::before。 */
+
+:root {
+    --cx-face-1: #262e4a;
+    --cx-face-2: #171d33;
+    --cx-face-3: #101527;
+    --cx-groove: #0a0e1c;
+    --cx-line: rgba(174, 190, 230, 0.10);
+    --cx-ink: #efe6d6;
+    --cx-dim: #8b97bb;
+    --cx-faint: #5d6789;
+    --cx-hot: #e8a9b0;     /* 磁带粉 */
+    --cx-amber: #e2b06a;   /* 琥珀指示 */
+}
+
+body {
+    background: linear-gradient(160deg, #0a0e22 0%, #141b36 55%, #0d1226 100%);
+    background-attachment: fixed;
+}
+/* 暗角，把视线收进机器 */
+body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: radial-gradient(120% 90% at 50% 18%, transparent 55%, rgba(4, 6, 16, 0.55) 100%);
+}
+
+.cx-wrap {
+    position: relative;
+    z-index: 1;
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 38px 24px 72px;
+    animation: cxIn 0.5s ease both;
+}
+@keyframes cxIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* ---------- 顶栏 ---------- */
+.cx-top {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--cx-line);
+}
+.cx-back {
+    font-size: 14px;
+    color: var(--cx-dim);
+    transition: color 0.2s;
+}
+.cx-back:hover { color: var(--cx-hot); }
+.cx-title {
+    font-size: 25px;
+    letter-spacing: 0.05em;
+    color: var(--cx-ink);
+    font-weight: 400;
+}
+.cx-title span { color: var(--cx-hot); }
+.cx-sub {
+    margin-left: auto;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--cx-faint);
+}
+
+/* ---------- 布局 ---------- */
+.cx-main {
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    gap: 40px;
+    margin-top: 34px;
+    align-items: start;
+}
+
+/* ============ 左：磁带机面板 ============ */
+.cx-deck {
+    position: relative;
+    border-radius: 16px;
+    padding: 30px 26px 26px;
+    background:
+        repeating-linear-gradient(115deg, rgba(255,255,255,0.014) 0 2px, transparent 2px 5px),
+        linear-gradient(165deg, var(--cx-face-1) 0%, var(--cx-face-2) 46%, var(--cx-face-3) 100%);
+    border: 1px solid rgba(190, 205, 245, 0.12);
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.10),
+        inset 0 -14px 30px rgba(0,0,0,0.35),
+        0 24px 50px rgba(3, 5, 14, 0.55);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+}
+/* 四角螺丝 */
+.screw {
+    position: absolute;
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #6b7596, #2a3149 70%);
+    box-shadow: inset 0 0 2px rgba(0,0,0,0.8), 0 1px 1px rgba(255,255,255,0.12);
+}
+.screw::after {
+    content: '';
+    position: absolute; left: 1px; right: 1px; top: 50%;
+    height: 1px; background: rgba(0,0,0,0.55);
+    transform: rotate(38deg);
+}
+.screw.tl { top: 12px; left: 12px; }
+.screw.tr { top: 12px; right: 12px; }
+.screw.bl { bottom: 12px; left: 12px; }
+.screw.br { bottom: 12px; right: 12px; }
+
+.deck-brand {
+    font-size: 11px;
+    letter-spacing: 0.34em;
+    color: var(--cx-faint);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+}
+.deck-brand span { font-size: 9px; letter-spacing: 0.26em; color: #4d5675; }
+
+/* 磁带窗：深陷暗舱 */
+.cx-window {
+    width: 100%;
+    border-radius: 12px;
+    padding: 24px 18px 12px;
+    background:
+        linear-gradient(180deg, #05070f, #0b1020);
+    box-shadow:
+        inset 0 3px 14px rgba(0,0,0,0.9),
+        inset 0 -1px 0 rgba(160,180,230,0.08),
+        0 1px 0 rgba(255,255,255,0.05);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+.cx-tape {
+    position: relative;
+    width: 148px; height: 148px;
+    display: flex; align-items: center; justify-content: center;
+}
+.cx-tape img {
+    width: 100%; height: 100%;
+    object-fit: contain;
+    image-rendering: pixelated;
+    filter: saturate(0.92) brightness(0.92);
+    transition: filter 0.3s;
+}
+/* 转动：粉色暖光从窗底漫上来 */
+.cx-tape.playing img { filter: saturate(1.05) brightness(1.02); }
+.cx-tape.playing::after {
+    content: '';
+    position: absolute;
+    left: 50%; bottom: -10px;
+    width: 110px; height: 16px;
+    transform: translateX(-50%);
+    background: radial-gradient(ellipse at center, rgba(232,169,176,0.55), transparent 70%);
+    filter: blur(3px);
+    animation: lamp 2.4s ease-in-out infinite;
+}
+@keyframes lamp { 0%,100% { opacity: .75; } 50% { opacity: 1; } }
+.win-caption {
+    font-size: 9px;
+    letter-spacing: 0.3em;
+    color: #49516e;
+}
+
+/* 状态行：像设备的 LCD 小窗 */
+.cx-now {
+    width: 100%;
+    text-align: center;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    color: var(--cx-dim);
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: #080b16;
+    box-shadow: inset 0 2px 8px rgba(0,0,0,0.8);
+    border: 1px solid rgba(120,140,190,0.08);
+    transition: color 0.25s, text-shadow 0.25s;
+}
+.cx-now.on {
+    color: var(--cx-hot);
+    text-shadow: 0 0 10px rgba(232,169,176,0.45);
+}
+
+/* 机械传输键 */
+.cx-ctrl { display: flex; gap: 10px; }
+.cx-key {
+    width: 64px;
+    padding: 9px 0 7px;
+    border-radius: 9px;
+    border: 1px solid rgba(190,205,245,0.14);
+    background: linear-gradient(180deg, #2c3553, #1a2138 70%, #151b30);
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.12),
+        0 3px 0 #0a0e1c, 0 5px 10px rgba(0,0,0,0.4);
+    color: var(--cx-ink);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    transition: transform 0.06s, box-shadow 0.06s, color 0.2s;
+}
+.cx-key i { font-style: normal; font-size: 14px; line-height: 1; }
+.cx-key em { font-style: normal; font-size: 8px; letter-spacing: 0.22em; color: var(--cx-faint); }
+.cx-key:hover { color: var(--cx-hot); border-color: rgba(232,169,176,0.4); }
+.cx-key:active {
+    transform: translateY(3px);
+    box-shadow: inset 0 2px 6px rgba(0,0,0,0.6), 0 0 0 #0a0e1c;
+}
+
+/* 音量推子 */
+.cx-vol {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-top: 4px;
+}
+.vol-l, .vol-r {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--cx-faint);
+    min-width: 24px;
+}
+.vol-r { text-align: right; min-width: 20px; letter-spacing: 0; }
+
+/* ============ 右：音源 / 场景 ============ */
+.cx-sources { display: flex; flex-direction: column; }
+.cx-lbl {
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    color: var(--cx-faint);
+    padding: 2px 2px 12px;
+}
+.cx-lbl.gap { margin-top: 30px; }
+
+.src-row, .sc-head {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 10px 13px 8px;
+    border: 0;
+    border-bottom: 1px solid var(--cx-line);
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+    color: inherit;
+    transition: background 0.18s;
+}
+.src-row:hover, .scene:hover .sc-head { background: rgba(232,169,176,0.045); }
+.sr-name { font-size: 15px; color: #d7dbeb; }
+.sr-tag {
+    margin-left: auto;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: var(--cx-faint);
+    font-family: 'Renogare', 'CelesteZH', sans-serif;
+}
+/* 选中标记：凹槽里的粉色小灯 */
+.sr-mark {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #232a44;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.8);
+    flex: 0 0 auto;
+    transition: all 0.2s;
+}
+.src-row.on .sr-mark,
+.scene.on .sr-mark {
+    background: var(--cx-hot);
+    box-shadow: 0 0 9px rgba(232,169,176,0.8);
+}
+.src-row.on .sr-name,
+.scene.on .sc-head .sr-name { color: var(--cx-hot); }
+
+/* 场景卡：内嵌控制槽 */
+.scene {
+    border-bottom: 1px solid var(--cx-line);
+    padding: 6px 0 16px;
+}
+.scene .sc-head { padding-bottom: 12px; }
+
+/* 硬件分段开关 */
+.seg {
+    display: inline-flex;
+    margin: 0 0 12px 19px;
+    padding: 3px;
+    border-radius: 9px;
+    background: var(--cx-groove);
+    box-shadow: inset 0 2px 6px rgba(0,0,0,0.85);
+}
+.seg button {
+    border: 0;
+    background: transparent;
+    color: var(--cx-dim);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 7px 16px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: all 0.16s;
+}
+.seg button:hover { color: var(--cx-ink); }
+.seg button.on {
+    color: #2a1620;
+    background: linear-gradient(180deg, #f0bcc4, var(--cx-hot));
+    box-shadow: 0 2px 8px rgba(232,169,176,0.35), inset 0 1px 0 rgba(255,255,255,0.5);
+    text-shadow: 0 1px 0 rgba(255,255,255,0.25);
+}
+
+/* 推子行 */
+.fader {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 4px 0 0 19px;
+    max-width: 440px;
+    transition: opacity 0.25s;
+}
+.fader label {
+    flex: 0 0 132px;
+    font-size: 12px;
+    color: var(--cx-dim);
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+.fader label span, .fader label i {
+    font-style: normal;
+    font-size: 10px;
+    color: var(--cx-faint);
+}
+.fader label i { margin-left: auto; color: var(--cx-hot); opacity: 0.75; }
+.fader.is-off { opacity: 0.3; pointer-events: none; }
+
+/* ---------- 自定义 range：金属推子 ---------- */
+input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 1;
+    height: 18px;
+    background: transparent;
+    cursor: pointer;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+    height: 5px;
+    border-radius: 3px;
+    background: linear-gradient(180deg, #05070f, #131a2e);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.9), 0 1px 0 rgba(255,255,255,0.05);
+}
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 15px; height: 20px;
+    margin-top: -8px;
+    border-radius: 4px;
+    background: linear-gradient(180deg, #d8def0, #97a0c0 60%, #78829f);
+    border: 1px solid rgba(20,26,46,0.8);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.7);
+}
+input[type="range"]::-moz-range-track {
+    height: 5px;
+    border-radius: 3px;
+    background: #0d1322;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.9);
+}
+input[type="range"]::-moz-range-thumb {
+    width: 15px; height: 20px;
+    border-radius: 4px;
+    background: linear-gradient(180deg, #d8def0, #97a0c0 60%, #78829f);
+    border: 1px solid rgba(20,26,46,0.8);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.55);
+}
+#wfNear::-webkit-slider-thumb,
+#wfNear::-moz-range-thumb {
+    background: linear-gradient(180deg, #f0bcc4, var(--cx-hot) 70%);
+}
+
+/* ---------- 窄屏 ---------- */
+@media (max-width: 860px) {
+    .cx-main { grid-template-columns: 1fr; gap: 28px; }
+    .cx-sub { display: none; }
+    .cx-deck { max-width: 420px; width: 100%; margin: 0 auto; }
+    .sr-tag { display: none; }
+    .seg { margin-left: 0; }
+    .fader { margin-left: 0; max-width: none; }
+}

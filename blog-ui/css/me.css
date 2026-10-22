@@ -37,20 +37,3 @@ body { min-height:100vh; background:url('../celeste-gui/me-bg.webp') center/cove
 .cePoemPage span { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-size:15px; color:#35312a; max-width:75%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .cePoemPage input { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); font-size:15px; color:#35312a; background:transparent; border:none; border-bottom:1px dashed rgba(53,49,42,.4); text-align:center; width:75%; outline:none; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; }
 
-/* ===== 情绪图谱 ===== */
-.emoChart { position:relative; max-width:520px; margin:0 auto 32px; padding:20px 24px 24px; background:linear-gradient(135deg, rgba(20,28,52,.92), rgba(14,18,36,.95)); border:1px solid rgba(120,160,220,.18); border-radius:6px; box-shadow:0 4px 24px rgba(0,0,0,.4), inset 0 1px 0 rgba(120,160,220,.08); }
-.emoChart .emoHeader { display:flex; align-items:center; gap:8px; margin-bottom:14px; }
-.emoChart .emoHeader img { width:22px; height:22px; image-rendering:pixelated; }
-.emoChart .emoTitle { font-size:13px; color:rgba(220,230,255,.9); letter-spacing:1px; text-transform:uppercase; }
-.emoChart .emoSub { font-size:11px; color:rgba(150,170,200,.6); margin-left:auto; }
-.emoChart .emoBars { display:flex; flex-direction:column; gap:6px; }
-.emoChart .emoBar { display:flex; align-items:center; gap:8px; }
-.emoChart .emoBar .emoLabel { width:44px; flex-shrink:0; font-size:12px; color:rgba(200,215,235,.8); text-align:right; }
-.emoChart .emoBar .emoTrack { flex:1; height:14px; background:rgba(255,255,255,.06); border-radius:3px; overflow:hidden; position:relative; }
-.emoChart .emoBar .emoFill { height:100%; border-radius:3px; transition:width .5s cubic-bezier(.2,.85,.3,1); image-rendering:pixelated; }
-.emoChart .emoBar .emoCount { width:28px; flex-shrink:0; font-size:12px; color:rgba(180,200,220,.7); text-align:left; }
-.emoChart .emoEmpty { text-align:center; padding:24px 0; color:rgba(150,170,200,.4); font-size:13px; }
-.emoChart .emoMonthRow { margin-top:14px; padding-top:12px; border-top:1px solid rgba(120,160,220,.1); }
-.emoChart .emoMonthLabel { font-size:11px; color:rgba(150,170,200,.5); margin-bottom:6px; }
-.emoChart .emoDots { display:flex; flex-wrap:wrap; gap:3px; }
-.emoChart .emoDot { width:12px; height:12px; border-radius:2px; image-rendering:pixelated; cursor:default; }

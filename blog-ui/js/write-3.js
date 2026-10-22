@@ -9,13 +9,6 @@
     document.addEventListener('click', tryPlayBGM);
     document.addEventListener('keydown', tryPlayBGM);
 
-    document.getElementById('openMadelineBtn').addEventListener('click', function() {
-        if (typeof togglePanel === 'function') togglePanel();
-    });
-    document.getElementById('toolbarPolishBtn').addEventListener('click', function() {
-        if (typeof doPolish === 'function') doPolish();
-    });
-
     if (!localStorage.getItem('token')) {
         showToast('Please login first', 'error');
         setTimeout(() => location.href = 'login.html', 800);
@@ -51,6 +44,19 @@
             return { title, body, summary, tagsRaw, categoryId, categories, imgSrcs };
         }
     }).mount('#writeApp');
+
+    // Vue 挂载 #writeApp 时会重建内部 DOM，冲掉在 mount 之前用 addEventListener
+    // 绑定的工具栏按钮事件。因此「Madeline / 润色 / 生成文章」三个按钮必须在
+    // mount 之后重新绑定，否则点击无反应。
+    document.getElementById('openMadelineBtn').addEventListener('click', function() {
+        if (typeof togglePanel === 'function') togglePanel();
+    });
+    document.getElementById('toolbarPolishBtn').addEventListener('click', function() {
+        if (typeof doPolish === 'function') doPolish();
+    });
+    document.getElementById('toolbarGenBtn').addEventListener('click', function() {
+        if (typeof doGenerate === 'function') doGenerate();
+    });
 
     // vanilla 预填后同步 v-model
     function setVal(id, val) {

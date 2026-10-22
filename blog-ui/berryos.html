@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -66,6 +66,8 @@
   .deskicon .di-img img { display: block; width: 100%; }
   /* payphone 原图仅 45×64，放大后需保持像素边缘清晰 */
   #icoSing .di-img img { image-rendering: pixelated; }
+  /* cassette 原图仅 64×64，放大后同样保持像素边缘 */
+  #icoCassette .di-img img { image-rendering: pixelated; }
 
   .di-label {
     margin-top: 1.42cqw; /* 图标底到文字 36px @2540（实测） */
@@ -326,7 +328,7 @@
 </style>
 </head>
 <body>
-  <div id="stage" @click="onStageClick">
+  <div id="stage">
     <div class="deskicon" v-for="ic in icons" :key="ic.id" :id="ic.id"
          :data-href="ic.href" :data-player="ic.player"
          :class="{ selected: selected === ic.id }"
@@ -362,7 +364,8 @@
     var ICONS = [
       { id: 'icoMountain', href: 'index.html', player: null, x: 8.319,  y: 5.206, w: 6.690, img: 'Atlases/WaveDashing/desktop/mymountain_icon.png', label: '我的大山' },
       { id: 'icoPpt',      href: null,     player: 'monthly', x: 31.236, y: 40.38, w: 6.672, img: 'Atlases/WaveDashing/desktop/wavedashing_icon.png', label: '凌波微步与我.ppt' },
-      { id: 'icoSing',     href: 'sing-test.html', player: null, x: 45, y: 40.38, w: 4.69,  img: 'Atlases/Gameplay/scenery/payphone.png', label: '玛德琳唱歌' }
+      { id: 'icoSing',     href: 'sing-test.html', player: null, x: 45, y: 40.38, w: 4.69,  img: 'Atlases/Gameplay/scenery/payphone.png', label: '玛德琳唱歌' },
+      { id: 'icoCassette', href: 'cassette.html',   player: null, x: 58.5, y: 40.38, w: 6.690, img: 'Atlases/Journal/cassette.png', label: 'cassette.exe' }
     ];
     createApp({
       setup: function () {
@@ -388,7 +391,12 @@
             selected.value = icon.id;
           }
         }
+        // #stage 是 Vue 挂载点自身：标签上的 @click 不会被 Vue 编译，
+        // 必须在挂载后用原生监听做事件委托（模板内子节点才走 Vue 事件）
+        var stageEl = null;
         onMounted(function () {
+          stageEl = document.getElementById('stage');
+          stageEl.addEventListener('click', onStageClick);
           tick();
           // 对齐到下一个整分钟，之后每 30s 兜底刷新
           alignTimer = setTimeout(function () {
@@ -397,10 +405,11 @@
           }, (60 - new Date().getSeconds()) * 1000);
         });
         onUnmounted(function () {
+          if (stageEl) stageEl.removeEventListener('click', onStageClick);
           clearTimeout(alignTimer);
           clearInterval(tickTimer);
         });
-        return { icons: ICONS, selected: selected, clockText: clockText, onStageClick: onStageClick };
+        return { icons: ICONS, selected: selected, clockText: clockText };
       }
     }).mount('#stage');
   })();

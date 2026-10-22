@@ -1,6 +1,7 @@
 package com.mszlu.blog.dao.controller;
 
 import com.mszlu.blog.service.DiaryService;
+import com.mszlu.blog.service.diarychat.DiaryChatLogService;
 import com.mszlu.blog.vo.Result;
 import com.mszlu.blog.vo.params.BadelineChatParam;
 import com.mszlu.blog.vo.params.CompanionParam;
@@ -17,6 +18,9 @@ public class DiaryController {
     @Autowired
     private DiaryService diaryService;
 
+    @Autowired
+    private DiaryChatLogService chatLogService;
+
     @PostMapping
     public Result save(@RequestBody DiaryParam param) {
         return diaryService.save(param);
@@ -32,11 +36,12 @@ public class DiaryController {
      * 日记伴侣流式版：SSE（text/event-stream）边生成边推。
      * 事件帧：emotion（情绪）/ delta（文本增量）/ done（结束，带元信息）/ error（异常）。
      * 用 POST + body 传草稿，避免长草稿进 URL 被截断或进 access log。
+     * v1 扩展：支持多轮会话记忆（sessionId）、实时中断（interrupt=true）、打字轨迹信号（typingSignal）、羽毛联动（featherTriggered）。
      */
     @PostMapping(value = "companion/stream")
     public void companionStream(@RequestBody CompanionParam param,
                                 javax.servlet.http.HttpServletResponse response) {
-        diaryService.companionStream(param.getDraft(), response);
+        diaryService.companionStream(param, response);
     }
 
     /** 获取日记列表（真分页）；type=day 普通日记 / type=dream 梦境日记，不传则全部 */
@@ -105,6 +110,21 @@ public class DiaryController {
     @GetMapping("feather-keyword")
     public Result featherKeyword() {
         return diaryService.featherKeyword();
+    }
+
+    /**
+     * v1 扩展：用户反馈（👍👎）
+     * 前端 Madeline 消息旁的反馈按钮点击后调用，轻量实现：按 sessionId 找最后一条日志写入 feedback 字段。
+     */
+    @PostMapping("companion/feedback")
+    public Result companionFeedback(@RequestBody java.util.Map<String, String> body) {
+        String sessionId = body.get("sessionId");
+        String feedback = body.get("feedback");
+        if (sessionId == null || feedback == null) {
+            return Result.fail(400, "缺少 sessionId 或 feedback");
+        }
+        chatLogService.recordFeedbackBySession(sessionId, feedback);
+        return Result.success();
     }
 
     /** 心之水晶：按近期日记情绪定色，AI 生成名称与描述 */

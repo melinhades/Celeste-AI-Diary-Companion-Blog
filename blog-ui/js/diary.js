@@ -1353,7 +1353,8 @@ function inferReplyEmotion(text) {
 
     // ===== 配置常量 =====
     const REALTIME_CONFIG = {
-        JUDGE_DEBOUNCE_MS: 700,
+        JUDGE_DEBOUNCE_MS: 2000,          // v1 扩展：修改触发防抖 2s（原 700ms）
+        PAUSE_TRIGGER_MS: 3000,           // v1 扩展：打字停顿 >3s 触发弱信号反应
         SILENCE_COOLDOWN: 8000,
         SENTENCE_ENDERS: ['。', '！', '？', '…', '...', '!', '?', '\n'],
         EMOTION_WORDS: {
@@ -1391,7 +1392,13 @@ function inferReplyEmotion(text) {
         peakEmotion: null,
         peakIntensity: 0,
         lastLocalReactTime: 0,
-        lastReactionLine: ''
+        lastReactionLine: '',
+        // v1 扩展：会话 + 打字轨迹
+        sessionId: (localStorage.getItem('diaryChatSessionId') || ''),
+        typingSignal: { delete: 0, undo: 0, pause: 0, lastInputAt: Date.now(), modifyFreq: 0 },
+        modifyFreqCounter: 0,
+        modifyFreqTimer: null,
+        pauseTimer: null
     };
     // ===== 本地快速情绪分析（每次输入都触发） =====
     function analyzeLocalEmotion(text) {
@@ -1525,13 +1532,25 @@ function inferReplyEmotion(text) {
         // —— 流式：POST + SSE（text/event-stream），按事件帧解析；情绪走 emotion 事件，正文走 delta ——
         try {
             const token = localStorage.getItem('token');
+            // v1 扩展：组装会话 + 打字轨迹数据
+            const payload = {
+                draft: text,
+                sessionId: companionState.sessionId || undefined,
+                triggerType: triggerType || 'save',
+                typingSignal: JSON.stringify({
+                    delete: companionState.typingSignal.delete,
+                    pause: +(Date.now() - companionState.typingSignal.lastInputAt).toFixed(1),
+                    undo: companionState.typingSignal.undo,
+                    modifyFreq: companionState.modifyFreqCounter
+                })
+            };
             const resp = await fetch(BASE_URL + '/diary/companion/stream', {
                 method: 'POST',
                 headers: Object.assign(
                     { 'Content-Type': 'application/json' },
                     token ? { 'Authorization': token } : {}
                 ),
-                body: JSON.stringify({ draft: text })
+                body: JSON.stringify(payload)
             });
             if (!resp.ok || !resp.body) throw new Error('流式不可用 HTTP ' + resp.status);
             const reader = resp.body.getReader();
@@ -1564,6 +1583,15 @@ function inferReplyEmotion(text) {
                     } else if (event === 'silent') {
                         // 她判断此刻不该开口：安静陪着，不落任何消息
                         silent = true;
+                    } else if (event === 'done') {
+                        // v1 扩展：提取 sessionId/turnId 存回
+                        try {
+                            const doneData = JSON.parse(data);
+                            if (doneData.sessionId) {
+                                companionState.sessionId = doneData.sessionId;
+                                localStorage.setItem('diaryChatSessionId', doneData.sessionId);
+                            }
+                        } catch (e) {}
                     } else if (event === 'delta') {
                         // 剥离 AI 内联情绪标记 [m:情绪]：标记本身不显示，切换点排队等打字机到点变脸
                         let cleanText = data;
@@ -1637,10 +1665,11 @@ function inferReplyEmotion(text) {
             localComfort(text);
         } finally {
             companionState.isAiPending = false;
+            // v1 扩展：保存触发后，Madeline 反应结束 → 自动判断是否出羽毛
+            if (triggerType === 'save' && window.featherTrigger && window.featherTrigger.isBadMood(companionState.currentEmotion)) {
+                window.featherTrigger.requestFromSave(companionState.currentEmotion);
+            }
         }
-    }
-
-    // 强痛苦内容的本地兜底台词：流式与整段接口都失败时，至少让她说一句话
     function localComfort(text) {
         if (!isDistressText(text)) return;
         const pool = [
@@ -1653,7 +1682,31 @@ function inferReplyEmotion(text) {
 
     // ===== 核心：输入事件处理 =====
     let aiJudgeTimer = null;
-    contentInput.addEventListener('input', () => {
+    contentInput.addEventListener('input', (e) => {
+        companionState.typingSignal.lastInputAt = Date.now();
+
+        // v1 扩展：打字轨迹收集
+        if (e.inputType === 'deleteContentBackward' || e.inputType === 'deleteContentForward') {
+            companionState.typingSignal.delete++;
+        }
+        if (e.inputType === 'historyUndo') {
+            companionState.typingSignal.undo++;
+        }
+        // 修改频率：2s 内多少次 input
+        companionState.modifyFreqCounter++;
+        clearTimeout(companionState.modifyFreqTimer);
+        companionState.modifyFreqTimer = setTimeout(() => { companionState.modifyFreqCounter = 0; }, 2000);
+
+        // v1 扩展：停顿触发（>3s 无输入 → triggerType='pause'）
+        clearTimeout(companionState.pauseTimer);
+        companionState.pauseTimer = setTimeout(() => {
+            const t = contentInput.value.trim();
+            if (t.length >= 20 && !companionState.isAiPending && Date.now() - companionState.lastJudgeTime > REALTIME_CONFIG.SILENCE_COOLDOWN) {
+                companionState.lastJudgeTime = Date.now();
+                triggerAiAnalysis(t, 'pause');
+            }
+        }, REALTIME_CONFIG.PAUSE_TRIGGER_MS);
+
         lastUserInputTime = Date.now();
         const text = contentInput.value.trim();
 
@@ -1681,9 +1734,57 @@ function inferReplyEmotion(text) {
             const now = Date.now();
             if (now - companionState.lastJudgeTime <= REALTIME_CONFIG.SILENCE_COOLDOWN) return; // 刚判断过（多半刚沉默）
             companionState.lastJudgeTime = now;
-            triggerAiAnalysis(t, 'change');
+            triggerAiAnalysis(t, 'modify');   // v1 扩展：明确传 triggerType='modify'（debounce 2s 触发）
         }, REALTIME_CONFIG.JUDGE_DEBOUNCE_MS);
     });
+
+    // v1 扩展：ESC 键中断当前流式生成（Madeline 正在说话时按）
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && companionState.isAiPending) {
+            const token = localStorage.getItem('token');
+            fetch(BASE_URL + '/diary/companion/stream', {
+                method: 'POST',
+                headers: Object.assign({ 'Content-Type': 'application/json' }, token ? { 'Authorization': token } : {}),
+                body: JSON.stringify({
+                    draft: '',
+                    sessionId: companionState.sessionId,
+                    triggerType: 'interrupt',
+                    interrupt: true
+                })
+            }).catch(() => {});
+            companionState.isAiPending = false;
+        }
+    });
+
+    // v1 扩展：Madeline 消息 append 后追加 👍👎 反馈按钮（动态创建，不新建 DOM 元素到 HTML）
+    const origAddMadeline = addMadelineMessage;
+    window.addMadelineMessage = function(text, emotion, forceGameDialog) {
+        origAddMadeline(text, emotion, forceGameDialog);
+        // 给最后一条 Madeline 消息追加反馈按钮（等 DOM 渲染完）
+        setTimeout(() => {
+            const rows = document.querySelectorAll('.madeline-message-row');
+            const lastRow = rows[rows.length - 1];
+            if (!lastRow || lastRow.dataset.v1Feedback === '1') return;
+            lastRow.dataset.v1Feedback = '1';
+            const feedbackDiv = document.createElement('div');
+            feedbackDiv.style.cssText = 'float:right;font-size:12px;margin-top:4px;';
+            feedbackDiv.innerHTML = '<span style="cursor:pointer;margin-right:8px;opacity:.5">👍</span><span style="cursor:pointer;opacity:.5">👎</span>';
+            feedbackDiv.querySelectorAll('span').forEach((el, i) => {
+                el.addEventListener('click', () => {
+                    const fb = i === 0 ? '👍' : '👎';
+                    el.parentElement.querySelectorAll('span').forEach(s => s.style.opacity = s === el ? '1' : '.25');
+                    const token = localStorage.getItem('token');
+                    // 后端 feedback 接口（轻量实现：直接写 diary_chat_log.user_feedback）
+                    fetch(BASE_URL + '/diary/companion/feedback', {
+                        method: 'POST',
+                        headers: Object.assign({ 'Content-Type': 'application/json' }, token ? { 'Authorization': token } : {}),
+                        body: JSON.stringify({ sessionId: companionState.sessionId, feedback: fb })
+                    }).catch(() => {});
+                });
+            });
+            lastRow.appendChild(feedbackDiv);
+        }, 50);
+    };
     // ===== 保存特效：帧动画出现在日记本右下角 =====
     const SAVE_FRAMES = [];
     for (let i = 0; i <= 20; i++) {
@@ -1863,24 +1964,17 @@ function inferReplyEmotion(text) {
                 companionState.peakIntensity = 0;
                 updateThemeByEmotion('默认');
 
-                // ... existing code ...
-                const companionRes = await api('/diary/companion', 'POST', { draft: content });
-                if (companionRes.success && companionRes.data) {
-                    const feedback = companionRes.data.feedback || '';
-                    const emotion = companionRes.data.emotion || '默认';
-                    // 保存总结是本次日记的收尾话，必须说出来：不做防复读吞没
-                    // （吞没会让总结凭空消失，只剩金羽毛过渡，观感上像羽毛抢了话）
-                    let summarySpoken = null;
-                    if (feedback) { rememberSpeech(feedback); summarySpoken = addMadelineMessage(feedback, emotion); }
-                    updateThemeByEmotion(emotion);
-
-                    // 金羽毛过渡严格排在总结说完之后：await 说话队列再触发
-                    // （suggestThenOpen 内部的建议台词也走同一队列，不会打断任何在说的话）
-                    if (window.featherTrigger && window.featherTrigger.isBadMood(emotion)) {
-                        try { if (summarySpoken) await summarySpoken; } catch (e) {}
-                        window.featherTrigger.requestFromSave(emotion);
+                // 两个请求串行：先拿总结（必须先说），再流式 companion 反应（排在总结之后）
+                let summarySpoken = null;
+                try {
+                    const sumRes = await api('/diary/summary', 'POST', { title: title, content: content });
+                    if (sumRes && sumRes.success && sumRes.data && sumRes.data.message) {
+                        summarySpoken = addMadelineMessage(sumRes.data.message, sumRes.data.emotion || '默认');
                     }
-                }
+                } catch (e) {}
+                // v1 扩展：保存后 Madeline 流式反应（triggerType='save'），排在总结之后
+                if (summarySpoken) { try { await summarySpoken; } catch(e) {} }
+                triggerAiAnalysis(content, 'save');
 
                 showToast(editingDiaryId ? '更新成功！' : '保存成功！', 'success');
 
@@ -1895,7 +1989,6 @@ function inferReplyEmotion(text) {
                     }, 4000);  // 等 Madeline 反馈 + 金羽毛流程跑完，再异步检查
                 }
                 pmCelebrate();
-                pmSummarize();
                 if (!editingDiaryId) {
                     const saveCnt = parseInt(localStorage.getItem('diarySaveCount') || '0') + 1;
                     localStorage.setItem('diarySaveCount', String(saveCnt));
@@ -2112,16 +2205,6 @@ function inferReplyEmotion(text) {
         pmState.modeUntil = performance.now() + 12000;
         pmSetSrc(PM_SRC.move);
     }
-
-    async function pmSummarize() {
-        const content = contentInput.value.trim();
-        if (!content) return;
-        try {
-            const res = await api('/diary/summary', 'POST', { title: titleInput.value.trim(), content: content });
-            if (res.success && res.data && res.data.message) addMadelineMessage(res.data.message, res.data.emotion || '默认');
-        } catch (e) { }
-    }
-
 
     // ===== 接入共享内核 madeline-core.js：情绪分组 / 加权随机 / 模式表 / enterMode / 中断优先级 =====
     const MC = window.MadelineCore;

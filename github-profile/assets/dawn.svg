@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 240" width="1200" height="240" role="img" aria-label="dawn on the track">
+  <defs>
+    <linearGradient id="dawn" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#151239"/>
+      <stop offset=".38" stop-color="#33245c"/>
+      <stop offset=".68" stop-color="#8b4a75"/>
+      <stop offset=".86" stop-color="#d4785e"/>
+      <stop offset="1" stop-color="#f2a968"/>
+    </linearGradient>
+    <radialGradient id="sun" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#fff0c4" stop-opacity=".95"/>
+      <stop offset=".45" stop-color="#ffca85" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#ffb066" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="vig" cx=".5" cy=".5" r=".72">
+      <stop offset=".6" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000000" stop-opacity=".38"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="240" fill="url(#dawn)"/>
+
+  <!-- 将熄的星 -->
+  <g fill="#ffffff">
+    <circle cx="96" cy="34" r="1.4" opacity=".5"/>
+    <circle cx="228" cy="58" r="1" opacity=".32"/>
+    <circle cx="918" cy="30" r="1.3" opacity=".45"/>
+    <circle cx="1064" cy="52" r="1" opacity=".3"/>
+    <circle cx="1128" cy="26" r="1.4" opacity=".42"/>
+  </g>
+
+  <!-- 日出 -->
+  <circle cx="600" cy="176" r="150" fill="url(#sun)"/>
+  <circle cx="600" cy="172" r="26" fill="#fff4d2"/>
+
+  <!-- 远山 -->
+  <path d="M0 186 L120 156 L232 182 L336 128 L452 172 L556 140 L660 176 L780 132 L896 178 L1010 148 L1116 180 L1200 158 L1200 240 L0 240 Z" fill="#3a2a63" opacity=".92"/>
+
+  <!-- 树线 -->
+  <g fill="#1b1638">
+    <path d="M0 200 L16 178 L32 200 Z"/>
+    <path d="M44 204 L58 184 L72 204 Z"/>
+    <path d="M92 198 L104 182 L116 198 Z"/>
+    <path d="M1088 200 L1100 182 L1112 200 Z"/>
+    <path d="M1122 204 L1136 186 L1150 204 Z"/>
+    <path d="M1160 198 L1172 182 L1184 198 Z"/>
+  </g>
+  <rect y="198" width="1200" height="42" fill="#120f2b"/>
+
+  <!-- 跑道 -->
+  <path d="M566 170 L634 170 L980 240 L220 240 Z" fill="#403a68"/>
+  <path d="M592 170 L608 170 L660 240 L540 240 Z" fill="#5b5390" opacity=".55"/>
+  <g stroke="#EDF0FF" stroke-width="1.2" opacity=".35">
+    <line x1="470" y1="212" x2="500" y2="212"/>
+    <line x1="700" y1="212" x2="730" y2="212"/>
+    <line x1="368" y1="234" x2="410" y2="234"/>
+    <line x1="790" y1="234" x2="832" y2="234"/>
+  </g>
+
+  <!-- 跑者 -->
+  <g transform="translate(626,178)" shape-rendering="crispEdges">
+    <rect x="-4" y="10" width="5" height="9" fill="#4a90d9"/>
+    <rect x="12" y="9" width="5" height="9" fill="#4a90d9"/>
+    <rect x="0" y="0" width="13" height="5" fill="#d9384c"/>
+    <rect x="2" y="5" width="9" height="5" fill="#f2c9a1"/>
+    <rect x="0" y="10" width="13" height="11" fill="#4a90d9"/>
+    <rect x="-2" y="21" width="6" height="8" fill="#2b3a67"/>
+    <rect x="10" y="21" width="6" height="8" fill="#2b3a67"/>
+  </g>
+
+  <!-- 鸟 -->
+  <g stroke="#EDF0FF" stroke-width="1.4" fill="none" opacity=".5">
+    <path d="M300 92 q8 -7 16 0"/>
+    <path d="M334 104 q7 -6 14 0"/>
+  </g>
+
+  <rect width="1200" height="240" fill="url(#vig)"/>
+</svg>

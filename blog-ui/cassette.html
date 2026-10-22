@@ -1,0 +1,127 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="icon/OIP.webp" type="image/webp">
+<title>cassette.exe - BerryOS</title>
+<link rel="stylesheet" href="css/common.css?v=20261003f">
+<link rel="stylesheet" href="css/cassette.css?v=20261016b">
+
+</head>
+<body>
+<div class="cx-wrap">
+    <header class="cx-top">
+        <a class="cx-back" href="berryos.html" title="返回桌面">‹ 返回桌面</a>
+        <h1 class="cx-title">cassette<span>.exe</span></h1>
+        <span class="cx-sub">环境混音台 · AMBIENCE DECK</span>
+    </header>
+
+    <div class="cx-main">
+        <!-- 左：磁带机面板 -->
+        <aside class="cx-deck">
+            <span class="screw tl" aria-hidden="true"></span>
+            <span class="screw tr" aria-hidden="true"></span>
+            <span class="screw bl" aria-hidden="true"></span>
+            <span class="screw br" aria-hidden="true"></span>
+
+            <p class="deck-brand">BERRY · SOUND<span>MODEL C-1988</span></p>
+
+            <div class="cx-window">
+                <div class="cx-tape" id="cxTape">
+                    <img id="cxTapeImg" src="celeste-collectables/cassette/idle00.png" alt="磁带" decoding="async">
+                </div>
+                <span class="win-caption">SIDE A · 环境循环</span>
+            </div>
+
+            <p class="cx-now" id="cxNow">SIDE A · 磁带</p>
+
+            <div class="cx-ctrl">
+                <button class="cx-key" id="cxPlay" type="button" aria-label="播放"><i>▶</i><em>PLAY</em></button>
+                <button class="cx-key" id="cxPause" type="button" aria-label="暂停"><i>⏸</i><em>PAUSE</em></button>
+                <button class="cx-key" id="cxStop" type="button" aria-label="停止"><i>⏹</i><em>STOP</em></button>
+            </div>
+
+            <label class="cx-vol" for="cxVol">
+                <span class="vol-l">VOL</span>
+                <input id="cxVol" type="range" min="0" max="100" value="90">
+                <span class="vol-r">90</span>
+            </label>
+        </aside>
+
+        <!-- 右：音源与场景控制 -->
+        <section class="cx-sources" id="cxApp">
+            <p class="cx-lbl">音源 · SELECT A TAPE</p>
+
+            <button class="src-row" type="button" data-src="cassette">
+                <span class="sr-mark" aria-hidden="true"></span>
+                <span class="sr-name">磁带</span>
+                <span class="sr-tag">intro → loop → outro</span>
+            </button>
+
+            <button class="src-row" type="button" data-src="campfire">
+                <span class="sr-mark" aria-hidden="true"></span>
+                <span class="sr-name">篝火</span>
+                <span class="sr-tag">campfire_start → loop</span>
+            </button>
+
+            <!-- 破窗：三档风 -->
+            <div class="scene" data-scene="window">
+                <div class="sc-head">
+                    <span class="sr-mark" aria-hidden="true"></span>
+                    <span class="sr-name">破窗</span>
+                    <span class="sr-tag" id="winTag">大风</span>
+                </div>
+                <div class="seg" role="group" aria-label="风力">
+                    <button type="button" class="on" data-win="large">大风</button>
+                    <button type="button" data-win="small1">小风 ①</button>
+                    <button type="button" data-win="small2">小风 ②</button>
+                </div>
+            </div>
+
+            <!-- 瀑布：大小 + 远近 + 深浅 实时混音 -->
+            <div class="scene" data-scene="waterfall">
+                <div class="sc-head">
+                    <span class="sr-mark" aria-hidden="true"></span>
+                    <span class="sr-name">瀑布</span>
+                    <span class="sr-tag" id="wfTag">大瀑布 · 走近 50%</span>
+                </div>
+                <div class="seg" role="group" aria-label="瀑布规模">
+                    <button type="button" class="on" data-size="big">大瀑布</button>
+                    <button type="button" data-size="small">小瀑布</button>
+                </div>
+                <div class="fader">
+                    <label for="wfNear">远近 <span>主声</span><i>走近</i></label>
+                    <input id="wfNear" type="range" min="0" max="100" value="50">
+                </div>
+                <div class="fader" id="depthRow">
+                    <label for="wfDepth">深浅 <span>深潭</span><i>浅滩</i></label>
+                    <input id="wfDepth" type="range" min="0" max="100" value="50">
+                </div>
+            </div>
+
+            <p class="cx-lbl gap">其他场景 · FIELD</p>
+
+            <button class="src-row" type="button" data-src="hot">
+                <span class="sr-mark" aria-hidden="true"></span>
+                <span class="sr-name">热浪</span><span class="sr-tag">hot.wav</span>
+            </button>
+            <button class="src-row" type="button" data-src="lava">
+                <span class="sr-mark" aria-hidden="true"></span>
+                <span class="sr-name">岩浆之门</span><span class="sr-tag">lavagate_idle.wav</span>
+            </button>
+            <button class="src-row" type="button" data-src="mirror">
+                <span class="sr-mark" aria-hidden="true"></span>
+                <span class="sr-name">镜之房间</span><span class="sr-tag">mirror_sequence.wav</span>
+            </button>
+            <button class="src-row" type="button" data-src="under">
+                <span class="sr-mark" aria-hidden="true"></span>
+                <span class="sr-name">水下</span><span class="sr-tag">underwater.wav</span>
+            </button>
+        </section>
+    </div>
+</div>
+
+<script src="js/cassette.js?v=20261016d"></script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
@@ -8,7 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 <link rel="preload" href="celeste-font-en/Renogare-Regular.otf" as="font" type="font/otf" crossorigin>
 <link rel="preload" href="fonts/NotoSansCJKsc-Medium.otf" as="font" type="font/otf" crossorigin>
-<link rel="stylesheet" href="css/me.css?v=20261015a">
+<link rel="stylesheet" href="css/me.css?v=20261015b">
 </head>
 <body>
 <audio id="meBgm" loop autoplay>
@@ -61,41 +61,12 @@
                @click.stop>
     </div>
 
-    <!-- 情绪图谱 -->
-    <div class="emoChart" v-if="emoLoaded">
-        <div class="emoHeader">
-            <img src="celeste-collectables/strawberry.png" alt="" loading="lazy" decoding="async">
-            <span class="emoTitle">Emotion Spectrum</span>
-            <span class="emoSub">{{ emoTotal }} 篇日记</span>
-        </div>
-        <div v-if="emoTotal === 0" class="emoEmpty">还没有情绪数据，写一篇日记试试吧</div>
-        <template v-else>
-            <div class="emoBars">
-                <div class="emoBar" v-for="e in emoBars" :key="e.name">
-                    <span class="emoLabel">{{ e.name }}</span>
-                    <div class="emoTrack">
-                        <div class="emoFill" :style="{ width: e.pct + '%', background: e.color }"></div>
-                    </div>
-                    <span class="emoCount">{{ e.count }}</span>
-                </div>
-            </div>
-            <div class="emoMonthRow" v-if="emoTimeline.length">
-                <div class="emoMonthLabel">月度趋势</div>
-                <div class="emoDots">
-                    <span v-for="(d, i) in emoTimelineDots" :key="i"
-                          class="emoDot"
-                          :style="{ background: d.color }"
-                          :title="d.month + ' · ' + d.name"></span>
-                </div>
-            </div>
-        </template>
-    </div>
 
 </div>
 
 <script src="js/api.js?v=20261002"></script>
 <script src="js/vue.global.prod.js?v=20261008a"></script>
-<script src="js/me.js?v=20261015a"></script>
+<script src="js/me.js?v=20261015b"></script>
 <script src="js/seed.js?v=20261011a"></script>
 </body>
 </html>

@@ -1,11 +1,11 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="icon/OIP.webp" type="image/webp">
     <title>Write - Celeste Blog</title>
-    <link rel="stylesheet" href="css/common.css?v=20261003e">
+    <link rel="stylesheet" href="css/common.css?v=20261003f">
     <link rel="stylesheet" href="css/text-fx.css?v=20261004a">
     <link rel="stylesheet" href="css/write.css?v=20261015a">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
@@ -61,7 +61,7 @@
         <button class="toolbar-btn" id="toolbarGenBtn" style="border-color:rgba(120,220,255,.5);color:#78dcff;"><img src="celeste-collectables/cassette.png" alt="" loading="lazy" decoding="async">生成文章</button>
     </div>
     <textarea class="write-body" id="articleBody" placeholder="Start writing... Markdown supported" v-model="body"></textarea>
-    <script src="js/write-1.js?v=20261015a"></script>
+    <script src="js/write-1.js?v=20261015b"></script>
     <div class="char-count" id="charCount">{{ body.length }} chars</div>
     <div id="imgPreviewBar" style="display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 10px;">
         <img v-for="(s, ii) in imgSrcs" :key="s + '-' + ii" :src="s" style="max-height:84px;max-width:140px;object-fit:contain;border-radius:6px;border:1px solid rgba(138,43,226,.35);background:rgba(30,27,75,.4);" loading="lazy" decoding="async">
@@ -105,8 +105,8 @@
 <script src="js/auth.js?v=20261003b"></script>
 <script src="js/madeline-core.js?v=20261002"></script>
 <script src="js/write-madeline.js?v=20261004a"></script>
-<script src="js/write-2.js?v=20261015a"></script>
-<script src="js/write-3.js?v=20261015a"></script>
+<script src="js/write-2.js?v=20261015b"></script>
+<script src="js/write-3.js?v=20261015b"></script>
 <script src="js/seed.js?v=20261011a"></script>
 </body>
 </html>

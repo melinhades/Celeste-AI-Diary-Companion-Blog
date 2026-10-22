@@ -588,14 +588,14 @@ body:has(.ds-world.panned) #strawberryBonfire { opacity:0; pointer-events:none; 
     background:url('../celeste-gui/dream/scene.png') center bottom / cover no-repeat;
 }
 /* 篝火：站在截图雪台面上（雪线在全高 75% 处，即底部 25%）；本身即"记梦"入口，hover 泛绿光 */
-#dsFire { position:absolute; left:50%; bottom:25%; width:clamp(135px,27.3vmin,195px);
+#dsFire { position:absolute; left:50%; bottom:25%; width:clamp(270px,54.6vmin,390px);
     transform:translateX(-50%); image-rendering:pixelated;
     cursor:pointer; transition:filter .18s ease; }
 #dsFire:hover { filter:drop-shadow(0 0 14px rgba(110,255,180,.8)); }
 /* 围炉睡觉的 Madeline（篝火左侧）：可点击，hover 泛暖光提示"可叫醒" */
 #dsMadeline {
     position:absolute; left:39%; bottom:24.8%; z-index:3;
-    width:clamp(67.6px,14.3vmin,109.2px); image-rendering:pixelated;
+    width:clamp(135.2px,28.6vmin,218.4px); image-rendering:pixelated;
     cursor:pointer; user-select:none; -webkit-user-drag:none;
     transition:filter .2s ease, transform .15s ease;
 }
@@ -613,15 +613,16 @@ body:has(.ds-world.panned) #strawberryBonfire { opacity:0; pointer-events:none; 
     transition:filter .18s ease, transform .18s ease;
 }
 .dt-anim-btn img { display:block; image-rendering:pixelated; }
-/* 夜话：badelineboost 24×24 → 52px（2 倍余像素放大保持锐边）；hover 紫光 */
-#dreamNightBtn img { width:52px; height:52px; }
+/* 夜话：badelineboost 源图 24×24 → 104px（较之前 52px 整体放大一倍），靠 .dt-anim-btn img 的 pixelated 保锐边 */
+#dreamNightBtn img { width:104px; height:104px; }
 #dreamNightBtn:hover { filter:drop-shadow(0 0 12px rgba(190,120,255,.9)); transform:translateY(-2px); }
 #dreamNightBtn:active { transform:translateY(1px); }
 
-/* ===== 金羽毛：随笔数量（≤6）随机散布 dream 天空，彼此间隔 ≥ 镜子之宽，点击写羽毛随笔 ===== */
+/* ===== 金羽毛：随笔数量（≤6）随机散布 dream 天空，点击写羽毛随笔。
+   尺寸与最小/最大间隔都随「整体放大一倍」重算，数值见 js/shelf.js 的 FEATHER_* 常量 ===== */
 #dsFeathers { position:absolute; inset:0; pointer-events:none; z-index:4; }
 #dsFeathers .feather {
-    position:absolute; width:52px; height:52px; padding:0;
+    position:absolute; width:104px; height:104px; padding:0;
     background:transparent; border:none; cursor:pointer; pointer-events:auto;
     filter:drop-shadow(0 4px 12px rgba(255,170,60,.65));
 }
@@ -765,7 +766,7 @@ body:has(.ds-world.panned) #strawberryBonfire { opacity:0; pointer-events:none; 
     .dp-old { display:none; }
     .nt-dreampick select { max-width:100px; }
     #dreamTools { gap:16px; }
-    #dreamNightBtn img { width:44px; height:44px; }
+    #dreamNightBtn img { width:88px; height:88px; }
 }
 /* 回书架：点击镜之房间背景（非镜子/Badeline）返回书架 */
 /* ===== 响应式：门宽按 100vh 比例自适应，仅收缩裂缝开度 ===== */

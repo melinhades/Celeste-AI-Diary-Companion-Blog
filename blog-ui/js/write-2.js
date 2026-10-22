@@ -231,6 +231,7 @@
         playFall(p.x, p.y);
     });
 
-    const genBtn = document.getElementById('toolbarGenBtn');
-    if (genBtn) genBtn.addEventListener('click', doGenerate);
+    // 暴露给 write-3.js 在 Vue mount 之后绑定（mount 会重建 #writeApp 内的 DOM，
+    // 此处直接 addEventListener 会被冲掉，故统一在 write-3.js mount 后绑定）。
+    window.doGenerate = doGenerate;
 })();

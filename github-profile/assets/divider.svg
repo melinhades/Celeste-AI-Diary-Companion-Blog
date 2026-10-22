@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 90" width="1200" height="90" role="img" aria-label="snow divider">
+  <defs>
+    <linearGradient id="line" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#9B87F5" stop-opacity="0"/>
+      <stop offset=".5" stop-color="#9B87F5" stop-opacity=".85"/>
+      <stop offset="1" stop-color="#9B87F5" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <line x1="20" y1="45" x2="1180" y2="45" stroke="url(#line)" stroke-width="1.4"/>
+
+  <!-- 雪线小峰 -->
+  <g fill="#CFC6FA" opacity=".92">
+    <path d="M556 30 L572 45 L540 45 Z"/>
+    <path d="M600 20 L624 45 L576 45 Z"/>
+    <path d="M644 30 L660 45 L628 45 Z"/>
+  </g>
+  <g fill="#9B87F5" opacity=".55">
+    <path d="M600 20 L610 32 L590 32 Z"/>
+    <path d="M556 30 L564 38 L548 38 Z"/>
+    <path d="M644 30 L652 38 L636 38 Z"/>
+  </g>
+
+  <!-- 左：草莓 -->
+  <g transform="translate(404,20) scale(.85)">
+    <path d="M0 9 C6 9 6 17 0 27 C-6 17 -6 9 0 9 Z" fill="#e53935"/>
+    <path d="M-7 5 L0 0 L7 5 L0 8 Z" fill="#3fae5a"/>
+    <circle cx="-3" cy="14" r="1.1" fill="#9e1b1b"/>
+    <circle cx="3" cy="15" r="1.1" fill="#9e1b1b"/>
+  </g>
+
+  <!-- 右：羽毛 -->
+  <g transform="translate(766,26)">
+    <path d="M0 14 C2 4 12 -1 19 1 C17 9 9 16 0 14 Z" fill="#9B87F5"/>
+    <line x1="1" y1="13" x2="18" y2="1" stroke="#CFC6FA" stroke-width="1"/>
+  </g>
+</svg>

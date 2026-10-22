@@ -51,7 +51,11 @@
     bgmPlayer.volume = 0.3;
     bgmPlayer.play().catch(() => {});
     setInterval(() => { localStorage.setItem('bgmTimeShelf', bgmPlayer.currentTime); }, 2000);
-    function tryPlayBGM() { bgmPlayer.play().then(() => { document.removeEventListener('click', tryPlayBGM); document.removeEventListener('keydown', tryPlayBGM); }).catch(() => {}); }
+    function tryPlayBGM() {
+        bgmPlayer.play().then(() => { document.removeEventListener('click', tryPlayBGM); document.removeEventListener('keydown', tryPlayBGM); }).catch(() => {});
+        // 书架常态篝火：start → loop 底噪（音量压 BGM 之下）；进 dream 不断，镜之房间让位
+        if (window.CampfireAudio) { window.CampfireAudio.setVolume(0.12); window.CampfireAudio.play(); }
+    }
     document.addEventListener('click', tryPlayBGM);
     document.addEventListener('keydown', tryPlayBGM);
 
@@ -354,7 +358,8 @@ function stopPeSnow() {
         }
         groups = [...map.values()].map(es => ({ date: es[0].updateDate || es[0].createDate, entries: es }));
     }
-    function showList() { detail.classList.remove('show'); cards.style.display = ''; }
+    // 点出（返回列表 / 删除后回列表）：磁带预览收尾放 outro（未播过则内部自动跳过）
+    function showList() { if (window.CassetteAudio) window.CassetteAudio.stop(); detail.classList.remove('show'); cards.style.display = ''; }
     function renderEntry() {
         cur = curGroup.entries[curIdx];
         detail.querySelector('.t').textContent = cur.title || '无题';
@@ -459,8 +464,10 @@ function stopPeSnow() {
     cards.addEventListener('click', ev => {
         const c = ev.target.closest('.shelf-row');
         if (!c || c.classList.contains('snapshot')) return;
-        // 点开往期日记：磁带预览音效（每周/每月快照明信片走各自的 variants 音效，不在此列）
-        pcPlay('cassette_preview_intro.wav'); showDetail(+c.dataset.i);
+        // 点开往期日记：磁带三联音 —— 先 intro，接 loop 循环，点出时由 showList() 放 outro
+        //（每周/每月快照明信片走各自的 variants 音效，不在此列）
+        if (window.CassetteAudio) window.CassetteAudio.play(); else pcPlay('cassette_preview_intro.wav');
+        showDetail(+c.dataset.i);
     });
 
     detail.querySelector('.back').addEventListener('click', showList);
@@ -1761,22 +1768,32 @@ function stopPeSnow() {
         var fxLayer = document.getElementById('dsFeathers');
         var featherN = 0, featherPlaced = [];
 
-        // 拒绝采样：天空区 [4vw,70vw]×[7vh,35vh] 内随机点，与已放羽毛的屏幕距离 ≥ need(px)
-        function featherRandPos(need) {
+        // 羽毛尺寸与 CSS #dsFeathers .feather 同步：整体放大一倍后是 104px（对角约 147px）
+        var FEATHER_SIZE = 104;
+        var FEATHER_GAP_MIN = Math.round(FEATHER_SIZE * 2.5);   // 260：最小距离（≈2.5 倍尺寸，彼此不重叠又留呼吸感）
+        var FEATHER_GAP_MAX = Math.round(FEATHER_SIZE * 4);     // 416：最大距离（≈4 倍尺寸，防止某一根飘成孤点）
+        var FEATHER_GAP_FLOOR = Math.round(FEATHER_SIZE * 1.5); // 156：迭代下限，是「不重叠」的物理底线（1.5 倍 > √2）
+
+        // 拒绝采样：天空区 [4vw,70vw]×[7vh,35vh] 内随机点。
+        // 要求：与所有已放羽毛的屏幕距离 ≥ need（最小距离），且与最近那根的屏幕距离 ≤ FEATHER_GAP_MAX（最大距离；第一根不受限）
+        function featherRandPos(need, ignoreMax) {
             for (var t = 0; t < 300; t++) {
-                var x = 4 + Math.random() * 66, y = 7 + Math.random() * 28, ok = true;
+                var x = 4 + Math.random() * 66, y = 7 + Math.random() * 28, ok = true, near = Infinity;
                 for (var i = 0; i < featherPlaced.length; i++) {
                     var dx = (x - featherPlaced[i].x) * innerWidth / 100;
                     var dy = (y - featherPlaced[i].y) * innerHeight / 100;
-                    if (dx * dx + dy * dy < need * need) { ok = false; break; }
+                    var d2 = dx * dx + dy * dy;
+                    if (d2 < need * need) { ok = false; break; }
+                    if (d2 < near * near) near = Math.sqrt(d2);
                 }
-                if (ok) return { x: x, y: y };
+                if (ok && (ignoreMax || featherPlaced.length === 0 || near <= FEATHER_GAP_MAX)) return { x: x, y: y };
             }
             return null;
         }
         function addFeather() {
-            var need = 384, p = null;             // 最短间隔 = 镜子之宽
-            while (need > 120 && !(p = featherRandPos(need))) need = Math.round(need * 0.8);
+            var need = FEATHER_GAP_MIN, p = null;
+            while (need > FEATHER_GAP_FLOOR && !(p = featherRandPos(need))) need = Math.round(need * 0.8);
+            if (!p) p = featherRandPos(FEATHER_GAP_FLOOR, true);   // 兜底：放宽最大距离，别让天上凭空少一根
             if (!p) return;
             featherPlaced.push(p);
             var b = document.createElement('button');
@@ -2125,6 +2142,7 @@ function stopPeSnow() {
                 if (window.__blDialogKill) window.__blDialogKill();
                 if (window.__mirrorBGM) window.__mirrorBGM.exit();
                 if (window.__badelineLeaveRoom) window.__badelineLeaveRoom();
+                if (window.CampfireAudio) window.CampfireAudio.resume();   // 从镜之房间直接离场：篝火回书架续烧
             }
             djStop();                              // 停 dream BGM（Starjump）并恢复全站 BGM
             scene.classList.remove('show');
@@ -2596,6 +2614,7 @@ function stopPeSnow() {
         function panRight() {
             dsWorld.classList.add('panned');
             if (window.__dreamBGM) window.__dreamBGM.pause();   // Starjump 暂停留位，让位 Resurrections
+            if (window.CampfireAudio) window.CampfireAudio.suspend();   // 镜之房间不要篝火声
             // 不再 door.classList.add('away') — 心门在镜之房间侧只露一半，可点击回书架
             if (window.__mirrorBGM) window.__mirrorBGM.enter();
             // 镜子破碎态优先：破碎 → 碎镜呈现 + Badeline 强制出场；完好 → 随机模式 A/B
@@ -2680,6 +2699,7 @@ function stopPeSnow() {
             if (window.__blDialogKill) window.__blDialogKill();
             if (window.__mirrorBGM) window.__mirrorBGM.exit();
             if (window.__dreamBGM) window.__dreamBGM.resume();   // 回雪夜：Starjump 从暂停处续播
+            if (window.CampfireAudio) window.CampfireAudio.resume();    // 回雪夜：篝火接着烧
             if (window.__badelineLeaveRoom) window.__badelineLeaveRoom();
         }
         window.__heartDoorGoBack = goBack;

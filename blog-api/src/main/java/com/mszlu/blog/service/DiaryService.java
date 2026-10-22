@@ -1,6 +1,7 @@
 package com.mszlu.blog.service;
 
 import com.mszlu.blog.vo.Result;
+import com.mszlu.blog.vo.params.CompanionParam;
 import com.mszlu.blog.vo.params.DiaryParam;
 
 /**
@@ -26,8 +27,8 @@ public interface DiaryService {
     /** 日记伴侣：根据草稿片段获得 Madeline 的反馈 */
     Result companion(String draftSnippet);
 
-    /** 日记伴侣流式版：Madeline 的反馈边生成边推给客户端（文本增量），收完才落库 */
-    void companionStream(String draftSnippet, javax.servlet.http.HttpServletResponse response);
+    /** 日记伴侣流式版（v1 扩展）：多轮会话记忆 + 实时中断 + 双模态情绪 + 人格检查 + 全链路日志 */
+    void companionStream(CompanionParam param, javax.servlet.http.HttpServletResponse response);
 
     /** 获取日记详情 */
     Result getById(String diaryId);
