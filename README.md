@@ -1,9 +1,3 @@
-<div align="center">
-
-<!-- ═══════════════════ HERO BANNER ═══════════════════ -->
-<img src="docs/banner.jpg" alt="Celeste AI Diary Companion Blog" width="100%" style="border-radius:12px;">
-
-#  AI Diary Companion Blog
 
 > *"Every step up the mountain is a word in your story."*
 > **让每一个字都有温度，让每一天都有意义。**
