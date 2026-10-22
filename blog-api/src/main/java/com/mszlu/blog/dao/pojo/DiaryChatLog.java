@@ -42,6 +42,7 @@ public class DiaryChatLog {
     // 分析侧
     private BigDecimal emotionScore;  // 0-1 双模态融合得分
     private String emotionType;       // 兴奋/平静/沮丧/愤怒/迷茫
+    private String emotionScoreDetail; // JSON：深度情绪分析全量输出（v2 新增）
     private String intentType;        // 吐槽/疑问/喜悦/反思/求助
     private Boolean featherTriggered;
     private Boolean roundtableSync;

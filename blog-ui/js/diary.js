@@ -1393,9 +1393,14 @@ function inferReplyEmotion(text) {
         peakIntensity: 0,
         lastLocalReactTime: 0,
         lastReactionLine: '',
-        // v1 扩展：会话 + 打字轨迹
+        // v1 扩展：会话 + 打字轨迹 + v2 按键级原始事件流
         sessionId: (localStorage.getItem('diaryChatSessionId') || ''),
         typingSignal: { delete: 0, undo: 0, pause: 0, lastInputAt: Date.now(), modifyFreq: 0 },
+        // v2 新增：按键级时间序列（最多保留最近 500 个事件，内存可控）
+        keyEvents: [],          // [{ts: 1234567890, action: 'insert'|'delete'|'undo'}]
+        lastKeyTs: 0,
+        keyIntervals: [],       // 两次输入间隔 ms
+        deleteInsertPairs: 0,   // 检测：delete 后 1s 内 insert 次数 → deleteRetypeRatio 分子
         modifyFreqCounter: 0,
         modifyFreqTimer: null,
         pauseTimer: null
@@ -1537,13 +1542,46 @@ function inferReplyEmotion(text) {
                 draft: text,
                 sessionId: companionState.sessionId || undefined,
                 triggerType: triggerType || 'save',
-                typingSignal: JSON.stringify({
-                    delete: companionState.typingSignal.delete,
-                    pause: +(Date.now() - companionState.typingSignal.lastInputAt).toFixed(1),
-                    undo: companionState.typingSignal.undo,
-                    modifyFreq: companionState.modifyFreqCounter
-                })
+                // v2 扩展：按键级原始事件流 + 计算好的轨迹特征
+                typingSignal: JSON.stringify((() => {
+                    const intervals = companionState.keyIntervals;
+                    let avgIntervalMs = 0, deleteRetypeRatio = 0, autocorrelation = 0;
+                    if (intervals.length > 2) {
+                        avgIntervalMs = intervals.reduce((a,b) => a+b, 0) / intervals.length;
+                        // deleteRetypeRatio = delete后1s内insert次数 / delete总数
+                        const del = companionState.typingSignal.delete || 0;
+                        deleteRetypeRatio = del > 0 ? companionState.deleteInsertPairs / del : 0;
+                        // 自相关 lag=1：相邻间隔的 Pearson r（简化版）
+                        const mean = avgIntervalMs;
+                        let num = 0, den1 = 0, den2 = 0;
+                        for (let i = 1; i < intervals.length; i++) {
+                            const a = intervals[i-1] - mean, b = intervals[i] - mean;
+                            num += a * b; den1 += a*a; den2 += b*b;
+                        }
+                        const den = Math.sqrt(den1) * Math.sqrt(den2);
+                        autocorrelation = den > 0 ? num / den : 0;
+                    }
+                    return {
+                        delete: companionState.typingSignal.delete,
+                        pause: +(Date.now() - companionState.typingSignal.lastInputAt).toFixed(1),
+                        undo: companionState.typingSignal.undo,
+                        modifyFreq: companionState.modifyFreqCounter,
+                        avgIntervalMs: +avgIntervalMs.toFixed(1),
+                        deleteRetypeRatio: +deleteRetypeRatio.toFixed(2),
+                        autocorrelation: +autocorrelation.toFixed(3),
+                        eventCount: companionState.keyEvents.length,
+                        // R5：上传最近 50 条原始按键事件（限长避免 body 过大）
+                        events: companionState.keyEvents.slice(-50)
+                    };
+                })())
             };
+            // B6：请求发出后重置轨迹计数器，避免跨轮次累加导致 deleteRetypeRatio 失真
+            companionState.deleteInsertPairs = 0;
+            companionState.typingSignal.delete = 0;
+            companionState.typingSignal.undo = 0;
+            companionState.keyIntervals = [];
+            companionState.lastKeyTs = 0;
+            companionState.keyEvents = [];
             const resp = await fetch(BASE_URL + '/diary/companion/stream', {
                 method: 'POST',
                 headers: Object.assign(
@@ -1682,16 +1720,38 @@ function inferReplyEmotion(text) {
 
     // ===== 核心：输入事件处理 =====
     let aiJudgeTimer = null;
+    // v2 辅助：计算 deleteRetypeRatio（delete 后 1s 内出现 insert 视为"重输"）
+    let recentDeleteAt = 0;
     contentInput.addEventListener('input', (e) => {
-        companionState.typingSignal.lastInputAt = Date.now();
+        const now = Date.now();
+        companionState.typingSignal.lastInputAt = now;
 
         // v1 扩展：打字轨迹收集
+        let action = 'insert';
         if (e.inputType === 'deleteContentBackward' || e.inputType === 'deleteContentForward') {
             companionState.typingSignal.delete++;
+            action = 'delete';
+            recentDeleteAt = now;
         }
         if (e.inputType === 'historyUndo') {
             companionState.typingSignal.undo++;
+            action = 'undo';
         }
+        // v2 扩展：delete 后 1s 内 insert → 重输计数 +1
+        if (action === 'insert' && recentDeleteAt && now - recentDeleteAt < 1000) {
+            companionState.deleteInsertPairs++;
+        }
+        // v2 扩展：按键间隔序列
+        if (companionState.lastKeyTs > 0) {
+            const gap = now - companionState.lastKeyTs;
+            companionState.keyIntervals.push(gap);
+            if (companionState.keyIntervals.length > 100) companionState.keyIntervals.shift();
+        }
+        companionState.lastKeyTs = now;
+        // v2 扩展：按键事件原始流（限长 500）
+        companionState.keyEvents.push({ ts: now, action });
+        if (companionState.keyEvents.length > 500) companionState.keyEvents.shift();
+
         // 修改频率：2s 内多少次 input
         companionState.modifyFreqCounter++;
         clearTimeout(companionState.modifyFreqTimer);

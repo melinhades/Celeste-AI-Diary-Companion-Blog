@@ -80,6 +80,16 @@ ai:
   model: ${AI_MODEL:Qwen/Qwen2.5-7B-Instruct}
   embedding-model: ${AI_EMBEDDING_MODEL:BAAI/bge-m3}
 
+# Madeline 情绪分析 v2 — 消融实验开关（全部默认为 true，置 false 即关闭对应子模块）
+# 消融实验流程：依次把每个开关置 false，跑相同 100 条输入，记录 Judge 评分变化
+emotion:
+  ablation:
+    disable-embed: false       # 关闭 AiClient.embed 交叉验证
+    disable-trajectory: false  # 关闭打字轨迹侧分析
+    disable-trend: false       # 关闭跨日记趋势
+    disable-fusion: false      # 关闭自适应融合（退回 0.7/0.3 固定权重）
+    disable-text: false        # 关闭 Plutchik AI 分析（退回关键词兜底）
+
 # Actuator & Prometheus 监控
 management:
   endpoints:

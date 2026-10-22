@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS `diary_chat_log` (
   -- 分析侧
   `emotion_score`     DECIMAL(5,3)             DEFAULT NULL COMMENT '0-1 情绪得分（双模态融合后）',
   `emotion_type`      VARCHAR(16)              DEFAULT NULL COMMENT '兴奋/平静/沮丧/愤怒/迷茫',
+  `emotion_score_detail` TEXT                 DEFAULT NULL COMMENT 'JSON：深度情绪分析全量输出（Plutchik/锚点/矛盾/轨迹特征/跨日记趋势/自适应权重）',
   `intent_type`       VARCHAR(16)              DEFAULT NULL COMMENT '吐槽/疑问/喜悦/反思/求助',
   `feather_triggered` TINYINT(1) UNSIGNED      NOT NULL DEFAULT 0 COMMENT '是否触发羽毛联动',
   `roundtable_sync`   TINYINT(1) UNSIGNED      NOT NULL DEFAULT 0 COMMENT '是否同步圆桌结论',
@@ -58,3 +59,61 @@ CREATE TABLE IF NOT EXISTS `diary_chat_session` (
   `created_at`        DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX `idx_user_active` (`user_id`, `last_active_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Madeline 日记会话记忆';
+
+
+-- =============================================================================
+-- v2 升级：为已有部署补 emotion_score_detail 列（CREATE TABLE IF NOT EXISTS 不会修改已存在表）
+-- 执行方式：在 MySQL 客户端直接跑这条 ALTER
+-- =============================================================================
+-- ALTER TABLE `diary_chat_log` ADD COLUMN `emotion_score_detail` TEXT DEFAULT NULL COMMENT 'JSON：深度情绪分析全量输出（Plutchik/锚点/矛盾/轨迹特征/跨日记趋势/自适应权重）' AFTER `emotion_type`;
+
+
+-- =============================================================================
+-- v2 验证 harness：金标准测试集表（用于 Cohen's kappa + LLM-as-Judge 双盲评分）
+-- 标注流程：2-3 标注者独立标 emotion_type + intensity 1-5
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS `diary_emotion_test_set` (
+  `id`                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `diary_text`        MEDIUMTEXT     NOT NULL COMMENT '日记原文',
+  `annotator_1_type`  VARCHAR(16)    DEFAULT NULL COMMENT '标注者 1 的 emotion_type（Plutchik primary）',
+  `annotator_1_intensity` INT      DEFAULT NULL COMMENT '标注者 1 的 intensity 1-5',
+  `annotator_2_type`  VARCHAR(16)    DEFAULT NULL COMMENT '标注者 2 的 emotion_type',
+  `annotator_2_intensity` INT      DEFAULT NULL,
+  `annotator_3_type`  VARCHAR(16)    DEFAULT NULL,
+  `annotator_3_intensity` INT      DEFAULT NULL,
+  `gold_type`         VARCHAR(16)    DEFAULT NULL COMMENT '仲裁后的金标准',
+  `gold_intensity`    INT            DEFAULT NULL,
+  `created_at`        DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX `idx_gold`    (`gold_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='金标准测试集（Cohen''s kappa + Judge 双盲评分用）';
+
+
+-- =============================================================================
+-- v2 验证 harness：消融实验记录（每去掉一个子模块 → Judge 打分变化）
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS `diary_emotion_ablation` (
+  `id`                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `turn_id`           VARCHAR(32)    NOT NULL COMMENT 'diary_chat_log.id 引用',
+  `ablation_module`   VARCHAR(32)    NOT NULL COMMENT '被关闭的模块名（text/embed/trajectory/trend/fusion）',
+  `judge_score_before` DECIMAL(5,2)  DEFAULT NULL COMMENT '关闭前 Judge 评分',
+  `judge_score_after`  DECIMAL(5,2)  DEFAULT NULL COMMENT '关闭后 Judge 评分',
+  `delta`              DECIMAL(5,2)  DEFAULT NULL COMMENT '评分下降值',
+  `created_at`         DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='消融实验记录';
+
+
+-- =============================================================================
+-- v2 验证 harness：外部效度（情绪得分 vs 真实用户行为相关）
+-- 这个表是从 diary_chat_log JOIN diary / diary_chat_log JOIN 其他行为表的物化结果
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS `diary_emotion_external_validity` (
+  `id`                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `session_id`        VARCHAR(64)    NOT NULL,
+  `emotion_score`     DECIMAL(5,3)  DEFAULT NULL COMMENT 'diary_chat_log.emotion_score',
+  `feather_triggered` TINYINT(1)    DEFAULT NULL COMMENT '是否触发羽毛',
+  `next_24h_diary`    TINYINT(1)    DEFAULT NULL COMMENT '24h 内是否再写日记',
+  `stay_minutes`      INT           DEFAULT NULL COMMENT '保存后停留分钟数（近似值）',
+  `user_feedback`     VARCHAR(8)    DEFAULT NULL COMMENT '👍/👎',
+  `created_at`        DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX `idx_score`   (`emotion_score`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='外部效度验证表（Pearson 相关系数计算用）';

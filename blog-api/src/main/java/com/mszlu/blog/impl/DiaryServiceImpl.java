@@ -485,8 +485,8 @@ public class DiaryServiceImpl implements DiaryService {
         DiaryChatMemory.SessionBuffer buf = chatMemory.getOrCreate(userId, sessionId);
         int turnId = buf.turnCount + 1;
 
-        // === v1 扩展：双模态情绪提取 ===
-        DiaryChatEmotionExtractor.EmotionResult emotion = emotionExtractor.extract(draftSnippet, param.getTypingSignal());
+        // === v2 扩展：深度情绪提取（Plutchik 三层 + embed 交叉验证 + 跨日记趋势 + 自适应融合） ===
+        DiaryChatEmotionExtractor.EmotionResult emotion = emotionExtractor.extract(draftSnippet, param.getTypingSignal(), userId);
 
         // === v1 扩展：意图分类 ===
         String intent = intentClassifier.classify(draftSnippet, buf.summary);
@@ -678,6 +678,7 @@ public class DiaryServiceImpl implements DiaryService {
         logEntity.setFilterReason(check.failReason);
         logEntity.setEmotionScore(emotion.getScore());
         logEntity.setEmotionType(emotion.getEmotionType());
+        logEntity.setEmotionScoreDetail(emotion.getEmotionScoreDetail());  // v2 新增：完整 JSON 落库
         logEntity.setIntentType(intent);
         logEntity.setFeatherTriggered(featherTriggered);
         logEntity.setFirstDeltaMs(firstDeltaMs[0]);
