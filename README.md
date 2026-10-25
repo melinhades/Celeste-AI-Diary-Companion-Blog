@@ -758,7 +758,7 @@ blog-ui/
 ## 🧪 Testing & Quality
 
 ### Current State
-- Unit tests: **9 test classes / 51 cases** — auth chain (`JWTUtils`, `LoginServiceImpl`, `LoginIntercepter`) + roundtable engine; all green (`RoundtableEngineE2eTest` requires the external AI service and is skipped in CI-style runs)
+- Unit tests: **10 test classes / 57 cases** — auth chain (`JWTUtils`, `LoginServiceImpl`, `LoginIntercepter`), prod config validation (`ConfigValidator`) + roundtable engine; all green (`RoundtableEngineE2eTest` requires the external AI service and is skipped in CI-style runs)
 - Integration tests: None yet (Testcontainers planned)
 - Coverage gate: Not yet configured (JaCoCo planned)
 - Static analysis: None configured
