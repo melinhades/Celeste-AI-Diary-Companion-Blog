@@ -123,15 +123,22 @@
     @keyframes snowDrift { from{background-position-x:0} to{background-position-x:-440px} }
     #articleLoadingOverlay .loading-madeline {
         width: 120px; height: 120px;
-        /* 10 帧雪碧图：一次请求全部就绪，动画只改 background-position-x，消除逐帧换图卡壳 */
-        background: url('../celeste-gui/loading/loading-sprite.png') left top no-repeat;
-        background-size: auto 100%;
+        background-size: 100% 100%; background-repeat: no-repeat; background-position: center;
         image-rendering: pixelated;
-        animation: loadingRun 0.8s steps(10) infinite;
+        animation: loadingRun 0.72s steps(9) infinite;
         position: relative; z-index: 1;
     }
-    /* 雪碧图定位：p% 对应偏移 -(p*(10-1)) 帧宽，steps(10) 恰好落在 0..9 帧 */
-    @keyframes loadingRun { from { background-position-x: 0%; } to { background-position-x: 100%; } }
+    @keyframes loadingRun {
+        0%   { background-image: url('../celeste-gui/loading/00.png'); }
+        11%  { background-image: url('../celeste-gui/loading/01.png'); }
+        22%  { background-image: url('../celeste-gui/loading/02.png'); }
+        33%  { background-image: url('../celeste-gui/loading/03.png'); }
+        44%  { background-image: url('../celeste-gui/loading/04.png'); }
+        55%  { background-image: url('../celeste-gui/loading/05.png'); }
+        66%  { background-image: url('../celeste-gui/loading/06.png'); }
+        77%  { background-image: url('../celeste-gui/loading/07.png'); }
+        88%  { background-image: url('../celeste-gui/loading/08.png'); }
+    }
     #articleLoadingOverlay .loading-text {
         margin-top: 20px; color: #ffe36d;
         font-family: 'Renogare', 'CelesteZH', sans-serif; font-size: 18px;
