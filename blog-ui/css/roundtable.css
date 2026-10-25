@@ -99,24 +99,16 @@
         text-shadow:0 0 10px rgba(126,108,255,.45);
     }
     .sugg-loading { display:flex; flex-direction:column; align-items:center; gap:12px; font-size:12px; color:rgba(200,210,255,.4); padding:14px 2px 22px; }
-    /* 推荐话题加载：Madeline 跑步动画（与登录加载同款 9 帧） */
+    /* 推荐话题加载：Madeline 跑步动画（与登录加载同款雪碧图，10 帧） */
     .sugg-running {
         width:72px; height:72px;
-        background-size:100% 100%; background-repeat:no-repeat; background-position:center;
+        background:url('../celeste-gui/loading/loading-sprite.png') left top no-repeat;
+        background-size:auto 100%;
         image-rendering:pixelated;
-        animation:suggRun 0.72s steps(9) infinite;
+        animation:suggRun 0.8s steps(10) infinite;
     }
-    @keyframes suggRun {
-        0%   { background-image:url('../celeste-gui/loading/00.png'); }
-        11%  { background-image:url('../celeste-gui/loading/01.png'); }
-        22%  { background-image:url('../celeste-gui/loading/02.png'); }
-        33%  { background-image:url('../celeste-gui/loading/03.png'); }
-        44%  { background-image:url('../celeste-gui/loading/04.png'); }
-        55%  { background-image:url('../celeste-gui/loading/05.png'); }
-        66%  { background-image:url('../celeste-gui/loading/06.png'); }
-        77%  { background-image:url('../celeste-gui/loading/07.png'); }
-        88%  { background-image:url('../celeste-gui/loading/08.png'); }
-    }
+    /* 雪碧图定位：p% 对应偏移 -(p*(10-1)) 帧宽，steps(10) 恰好落在 0..9 帧 */
+    @keyframes suggRun { from { background-position-x:0%; } to { background-position-x:100%; } }
 
     /* ===== 席位卡片（演播厅栅格子元素，margin 由 studio gap 接管） ===== */
     .seats { display:grid; grid-template-columns:repeat(6,1fr); gap:10px; align-content:start; }
