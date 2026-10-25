@@ -2,7 +2,7 @@ package com.mszlu.blog.service.ai.roundtable;
 
 import com.mszlu.blog.controller.RoundtableController;
 import com.mszlu.blog.dao.pojo.SysUser;
-import com.mszlu.blog.service.LoginService;
+import com.mszlu.blog.service.TokenService;
 import com.mszlu.blog.service.ai.AiClient;
 import com.mszlu.blog.service.ai.AiMessage;
 import org.junit.jupiter.api.Test;
@@ -410,14 +410,14 @@ class RoundtableEngineE2eTest {
             assertTrue(transcriptAtJoin >= 4, "会前先攒够快照内容");
 
             // 通过真实 controller 的 observe() 加入（mock 登录态）
-            LoginService loginService = mock(LoginService.class);
+            TokenService tokenService = mock(TokenService.class);
             SysUser watcher = new SysUser();
             watcher.setId("777");
             watcher.setNickname("观察者");
-            when(loginService.checkToken(anyString())).thenReturn(watcher);
+            when(tokenService.checkToken(anyString())).thenReturn(watcher);
 
             RoundtableController controller = new RoundtableController();
-            setField(controller, RoundtableController.class, "loginService", loginService);
+            setField(controller, RoundtableController.class, "tokenService", tokenService);
             Map<String, RoundtableSession> sessions = new ConcurrentHashMap<>();
             sessions.put(session.getId(), session);
             setField(controller, RoundtableController.class, "sessions", sessions);

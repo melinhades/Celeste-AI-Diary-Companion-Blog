@@ -2,7 +2,7 @@ package com.mszlu.blog.controller;
 
 import com.mszlu.blog.dao.pojo.SysUser;
 import com.mszlu.blog.service.LikeService;
-import com.mszlu.blog.service.LoginService;
+import com.mszlu.blog.service.TokenService;
 import com.mszlu.blog.utils.UserThreadLocal;
 import com.mszlu.blog.vo.Result;
 import org.apache.commons.lang3.StringUtils;
@@ -23,7 +23,7 @@ public class LikeController {
     private LikeService likeService;
 
     @Autowired
-    private LoginService loginService;
+    private TokenService tokenService;
 
     // 点赞/取消（需登录，走拦截器）
     @PostMapping("toggle")
@@ -38,7 +38,7 @@ public class LikeController {
         SysUser user = null;
         String token = request.getHeader("Authorization");
         if (StringUtils.isNotBlank(token)) {
-            user = loginService.checkToken(token);
+            user = tokenService.checkToken(token);
         }
         return likeService.info(articleId, user);
     }

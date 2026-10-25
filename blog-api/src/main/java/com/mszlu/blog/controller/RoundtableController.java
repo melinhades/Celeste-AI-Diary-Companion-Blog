@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.mszlu.blog.dao.mapper.RoundtableSessionMapper;
 import com.mszlu.blog.dao.pojo.RoundtableSessionEntity;
 import com.mszlu.blog.dao.pojo.SysUser;
-import com.mszlu.blog.service.LoginService;
+import com.mszlu.blog.service.TokenService;
 import com.mszlu.blog.service.ai.roundtable.RoundtableEngine;
 import com.mszlu.blog.service.ai.roundtable.RoundtableSession;
 import com.mszlu.blog.service.ai.roundtable.RoundtableTopicService;
@@ -42,7 +42,7 @@ import java.util.concurrent.TimeUnit;
 public class RoundtableController {
 
     @Autowired
-    private LoginService loginService;
+    private TokenService tokenService;
     @Autowired
     private RoundtableEngine engine;
     @Autowired
@@ -62,7 +62,7 @@ public class RoundtableController {
                              @RequestParam(value = "topic", required = false) String topic,
                              @RequestParam(value = "rounds", required = false) Integer rounds,
                              HttpServletResponse response) throws IOException {
-        SysUser user = (token == null || token.isEmpty()) ? null : loginService.checkToken(token);
+        SysUser user = (token == null || token.isEmpty()) ? null : tokenService.checkToken(token);
         if (user == null) {
             // EventSource 只接受 text/event-stream，不能返回 Result 对象（406），手写 401
             response.setStatus(401);
@@ -202,7 +202,7 @@ public class RoundtableController {
     public SseEmitter observe(@PathVariable("id") String id,
                               @RequestParam(value = "token", required = false) String token,
                               HttpServletResponse response) throws IOException {
-        SysUser me = (token == null || token.isEmpty()) ? null : loginService.checkToken(token);
+        SysUser me = (token == null || token.isEmpty()) ? null : tokenService.checkToken(token);
         if (me == null) {
             response.setStatus(401);
             response.setContentType("application/json;charset=utf-8");

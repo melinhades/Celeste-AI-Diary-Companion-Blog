@@ -1,7 +1,7 @@
 package com.mszlu.blog.controller;
 
 import com.mszlu.blog.dao.pojo.SysUser;
-import com.mszlu.blog.service.LoginService;
+import com.mszlu.blog.service.TokenService;
 import com.mszlu.blog.utils.UserThreadLocal;
 import com.mszlu.blog.vo.Result;
 import lombok.extern.slf4j.Slf4j;
@@ -37,7 +37,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class RealtimeChatController {
 
     @Autowired
-    private LoginService loginService;
+    private TokenService tokenService;
 
     /** 单条消息最长 500 字 */
     private static final int MAX_CONTENT_LEN = 500;
@@ -67,7 +67,7 @@ public class RealtimeChatController {
     @GetMapping(value = "stream")
     public SseEmitter stream(@RequestParam(value = "token", required = false) String token,
                              jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
-        SysUser user = (token == null || token.isEmpty()) ? null : loginService.checkToken(token);
+        SysUser user = (token == null || token.isEmpty()) ? null : tokenService.checkToken(token);
         if (user == null) {
             // EventSource 的 Accept 只认 text/event-stream，不能返回 Result 对象（会触发 406），
             // 直接手写 401 JSON：浏览器侧只表现为 onerror 并自动重连

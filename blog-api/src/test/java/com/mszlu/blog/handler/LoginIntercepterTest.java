@@ -1,7 +1,7 @@
 package com.mszlu.blog.handler;
 
 import com.mszlu.blog.dao.pojo.SysUser;
-import com.mszlu.blog.service.LoginService;
+import com.mszlu.blog.service.TokenService;
 import com.mszlu.blog.utils.UserThreadLocal;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -25,7 +25,7 @@ import static org.mockito.Mockito.*;
 class LoginIntercepterTest {
 
     @Mock
-    private LoginService loginService;
+    private TokenService tokenService;
     @Mock
     private HttpServletRequest request;
     @Mock
@@ -42,7 +42,7 @@ class LoginIntercepterTest {
     void preHandle_optionsRequest_passesWithoutTokenCheck() throws Exception {
         when(request.getMethod()).thenReturn("OPTIONS");
         assertTrue(interceptor.preHandle(request, response, new Object()));
-        verifyNoInteractions(loginService);
+        verifyNoInteractions(tokenService);
     }
 
     @Test
@@ -55,7 +55,7 @@ class LoginIntercepterTest {
 
         assertFalse(interceptor.preHandle(request, response, new Object()));
         assertTrue(body.toString().contains("90002"));
-        verify(loginService, never()).checkToken(anyString());
+        verify(tokenService, never()).checkToken(anyString());
     }
 
     @Test
@@ -63,7 +63,7 @@ class LoginIntercepterTest {
         when(request.getMethod()).thenReturn("GET");
         when(request.getRequestURI()).thenReturn("/articles/myCount");
         when(request.getHeader("Authorization")).thenReturn("bad-token");
-        when(loginService.checkToken("bad-token")).thenReturn(null);
+        when(tokenService.checkToken("bad-token")).thenReturn(null);
         StringWriter body = new StringWriter();
         when(response.getWriter()).thenReturn(new PrintWriter(body));
 
@@ -78,7 +78,7 @@ class LoginIntercepterTest {
         when(request.getMethod()).thenReturn("GET");
         when(request.getRequestURI()).thenReturn("/articles/myCount");
         when(request.getHeader("Authorization")).thenReturn("good-token");
-        when(loginService.checkToken("good-token")).thenReturn(user);
+        when(tokenService.checkToken("good-token")).thenReturn(user);
 
         assertTrue(interceptor.preHandle(request, response, new Object()));
         assertEquals("1001", UserThreadLocal.get().getId());

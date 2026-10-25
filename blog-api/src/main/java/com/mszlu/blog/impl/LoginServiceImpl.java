@@ -13,7 +13,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -122,37 +121,6 @@ public class LoginServiceImpl implements LoginService {
             redisTemplate.delete("login_fail_" + account);
         } catch (Exception e) {
             // ignore
-        }
-    }
-
-    @Override
-    public SysUser checkToken(String token) {
-        if (StringUtils.isBlank(token)) {
-            return null;
-        }
-        Map<String, Object> stringObjectMap = jwtUtils.checkToken(token);
-        if (stringObjectMap == null) {
-            return null;
-        }
-        String userJson = redisTemplate.opsForValue().get("Token_" + token);
-        if (userJson == null) {
-            return null;
-        }
-        SysUser sysUser = JSON.parseObject(userJson, SysUser.class);
-        return sysUser;
-    }
-
-    @Override
-    public void refreshUserCache(String token, SysUser sysUser) {
-        try {
-            // 保持原 30 天 TTL：用 getExpire 读出剩余秒数后重写，过期后自然重新登录
-            String key = "Token_" + token;
-            Long ttl = redisTemplate.getExpire(key, TimeUnit.SECONDS);
-            if (ttl != null && ttl > 0) {
-                redisTemplate.opsForValue().set(key, JSON.toJSONString(sysUser), ttl, TimeUnit.SECONDS);
-            }
-        } catch (Exception e) {
-            // 缓存刷新失败不影响写库结果，下次登录自然一致
         }
     }
 

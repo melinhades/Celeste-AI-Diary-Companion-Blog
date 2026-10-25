@@ -4,8 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.mszlu.blog.dao.mapper.SysUserMapper;
 import com.mszlu.blog.dao.pojo.SysUser;
-import com.mszlu.blog.service.LoginService;
 import com.mszlu.blog.service.SysUserService;
+import com.mszlu.blog.service.TokenService;
 import com.mszlu.blog.vo.LoginUserVo;
 import com.mszlu.blog.vo.Result;
 import com.mszlu.blog.vo.params.ErrorCode;
@@ -19,7 +19,7 @@ public class SysUserServiceImpl implements SysUserService {
     @Autowired
     private SysUserMapper sysUserMapper;
     @Autowired
-    private LoginService loginService;
+    private TokenService tokenService;
 
     @Override
     public UserVo findUserVoById(String id) {
@@ -56,7 +56,7 @@ public class SysUserServiceImpl implements SysUserService {
 
     @Override
     public Result findUserByToken(String token) {
-        SysUser sysUser = loginService.checkToken(token);
+        SysUser sysUser = tokenService.checkToken(token);
         if (sysUser == null) {
             return Result.fail(ErrorCode.TOKEN_ERROR.getCode(), ErrorCode.TOKEN_ERROR.getMsg());
         }
@@ -86,7 +86,7 @@ public class SysUserServiceImpl implements SysUserService {
 
     @Override
     public Result berryBalance(String token) {
-        SysUser loginUser = loginService.checkToken(token);
+        SysUser loginUser = tokenService.checkToken(token);
         if (loginUser == null) {
             return Result.fail(ErrorCode.TOKEN_ERROR.getCode(), ErrorCode.TOKEN_ERROR.getMsg());
         }
@@ -103,7 +103,7 @@ public class SysUserServiceImpl implements SysUserService {
 
     @Override
     public Result adjustBerry(String token, Integer delta) {
-        SysUser loginUser = loginService.checkToken(token);
+        SysUser loginUser = tokenService.checkToken(token);
         if (loginUser == null) {
             return Result.fail(ErrorCode.TOKEN_ERROR.getCode(), ErrorCode.TOKEN_ERROR.getMsg());
         }
@@ -124,7 +124,7 @@ public class SysUserServiceImpl implements SysUserService {
         sysUserMapper.update(null, uw);
 
         SysUser fresh = sysUserMapper.selectById(loginUser.getId());
-        loginService.refreshUserCache(token, fresh);
+        tokenService.refreshUserCache(token, fresh);
         java.util.Map<String, Object> data = new java.util.HashMap<>();
         Integer berry = fresh.getBerry();
         data.put("berry", berry == null ? Integer.valueOf(0) : berry);
@@ -133,7 +133,7 @@ public class SysUserServiceImpl implements SysUserService {
 
     @Override
     public Result updateSignature(String token, String signature) {
-        SysUser loginUser = loginService.checkToken(token);
+        SysUser loginUser = tokenService.checkToken(token);
         if (loginUser == null) {
             return Result.fail(ErrorCode.TOKEN_ERROR.getCode(), ErrorCode.TOKEN_ERROR.getMsg());
         }
@@ -147,7 +147,7 @@ public class SysUserServiceImpl implements SysUserService {
         sysUserMapper.update(null, uw);
 
         SysUser fresh = sysUserMapper.selectById(loginUser.getId());
-        loginService.refreshUserCache(token, fresh);
+        tokenService.refreshUserCache(token, fresh);
         java.util.Map<String, Object> data = new java.util.HashMap<>();
         data.put("signature", fresh.getSignature());
         return Result.success(data);

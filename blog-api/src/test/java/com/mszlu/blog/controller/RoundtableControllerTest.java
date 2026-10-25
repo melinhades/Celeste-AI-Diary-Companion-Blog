@@ -1,7 +1,7 @@
 package com.mszlu.blog.controller;
 
 import com.mszlu.blog.dao.pojo.SysUser;
-import com.mszlu.blog.service.LoginService;
+import com.mszlu.blog.service.TokenService;
 import com.mszlu.blog.service.ai.roundtable.RoundtableEngine;
 import com.mszlu.blog.service.ai.roundtable.RoundtableSession;
 import com.mszlu.blog.service.ai.roundtable.RoundtableTopicService;
@@ -28,7 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ExtendWith(MockitoExtension.class)
 class RoundtableControllerTest {
 
-    @Mock private LoginService loginService;
+    @Mock private TokenService tokenService;
     @Mock private RoundtableEngine engine;
     @Mock private RoundtableTopicService topicService;
 

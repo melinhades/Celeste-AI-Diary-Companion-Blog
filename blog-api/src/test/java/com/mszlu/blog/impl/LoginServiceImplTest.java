@@ -1,6 +1,5 @@
 package com.mszlu.blog.impl;
 
-import com.alibaba.fastjson.JSON;
 import com.mszlu.blog.dao.pojo.SysUser;
 import com.mszlu.blog.service.SysUserService;
 import com.mszlu.blog.utils.JWTUtils;
@@ -19,7 +18,6 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -177,42 +175,6 @@ class LoginServiceImplTest {
         Result r = loginService.login(param("alice", "plain-password"));
         assertTrue(r.isSuccess());
         verify(sysUserService).updateById(argThat(s -> s.getPassword().startsWith("$2")));
-    }
-
-    // ===== checkToken =====
-
-    @Test
-    void checkToken_blank_returnsNull() {
-        assertNull(loginService.checkToken(""));
-        assertNull(loginService.checkToken(null));
-    }
-
-    @Test
-    void checkToken_invalidJwt_returnsNull() {
-        when(jwtUtils.checkToken("bad")).thenReturn(null);
-        assertNull(loginService.checkToken("bad"));
-    }
-
-    @Test
-    void checkToken_jwtValidButRedisMiss_returnsNull() {
-        Map<String, Object> claims = new HashMap<>();
-        claims.put("userId", "1001");
-        when(jwtUtils.checkToken("t")).thenReturn(claims);
-        when(valueOps.get("Token_t")).thenReturn(null);
-        assertNull(loginService.checkToken("t"));
-    }
-
-    @Test
-    void checkToken_jwtAndRedisHit_returnsUser() {
-        SysUser u = userWithPassword("x");
-        Map<String, Object> claims = new HashMap<>();
-        claims.put("userId", "1001");
-        when(jwtUtils.checkToken("t")).thenReturn(claims);
-        when(valueOps.get("Token_t")).thenReturn(JSON.toJSONString(u));
-
-        SysUser result = loginService.checkToken("t");
-        assertNotNull(result);
-        assertEquals("alice", result.getAccount());
     }
 
     // ===== logout =====
