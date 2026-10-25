@@ -1,5 +1,19 @@
-    // 已登录直接跳转（Vue 挂载前执行）
-    if (localStorage.getItem('token')) location.href = 'index.html';
+    // 已登录直接跳转（Vue 挂载前执行）：同 login-2.js，必须服务端校验 token，
+    // 否则残留 token 会让注册页立刻弹回首页、进不去
+    (function () {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        api('/users/currentUser', 'GET', null, 3000).then(res => {
+            if (res && res.success) {
+                location.href = 'index.html';
+                return;
+            }
+            if (!(res && res.msg === '网络错误')) {
+                localStorage.removeItem('token');
+                localStorage.removeItem('nickname');
+            }
+        });
+    })();
 
     // 明信片同款出场
     requestAnimationFrame(() => requestAnimationFrame(() => {
