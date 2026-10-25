@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main, "upgrade/**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      # 与本地门禁同一条命令：编译 + 单测 + Checkstyle + SpotBugs。
+      # RoundtableEngineE2eTest 依赖外部 AI 服务，CI 永远跳过（与本地约定一致）；
+      # blog-admin 无测试，需 failIfNoSpecifiedTests=false 防止 -Dtest 过滤报错。
+      - name: mvn clean verify
+        run: mvn -B clean verify "-Dtest=!RoundtableEngineE2eTest" "-Dsurefire.failIfNoSpecifiedTests=false"
