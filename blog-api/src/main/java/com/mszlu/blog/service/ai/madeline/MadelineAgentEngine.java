@@ -87,7 +87,9 @@ public class MadelineAgentEngine {
                                     + ",\"mood\":" + JSON.toJSONString(normalizeMood(decision.getString("mood"))) + "}");
                             anyFrame[0] = true;
                         } catch (Exception e) {
-                            return; // 客户端已断开
+                            // 客户端已断开
+                            log.debug("SSE step 帧写入失败，客户端可能已断开", e);
+                            return;
                         }
                     }
                     polishOriginal = text;
@@ -166,6 +168,8 @@ public class MadelineAgentEngine {
                 try {
                     sseEvent(response, "error", "AI 暂时开小差，请稍后再试");
                 } catch (Exception ignored) {
+                    // 客户端已断开，无需再发
+                    log.debug("SSE error 帧写入失败，客户端可能已断开", ignored);
                 }
             }
             return;
@@ -188,6 +192,8 @@ public class MadelineAgentEngine {
         try {
             sseEvent(response, "done", "{\"mood\":\"" + mood + "\"}");
         } catch (Exception ignored) {
+            // 客户端已断开，无需再发
+            log.debug("SSE done 帧写入失败，客户端可能已断开", ignored);
         }
     }
 
@@ -237,6 +243,8 @@ public class MadelineAgentEngine {
             response.setContentType("application/json;charset=UTF-8");
             response.getWriter().write("{\"success\":false,\"code\":" + code + ",\"msg\":\"" + msg + "\"}");
         } catch (Exception ignored) {
+            // 客户端已断开，错误帧写不出去也无法补救
+            log.debug("JSON 错误帧写入失败，客户端可能已断开", ignored);
         }
     }
 }

@@ -3,7 +3,6 @@ package com.mszlu.blog.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.mszlu.blog.dao.mapper.ArticleMapper;
 import com.mszlu.blog.dao.pojo.Article;
-import com.mszlu.blog.vo.params.ArticleVo;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 

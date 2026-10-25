@@ -2,9 +2,6 @@ package com.mszlu.blog.service.ai;
 
 import org.springframework.stereotype.Component;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -18,25 +15,25 @@ import java.util.Set;
 public class BadelineStageRules {
 
     /** 负面情绪词（连续下滑 / 低谷判定用） */
-    private final Set<String> negativeEmotions = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
-            "不安", "悲伤", "孤独", "愤怒", "疲惫")));
+    private static final Set<String> NEGATIVE_EMOTIONS = Set.of(
+            "不安", "悲伤", "孤独", "愤怒", "疲惫");
 
     /** 正面情绪词（正在爬出来判定用） */
-    private final Set<String> positiveEmotions = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
-            "开心", "期待", "满足")));
+    private static final Set<String> POSITIVE_EMOTIONS = Set.of(
+            "开心", "期待", "满足");
 
     /** 深谷情绪：连续 3 篇全是这两种 → 告别·沉郁 */
-    private final Set<String> sorrowEmotions = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
-            "悲伤", "孤独")));
+    private static final Set<String> SORROW_EMOTIONS = Set.of(
+            "悲伤", "孤独");
 
     /** 连续观察的近期日记篇数 */
-    private final int recentWindow = 3;
+    private static final int RECENT_WINDOW = 3;
 
     /** 断更阈值（天）：≥ 该天数视为断更 */
-    private final int gapDaysThreshold = 4;
+    private static final int GAP_DAYS_THRESHOLD = 4;
 
     /** 长期坚持阈值（天）：≥ 该天数进入山顶阶段 */
-    private final int longTermDaysThreshold = 30;
+    private static final int LONG_TERM_DAYS_THRESHOLD = 30;
 
     /**
      * 由情绪轨迹与时间间隔推导阶段。
@@ -51,19 +48,19 @@ public class BadelineStageRules {
             return new String[]{"还没有日记", "初遇·试探", "她只在观察，什么都还不确定"};
         }
 
-        List<String> last = emotionsAsc.size() > recentWindow
-                ? emotionsAsc.subList(emotionsAsc.size() - recentWindow, emotionsAsc.size())
+        List<String> last = emotionsAsc.size() > RECENT_WINDOW
+                ? emotionsAsc.subList(emotionsAsc.size() - RECENT_WINDOW, emotionsAsc.size())
                 : emotionsAsc;
 
-        boolean allNeg = last.size() == recentWindow;
-        boolean allSorrow = last.size() == recentWindow;
+        boolean allNeg = last.size() == RECENT_WINDOW;
+        boolean allSorrow = last.size() == RECENT_WINDOW;
         for (String e : last) {
-            if (!negativeEmotions.contains(e)) allNeg = false;
-            if (!sorrowEmotions.contains(e)) allSorrow = false;
+            if (!NEGATIVE_EMOTIONS.contains(e)) allNeg = false;
+            if (!SORROW_EMOTIONS.contains(e)) allSorrow = false;
         }
-        boolean climbing = last.size() == recentWindow
-                && negativeEmotions.contains(last.get(0))
-                && positiveEmotions.contains(last.get(recentWindow - 1));
+        boolean climbing = last.size() == RECENT_WINDOW
+                && NEGATIVE_EMOTIONS.contains(last.get(0))
+                && POSITIVE_EMOTIONS.contains(last.get(RECENT_WINDOW - 1));
 
         if (allSorrow) {
             return new String[]{"连续的低谷", "告别·沉郁", "最难的日子里，她反而最好"};
@@ -74,23 +71,15 @@ public class BadelineStageRules {
         if (climbing) {
             return new String[]{"正在爬出来", "并肩", "「不错。别得寸进尺。」——嘴硬地支持"};
         }
-        if (gapDays >= gapDaysThreshold) {
+        if (gapDays >= GAP_DAYS_THRESHOLD) {
             return new String[]{"断更中", "对峙·退避", "她退开了——两种防御之一"};
         }
-        if (prevGap >= gapDaysThreshold) {
+        if (prevGap >= GAP_DAYS_THRESHOLD) {
             return new String[]{"刚从断更中回来", "并肩", "回来了，谈开了——嘴硬，但站在同一边"};
         }
-        if (dayCount >= longTermDaysThreshold) {
+        if (dayCount >= LONG_TERM_DAYS_THRESHOLD) {
             return new String[]{"长期坚持", "山顶", "里程碑附近——真心地骄傲（用她自己的方式）"};
         }
         return new String[]{"平稳起伏", "追逐·共处", "尖锐、讽刺、试探——「你以为你是谁啊，天天写日记？」"};
-    }
-
-    public Set<String> getNegativeEmotions() {
-        return negativeEmotions;
-    }
-
-    public Set<String> getPositiveEmotions() {
-        return positiveEmotions;
     }
 }

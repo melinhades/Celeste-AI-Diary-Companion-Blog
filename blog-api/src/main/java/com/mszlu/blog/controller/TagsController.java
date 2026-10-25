@@ -1,6 +1,5 @@
 package com.mszlu.blog.controller;
 
-import com.mszlu.blog.dao.mapper.TagMapper;
 import com.mszlu.blog.service.TagService;
 import com.mszlu.blog.vo.Result;
 import org.springframework.beans.factory.annotation.Autowired;

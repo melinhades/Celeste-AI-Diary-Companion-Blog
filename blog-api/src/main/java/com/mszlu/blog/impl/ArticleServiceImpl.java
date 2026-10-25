@@ -12,7 +12,6 @@ import com.mszlu.blog.dao.pojo.Article;
 import com.mszlu.blog.dao.pojo.ArticleBody;
 import com.mszlu.blog.dao.pojo.Tag;
 import com.mszlu.blog.vo.params.ArticleTag;
-import com.mszlu.blog.dao.pojo.Category;
 import com.mszlu.blog.dao.pojo.SysUser;
 import com.mszlu.blog.dao.mapper.ArticleTagMapper;
 import com.mszlu.blog.service.ArticleService;
@@ -91,14 +90,6 @@ public class ArticleServiceImpl implements ArticleService {
         return articleVoList;
     }
 
-    private List<ArticleVo> copyList(List<Article> records, boolean isAuthor, boolean isBody, boolean isTags, boolean isCategory){
-        List<ArticleVo> articleVoList = new ArrayList<>();
-        for (Article article : records) {
-            ArticleVo articleVo = copy(article, isAuthor, isBody, isTags, isCategory);
-            articleVoList.add(articleVo);
-        }
-        return articleVoList;
-    }
     @Override
     public List<ArticleVo> listArticlesPage(PageParams pageParams) {
         QueryWrapper<Article> queryWrapper = new QueryWrapper<>();

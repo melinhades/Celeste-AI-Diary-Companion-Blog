@@ -32,14 +32,12 @@ public class DiaryChatPersonaChecker {
         public String failReason;
         public String suggestion;       // AI 建议的替代回复（Madeline 应该怎么说）
         public String finalResponse;    // 最终采用的回复（可能是重新生成的）
-        public int attemptsUsed;        // 用了几次尝试才过关
 
-        public CheckResult(boolean pass, String failReason, String suggestion, String finalResponse, int attemptsUsed) {
+        public CheckResult(boolean pass, String failReason, String suggestion, String finalResponse) {
             this.pass = pass;
             this.failReason = failReason;
             this.suggestion = suggestion;
             this.finalResponse = finalResponse;
-            this.attemptsUsed = attemptsUsed;
         }
     }
 
@@ -61,7 +59,7 @@ public class DiaryChatPersonaChecker {
             attempts++;
             CheckResult check = runCheck(current, systemPrompt, userContext, intentType);
             if (check.pass) {
-                return new CheckResult(true, null, null, current, attempts);
+                return new CheckResult(true, null, null, current);
             }
 
             // 不通过：如果 AI 给了 suggestion，直接用 suggestion 替换；否则用简化 prompt 重新生成
@@ -80,7 +78,7 @@ public class DiaryChatPersonaChecker {
         // 三次都没过关：兜底温柔回应
         log.warn("人格检查连续 {} 次未过，兜底温柔回应", MAX_ATTEMPTS);
         return new CheckResult(false, "连续" + MAX_ATTEMPTS + "次人格检查未过", "兜底",
-                "嗯，我在听～", attempts);
+                "嗯，我在听～");
     }
 
     private CheckResult runCheck(String response, String systemPrompt, String userContext, String intentType) {
@@ -118,17 +116,17 @@ public class DiaryChatPersonaChecker {
         if (raw == null) {
             // AI 调用失败，保守假设通过，避免中断对话
             log.warn("人格检查 AI 调用失败，保守放行");
-            return new CheckResult(true, null, null, response, 1);
+            return new CheckResult(true, null, null, response);
         }
         try {
             JSONObject obj = JSON.parseObject(raw.trim());
             boolean pass = obj.getBooleanValue("pass");
             String failReason = obj.getString("fail_reason");
             String suggestion = obj.getString("suggestion");
-            return new CheckResult(pass, failReason, suggestion, response, 1);
+            return new CheckResult(pass, failReason, suggestion, response);
         } catch (Exception e) {
             log.warn("人格检查 JSON 解析失败: {}", e.getMessage());
-            return new CheckResult(true, null, null, response, 1);
+            return new CheckResult(true, null, null, response);
         }
     }
 

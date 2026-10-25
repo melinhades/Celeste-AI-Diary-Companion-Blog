@@ -1,7 +1,6 @@
 package com.mszlu.blog.config;
 
 import com.mszlu.blog.handler.LoginIntercepter;
-import com.mszlu.blog.config.UTF8EncodingFilter;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -64,7 +63,10 @@ public class WebMVCConfig implements WebMvcConfigurer {
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         File dir = new File(System.getProperty("user.dir"), "uploads");
-        if (!dir.exists()) dir.mkdirs();
+        if (!dir.exists() && !dir.mkdirs()) {
+            // 目录建不出来后续上传必然 500，启动期直接 fail-fast
+            throw new IllegalStateException("无法创建上传目录: " + dir.getAbsolutePath());
+        }
         registry.addResourceHandler("/uploads/**").addResourceLocations(dir.toURI().toString());
     }
 

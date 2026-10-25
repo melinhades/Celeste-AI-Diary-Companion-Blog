@@ -1,6 +1,5 @@
 package com.mszlu.blog.controller;
 
-import com.mszlu.blog.utils.QiniuUtils;
 import com.mszlu.blog.vo.Result;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -60,7 +59,9 @@ public class UploadController {
 
         try {
             File dir = new File(System.getProperty("user.dir"), "uploads");
-            if (!dir.exists()) dir.mkdirs();
+            if (!dir.exists() && !dir.mkdirs()) {
+                return Result.fail(20001, "上传失败");
+            }
             String fileName = UUID.randomUUID().toString().replace("-", "") + "." + ext;
             file.transferTo(new File(dir, fileName));
             return Result.success("/uploads/" + fileName);

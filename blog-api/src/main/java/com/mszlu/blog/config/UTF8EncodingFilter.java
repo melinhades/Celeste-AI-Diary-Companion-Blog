@@ -4,7 +4,6 @@ import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.StringReader;
 import jakarta.servlet.Filter;
 import jakarta.servlet.FilterChain;
@@ -45,7 +44,7 @@ public class UTF8EncodingFilter implements Filter {
     public void destroy() {
     }
 
-    private static class UTF8RequestWrapper extends HttpServletRequestWrapper {
+    private static final class UTF8RequestWrapper extends HttpServletRequestWrapper {
         private byte[] body;
 
         public UTF8RequestWrapper(HttpServletRequest request) throws IOException {

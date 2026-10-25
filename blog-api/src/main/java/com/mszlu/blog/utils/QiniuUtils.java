@@ -8,7 +8,6 @@ import com.qiniu.storage.UploadManager;
 import com.qiniu.storage.model.DefaultPutRet;
 import com.qiniu.util.Auth;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
@@ -38,8 +37,8 @@ public class QiniuUtils {
             Auth auth = Auth.create(accessKey, accessSecretKey);
             String upToken = auth.uploadToken(bucket);
                 Response response = uploadManager.put(uploadBytes, fileName, upToken);
-                //解析上传成功的结果
-                DefaultPutRet putRet = JSON.parseObject(response.bodyString(), DefaultPutRet.class);
+                //解析上传成功的结果（解析失败抛异常走 catch）
+                JSON.parseObject(response.bodyString(), DefaultPutRet.class);
                 return true;
             } catch (Exception ex) {
                 log.error("qiniu upload error, fileName:{}", fileName, ex);

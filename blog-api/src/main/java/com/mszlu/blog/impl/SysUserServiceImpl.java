@@ -107,22 +107,27 @@ public class SysUserServiceImpl implements SysUserService {
         if (loginUser == null) {
             return Result.fail(ErrorCode.TOKEN_ERROR.getCode(), ErrorCode.TOKEN_ERROR.getMsg());
         }
-        if (delta == null || delta == 0) {
+        if (delta == null) {
             return Result.fail(400, "delta 非法");
         }
-        if (Math.abs(delta) > 100000) {
+        int deltaVal = delta;
+        if (deltaVal == 0) {
+            return Result.fail(400, "delta 非法");
+        }
+        if (Math.abs(deltaVal) > 100000) {
             return Result.fail(400, "delta 超出范围");
         }
         // 数据库原子增减，GREATEST 兜底保证余额永不为负
         LambdaUpdateWrapper<SysUser> uw = new LambdaUpdateWrapper<>();
         uw.eq(SysUser::getId, loginUser.getId());
-        uw.setSql("berry = GREATEST(COALESCE(berry, 0) + " + delta + ", 0)");
+        uw.setSql("berry = GREATEST(COALESCE(berry, 0) + " + deltaVal + ", 0)");
         sysUserMapper.update(null, uw);
 
         SysUser fresh = sysUserMapper.selectById(loginUser.getId());
         loginService.refreshUserCache(token, fresh);
         java.util.Map<String, Object> data = new java.util.HashMap<>();
-        data.put("berry", fresh.getBerry() == null ? 0 : fresh.getBerry());
+        Integer berry = fresh.getBerry();
+        data.put("berry", berry == null ? Integer.valueOf(0) : berry);
         return Result.success(data);
     }
 

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+
+    <!-- ========== 有依据的排除（附理由） ========== -->
+
+    <!-- Lombok @Data 的 VO/POJO/参数对象：getter/setter 直接暴露 Date/List 等可变字段。
+         这些是纯数据传输对象，防御性拷贝无收益，属于该模式在 DTO 层的固有噪音。 -->
+    <Match>
+        <Or>
+            <Class name="~com\.mszlu\.blog\.vo\..*"/>
+            <Class name="~com\.mszlu\.blog\.dao\.pojo\..*"/>
+            <Class name="~com\.mszlu\.blog\.dao\.dos\..*"/>
+            <Class name="~com\.mszlu\.blog\.admin\.vo\..*"/>
+            <Class name="~com\.mszlu\.blog\.admin\.pojo\..*"/>
+        </Or>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    </Match>
+
+    <!-- 圆桌会议运行时会话对象：引擎线程与 Controller 按设计共享可变状态
+         （transcript/interjections/bus 等），防御性拷贝会破坏该共享语义。 -->
+    <Match>
+        <Class name="com.mszlu.blog.service.ai.roundtable.RoundtableSession"/>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    </Match>
+
+    <!-- 事件扇出总线与其回放快照：bus 按设计持有 session 引用；
+         快照的 transcript 构造时已被 unmodifiableList 包装，只读用途 -->
+    <Match>
+        <Class name="~com\.mszlu\.blog\.service\.ai\.roundtable\.SessionBus.*"/>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    </Match>
+
+    <!-- 命令行灌库工具（由 ingest-lore 参数触发）：需要以退出码向调用方报告结果，
+         System.exit 为有意为之；不影响主服务（无参数时直接 return）。 -->
+    <Match>
+        <Class name="com.mszlu.blog.tool.LoreIngest"/>
+        <Bug pattern="DM_EXIT"/>
+    </Match>
+
+    <!-- ========== 临时排除（附移除条件） ========== -->
+
+    <!-- 含未提交 faceEmotion WIP 改动的冻结类，WIP 合并后逐个移除本条目 -->
+    <Match>
+        <Class name="com.mszlu.blog.impl.DiaryServiceImpl"/>
+    </Match>
+    <Match>
+        <Class name="com.mszlu.blog.service.ai.PromptBuilder"/>
+    </Match>
+    <Match>
+        <Class name="com.mszlu.blog.service.diarychat.DiaryChatEmotionExtractor"/>
+    </Match>
+    <Match>
+        <Class name="com.mszlu.blog.impl.MemoryServiceImpl"/>
+    </Match>
+    <Match>
+        <Class name="com.mszlu.blog.service.diarychat.DiaryChatMemory"/>
+    </Match>
+</FindBugsFilter>

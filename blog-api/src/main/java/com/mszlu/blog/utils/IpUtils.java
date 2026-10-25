@@ -5,7 +5,9 @@ import java.net.UnknownHostException;
 
 public class IpUtils {
 
-
+    private IpUtils() {
+        // 工具类禁止实例化
+    }
 
     /**
      * 获取IP方法
@@ -91,10 +93,12 @@ public class IpUtils {
                     {
                         return true;
                     }
+                    // fall through：不是 172.16-31 网段则继续检查 192.168
                 case SECTION_5:
                     if (b1 == SECTION_6) {
                         return true;
                     }
+                    // fall through：不是 192.168 网段则走 default
                 default:
                     return false;
             }
@@ -201,6 +205,7 @@ public class IpUtils {
             }
             catch (UnknownHostException ignored)
             {
+                // 解析本机地址失败，返回回退 IP
             }
             return "127.0.0.1";
         }
@@ -218,6 +223,7 @@ public class IpUtils {
             }
             catch (UnknownHostException ignored)
             {
+                // 解析主机名失败，返回回退文案
             }
             return "未知";
         }

@@ -4,7 +4,6 @@ import com.mszlu.blog.vo.Result;
 import com.mszlu.blog.vo.params.ArticleParam;
 import com.mszlu.blog.vo.params.PageParams;
 import com.mszlu.blog.vo.params.ArticleVo;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 

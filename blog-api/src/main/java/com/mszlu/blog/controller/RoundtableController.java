@@ -102,7 +102,6 @@ public class RoundtableController {
         evictIfNeeded();
 
         SseEmitter emitter = attachOwnerEmitter(session, response, false);
-        if (emitter == null) return null;
         engine.run(session);
         return emitter;
     }

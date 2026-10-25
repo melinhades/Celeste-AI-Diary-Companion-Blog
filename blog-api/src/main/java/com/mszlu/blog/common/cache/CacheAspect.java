@@ -11,9 +11,7 @@ import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Pointcut;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.annotation.AliasFor;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Method;
@@ -42,19 +40,20 @@ public class CacheAspect {
 
             Class[] parameterTypes = new Class[pjp.getArgs().length];
             Object[] args = pjp.getArgs();
-            //参数
-            String params = "";
+            //参数（循环内用 StringBuilder 拼接，避免 String += 产生中间对象）
+            StringBuilder params = new StringBuilder();
             for(int i=0; i<args.length; i++) {
                 if(args[i] != null) {
-                    params += JSON.toJSONString(args[i]);
+                    params.append(JSON.toJSONString(args[i]));
                     parameterTypes[i] = args[i].getClass();
                 }else {
                     parameterTypes[i] = null;
                 }
             }
-            if (StringUtils.isNotEmpty(params)) {
+            String paramsKey = "";
+            if (params.length() > 0) {
                 //加密 以防出现key过长以及字符转义获取不到的情况
-                params = DigestUtils.md5Hex(params);
+                paramsKey = DigestUtils.md5Hex(params.toString());
             }
             Method method = pjp.getSignature().getDeclaringType().getMethod(methodName, parameterTypes);
             //获取Cache注解
@@ -64,7 +63,7 @@ public class CacheAspect {
             //缓存名称
             String name = annotation.name();
             //先从redis获取
-            String redisKey = name + "::" + className+"::"+methodName+"::"+params;
+            String redisKey = name + "::" + className+"::"+methodName+"::"+paramsKey;
             String redisValue = redisTemplate.opsForValue().get(redisKey);
             if (StringUtils.isNotEmpty(redisValue)){
                 log.info("走了缓存~~~,{},{}",className,methodName);
