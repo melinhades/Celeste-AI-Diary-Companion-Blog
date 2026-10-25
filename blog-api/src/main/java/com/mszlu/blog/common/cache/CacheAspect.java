@@ -75,7 +75,7 @@ public class CacheAspect {
             log.info("存入缓存~~~ {},{}",className,methodName);
             return proceed;
         } catch (Throwable throwable) {
-            throwable.printStackTrace();
+            log.error("cache aspect error", throwable);
         }
         return Result.fail(-999,"系统错误");
     }
