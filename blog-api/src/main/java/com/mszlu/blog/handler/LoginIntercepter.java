@@ -41,7 +41,8 @@ public class LoginIntercepter implements HandlerInterceptor {
         String requestURI = request.getRequestURI();
         log.info("request uri:{}",requestURI);
         log.info("request method:{}",request.getMethod());
-        log.info("token:{}", token);
+        // 安全：完整 token 属于凭证，禁止落日志；只记录是否存在与脱敏前缀
+        log.info("token present:{}", token != null);
         log.info("=================request end===========================");
         if (StringUtils.isBlank(token)) {
             Result result = Result.fail(ErrorCode.NO_LOGIN.getCode(),"未登录");
