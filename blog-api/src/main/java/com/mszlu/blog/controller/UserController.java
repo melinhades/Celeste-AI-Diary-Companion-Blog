@@ -1,4 +1,4 @@
-package com.mszlu.blog.dao.controller;
+package com.mszlu.blog.controller;
 
 import com.mszlu.blog.service.SysUserService;
 import com.mszlu.blog.vo.Result;

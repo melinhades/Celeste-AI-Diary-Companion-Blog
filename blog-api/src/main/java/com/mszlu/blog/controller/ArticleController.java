@@ -1,4 +1,4 @@
-package com.mszlu.blog.dao.controller;
+package com.mszlu.blog.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.mszlu.blog.common.aop.LogAnnotation;

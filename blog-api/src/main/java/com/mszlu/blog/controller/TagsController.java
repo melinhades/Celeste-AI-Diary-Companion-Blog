@@ -1,4 +1,4 @@
-package com.mszlu.blog.dao.controller;
+package com.mszlu.blog.controller;
 
 import com.mszlu.blog.dao.mapper.TagMapper;
 import com.mszlu.blog.service.TagService;

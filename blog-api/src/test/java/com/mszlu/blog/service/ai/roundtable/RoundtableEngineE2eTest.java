@@ -1,6 +1,6 @@
 package com.mszlu.blog.service.ai.roundtable;
 
-import com.mszlu.blog.dao.controller.RoundtableController;
+import com.mszlu.blog.controller.RoundtableController;
 import com.mszlu.blog.dao.pojo.SysUser;
 import com.mszlu.blog.service.LoginService;
 import com.mszlu.blog.service.ai.AiClient;
