@@ -3,11 +3,14 @@
     (function () {
         const token = localStorage.getItem('token');
         if (!token) return;
+        // 校验期间隐藏整页，已登录用户不会看到注册表单闪烁
+        document.documentElement.style.visibility = 'hidden';
         api('/users/currentUser', 'GET', null, 3000).then(res => {
             if (res && res.success) {
                 location.href = 'index.html';
                 return;
             }
+            document.documentElement.style.visibility = '';
             if (!(res && res.msg === '网络错误')) {
                 localStorage.removeItem('token');
                 localStorage.removeItem('nickname');

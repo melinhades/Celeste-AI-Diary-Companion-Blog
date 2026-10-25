@@ -5,9 +5,13 @@
     (function () {
         const token = localStorage.getItem('token');
         if (!token) return;
+        // 校验期间隐藏整页：已登录用户等请求返回后直接跳走，看不到登录表单闪烁；
+        // 校验失败/网络错误时立刻恢复显示
+        document.documentElement.style.visibility = 'hidden';
         api('/users/currentUser', 'GET', null, 3000).then(res => {
             const u = res && res.success ? (res.data || {}) : null;
             if (!u) {
+                document.documentElement.style.visibility = '';
                 // 仅服务端明确拒绝才清凭据；后端没起（网络错误）时保留，避免误登出
                 if (!(res && res.msg === '网络错误')) {
                     localStorage.removeItem('token');
