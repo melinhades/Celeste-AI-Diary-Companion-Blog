@@ -17,7 +17,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>2.7.18</version>
+        <version>3.2.6</version>
         <relativePath/>
     </parent>
 
@@ -121,8 +121,14 @@
 
         <dependency>
             <groupId>com.baomidou</groupId>
-            <artifactId>mybatis-plus-boot-starter</artifactId>
-            <version>3.5.3.1</version>
+            <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+            <version>3.5.11</version>
+        </dependency>
+        <!-- MyBatis-Plus 3.5.9 起把分页等依赖 jsqlparser 的插件拆到独立模块，不引入则 PaginationInnerInterceptor 不存在 -->
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-jsqlparser</artifactId>
+            <version>3.5.11</version>
         </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
@@ -168,25 +174,20 @@
             <version>[7.7.0, 7.7.99]</version>
         </dependency>
 
-        <!-- JAXB API for Java 9+ -->
-        <dependency>
-            <groupId>javax.xml.bind</groupId>
-            <artifactId>jaxb-api</artifactId>
-            <version>2.3.1</version>
-        </dependency>
-        <dependency>
-            <groupId>org.glassfish.jaxb</groupId>
-            <artifactId>jaxb-runtime</artifactId>
-            <version>2.3.1</version>
-        </dependency>
+        <!-- JAXB 依赖已移除：全仓库无 JAXBContext / javax.xml.bind 使用 -->
     </dependencies>
 
     <dependencyManagement>
         <dependencies>
             <dependency>
                 <groupId>com.baomidou</groupId>
-                <artifactId>mybatis-plus-boot-starter</artifactId>
-                <version>3.5.3.1</version>
+                <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+                <version>3.5.11</version>
+            </dependency>
+            <dependency>
+                <groupId>com.baomidou</groupId>
+                <artifactId>mybatis-plus-jsqlparser</artifactId>
+                <version>3.5.11</version>
             </dependency>
             <dependency>
                 <groupId>org.projectlombok</groupId>

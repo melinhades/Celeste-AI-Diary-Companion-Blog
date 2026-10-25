@@ -455,7 +455,7 @@ public class DiaryServiceImpl implements DiaryService {
      * 与 v0 同一套 SSE 事件帧协议（emotion/delta/done/silent/error），前端无需改解析逻辑。
      */
     @Override
-    public void companionStream(CompanionParam param, javax.servlet.http.HttpServletResponse response) {
+    public void companionStream(CompanionParam param, jakarta.servlet.http.HttpServletResponse response) {
         SysUser user = UserThreadLocal.get();
         if (user == null) {
             try { response.setStatus(400); response.setContentType("application/json;charset=UTF-8");
@@ -464,8 +464,10 @@ public class DiaryServiceImpl implements DiaryService {
         }
         String userId = user.getId();
         String draftSnippet = param.getDraft() == null ? "" : param.getDraft().trim();
-        String sessionId = param.getSessionId();
-        if (sessionId == null || sessionId.isBlank()) sessionId = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        String rawSid = param.getSessionId();
+        String sessionId = (rawSid == null || rawSid.isBlank())
+                ? UUID.randomUUID().toString().replace("-", "").substring(0, 16)
+                : rawSid;
 
         // —— 中断入口：如果前端传了 interrupt=true，直接标记中断并返回（新请求不启动生成） ——
         if (Boolean.TRUE.equals(param.getInterrupt()) || "interrupt".equals(param.getTriggerType())) {
@@ -708,7 +710,7 @@ public class DiaryServiceImpl implements DiaryService {
     }
 
     /** 写一个 SSE 事件帧：event: <name>\n[data: ...]\n\n。多行 data 自动按 \n 拆分，兼容 \r\n。 */
-    private void sseEvent(javax.servlet.http.HttpServletResponse response, String event, String data)
+    private void sseEvent(jakarta.servlet.http.HttpServletResponse response, String event, String data)
             throws java.io.IOException {
         java.io.PrintWriter w = response.getWriter();
         w.write("event: ");

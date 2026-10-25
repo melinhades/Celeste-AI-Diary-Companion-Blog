@@ -40,7 +40,7 @@ public class DiaryController {
      */
     @PostMapping(value = "companion/stream")
     public void companionStream(@RequestBody CompanionParam param,
-                                javax.servlet.http.HttpServletResponse response) {
+                                jakarta.servlet.http.HttpServletResponse response) {
         diaryService.companionStream(param, response);
     }
 
@@ -124,7 +124,7 @@ public class DiaryController {
             return Result.fail(400, "缺少 sessionId 或 feedback");
         }
         chatLogService.recordFeedbackBySession(sessionId, feedback);
-        return Result.success();
+        return Result.success(null);
     }
 
     /** 心之水晶：按近期日记情绪定色，AI 生成名称与描述 */

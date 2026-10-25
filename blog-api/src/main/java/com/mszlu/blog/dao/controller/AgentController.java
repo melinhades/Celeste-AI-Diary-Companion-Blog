@@ -22,7 +22,7 @@ public class AgentController {
      */
     @PostMapping(value = "madeline/stream")
     public void madelineStream(@RequestBody AgentParam param,
-                               javax.servlet.http.HttpServletResponse response) {
+                               jakarta.servlet.http.HttpServletResponse response) {
         madelineAgentEngine.run(param.getMessage(), response);
     }
 }

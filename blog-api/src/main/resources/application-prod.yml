@@ -11,6 +11,10 @@ server:
 spring:
   application:
     name: mszlu_blog
+  # Boot 2.6 起默认禁止 Bean 循环引用；loginServiceImpl 与 sysUserServiceImpl 存在历史循环依赖，
+  # 升级到 2.7.x 后需显式开启（不改业务代码的最小兼容方案）
+  main:
+    allow-circular-references: true
   # 注意：profile 专属文件（application-prod.yml）里禁止声明 spring.profiles.active，
   # 否则启动抛 InvalidConfigDataPropertyException；prod 由环境变量 SPRING_PROFILES_ACTIVE 激活
   datasource:
@@ -33,18 +37,20 @@ spring:
     multipart:
       max-request-size: 20MB
       max-file-size: 8MB
-  redis:
-    host: ${REDIS_HOST:localhost}
-    port: ${REDIS_PORT:6379}
-    password: ${REDIS_PASSWORD:}
-    database: 0
-    lettuce:
-      pool:
-        max-active: 20
-        max-idle: 10
-        min-idle: 2
-        max-wait: 2000ms
-    timeout: 3000ms
+  # Boot 3 起 Redis 配置从 spring.redis 迁移到 spring.data.redis
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 0
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 10
+          min-idle: 2
+          max-wait: 2000ms
+      timeout: 3000ms
   jackson:
     date-format: yyyy-MM-dd HH:mm:ss
     time-zone: GMT+8

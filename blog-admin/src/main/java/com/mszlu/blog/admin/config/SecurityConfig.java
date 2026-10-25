@@ -1,75 +1,78 @@
 package com.mszlu.blog.admin.config;
 
+import com.mszlu.blog.admin.service.AuthService;
 import com.mszlu.blog.admin.service.SecurityUserService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
-import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.authorization.AuthorizationDecision;
+import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.builders.WebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.web.authentication.AuthenticationFailureHandler;
-import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
-import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
+import org.springframework.security.web.SecurityFilterChain;
 
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import java.io.IOException;
-import java.io.PrintWriter;
-
+/**
+ * Spring Security 6 配置。
+ * 6.x 已删除 WebSecurityConfigurerAdapter，改为声明 SecurityFilterChain / AuthenticationProvider Bean；
+ * authorizeRequests -> authorizeHttpRequests，antMatchers -> requestMatchers，
+ * @EnableGlobalMethodSecurity -> @EnableMethodSecurity。
+ */
 @Configuration
-public class SecurityConfig extends WebSecurityConfigurerAdapter {
+@EnableWebSecurity
+@EnableMethodSecurity
+public class SecurityConfig {
 
-    @Autowired
-    private SecurityUserService securityUserService;
+    private final SecurityUserService securityUserService;
+    private final AuthService authService;
+
+    public SecurityConfig(SecurityUserService securityUserService, AuthService authService) {
+        this.securityUserService = securityUserService;
+        this.authService = authService;
+    }
 
     @Bean
-    public BCryptPasswordEncoder bCryptPasswordEncoder(){
+    public BCryptPasswordEncoder bCryptPasswordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
-    @Override
-    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
-        // 走数据库管理员表（ms_admin）校验账号密码，密码使用 BCrypt 比对
-        auth.userDetailsService(securityUserService).passwordEncoder(bCryptPasswordEncoder());
+    /**
+     * 走数据库管理员表（ms_admin）校验账号密码，密码使用 BCrypt 比对。
+     */
+    @Bean
+    public DaoAuthenticationProvider daoAuthenticationProvider() {
+        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
+        provider.setUserDetailsService(securityUserService);
+        provider.setPasswordEncoder(bCryptPasswordEncoder());
+        return provider;
     }
 
-    @Override
-    public void configure(WebSecurity web) throws Exception {
-        super.configure(web);
-    }
-    @Override
-    protected void configure(HttpSecurity http) throws Exception {
-
-        http.authorizeRequests() //开启登录认证
-//                .antMatchers("/user/findAll").hasRole("admin") //访问接口需要admin的角色
-                .antMatchers("/css/**").permitAll()
-                .antMatchers("/img/**").permitAll()
-                .antMatchers("/js/**").permitAll()
-                .antMatchers("/plugins/**").permitAll()
-                .antMatchers("/admin/**").access("@authService.auth(request,authentication)") //自定义service 来去实现实时的权限认证
-                .antMatchers("/pages/**").authenticated()
-                .and().formLogin()
-                .loginPage("/login.html") //自定义的登录页面
-                .loginProcessingUrl("/login") //登录处理接口
-                .usernameParameter("username") //定义登录时的用户名的key 默认为username
-                .passwordParameter("password") //定义登录时的密码key，默认是password
-                .defaultSuccessUrl("/pages/main.html")
-                .failureUrl("/login.html?error") //失败时带回 error 参数，登录页据此显示错误提示
-                .permitAll() //通过 不拦截，更加前面配的路径决定，这是指和登录表单相关的接口 都通过
-                .and().logout() //退出登录配置
-                .logoutUrl("/logout") //退出登录接口
-                .logoutSuccessUrl("/login.html")
-                .permitAll() //退出登录的接口放行
-                .and()
-                .httpBasic()
-                .and()
-                .csrf().disable() //csrf关闭 如果自定义登录 需要关闭
-                .headers().frameOptions().sameOrigin();
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http.authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/css/**", "/img/**", "/js/**", "/plugins/**").permitAll()
+                        // 自定义 service 实时权限认证：超管直接放行，普通管理员按 ms_permission.path 逐条比对
+                        .requestMatchers("/admin/**").access((authenticationSupplier, context) ->
+                                new AuthorizationDecision(authService.auth(context.getRequest(), authenticationSupplier.get())))
+                        .requestMatchers("/pages/**").authenticated())
+                .formLogin(form -> form
+                        .loginPage("/login.html")
+                        .loginProcessingUrl("/login")
+                        .usernameParameter("username")
+                        .passwordParameter("password")
+                        .defaultSuccessUrl("/pages/main.html")
+                        .failureUrl("/login.html?error")
+                        .permitAll())
+                .logout(logout -> logout
+                        .logoutUrl("/logout")
+                        .logoutSuccessUrl("/login.html")
+                        .permitAll())
+                .httpBasic(Customizer.withDefaults())
+                .csrf(AbstractHttpConfigurer::disable)
+                // 后台页面使用 iframe 嵌套，必须保留 sameOrigin，否则子页被 X-Frame-Options 拒绝
+                .headers(headers -> headers.frameOptions(frameOptions -> frameOptions.sameOrigin()));
+        return http.build();
     }
 }

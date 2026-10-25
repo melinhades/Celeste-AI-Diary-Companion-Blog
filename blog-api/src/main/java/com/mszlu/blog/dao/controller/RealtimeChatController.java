@@ -66,7 +66,7 @@ public class RealtimeChatController {
     /** SSE 订阅。token 通过 query 传递，未登录直接 401 JSON（EventSource 侧会走 onerror 重连） */
     @GetMapping(value = "stream")
     public SseEmitter stream(@RequestParam(value = "token", required = false) String token,
-                             javax.servlet.http.HttpServletResponse response) throws java.io.IOException {
+                             jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
         SysUser user = (token == null || token.isEmpty()) ? null : loginService.checkToken(token);
         if (user == null) {
             // EventSource 的 Accept 只认 text/event-stream，不能返回 Result 对象（会触发 406），
