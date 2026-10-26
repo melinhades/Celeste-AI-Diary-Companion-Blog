@@ -1,7 +1,6 @@
 package com.mszlu.blog.config;
 
 import com.mszlu.blog.handler.LoginIntercepter;
-import com.mszlu.blog.config.UTF8EncodingFilter;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -64,7 +63,10 @@ public class WebMVCConfig implements WebMvcConfigurer {
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         File dir = new File(System.getProperty("user.dir"), "uploads");
-        if (!dir.exists()) dir.mkdirs();
+        if (!dir.exists() && !dir.mkdirs()) {
+            // 目录建不出来后续上传必然 500，启动期直接 fail-fast
+            throw new IllegalStateException("无法创建上传目录: " + dir.getAbsolutePath());
+        }
         registry.addResourceHandler("/uploads/**").addResourceLocations(dir.toURI().toString());
     }
 
@@ -74,6 +76,19 @@ public class WebMVCConfig implements WebMvcConfigurer {
         registrationBean.setFilter(new UTF8EncodingFilter());
         registrationBean.addUrlPatterns("/*"); // 应用于所有路径
         registrationBean.setOrder(1); // 设置过滤器顺序，数字越小优先级越高
+        return registrationBean;
+    }
+
+    /**
+     * 链路追踪过滤器：order=0，先于 UTF8 编码过滤器执行，
+     * 保证整条请求链（含后续过滤器、拦截器、Controller、日志）都能拿到 traceId。
+     */
+    @Bean
+    public FilterRegistrationBean<TraceIdFilter> traceIdFilterRegistrationBean() {
+        FilterRegistrationBean<TraceIdFilter> registrationBean = new FilterRegistrationBean<>();
+        registrationBean.setFilter(new TraceIdFilter());
+        registrationBean.addUrlPatterns("/*");
+        registrationBean.setOrder(0);
         return registrationBean;
     }
 }

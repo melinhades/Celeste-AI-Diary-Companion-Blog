@@ -64,7 +64,8 @@
             ]
         },
         {
-            bg: '#D9EAD3', tr: 'dissolve', dur: 10000, name: 'p3_intro',
+            bg: '#D9EAD3', tr: 'cube3d', dur: 10000, name: 'p3_intro',
+            // 仅第 3 页用 cube3d（berryos.html 的 cubeTo）：2→3 真立方体，其余页不变
             slots: [
                 { slotId: 'p3_title', cls: 't-head-en white', chars: true, stream: true, d: .5,  x: 5.36, y: 11.47, w: 90, max: 28 },
                 { slotId: 'p3_placeholder', kind: 'ph', cls: 'anim-rise', d: 2.5, x: 29.63, y: 21.27, w: 40.76, ratio: 10.87/6.11, t: '本月配图位' },

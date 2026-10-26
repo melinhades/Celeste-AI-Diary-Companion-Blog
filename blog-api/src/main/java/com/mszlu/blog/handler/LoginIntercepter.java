@@ -3,24 +3,23 @@ package com.mszlu.blog.handler;
 import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.toolkit.StringUtils;
 import com.mszlu.blog.dao.pojo.SysUser;
-import com.mszlu.blog.service.LoginService;
+import com.mszlu.blog.service.TokenService;
 import com.mszlu.blog.utils.UserThreadLocal;
 import com.mszlu.blog.vo.Result;
 import com.mszlu.blog.vo.params.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 @Component
 @Slf4j
 public class LoginIntercepter implements HandlerInterceptor {
     @Autowired
-    private LoginService loginService;
+    private TokenService tokenService;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)throws Exception{
@@ -41,7 +40,8 @@ public class LoginIntercepter implements HandlerInterceptor {
         String requestURI = request.getRequestURI();
         log.info("request uri:{}",requestURI);
         log.info("request method:{}",request.getMethod());
-        log.info("token:{}", token);
+        // 安全：完整 token 属于凭证，禁止落日志；只记录是否存在与脱敏前缀
+        log.info("token present:{}", token != null);
         log.info("=================request end===========================");
         if (StringUtils.isBlank(token)) {
             Result result = Result.fail(ErrorCode.NO_LOGIN.getCode(),"未登录");
@@ -49,7 +49,7 @@ public class LoginIntercepter implements HandlerInterceptor {
             response.getWriter().print(JSON.toJSONString(result));
             return false;
         }
-        SysUser sysUser=loginService.checkToken(token);
+        SysUser sysUser=tokenService.checkToken(token);
         if(sysUser==null){
             Result result= Result.fail(ErrorCode.NO_LOGIN.getCode(),"未登录");
             response.setContentType("application/json;charset=utf-8");

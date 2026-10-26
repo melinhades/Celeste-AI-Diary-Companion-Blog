@@ -147,7 +147,7 @@ public class DiaryChatEmotionExtractor {
     }
 
     // ────────────────────────────────────────────────────
-    // ⑤ 内部数据类
+    // ⑤ 内部数据类（CI 环境 Lombok annotation processing 可能不生效，手动 getter/setter）
     // ────────────────────────────────────────────────────
     public static class EmotionResult {
         public String emotionType;
@@ -156,6 +156,7 @@ public class DiaryChatEmotionExtractor {
         public BigDecimal trajectoryScore;
         public String emotionScoreDetail;   // v2 新增：完整 JSON
         public String confidence;           // v2 新增：high/medium/low
+        public String faceEmotion;          // 日记页情绪池（7 选 1），由日记内容推出，而非关键词匹配
 
         public EmotionResult(String emotionType, BigDecimal score, BigDecimal textScore,
                              BigDecimal trajectoryScore, String emotionScoreDetail, String confidence) {
@@ -166,6 +167,21 @@ public class DiaryChatEmotionExtractor {
             this.emotionScoreDetail = emotionScoreDetail;
             this.confidence = confidence;
         }
+
+        public String getEmotionType() { return emotionType; }
+        public void setEmotionType(String emotionType) { this.emotionType = emotionType; }
+        public BigDecimal getScore() { return score; }
+        public void setScore(BigDecimal score) { this.score = score; }
+        public BigDecimal getTextScore() { return textScore; }
+        public void setTextScore(BigDecimal textScore) { this.textScore = textScore; }
+        public BigDecimal getTrajectoryScore() { return trajectoryScore; }
+        public void setTrajectoryScore(BigDecimal trajectoryScore) { this.trajectoryScore = trajectoryScore; }
+        public String getEmotionScoreDetail() { return emotionScoreDetail; }
+        public void setEmotionScoreDetail(String emotionScoreDetail) { this.emotionScoreDetail = emotionScoreDetail; }
+        public String getConfidence() { return confidence; }
+        public void setConfidence(String confidence) { this.confidence = confidence; }
+        public String getFaceEmotion() { return faceEmotion; }
+        public void setFaceEmotion(String faceEmotion) { this.faceEmotion = faceEmotion; }
     }
 
     // ────────────────────────────────────────────────────
@@ -315,6 +331,10 @@ public class DiaryChatEmotionExtractor {
 
         // Plutchik → 前端兼容的 emotionType 输出
         String emotionType = plutchikToFrontendEmotion(plutchikPrimary, valence);
+        JSONObject conflictJson = textAnalysis.getJSONObject("conflict");
+        double conflictScore = conflictJson != null ? conflictJson.getDoubleValue("score") : 0.0;
+        String faceEmotion = plutchikToFaceEmotion(plutchikPrimary, valence,
+                finalScore.doubleValue(), conflictScore);
 
         // R3：detail JSON 长度截断（MySQL TEXT 最大 65535 字节，留安全余量到 60000 字符）
         String detailJson = detail.toJSONString();
@@ -322,12 +342,14 @@ public class DiaryChatEmotionExtractor {
             detailJson = detailJson.substring(0, 60000) + "...[truncated]";
         }
 
-        return new EmotionResult(emotionType,
+        EmotionResult result = new EmotionResult(emotionType,
                 finalScore.setScale(3, RoundingMode.HALF_UP),
                 textScore.setScale(3, RoundingMode.HALF_UP),
                 trajectoryScore.setScale(3, RoundingMode.HALF_UP),
                 detailJson,
                 confidence);
+        result.faceEmotion = faceEmotion;
+        return result;
     }
 
     /** 向后兼容：extract 不带 userId 时（无跨日记趋势） */
@@ -530,7 +552,7 @@ public class DiaryChatEmotionExtractor {
         conflict.put("hidden", "neutral");
         conflict.put("score", 0.0);
 
-        if (text == null || text.length() < 10) return conflict;
+        if (text == null || text.length() < 3) return conflict;
 
         // 规则检测：否定 + 正向词 = 隐含负向；反之亦然
         boolean hasNegation = false;
@@ -988,6 +1010,40 @@ public class DiaryChatEmotionExtractor {
         if ("disgust".equals(plutchikPrimary))       return "愤怒";
         if ("surprise".equals(plutchikPrimary))      return valence > 0 ? "兴奋" : "迷茫";
         return "平静";
+    }
+
+    // ────────────────────────────────────────────────────
+    // Plutchik → 日记页情绪池（7 选 1）
+    // 池内合法值：默认 / 不安 / 惊讶 / 怨恨 / 不开心 / 可爱 / 无语
+    // 依据「读完这篇日记后 Madeline 该用什么表情」推导，而非关键词命中
+    // ────────────────────────────────────────────────────
+    private String plutchikToFaceEmotion(String primary, int valence, double score, double conflict) {
+        if (primary == null) return "默认";
+        // 情绪强度太低：不值得变脸，默认即可（避免为变化而变化）
+        if (score < 0.35) return "默认";
+        // 表里不一：表面平静但内里压着事，用「无语」比直接共情更贴近真实反应
+        if (conflict >= 0.6) return "无语";
+        switch (primary) {
+            case "joy":
+                return score >= 0.55 ? "可爱" : "默认";
+            case "trust":
+                return "默认";
+            case "anticipation":
+                return valence > 0 ? "可爱" : "默认";
+            case "sadness":
+                return "不开心";
+            case "anger":
+                return "怨恨";
+            case "fear":
+                return "不安";
+            case "disgust":
+                return "无语";
+            case "surprise":
+                // 惊讶是稀缺表情：只有确实意外且情绪足够强才给
+                return score >= 0.6 ? "惊讶" : "默认";
+            default:
+                return "默认";
+        }
     }
 
     // ────────────────────────────────────────────────────

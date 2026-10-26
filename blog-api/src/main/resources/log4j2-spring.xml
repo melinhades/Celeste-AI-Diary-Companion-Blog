@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  日志配置：在 Spring Boot 默认控制台输出基础上，增加全链路追踪 traceId。
+  - 格式：时间 [线程] [traceId] 级别 日志器 - 消息
+  - traceId 由 TraceIdFilter 写入 MDC，缺失时输出空串而非 null
+  - 根日志级别 info，异常堆栈完整输出
+-->
+<Configuration status="WARN">
+    <Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout
+                pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId:-}] %-5level %logger{36} - %msg%n"/>
+        </Console>
+    </Appenders>
+    <Loggers>
+        <Root level="info">
+            <AppenderRef ref="Console"/>
+        </Root>
+    </Loggers>
+</Configuration>

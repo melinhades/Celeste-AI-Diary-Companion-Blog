@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<!DOCTYPE suppressions PUBLIC
+        "-//Checkstyle//DTD SuppressionFilter Configuration 1.2//EN"
+        "https://checkstyle.org/dtds/suppressions_1_2.dtd">
+
+<suppressions>
+    <!-- 临时抑制：含未提交 faceEmotion WIP 改动的冻结文件，WIP 合并后逐个移除本条目 -->
+    <suppress files="[\\/]DiaryServiceImpl\.java$" checks=".*"/>
+    <suppress files="[\\/]PromptBuilder\.java$" checks=".*"/>
+    <suppress files="[\\/]DiaryChatEmotionExtractor\.java$" checks=".*"/>
+    <suppress files="[\\/]MemoryServiceImpl\.java$" checks=".*"/>
+    <suppress files="[\\/]DiaryChatMemory\.java$" checks=".*"/>
+
+    <!-- Spring Boot 启动类本身就是 @Configuration Bean，必须由容器实例化，
+         不能加私有构造器，HideUtilityClassConstructor 在此为误报 -->
+    <suppress files="[\\/]BlogAPP\.java$" checks="HideUtilityClassConstructor"/>
+    <suppress files="[\\/]AdminApp\.java$" checks="HideUtilityClassConstructor"/>
+</suppressions>

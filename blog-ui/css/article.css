@@ -125,19 +125,22 @@
         width: 120px; height: 120px;
         background-size: 100% 100%; background-repeat: no-repeat; background-position: center;
         image-rendering: pixelated;
-        animation: loadingRun 0.72s steps(9) infinite;
+        /* 10 帧均分，00 同时放在 0% 与 100%，循环首尾衔接无跳变 */
+        animation: loadingRun 0.8s steps(10) infinite;
         position: relative; z-index: 1;
     }
     @keyframes loadingRun {
         0%   { background-image: url('../celeste-gui/loading/00.png'); }
-        11%  { background-image: url('../celeste-gui/loading/01.png'); }
-        22%  { background-image: url('../celeste-gui/loading/02.png'); }
-        33%  { background-image: url('../celeste-gui/loading/03.png'); }
-        44%  { background-image: url('../celeste-gui/loading/04.png'); }
-        55%  { background-image: url('../celeste-gui/loading/05.png'); }
-        66%  { background-image: url('../celeste-gui/loading/06.png'); }
-        77%  { background-image: url('../celeste-gui/loading/07.png'); }
-        88%  { background-image: url('../celeste-gui/loading/08.png'); }
+        10%  { background-image: url('../celeste-gui/loading/01.png'); }
+        20%  { background-image: url('../celeste-gui/loading/02.png'); }
+        30%  { background-image: url('../celeste-gui/loading/03.png'); }
+        40%  { background-image: url('../celeste-gui/loading/04.png'); }
+        50%  { background-image: url('../celeste-gui/loading/05.png'); }
+        60%  { background-image: url('../celeste-gui/loading/06.png'); }
+        70%  { background-image: url('../celeste-gui/loading/07.png'); }
+        80%  { background-image: url('../celeste-gui/loading/08.png'); }
+        90%  { background-image: url('../celeste-gui/loading/09.png'); }
+        100% { background-image: url('../celeste-gui/loading/00.png'); }
     }
     #articleLoadingOverlay .loading-text {
         margin-top: 20px; color: #ffe36d;

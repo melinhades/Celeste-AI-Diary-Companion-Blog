@@ -20,10 +20,6 @@
     const closeChatBtn = document.getElementById('closeChatBtn');
     const chatAvatar = document.getElementById('chatAvatar');
 
-    const snowCanvas = document.getElementById('snowCanvas');
-    const snowCtx = snowCanvas.getContext('2d');
-    let snowflakes = [];
-    let snowAnimFrame = null;
     // 尺寸完全交由 CSS 属性选择器控制（参照 archives 方案），JS 不再设置内联尺寸
     const PM_SRC = {
         move: 'celeste-gui/madeline-move.gif',
@@ -59,35 +55,7 @@
 
     function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-    // ===================== 雪花 =====================
-    function resizeSnow() { snowCanvas.width = window.innerWidth; snowCanvas.height = window.innerHeight; }
-    function mkFlake() {
-        return { x: Math.random() * snowCanvas.width, y: -10, r: Math.random() * 3 + 1,
-            speed: Math.random() * 1.5 + 0.5, wind: Math.random() * 0.5 - 0.25,
-            opacity: Math.random() * 0.6 + 0.2, swing: Math.random() * Math.PI * 2,
-            swingSpeed: Math.random() * 0.02 + 0.01 };
-    }
-    function initSnow() {
-        snowflakes = [];
-        for (let i = 0; i < 80; i++) { const f = mkFlake(); f.y = Math.random() * snowCanvas.height; snowflakes.push(f); }
-    }
-    function drawSnow() {
-        snowCtx.clearRect(0, 0, snowCanvas.width, snowCanvas.height);
-        for (const f of snowflakes) {
-            f.y += f.speed; f.swing += f.swingSpeed;
-            f.x += Math.sin(f.swing) * 0.5 + f.wind;
-            if (f.y > snowCanvas.height + 10) { f.y = -10; f.x = Math.random() * snowCanvas.width; }
-            if (f.x > snowCanvas.width + 10) f.x = -10;
-            if (f.x < -10) f.x = snowCanvas.width + 10;
-            snowCtx.beginPath();
-            snowCtx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
-            snowCtx.fillStyle = 'rgba(255,255,255,' + f.opacity + ')';
-            snowCtx.fill();
-        }
-        snowAnimFrame = requestAnimationFrame(drawSnow);
-    }
-    function startSnow() { resizeSnow(); initSnow(); drawSnow(); }
-    window.addEventListener('resize', resizeSnow);
+    // ===================== 雪花（实现见 js/snow-bgm.js） =====================
 
     // ===================== 行为树 =====================
     function pmGroundY() {
@@ -553,8 +521,8 @@
             '.pv-actions button:hover{background:rgba(255,227,109,.2);}' +
             '.pv-actions button.pv-reject{border-color:#888;color:#aaa;}' +
             '#polishLoadingOverlay{position:fixed;right:28px;bottom:28px;z-index:2001;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;}' +
-            '.polish-run-anim{width:64px;height:64px;background-size:contain;background-repeat:no-repeat;background-position:center;animation:polishRun .9s steps(1,end) infinite;filter:drop-shadow(0 2px 8px rgba(0,0,0,.5));}' +
-            '@keyframes polishRun{0%{background-image:url("celeste-gui/loading/00.png")}10%{background-image:url("celeste-gui/loading/01.png")}20%{background-image:url("celeste-gui/loading/02.png")}30%{background-image:url("celeste-gui/loading/03.png")}40%{background-image:url("celeste-gui/loading/04.png")}50%{background-image:url("celeste-gui/loading/05.png")}60%{background-image:url("celeste-gui/loading/06.png")}70%{background-image:url("celeste-gui/loading/07.png")}80%{background-image:url("celeste-gui/loading/08.png")}90%{background-image:url("celeste-gui/loading/09.png")}}' +
+            '.polish-run-anim{width:64px;height:64px;background-size:contain;background-repeat:no-repeat;background-position:center;animation:polishRun .9s steps(10) infinite;filter:drop-shadow(0 2px 8px rgba(0,0,0,.5));}' +
+            '@keyframes polishRun{0%{background-image:url("celeste-gui/loading/00.png")}10%{background-image:url("celeste-gui/loading/01.png")}20%{background-image:url("celeste-gui/loading/02.png")}30%{background-image:url("celeste-gui/loading/03.png")}40%{background-image:url("celeste-gui/loading/04.png")}50%{background-image:url("celeste-gui/loading/05.png")}60%{background-image:url("celeste-gui/loading/06.png")}70%{background-image:url("celeste-gui/loading/07.png")}80%{background-image:url("celeste-gui/loading/08.png")}90%{background-image:url("celeste-gui/loading/09.png")}100%{background-image:url("celeste-gui/loading/00.png")}}' +
             '.polish-loading-text{color:#ffe36d;font-size:14px;font-family:"Renogare","CelesteZH",sans-serif;text-align:center;text-shadow:0 1px 4px rgba(0,0,0,.8);}' +
             '.loading-dots::after{content:"";animation:ldDots 1.5s steps(4,end) infinite;}' +
             '@keyframes ldDots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}' +

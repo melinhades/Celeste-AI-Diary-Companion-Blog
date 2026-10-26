@@ -179,10 +179,17 @@ window.CampfireAudio = (function () {
         suspended = true;
     }
     function resume() {
-        if (!suspended) return;
+        // 没挂起过：要么已经点着（无事可做），要么起播被浏览器拦过 / 已熄火 —— 得重新点着，
+        // 否则会出现「面板显示在播、其实一点声都没有」
+        if (!suspended) {
+            if (phase === 'off') return play();
+            return;
+        }
         suspended = false;
         var a = phase === 'intro' ? parts.intro : parts.loop;
-        a.play().catch(function () {});
+        var pr = a.play();
+        if (pr && pr.catch) pr.catch(function () {});
+        return pr;
     }
 
     /* 熄火：静默全停归零（切歌 / 离开页面） */
@@ -234,42 +241,168 @@ window.CampfireAudio = (function () {
     var depthRow = document.getElementById('depthRow');
 
     /* ---------- 全局唯一状态 ---------- */
-    var gVol = volEl ? volEl.value / 100 : 0.9;
-    var cur = null;        // 'cassette' | 'window' | 'waterfall' | SINGLES 的 key
+    var LS = 'cx.';
+    function lsGet(k, dft) {
+        try { var v = localStorage.getItem(LS + k); return v == null ? dft : v; }
+        catch (e) { return dft; }
+    }
+    function lsSet(k, v) {
+        try { localStorage.setItem(LS + k, String(v)); } catch (e) {}
+    }
+    function clamp01(v) {
+        v = parseFloat(v);
+        if (isNaN(v)) return 0;
+        return v < 0 ? 0 : (v > 1 ? 1 : v);
+    }
+
+    var gVol = clamp01(parseFloat(lsGet('vol', 90)) / 100);
+    var muted = lsGet('mute', '0') === '1';
+    var cur = null;        // 'cassette' | 'window' | 'waterfall' | 'campfire' | SINGLES 的 key
     var playing = false;
-    var wind = 'large';
-    var wf = { size: 'big', near: 0.5, depth: 0.5, chans: [] };
+    var armed = false;     // 自动播放被拦，等首次手势
+    var unlockFn = null;   // 已挂上的解锁监听，disarm 时摘掉
+    var wind = WINDS[lsGet('wind', 'large')] ? lsGet('wind', 'large') : 'large';
+    var wf = {
+        size: lsGet('wfSize', 'big') === 'small' ? 'small' : 'big',
+        near: clamp01(parseFloat(lsGet('wfNear', 50)) / 100),
+        depth: clamp01(parseFloat(lsGet('wfDepth', 50)) / 100),
+        chans: [],
+        chansSize: null   // 已建通道对应的尺寸；与 wf.size 不一致时必须重建
+    };
+    var elapsed = 0, clock = null;
+
+    // 静音也走同一个出口：所有音量都乘它，不另存一份状态
+    function effVol() { return muted ? 0 : gVol; }
 
     var amb = new Audio();
     amb.loop = true;
-    amb.volume = gVol;
+    amb.volume = effVol();
 
-    /* ---------- 磁带转动：只要当前源在响，磁带就转 ---------- */
-    var FRAMES = [], FRAME_MS = 90, fi = 0, timer = null;
+    // 传输键 / 开关组集中取一次，下面所有同步都只读这几个引用
+    var winSegs = app.querySelectorAll('[data-win]');
+    var sizeSegs = app.querySelectorAll('[data-size]');
+    var playBtn = document.getElementById('cxPlay');
+    var pauseBtn = document.getElementById('cxPause');
+    var stopBtn = document.getElementById('cxStop');
+    var muteBtn = document.getElementById('cxMute');
+    var nowText = document.getElementById('cxNowText');
+    var timeEl = document.getElementById('cxTime');
+    var deckEl = document.querySelector('.cx-deck');
+
+    // 对准（鼠标悬停）或聚焦在磁带机上时，方向键才归我们调音量
+    var deckHover = false;
+    if (deckEl) {
+        deckEl.addEventListener('pointerenter', function () { deckHover = true; });
+        deckEl.addEventListener('pointerleave', function () { deckHover = false; });
+    }
+    function deckHot() {
+        return deckHover || !!(deckEl && deckEl.contains(document.activeElement));
+    }
+    // 系统开了「减少动态效果」就不转帧，只靠亮灯表示状态
+    var REDUCE = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+    /* ---------- 磁带转动：rAF 驱动（后台标签自动停），帧预解码 ---------- */
+    var FRAMES = [], FRAME_MS = 90, fi = 0, spinRaf = 0, spinLast = 0;
     for (var k = 0; k < 19; k++) FRAMES.push('celeste-collectables/cassette/idle' + (k < 10 ? '0' + k : k) + '.png');
-    function spin(on) {
-        if (on && !timer) {
-            timer = setInterval(function () {
-                fi = (fi + 1) % FRAMES.length;
-                if (tapeImg) tapeImg.src = FRAMES[fi];
-            }, FRAME_MS);
-        } else if (!on && timer) {
-            clearInterval(timer); timer = null;
-        }
-        if (tapeBox) tapeBox.classList.toggle('playing', !!on);
+    // 先把 19 帧解好：否则每换一帧都可能掉一次解码，转动会一顿一顿
+    for (var pk = 0; pk < FRAMES.length; pk++) {
+        var pre = new Image();
+        pre.src = FRAMES[pk];
+        if (pre.decode) pre.decode().catch(function () {});
     }
-    function say(text, hot) {
-        if (!nowEl) return;
-        nowEl.textContent = text;
-        nowEl.classList.toggle('on', !!hot);
+    function spinStep(ts) {
+        if (!spinLast) spinLast = ts;
+        if (ts - spinLast >= FRAME_MS) {
+            spinLast = ts;
+            fi = (fi + 1) % FRAMES.length;
+            if (tapeImg) tapeImg.src = FRAMES[fi];
+        }
+        spinRaf = requestAnimationFrame(spinStep);
+    }
+    function spin(on) {
+        if (tapeBox) tapeBox.classList.toggle('playing', !!on);
+        if (REDUCE) return;   // 尊重系统设置：不转帧（停在当前帧）
+        if (on && !spinRaf) {
+            spinLast = 0;
+            spinRaf = requestAnimationFrame(spinStep);
+        } else if (!on && spinRaf) {
+            cancelAnimationFrame(spinRaf); spinRaf = 0;
+        }
     }
 
-    /* ---------- 当前源高亮 ---------- */
+    /* ---------- LCD：文案 + 计时 ---------- */
+    function say(text, hot) {
+        if (nowText) nowText.textContent = text;
+        else if (nowEl) nowEl.textContent = text;
+        if (nowEl) nowEl.classList.toggle('on', !!hot);
+    }
+    function fmtClock(s) {
+        var m = Math.floor(s / 60), r = s % 60;
+        return (m < 10 ? '0' : '') + m + ':' + (r < 10 ? '0' : '') + r;
+    }
+    function paintClock() { if (timeEl) timeEl.textContent = fmtClock(elapsed); }
+    function stopClock() { if (clock) { clearInterval(clock); clock = null; } }
+    function startClock() {
+        stopClock();
+        clock = setInterval(function () { elapsed++; paintClock(); }, 1000);
+    }
+
+    /* ---------- 状态 → UI：单向同步的唯一出口 ---------- */
+    function paintRange(el) {
+        if (!el) return;
+        var min = parseFloat(el.min || 0), max = parseFloat(el.max || 100);
+        var p = max > min ? (parseFloat(el.value) - min) / (max - min) : 0;
+        el.style.setProperty('--p', (p * 100).toFixed(1) + '%');
+    }
     function mark() {
         var roots = app.querySelectorAll('[data-src],[data-scene]');
         for (var i = 0; i < roots.length; i++) {
             var key = roots[i].getAttribute('data-src') || roots[i].getAttribute('data-scene');
-            roots[i].classList.toggle('on', key === cur);
+            var on = !!cur && key === cur;
+            roots[i].classList.toggle('on', on);
+            roots[i].classList.toggle('is-live', on && playing);
+            if (roots[i].hasAttribute('data-src')) {
+                roots[i].setAttribute('aria-pressed', on ? 'true' : 'false');
+            }
+        }
+    }
+    function syncSegs() {
+        var i, on;
+        for (i = 0; i < winSegs.length; i++) {
+            on = winSegs[i].getAttribute('data-win') === wind;
+            winSegs[i].classList.toggle('on', on);
+            winSegs[i].setAttribute('aria-pressed', on ? 'true' : 'false');
+        }
+        for (i = 0; i < sizeSegs.length; i++) {
+            on = sizeSegs[i].getAttribute('data-size') === wf.size;
+            sizeSegs[i].classList.toggle('on', on);
+            sizeSegs[i].setAttribute('aria-pressed', on ? 'true' : 'false');
+        }
+    }
+    function syncUI() {
+        app.classList.toggle('playing', playing);
+        if (playBtn) playBtn.classList.toggle('is-on', playing);
+        if (pauseBtn) pauseBtn.classList.toggle('is-on', !playing && !!cur);
+        if (muteBtn) {
+            muteBtn.classList.toggle('on', muted);
+            muteBtn.setAttribute('aria-pressed', muted ? 'true' : 'false');
+        }
+        mark();
+        paintRange(volEl); paintRange(nearEl); paintRange(depthEl);
+        if (volNum) volNum.textContent = Math.round(gVol * 100);
+        syncDepthEnabled();
+    }
+
+    /* 电平柱只建一次，状态切换靠 class */
+    function buildEq() {
+        var rows = app.querySelectorAll('[data-src], .sc-head');
+        for (var i = 0; i < rows.length; i++) {
+            if (rows[i].querySelector('.sr-eq')) continue;
+            var eq = document.createElement('span');
+            eq.className = 'sr-eq';
+            eq.setAttribute('aria-hidden', 'true');
+            eq.innerHTML = '<i></i><i></i><i></i>';
+            rows[i].appendChild(eq);
         }
     }
 
@@ -296,28 +429,39 @@ window.CampfireAudio = (function () {
     }
     function wfTeardown() {
         for (var i = 0; i < wf.chans.length; i++) {
-            wf.chans[i].a.pause();
-            wf.chans[i].a.src = '';
+            var a = wf.chans[i].a;
+            a.pause();
+            // 不能写 a.src = ''：空串会解析成当前页面地址，浏览器会当媒体去加载，控制台报错
+            if (a.removeAttribute) a.removeAttribute('src');
+            if (a.load) a.load();
         }
         wf.chans = [];
+        wf.chansSize = null;
     }
-    function wfBuild() {
+    // autoplay：建完通道是否立即出声。切大小/首次进入传当前是否在播，改档不留声但也不丢状态
+    function wfBuild(autoplay) {
         wfTeardown();
         var files = wfFiles();
         for (var i = 0; i < files.length; i++) {
             var a = new Audio(AMB + files[i].f);
             a.loop = true;
-            a.volume = wfGain(files[i].key) * gVol;
+            a.volume = wfGain(files[i].key) * effVol();
             wf.chans.push({ key: files[i].key, a: a });
         }
+        wf.chansSize = wf.size;
+        if (autoplay) wfPlay();
     }
     function wfApplyGains() {
+        var v = effVol();
         for (var i = 0; i < wf.chans.length; i++) {
-            wf.chans[i].a.volume = wfGain(wf.chans[i].key) * gVol;
+            wf.chans[i].a.volume = wfGain(wf.chans[i].key) * v;
         }
     }
     function wfPlay() {
-        for (var i = 0; i < wf.chans.length; i++) wf.chans[i].a.play().catch(function () {});
+        for (var i = 0; i < wf.chans.length; i++) {
+            var pr = wf.chans[i].a.play();
+            if (pr && pr.catch) pr.catch(function (err) { blocked(err); });
+        }
     }
     function wfPause(reset) {
         for (var i = 0; i < wf.chans.length; i++) {
@@ -346,52 +490,103 @@ window.CampfireAudio = (function () {
         amb.pause();
         wfPause(false);
     }
+    
+    // 单文件源（破窗/其他场景）统一走这两个装载入口：换文件与“要不要出声”分开
+    function playAmb() {
+        var pr = amb.play();
+        if (pr && pr.catch) pr.catch(function (err) { blocked(err); });
+        return pr;
+    }
+    function loadWindow(autoplay) {
+        amb.src = AMB + WINDS[wind].f;
+        try { amb.currentTime = 0; } catch (e) {}
+        if (autoplay) playAmb();
+    }
+    function loadSingle(name) {
+        amb.src = AMB + SINGLES[name].f;
+        try { amb.currentTime = 0; } catch (e) {}
+        playAmb();
+    }
+    
+    /* 自动播放被拦：只认 NotAllowedError；用户主动暂停引发的 AbortError 不算 */
+    function blocked(err) {
+        if (err && err.name && err.name !== 'NotAllowedError') return;
+        playing = false;
+        spin(false);
+        stopClock();
+        say('轻触任意位置 · 开始播放', false);
+        syncUI();
+        armUnlock();
+    }
+    function disarm() {
+        armed = false;
+        if (!unlockFn) return;
+        window.removeEventListener('pointerdown', unlockFn, true);
+        window.removeEventListener('keydown', unlockFn, true);
+        unlockFn = null;
+    }
+    function armUnlock() {
+        if (armed) return;
+        armed = true;
+        unlockFn = function (e) {
+            disarm();
+            // 点在音源列表上的话，交给它自己的 click，别抢它
+            if (e && e.target && e.target.closest && e.target.closest('#cxApp')) return;
+            doPlay();
+        };
+        window.addEventListener('pointerdown', unlockFn, true);
+        window.addEventListener('keydown', unlockFn, true);
+    }
+    
+    function describeCur() {
+        if (cur === 'cassette') return 'SIDE A · 磁带';
+        if (cur === 'campfire') return '篝火 · 哔剥作响';
+        if (cur === 'window') return '破窗 · ' + WINDS[wind].n;
+        if (cur === 'waterfall') return '瀑布 · ' + wfDescribe();
+        return SINGLES[cur] ? SINGLES[cur].n : '待机';
+    }
+    
     function activate(name) {
         silenceAll();
         cur = name;
+        lsSet('src', name);
         playing = true;
+        elapsed = 0; paintClock(); startClock();
         spin(true);
         mark();
         if (name === 'cassette') {
             var pr = window.CassetteAudio.enterTape();
             say('SIDE A · 磁带', true);
-            return pr;
-        }
-        if (name === 'campfire') {
+            if (pr && pr.catch) pr.catch(function (err) { blocked(err); });
+        } else if (name === 'campfire') {
             var pr2 = window.CampfireAudio.play();
             say('篝火 · 哔剥作响', true);
-            return pr2;
-        }
-        if (name === 'window') {
-            amb.src = AMB + WINDS[wind].f;
-            amb.currentTime = 0;
-            amb.play().catch(function () {});
+            if (pr2 && pr2.catch) pr2.catch(function (err) { blocked(err); });
+        } else if (name === 'window') {
+            loadWindow(true);
             say('破窗 · ' + WINDS[wind].n, true);
-            return null;
-        }
-        if (name === 'waterfall') {
-            wfBuild();
-            wfPlay();
+        } else if (name === 'waterfall') {
+            wfBuild(true);
             wfSyncTag();
             say('瀑布 · ' + wfDescribe(), true);
-            return null;
+        } else {
+            loadSingle(name);
+            say(SINGLES[name].n, true);
         }
-        var s = SINGLES[name];
-        amb.src = AMB + s.f;
-        amb.currentTime = 0;
-        amb.play().catch(function () {});
-        say(s.n, true);
-        return null;
+        syncUI();
     }
+    
     function doPause() {
         if (!playing) return;
-        // 磁带机里磁带没有「收尾」：PAUSE 只是静默挂起 loop，再按 PLAY 续播，不碰 intro/outro
+        // 磁带机里磁带没有“收尾”：PAUSE 只是静默挂起 loop，再按 PLAY 续播，不碰 intro/outro
         if (cur === 'cassette') window.CassetteAudio.suspendTape();
         else if (cur === 'campfire') window.CampfireAudio.suspend();
         else if (cur === 'waterfall') wfPause(false);
         else amb.pause();
-        playing = false; spin(false);
+        playing = false;
+        spin(false); stopClock();
         say('暂停 · 再点 ▶ 继续', false);
+        syncUI();
     }
     function doStop() {
         if (!cur) return;
@@ -400,47 +595,70 @@ window.CampfireAudio = (function () {
         else if (cur === 'campfire') window.CampfireAudio.halt();
         else if (cur === 'waterfall') wfPause(true);
         else { amb.pause(); amb.currentTime = 0; }
-        playing = false; spin(false);
+        playing = false;
+        spin(false); stopClock();
+        elapsed = 0; paintClock();
         say('停了 · 按 ▶ 让磁带继续转', false);
+        flashStop();
+        syncUI();
     }
     function doPlay() {
+        disarm();
         if (playing) return;
-        if (!cur) { bootCassette(); return; }
-        playing = true; spin(true);
+        if (!cur) { activate('cassette'); return; }
+        playing = true;
+        spin(true); startClock();
         if (cur === 'cassette') window.CassetteAudio.resumeTape();
         else if (cur === 'campfire') window.CampfireAudio.resume();
-        else if (cur === 'waterfall') wfPlay();
-        else amb.play().catch(function () {});
-        if (cur === 'waterfall') say('瀑布 · ' + wfDescribe(), true);
-        else if (cur === 'window') say('破窗 · ' + WINDS[wind].n, true);
-        else if (cur === 'cassette') say('SIDE A · 磁带', true);
-        else if (cur === 'campfire') say('篝火 · 哔剥作响', true);
-        else say(SINGLES[cur].n, true);
+        else if (cur === 'waterfall') {
+            // 暂停期间换过大小：必须先按新尺寸重建通道，否则播的是旧那套
+            if (wf.chansSize !== wf.size) wfBuild(false);
+            wfPlay();
+        } else if (cur === 'window') {
+            // 暂停期间换过风档：按当前 wind 重新装文件
+            loadWindow(true);
+        } else {
+            playAmb();
+        }
+        say(describeCur(), true);
+        syncUI();
     }
-
-    /* ---------- 默认磁带：进页面就放；被浏览器拦截时，首次轻触补播 ---------- */
-    var armed = false;
-    function armUnlock() {
-        if (armed) return;
-        armed = true;
-        say('轻触任意位置 · 磁带开始转动', false);
-        var unlock = function () {
-            armed = false;
-            var pr = window.CassetteAudio.play();
-            if (pr && pr.catch) pr.catch(function () {});
-            say('SIDE A · 磁带', true);
-            window.removeEventListener('pointerdown', unlock);
-            window.removeEventListener('keydown', unlock);
-        };
-        window.addEventListener('pointerdown', unlock);
-        window.addEventListener('keydown', unlock);
+    
+    // STOP 不是持续态，只闪 0.4s
+    var stopFlash = 0;
+    function flashStop() {
+        if (!stopBtn) return;
+        stopBtn.classList.add('is-on');
+        clearTimeout(stopFlash);
+        stopFlash = setTimeout(function () { stopBtn.classList.remove('is-on'); }, 420);
     }
-    function bootCassette() {
-        cur = 'cassette'; playing = true;
-        spin(true); mark();
-        var pr = window.CassetteAudio.play();
-        say('SIDE A · 磁带', true);
-        if (pr && pr.catch) pr.catch(function () { armUnlock(); });
+    
+    /* ---------- 音量：一条口径管到底（静音 = 乘 0） ---------- */
+    function applyVolumes() {
+        var v = effVol();
+        amb.volume = v;
+        window.CassetteAudio.setVolume(v);
+        window.CampfireAudio.setVolume(v * 0.38);   // 篝火做底噪，永远压一头
+        wfApplyGains();
+        if (volEl) volEl.value = Math.round(gVol * 100);
+        if (volNum) volNum.textContent = Math.round(gVol * 100);
+        paintRange(volEl);
+    }
+    function unmuteIfNeeded() {
+        if (muted && gVol > 0) { muted = false; lsSet('mute', '0'); }
+    }
+    function setVol(v) {
+        gVol = clamp01(v);
+        unmuteIfNeeded();
+        lsSet('vol', Math.round(gVol * 100));
+        applyVolumes();
+        syncUI();
+    }
+    function toggleMute() {
+        muted = !muted;
+        lsSet('mute', muted ? '1' : '0');
+        applyVolumes();
+        syncUI();
     }
 
     /* ---------- 事件：单曲 / 磁带行 ---------- */
@@ -453,67 +671,93 @@ window.CampfireAudio = (function () {
     });
 
     /* ---------- 事件：破窗分段开关 ---------- */
-    var winSegs = app.querySelectorAll('[data-win]');
     for (var wi = 0; wi < winSegs.length; wi++) {
         winSegs[wi].addEventListener('click', function () {
             wind = this.getAttribute('data-win');
-            for (var j = 0; j < winSegs.length; j++) winSegs[j].classList.toggle('on', winSegs[j] === this);
+            lsSet('wind', wind);
+            syncSegs();
             if (winTag) winTag.textContent = WINDS[wind].n;
-            if (cur !== 'window') activate('window');
-            else if (playing) {
-                amb.src = AMB + WINDS[wind].f;
-                amb.currentTime = 0;
-                amb.play().catch(function () {});
-                say('破窗 · ' + WINDS[wind].n, true);
-            }
+            if (cur !== 'window') { activate('window'); return; }
+            // 关键：不论当前是不是在播，都要把文件换成新那档
+            loadWindow(playing);
+            if (playing) say('破窗 · ' + WINDS[wind].n, true);
+            syncUI();
         });
     }
 
     /* ---------- 事件：瀑布大小开关 ---------- */
-    var sizeSegs = app.querySelectorAll('[data-size]');
     for (var si = 0; si < sizeSegs.length; si++) {
         sizeSegs[si].addEventListener('click', function () {
             var size = this.getAttribute('data-size');
             if (size === wf.size) return;
             wf.size = size;
-            for (var j = 0; j < sizeSegs.length; j++) sizeSegs[j].classList.toggle('on', sizeSegs[j] === this);
+            lsSet('wfSize', size);
+            syncSegs();
             syncDepthEnabled();
             wfSyncTag();
-            if (cur !== 'waterfall') activate('waterfall');
-            else if (playing) { wfBuild(); wfPlay(); say('瀑布 · ' + wfDescribe(), true); }
+            if (cur !== 'waterfall') { activate('waterfall'); return; }
+            // 关键：重建通道；在播就接上出声，暂停中就只换好等着
+            wfBuild(playing);
+            if (playing) say('瀑布 · ' + wfDescribe(), true);
+            syncUI();
         });
     }
 
     /* ---------- 事件：瀑布推子（实时交叉渐变；拖推子本身也是手势，可直接起播） ---------- */
-    nearEl.addEventListener('input', function () {
-        wf.near = nearEl.value / 100;
+    if (nearEl) nearEl.addEventListener('input', function () {
+        wf.near = clamp01(parseFloat(nearEl.value) / 100);
+        lsSet('wfNear', nearEl.value);
+        paintRange(nearEl);
         if (cur !== 'waterfall') { activate('waterfall'); return; }
         wfApplyGains();
         wfSyncTag();
         if (playing) say('瀑布 · ' + wfDescribe(), true);
     });
-    depthEl.addEventListener('input', function () {
-        wf.depth = depthEl.value / 100;
+    if (depthEl) depthEl.addEventListener('input', function () {
+        wf.depth = clamp01(parseFloat(depthEl.value) / 100);
+        lsSet('wfDepth', depthEl.value);
+        paintRange(depthEl);
         if (cur !== 'waterfall') { activate('waterfall'); return; }
         wfApplyGains();
         wfSyncTag();
         if (playing) say('瀑布 · ' + wfDescribe(), true);
     });
 
-    /* ---------- 传输键 / 音量 ---------- */
-    var playBtn = document.getElementById('cxPlay');
-    var pauseBtn = document.getElementById('cxPause');
-    var stopBtn = document.getElementById('cxStop');
+    /* ---------- 传输键 / 音量 / 静音 ---------- */
     if (playBtn) playBtn.addEventListener('click', doPlay);
     if (pauseBtn) pauseBtn.addEventListener('click', doPause);
     if (stopBtn) stopBtn.addEventListener('click', doStop);
+    if (muteBtn) muteBtn.addEventListener('click', toggleMute);
     if (volEl) volEl.addEventListener('input', function () {
-        gVol = volEl.value / 100;
-        amb.volume = gVol;
-        wfApplyGains();
-        window.CassetteAudio.setVolume(gVol);
-        window.CampfireAudio.setVolume(gVol * 0.38);   // 篝火做底噪，永远压一头，不跟主声抢
-        if (volNum) volNum.textContent = volEl.value;
+        gVol = clamp01(parseFloat(volEl.value) / 100);
+        unmuteIfNeeded();                   // 拖音量本身就是“我要听见”
+        lsSet('vol', Math.round(gVol * 100));
+        applyVolumes();
+        syncUI();
+    });
+
+    /* ---------- 键盘：空格 / M / ↑↓ ---------- */
+    document.addEventListener('keydown', function (e) {
+        var t = e.target;
+        var tag = t && t.tagName;
+        // 焦点在表单控件里时不抢键（方向键要留给 range 原生调值）
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+        var onBtn = tag === 'BUTTON' || tag === 'A' || (t && t.closest && t.closest('button, a'));
+        if (e.code === 'Space' || e.key === ' ') {
+            // 焦点在按钮/链接上：交给原生 Space 触发它自己的 click，
+            // 否则 Tab 到音源行再按空格会被误解成“播放/暂停”
+            if (onBtn) return;
+            e.preventDefault();
+            if (playing) doPause(); else doPlay();
+        } else if (e.key === 'm' || e.key === 'M') {
+            e.preventDefault();
+            toggleMute();
+        } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            // 只在对着磁带机时接管上下键，不然会抢掉页面本身的滚动
+            if (!deckHot()) return;
+            e.preventDefault();
+            setVol(gVol + (e.key === 'ArrowUp' ? 0.05 : -0.05));
+        }
     });
 
     // 离开页面：静默收尾，别让声音跟着走
@@ -522,10 +766,28 @@ window.CampfireAudio = (function () {
         window.CampfireAudio.halt();
         amb.pause();
         wfPause(false);
+        stopClock();
     });
 
-    syncDepthEnabled();
-    wfSyncTag();
-    window.CampfireAudio.setVolume(gVol * 0.38);
-    bootCassette();
+    /* ---------- 启动：先复原上次的音量/档位，再开启音源 ---------- */
+    function restoreUI() {
+        if (volEl) volEl.value = Math.round(gVol * 100);
+        if (nearEl) nearEl.value = Math.round(wf.near * 100);
+        if (depthEl) depthEl.value = Math.round(wf.depth * 100);
+        if (winTag) winTag.textContent = WINDS[wind].n;
+        syncSegs();
+        syncDepthEnabled();
+        wfSyncTag();
+    }
+    function boot() {
+        buildEq();
+        restoreUI();
+        applyVolumes();
+        var last = lsGet('src', 'cassette');
+        var known = last === 'cassette' || last === 'campfire' || last === 'window' ||
+                    last === 'waterfall' || !!SINGLES[last];
+        activate(known ? last : 'cassette');
+        paintClock();
+    }
+    boot();
 })();

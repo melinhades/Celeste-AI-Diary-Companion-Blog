@@ -455,7 +455,7 @@ public class DiaryServiceImpl implements DiaryService {
      * 与 v0 同一套 SSE 事件帧协议（emotion/delta/done/silent/error），前端无需改解析逻辑。
      */
     @Override
-    public void companionStream(CompanionParam param, javax.servlet.http.HttpServletResponse response) {
+    public void companionStream(CompanionParam param, jakarta.servlet.http.HttpServletResponse response) {
         SysUser user = UserThreadLocal.get();
         if (user == null) {
             try { response.setStatus(400); response.setContentType("application/json;charset=UTF-8");
@@ -464,8 +464,10 @@ public class DiaryServiceImpl implements DiaryService {
         }
         String userId = user.getId();
         String draftSnippet = param.getDraft() == null ? "" : param.getDraft().trim();
-        String sessionId = param.getSessionId();
-        if (sessionId == null || sessionId.isBlank()) sessionId = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        String rawSid = param.getSessionId();
+        String sessionId = (rawSid == null || rawSid.isBlank())
+                ? UUID.randomUUID().toString().replace("-", "").substring(0, 16)
+                : rawSid;
 
         // —— 中断入口：如果前端传了 interrupt=true，直接标记中断并返回（新请求不启动生成） ——
         if (Boolean.TRUE.equals(param.getInterrupt()) || "interrupt".equals(param.getTriggerType())) {
@@ -479,6 +481,33 @@ public class DiaryServiceImpl implements DiaryService {
                   response.getWriter().write("{\"success\":false,\"code\":400,\"msg\":\"草稿为空\"}"); } catch (Exception ignored) {}
             return;
         }
+
+        // 决策锁：同一会话只允许一轮回复在跑。她一旦决定开口，就冻结这一版稿本、专心说完；
+        // 期间前端不再发新请求，多标签页/网络重试也在这里被挡掉，不再重复调用 AI。
+        if (!interruptManager.tryAcquireReply(sessionId)) {
+            try {
+                response.setContentType("text/event-stream;charset=UTF-8");
+                response.setHeader("Cache-Control", "no-cache");
+                response.setHeader("X-Accel-Buffering", "no");
+                sseEvent(response, "busy", "");
+                sseEvent(response, "done", "{\"busy\":true,\"sessionId\":\"" + sessionId + "\"}");
+            } catch (Exception ignored) {}
+            return;
+        }
+        try {
+            doCompanionReply(param, response, userId, draftSnippet, sessionId);
+        } finally {
+            interruptManager.releaseReply(sessionId);
+        }
+    }
+
+    /**
+     * companionStream 的主体：拿到「决策锁」后执行。
+     * 整轮只使用入口处冻结的 draftSnippet，不再回头看用户后续改动；
+     * 任何返回路径（静默/中断/503/空文本）都由外层 finally 释放锁。
+     */
+    private void doCompanionReply(CompanionParam param, jakarta.servlet.http.HttpServletResponse response,
+                                  String userId, String draftSnippet, String sessionId) {
 
         // === v1 扩展：会话记忆 ===
         long t0 = System.currentTimeMillis();
@@ -516,15 +545,14 @@ public class DiaryServiceImpl implements DiaryService {
         systemPrompt.append("\n\n【本轮上下文（供你参考，直接响应）】\n")
                 .append("- 用户情绪：").append(emotion.getEmotionType())
                 .append("，强度 ").append(String.format("%.2f", emotion.getScore().doubleValue())).append("\n")
+                .append("- 你此刻的表情倾向：").append(emotion.getFaceEmotion())
+                .append("（读完这篇日记后的自然反应，用 [m:表情] 标记落在句首；觉得不对可以改成别的）\n")
                 .append("- 用户意图：").append(intent).append("\n")
                 .append("- 反应策略参考：")
                 .append(intentStrategy(intent)).append("\n");
 
-        // 羽毛联动
+        // 羽毛：不再硬注入提示词（显得死板），改由知识库 source=lore 在需要时自然检索命中；此处只保留标记用于日志
         boolean featherTriggered = Boolean.TRUE.equals(param.getFeatherTriggered());
-        if (featherTriggered) {
-            systemPrompt.append("- 提示：用户本次保存触发了羽毛，你可以自然地提一句（不要生硬）。\n");
-        }
 
         // === v1 扩展：用记忆层的 buildMessages 组装完整消息列表 ===
         List<AiMessage> messages = chatMemory.buildMessages(
@@ -708,7 +736,7 @@ public class DiaryServiceImpl implements DiaryService {
     }
 
     /** 写一个 SSE 事件帧：event: <name>\n[data: ...]\n\n。多行 data 自动按 \n 拆分，兼容 \r\n。 */
-    private void sseEvent(javax.servlet.http.HttpServletResponse response, String event, String data)
+    private void sseEvent(jakarta.servlet.http.HttpServletResponse response, String event, String data)
             throws java.io.IOException {
         java.io.PrintWriter w = response.getWriter();
         w.write("event: ");

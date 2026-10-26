@@ -1,13 +1,4 @@
-    // BGM
-    const bgmPlayer = document.getElementById('bgmPlayer');
-    const savedTime = parseFloat(localStorage.getItem('bgmTime') || '0');
-    if (savedTime > 0) bgmPlayer.currentTime = savedTime;
-    bgmPlayer.volume = 0.25;
-    bgmPlayer.play().catch(() => {});
-    setInterval(() => { localStorage.setItem('bgmTime', bgmPlayer.currentTime); }, 2000);
-    function tryPlayBGM() { bgmPlayer.play().then(() => { document.removeEventListener('click', tryPlayBGM); document.removeEventListener('keydown', tryPlayBGM); }).catch(() => {}); }
-    document.addEventListener('click', tryPlayBGM);
-    document.addEventListener('keydown', tryPlayBGM);
+    // BGM 由 js/snow-bgm.js 统一提供
 
     if (!localStorage.getItem('token')) {
         showToast('Please login first', 'error');

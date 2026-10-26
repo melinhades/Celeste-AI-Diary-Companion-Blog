@@ -1,5 +1,30 @@
-    // 已登录直接跳转（在 Vue 挂载前执行，避免无谓渲染）
-    if (localStorage.getItem('token')) location.href = 'index.html';
+    // 已登录直接跳转（在 Vue 挂载前执行，避免无谓渲染）。
+    // 必须先让服务端校验 token：只看 localStorage 里有没有 token，会让过期/残留 token
+    // 把 login.html 立刻弹回 index，而 auth.js 又因缺 nickname 显示「登录」按钮，
+    // 用户表现为点登录一直停在 index、进不去登录页。
+    (function () {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        // 校验期间隐藏整页：已登录用户等请求返回后直接跳走，看不到登录表单闪烁；
+        // 校验失败/网络错误时立刻恢复显示
+        document.documentElement.style.visibility = 'hidden';
+        api('/users/currentUser', 'GET', null, 3000).then(res => {
+            const u = res && res.success ? (res.data || {}) : null;
+            if (!u) {
+                document.documentElement.style.visibility = '';
+                // 仅服务端明确拒绝才清凭据；后端没起（网络错误）时保留，避免误登出
+                if (!(res && res.msg === '网络错误')) {
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('nickname');
+                }
+                return;
+            }
+            // 补回昵称：历史残留数据可能只有 token 没有 nickname，否则首页头部仍显示未登录
+            const name = u.nickname || u.account;
+            if (name) localStorage.setItem('nickname', name);
+            location.href = 'index.html';
+        });
+    })();
 
     // 记住我：回填账号（初始值传入 Vue setup）
     // 明信片同款出场（Vue 不接管 .login-box 根的 class 属性，vanilla 操作仍生效）

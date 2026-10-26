@@ -226,12 +226,19 @@ public class PromptBuilder {
              + "  \"energy\": \"high或medium或low\",\n"
              + "  \"events\": [\"日记里真实发生或提到的具体事件\"],\n"
              + "  \"concern\": \"用户当前挂心、想解决或在意的事，没有就留空字符串\",\n"
-             + "  \"keySentence\": \"日记里最能体现主要情绪的原文句子，原样摘录，不超过30字\"\n"
+             + "  \"keySentence\": \"日记里最能体现主要情绪的原文句子，原样摘录，不超过30字\",\n"
+             + "  \"faceEmotion\": \"Madeline 该用哪张脸面对写这篇日记的人\"\n"
              + "}\n"
              + "【分析准则】\n"
              + "- emotions 给 2-4 种最主要的情绪，按占比从高到低，percent 总和 100；\n"
              + "  只能从这 10 个里选：开心、平静、期待、满足、不安、悲伤、孤独、愤怒、惊讶、疲惫；\n"
              + "  都不贴切时选「最接近的一个」，别造新词。\n"
+             + "- faceEmotion：读完这篇日记后，Madeline 脸上该是什么表情。只能从这 7 个里选：\n"
+             + "  默认、不安、惊讶、怨恨、不开心、可爱、无语。\n"
+             + "  判断的是「她听完这段话的反应」，不是照抄上面的情绪名：\n"
+             + "  默认=平静倾听或普通日常；不安=对方正难受/恐慌/撑不住了；惊讶=对方说了意想不到的事；\n"
+             + "  怨恨=对方被冒犯或愤怒；不开心=低落、疲惫、孤独；可爱=开心、雀跃、撒娇、被逗笑；\n"
+             + "  无语=荒诞、无语、吐槽、自我调侃。拿不准就用「默认」，别为了变化而变化。\n"
              + "- intensity：整体情绪强烈度，1=平如止水，5=情绪风暴。\n"
              + "- valence：整体走向，positive/neutral/negative 三选一。\n"
              + "- energy：当下精力状态，high/medium/low 三选一。\n"
@@ -274,6 +281,10 @@ public class PromptBuilder {
             String concern = obj.getString("concern");
             if (concern != null && !concern.isEmpty()) {
                 sb.append("- 还放不下：").append(concern).append("\n");
+            }
+            String faceEmotion = obj.getString("faceEmotion");
+            if (faceEmotion != null && !faceEmotion.isEmpty()) {
+                sb.append("- 你的表情：").append(faceEmotion).append("\n");
             }
             return sb.toString();
         } catch (Exception e) {
@@ -413,8 +424,11 @@ public class PromptBuilder {
         sb.append("- Grounded: concrete and bodily — breath, tired legs, shaking hands — like someone who actually climbed, not a motivational speaker.\n");
         sb.append("- Kind: land on kindness, the calm 'okay, one more step', not hype.\n\n");
 
-        sb.append("## Map the feeling to Celeste imagery (use at most ONE)\n");
-        sb.append("setbacks -> falling; persistence -> kept climbing; anxiety -> chest tight, can't breathe; self-doubt -> that voice in your head (her); self-acceptance -> stopped fighting her; friends -> someone walked with you; rest -> staying at the resort; new start -> a new area; small joy -> found a strawberry; calm -> the feather; loss -> the bird flew away.\n\n");
+        sb.append("## Map the feeling to an image — grounded in what they wrote, use at most ONE\n");
+        sb.append("Prefer a concrete detail from their own entry (the thing, place, person, or body sensation they actually mentioned).\n");
+        sb.append("Only when the entry gives you nothing concrete, fall back to Celeste imagery:\n");
+        sb.append("setbacks -> falling; persistence -> kept climbing; anxiety -> chest tight, can't breathe; self-doubt -> that voice in your head (her); self-acceptance -> stopped fighting her; friends -> someone walked with you; rest -> staying at the resort; new start -> a new area; small joy -> found a strawberry; calm -> still water at the bottom of the mountain; loss -> the bird flew away.\n");
+        sb.append("Never reach for mountain imagery just to sound like Celeste.\n\n");
 
         sb.append("## Style rules\n");
         sb.append("- Write TO the user but like talking to yourself — if you couldn't say it to yourself, don't write it.\n");
@@ -450,10 +464,15 @@ public class PromptBuilder {
             sb.append("Good day with friends -> 'Someone walked with you today, and I heard you laughing again. Days like that make the mountain smaller. Remember this when it steepens.'\n");
             sb.append("Anxious, can't sleep -> 'That voice in your head is loud tonight. Mine too, some nights. You don't have to win — just breathe. Tomorrow we keep going.'\n");
         } else {
-            sb.append("The user didn't write a diary entry yesterday.\n\n");
+            sb.append("The user didn't write a diary entry yesterday.\n");
+            if (emotionNote != null && !emotionNote.trim().isEmpty()) {
+                sb.append("Here is what they have been carrying recently (Chinese; use it only as background, never mention analysis):\n")
+                  .append(emotionNote).append("\n");
+            }
             sb.append("Write a short postcard message for ").append(userName).append(" this morning.\n")
-              .append("- A quiet, warm greeting for a new day; don't ask why they didn't write\n")
-              .append("- Include ONE light image: climbing, mountains, snow, wind or the feather\n")
+              .append("- If recent context is given above, quietly acknowledge the mood they've been in — don't ask why they didn't write\n")
+              .append("- If there is no recent context either, just a quiet, warm greeting for a new day\n")
+              .append("- Include ONE light image, and only one: something from their recent life if present above, otherwise climbing, mountains, snow or wind\n")
               .append("- Same voice rules: no hype, no exclamation marks, calm and earnest\n")
               .append("- LENGTH (hard limit): 2-3 short sentences, around 23 words total (18-28), NEVER more than 30\n")
               .append("- ALL IN ENGLISH, do not use any Chinese characters\n")

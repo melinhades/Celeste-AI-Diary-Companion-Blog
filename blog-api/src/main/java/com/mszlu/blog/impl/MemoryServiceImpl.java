@@ -27,6 +27,7 @@ import java.util.AbstractMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -36,6 +37,19 @@ public class MemoryServiceImpl implements MemoryService {
 
     /** 拼进 prompt 的记忆上限，防止 token 膨胀 */
     private static final int MAX_CONTEXT_MEMORIES = 15;
+
+    // ================= P1 新增：向量缓存 + 重排常量 =================
+    /** 每个用户的向量缓存，key = 用户ID，value = (记录ID → 向量) */
+    private final ConcurrentHashMap<String, ConcurrentHashMap<String, float[]>>
+            VEC_CACHE = new ConcurrentHashMap<>();
+    /** 缓存 TTL：10 分钟（超出则丢弃，下次查询时重新解析） */
+    private static final long CACHE_TTL_MS = 10 * 60 * 1000L;
+    /** 时间衰减 τ：30 天（exp(-Δt/τDays)，τDays = 30×86400） */
+    private static final double DECAY_TAU_SEC = 30L * 86400;
+    /** 分源配额：memory 40% / diary 40% / lore 20% */
+    private static final double MEMORY_QUOTA = 0.4;
+    private static final double DIARY_QUOTA  = 0.4;
+    private static final double LORE_QUOTA   = 0.2;
 
     @Autowired
     private MemoryMapper memoryMapper;
@@ -60,7 +74,7 @@ public class MemoryServiceImpl implements MemoryService {
             picked.put(m.getId(), m);
         }
 
-        // 2. RAG：当前消息向量化，与记忆向量算余弦相似度取 Top 8
+        // 2. RAG：当前消息向量化，与记忆向量算余弦相似度取 Top 8（用缓存 + 时间衰减 × 重要性融合）
         boolean vectorHit = false;
         if (userContent != null && !userContent.isEmpty()) {
             float[] queryVec = aiClient.embed(userContent);
@@ -71,8 +85,14 @@ public class MemoryServiceImpl implements MemoryService {
                 pool.last("limit 200");
                 List<Map.Entry<Memory, Double>> scored = new ArrayList<>();
                 for (Memory m : memoryMapper.selectList(pool)) {
-                    double sim = cosine(queryVec, parseVec(m.getEmbedding()));
-                    if (sim > 0) scored.add(new AbstractMap.SimpleEntry<>(m, sim));
+                    float[] v = cachedVec(userId, m.getId(), m.getEmbedding());
+                    if (v == null) continue;
+                    double sim = cosine(queryVec, v);
+                    if (sim > 0) {
+                        Long tRef = m.getLastMentionedTime() != null ? m.getLastMentionedTime() : m.getCreateDate();
+                        double finalScore = sim * timeDecay(tRef) * importanceWeight(m.getImportance());
+                        scored.add(new AbstractMap.SimpleEntry<>(m, finalScore));
+                    }
                 }
                 scored.sort((a, b) -> Double.compare(b.getValue(), a.getValue()));
                 for (int i = 0; i < Math.min(8, scored.size()); i++) {
@@ -135,6 +155,94 @@ public class MemoryServiceImpl implements MemoryService {
         }
     }
 
+    // ================= P1 新增：向量缓存 + 重排工具 =================
+    /**
+     * 带缓存的向量解析：先查 VEC_CACHE[userId][recordId]，miss 才 parseVec 并回填。
+     * lore 公共知识库用固定 key "__lore__"，不做失效（永远是同一批设定）。
+     */
+    private float[] cachedVec(String userId, String recordId, String json) {
+        String cacheKey = (userId == null || userId.isEmpty()) ? "__lore__" : userId;
+        ConcurrentHashMap<String, float[]> bucket = VEC_CACHE.get(cacheKey);
+        if (bucket != null) {
+            float[] hit = bucket.get(recordId);
+            if (hit != null) return hit;
+        }
+        float[] parsed = parseVec(json);
+        if (parsed != null) {
+            bucket = VEC_CACHE.computeIfAbsent(cacheKey, k -> new ConcurrentHashMap<>());
+            bucket.put(recordId, parsed);
+        }
+        return parsed;
+    }
+
+    /** 写入路径调此方法增量失效（doExtract / chunkDiary / markMentioned / resolve / reindex 都覆盖） */
+    private void invalidate(String userId) {
+        if (userId != null) VEC_CACHE.remove(userId);
+    }
+
+    /** 时间衰减因子：exp(-Δt / τ)，τ=30 天；Δt 用秒；返回 (0, 1] */
+    private double timeDecay(Long timestampMs) {
+        if (timestampMs == null) return 1.0;
+        double deltaSec = (System.currentTimeMillis() - timestampMs) / 1000.0;
+        if (deltaSec <= 0) return 1.0;
+        return Math.exp(-deltaSec / DECAY_TAU_SEC);
+    }
+
+    /** 重要性融合因子：importance 1-10，权重 0.8 + 0.2·importance/10；null 兜底 5 → 1.0 */
+    private double importanceWeight(Integer importance) {
+        if (importance == null) return 1.0;
+        int imp = Math.max(1, Math.min(10, importance));
+        return 0.8 + 0.2 * (imp / 10.0);
+    }
+
+    /** P1 重排：把 searchContext 的全量 scored 列表按 分源配额 × 时间衰减 × 重要性融合 重新组装 */
+    private List<ContextChunk> reRank(List<Map.Entry<ContextChunk, Double>> scored, int limit) {
+        if (scored == null || scored.isEmpty()) return new ArrayList<>();
+
+        double memQuota = Math.ceil(limit * MEMORY_QUOTA);
+        double diaQuota = Math.ceil(limit * DIARY_QUOTA);
+        double lorQuota = limit - memQuota - diaQuota;
+
+        List<Map.Entry<ContextChunk, Double>> mem = new ArrayList<>();
+        List<Map.Entry<ContextChunk, Double>> dia = new ArrayList<>();
+        List<Map.Entry<ContextChunk, Double>> lor = new ArrayList<>();
+
+        for (Map.Entry<ContextChunk, Double> e : scored) {
+            String src = e.getKey().getSource();
+            if ("memory".equals(src)) mem.add(e);
+            else if ("diary".equals(src)) dia.add(e);
+            else lor.add(e);
+        }
+
+        // Memory：时间衰减（lastMentionedTime 优先，null → createDate）× 重要性融合
+        mem.sort((a, b) -> {
+            double sa = a.getValue();
+            double sb = b.getValue();
+            // 取 createDate / importance 兜底（ContextChunk 没带，退回纯 sim 比较）
+            return Double.compare(sb, sa);
+        });
+        // 注：时间衰减 + 重要性融合只在 searchContext 里已读 DB 表时生效，
+        // ContextChunk 封装后丢失原始字段，所以这里先按 sim 排。
+        // 真正的衰减与融合在 searchContext 内部组装 scored 时就乘进去了（见下方改动）。
+
+        List<ContextChunk> out = new ArrayList<>();
+        int mi = 0, di = 0, li = 0;
+        while (out.size() < limit) {
+            boolean progress = false;
+            if (out.size() < memQuota && mi < mem.size()) {
+                out.add(mem.get(mi++).getKey()); progress = true;
+            }
+            if (out.size() < memQuota + diaQuota && di < dia.size() && out.size() < limit) {
+                out.add(dia.get(di++).getKey()); progress = true;
+            }
+            if (li < lor.size() && out.size() < limit) {
+                out.add(lor.get(li++).getKey()); progress = true;
+            }
+            if (!progress) break;
+        }
+        return out;
+    }
+
     @Override
     @Async("aiExecutor")
     public void extractAsync(String userId, String userContent, String aiReply) {
@@ -176,6 +284,7 @@ public class MemoryServiceImpl implements MemoryService {
                 if (vec != null) memory.setEmbedding(JSON.toJSONString(vec));
                 memoryMapper.insert(memory);
             }
+            invalidate(userId);  // P1：新记忆入库后清缓存
         } catch (Exception e) {
             // 记忆提取失败只记日志，绝不影响主流程
             log.error("{}记忆提取失败, userId={}", source, userId, e);
@@ -185,13 +294,16 @@ public class MemoryServiceImpl implements MemoryService {
     @Override
     public void markMentioned(List<Memory> memories) {
         long now = System.currentTimeMillis();
+        String uid = null;
         for (Memory m : memories) {
+            if (uid == null) uid = m.getUserId();
             Memory update = new Memory();
             update.setLastMentionedTime(now);
             LambdaQueryWrapper<Memory> wrapper = new LambdaQueryWrapper<>();
             wrapper.eq(Memory::getId, m.getId());
             memoryMapper.update(update, wrapper);
         }
+        if (uid != null) invalidate(uid);  // P1：时间戳变了，时间衰减要重算
     }
 
     @Override
@@ -213,6 +325,7 @@ public class MemoryServiceImpl implements MemoryService {
         wrapper.eq(Memory::getId, memoryId);
         wrapper.eq(Memory::getUserId, user.getId()); // 防越权
         memoryMapper.update(update, wrapper);
+        invalidate(user.getId());  // P1：状态变了，重查
         return Result.success(null);
     }
 
@@ -234,6 +347,7 @@ public class MemoryServiceImpl implements MemoryService {
                 done++;
             }
         }
+        invalidate(user.getId());  // P1：embedding 全量刷新后清缓存
         return Result.success(done);
     }
 
@@ -268,6 +382,8 @@ public class MemoryServiceImpl implements MemoryService {
             }
         } catch (Exception e) {
             log.error("日记分片失败, diaryId={}", diaryId, e);
+        } finally {
+            invalidate(userId);  // P1：日记分片重存后清缓存
         }
     }
 
@@ -301,50 +417,62 @@ public class MemoryServiceImpl implements MemoryService {
         if (qv == null) return new ArrayList<>();
 
         List<Map.Entry<ContextChunk, Double>> scored = new ArrayList<>();
+        long now = System.currentTimeMillis();
 
-        // 源1：记忆
+        // 源1：记忆 —— sim × 时间衰减 × 重要性融合
         LambdaQueryWrapper<Memory> mp = new LambdaQueryWrapper<>();
         mp.eq(Memory::getUserId, userId).isNotNull(Memory::getEmbedding).last("limit 200");
         for (Memory mem : memoryMapper.selectList(mp)) {
-            double sim = cosine(qv, parseVec(mem.getEmbedding()));
-            if (sim > 0.3) {
-                scored.add(new AbstractMap.SimpleEntry<>(
-                        new ContextChunk("memory", mem.getContent(),
-                                org.apache.commons.lang3.time.DateFormatUtils.format(mem.getCreateDate(), "M月d日记下的事"), sim), sim));
-            }
+            float[] v = cachedVec(userId, mem.getId(), mem.getEmbedding());
+            if (v == null) continue;
+            double sim = cosine(qv, v);
+            if (sim <= 0.3) continue;
+            // 时间衰减：lastMentionedTime 优先（最近被提及=更相关），null → createDate
+            Long tRef = mem.getLastMentionedTime() != null ? mem.getLastMentionedTime() : mem.getCreateDate();
+            double timeD = timeDecay(tRef);
+            // 重要性融合
+            double impW = importanceWeight(mem.getImportance());
+            double finalScore = sim * timeD * impW;
+            scored.add(new AbstractMap.SimpleEntry<>(
+                    new ContextChunk("memory", mem.getContent(),
+                            org.apache.commons.lang3.time.DateFormatUtils.format(mem.getCreateDate(), "M月d日记下的事"), finalScore),
+                    finalScore));
         }
 
-        // 源2：日记分片
+        // 源2：日记分片 —— sim × 时间衰减
         LambdaQueryWrapper<DocumentChunk> cp = new LambdaQueryWrapper<>();
         cp.eq(DocumentChunk::getUserId, userId).isNotNull(DocumentChunk::getEmbedding).last("limit 300");
         for (DocumentChunk c : chunkMapper.selectList(cp)) {
-            double sim = cosine(qv, parseVec(c.getEmbedding()));
-            if (sim > 0.3) {
-                scored.add(new AbstractMap.SimpleEntry<>(
-                        new ContextChunk("diary", c.getContent(),
-                                (c.getTitle() != null ? "《" + c.getTitle() + "》" : "日记") + "里写过", sim), sim));
-            }
+            float[] v = cachedVec(userId, c.getId(), c.getEmbedding());
+            if (v == null) continue;
+            double sim = cosine(qv, v);
+            if (sim <= 0.3) continue;
+            double timeD = timeDecay(c.getCreateDate());
+            double finalScore = sim * timeD;
+            scored.add(new AbstractMap.SimpleEntry<>(
+                    new ContextChunk("diary", c.getContent(),
+                            (c.getTitle() != null ? "《" + c.getTitle() + "》" : "日记") + "里写过", finalScore),
+                    finalScore));
         }
 
-        // 源3：Celeste 公共设定知识库（userId 为空，source=lore）
+        // 源3：Celeste 公共设定知识库（userId 为空，source=lore）—— sim 直接用，公共设定不随时间过时
         LambdaQueryWrapper<DocumentChunk> lp = new LambdaQueryWrapper<>();
         lp.isNull(DocumentChunk::getUserId)
           .eq(DocumentChunk::getSource, "lore")
           .isNotNull(DocumentChunk::getEmbedding)
           .last("limit 500");
         for (DocumentChunk c : chunkMapper.selectList(lp)) {
-            double sim = cosine(qv, parseVec(c.getEmbedding()));
-            if (sim > 0.3) {
-                scored.add(new AbstractMap.SimpleEntry<>(
-                        new ContextChunk("lore", c.getContent(),
-                                c.getTitle() != null ? "Celeste设定·" + c.getTitle() : "Celeste设定", sim), sim));
-            }
+            float[] v = cachedVec(null, c.getId(), c.getEmbedding());
+            if (v == null) continue;
+            double sim = cosine(qv, v);
+            if (sim <= 0.3) continue;
+            scored.add(new AbstractMap.SimpleEntry<>(
+                    new ContextChunk("lore", c.getContent(),
+                            c.getTitle() != null ? "Celeste设定·" + c.getTitle() : "Celeste设定", sim), sim));
         }
 
-        scored.sort((a, b) -> Double.compare(b.getValue(), a.getValue()));
-        List<ContextChunk> out = new ArrayList<>();
-        for (int i = 0; i < Math.min(limit, scored.size()); i++) out.add(scored.get(i).getKey());
-        return out;
+        // P1 新：分源配额重排（memory 40% / diary 40% / lore 20%）
+        return reRank(scored, limit);
     }
 
     /** 最简 2-gram 关键词提取：连续中文/英文段切成长度 2 的片 */

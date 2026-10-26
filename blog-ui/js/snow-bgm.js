@@ -58,14 +58,20 @@ function startSnow() {
     drawSnowflakes();
 }
 
+function stopSnow() {
+    if (snowAnimFrame) { cancelAnimationFrame(snowAnimFrame); snowAnimFrame = null; }
+    if (snowCtx) snowCtx.clearRect(0, 0, snowCanvas.width, snowCanvas.height);
+}
+
 if (snowCanvas) {
     window.addEventListener('resize', resizeSnowCanvas);
     startSnow();
 }
 
 // ===== BGM（postcard.mp3：进度跨页接续 + 自动播放兜底） =====
+// 页面若自行管理 BGM（如 diary 使用 bgmTimeDiary），可在 <html> 上标记 data-no-auto-bgm 关闭本段
 var bgmPlayer = document.getElementById('bgmPlayer');
-if (bgmPlayer) {
+if (bgmPlayer && !document.documentElement.hasAttribute('data-no-auto-bgm')) {
     const savedTime = parseFloat(localStorage.getItem('bgmTime') || '0');
     if (savedTime > 0) bgmPlayer.currentTime = savedTime;
     bgmPlayer.volume = 0.25;

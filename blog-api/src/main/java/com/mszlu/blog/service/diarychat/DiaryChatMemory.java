@@ -160,7 +160,7 @@ public class DiaryChatMemory {
             sb.append("请将以下对话压缩成不超过 100 字的中文摘要，保留关键信息（讨论的主题、情绪、关键观点），" +
                     "不要添加任何说明性文字，直接输出摘要文本。\n\n");
             for (AiMessage m : recent) {
-                sb.append((m.role.equals("user") ? "用户：" : "Madeline：")).append(m.content).append('\n');
+                sb.append((m.getRole().equals("user") ? "用户：" : "Madeline：")).append(m.getContent()).append('\n');
             }
             sb.append("\n压缩后的摘要（≤ 100 字）：");
 

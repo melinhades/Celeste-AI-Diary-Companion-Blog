@@ -15,7 +15,7 @@ import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
-import javax.annotation.PostConstruct;
+import jakarta.annotation.PostConstruct;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -139,6 +139,21 @@ public class AiClient {
             openedAt = System.currentTimeMillis();
             log.warn("AI 连续失败 {} 次，熔断器打开 {}ms，期间快速失败", n, circuitOpenDurationMs);
         }
+    }
+
+    /** 熔断器当前状态：CLOSED / OPEN / HALF_OPEN，供健康检查与监控使用 */
+    public String circuitState() {
+        return circuitState.name();
+    }
+
+    /** 连续失败次数，熔断打开后达到阈值，恢复成功后归零 */
+    public int consecutiveFailures() {
+        return consecutiveFailures.get();
+    }
+
+    /** 触发熔断的连续失败阈值 */
+    public int circuitFailureThreshold() {
+        return circuitFailureThreshold;
     }
 
     public String chat(List<AiMessage> messages, boolean jsonMode) {

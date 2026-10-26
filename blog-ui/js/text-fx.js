@@ -220,6 +220,43 @@
         return text;
     }
 
+    /* 镜像层专用渲染：一次线性扫描 → 合并区间 → 一次生成 HTML。
+       旧路径 autoWrapWave 每包住一个词就重扫一遍全文，长日记退化成平方级，
+       且每次都复制整串，是打字发涩的主因之一。 */
+    var MIRROR_MAX_HITS = 120;   // 兜底：命中过多时不再逐个包 span
+    function renderMirrorHtml(raw, list) {
+        var text = String(raw == null ? '' : raw);
+        var n = list ? list.length : 0;
+        if (!n) return esc(text);
+        var hits = [], k, w, idx;
+        for (k = 0; k < n; k++) {
+            w = list[k];
+            if (!w) continue;
+            idx = text.indexOf(w);
+            while (idx !== -1 && hits.length < MIRROR_MAX_HITS) {
+                hits.push([idx, idx + w.length]);
+                idx = text.indexOf(w, idx + w.length);
+            }
+        }
+        if (!hits.length) return esc(text);
+        /* 起点升序、长词优先；重叠段并入前一段，避免嵌套 span */
+        hits.sort(function (a, b) { return a[0] - b[0] || b[1] - a[1]; });
+        var t = (performance.now() / 1000).toFixed(3);
+        var out = '', pos = 0, end = 0, i, s, e, inner, c, attr;
+        for (i = 0; i < hits.length; i++) {
+            s = hits[i][0]; e = hits[i][1];
+            if (s < end) { if (e > end) end = e; continue; }
+            out += esc(text.slice(pos, s));
+            inner = text.slice(s, e);
+            c = colorOf(inner);
+            attr = c ? (c.key ? ' data-char="' + c.key + '"'
+                               : ' style="--fxc:' + c.color + '"') : '';
+            out += '<span class="fx ' + MARK['~'] + '"' + attr + '>' + charsHtml(inner, t) + '</span>';
+            pos = e; end = e;
+        }
+        return out + esc(text.slice(pos));
+    }
+
     /* ================= textarea / input 镜像层高亮 =================
        原生输入框文字无法加动画，用一个同位置镜像 div 渲染高亮文本，
        输入框本身文字透明、保留光标。仅用于关键词波浪（不改变输入行为）。 */
@@ -269,16 +306,37 @@
             mirror.style.textIndent = c.textIndent;
         }
 
-        function renderMirror() {
-            // textarea 用 % 定位，书页图片加载/翻页后其像素尺寸会变；mirror 是内联 px，
-            // 每次渲染前先重新对齐，避免与真实文字产生水平错位（重影/光标偏一个字）
-            syncBox();
+        /* 状态：几何量只在可能变化时读；渲染按帧合并。
+           旧实现每次输入都 syncBox()（读 offset*，恰在布局刚变脏的时刻强制重排），
+           再整篇重建 innerHTML —— 打字卡顿的来源。 */
+        var needSync = true;      // 几何量待同步（首次 / resize / 字体就绪 / 尺寸变化）
+        var rafId = 0;
+        var composing = false;    // 拼音组合输入中
+        var lastRendered = null;
+
+        function paint() {
+            rafId = 0;
             var val = input.value;
+            if (!needSync && val === lastRendered) return;   // 内容没变就不动 DOM
+            if (needSync) { syncBox(); needSync = false; }
+            lastRendered = val;
             mirror.style.color = origColor;
-            mirror.innerHTML = render(autoWrapWave(val, wordList))
+            mirror.innerHTML = renderMirrorHtml(val, wordList)
                 + '<span style="white-space:pre"> </span>';   // 尾空格撑住末行高度
             mirror.scrollTop = input.scrollTop;
             mirror.scrollLeft = input.scrollLeft;
+        }
+
+        function schedule() {
+            if (!rafId) rafId = requestAnimationFrame(paint);   // 一帧最多渲一次
+        }
+
+        /* 组合输入期间只同步纯文本：输入框文字是透明的，镜像必须一直有内容，
+           但候选阶段每个拼音键都重建关键词 span 太贵，等 compositionend 再补高亮。 */
+        function paintPlain() {
+            mirror.textContent = input.value + ' ';
+            mirror.scrollTop = input.scrollTop;
+            lastRendered = null;
         }
 
         function applyTransparent() {
@@ -293,28 +351,43 @@
             }
         }
 
-        input.addEventListener('input', renderMirror, false);
+        input.addEventListener('input', function (e) {
+            if (composing || (e && e.isComposing)) { paintPlain(); return; }
+            schedule();
+        }, false);
+        input.addEventListener('compositionstart', function () {
+            composing = true;
+            paintPlain();
+        }, false);
+        input.addEventListener('compositionend', function () {
+            composing = false;
+            schedule();
+        }, false);
         input.addEventListener('scroll', function () {
             mirror.scrollTop = input.scrollTop;
             mirror.scrollLeft = input.scrollLeft;
         }, false);
-        window.addEventListener('resize', syncBox, false);
+        window.addEventListener('resize', function () { needSync = true; schedule(); }, false);
 
-        /* 页面切换/显隐后重新对齐 */
+        /* 页面切换/显隐后重新对齐（只有尺寸可能变了才重读几何量） */
         if (window.ResizeObserver) {
-            new ResizeObserver(function () { syncBox(); renderMirror(); }).observe(input);
+            new ResizeObserver(function () { needSync = true; schedule(); }).observe(input);
         }
         /* 网络字体加载完成后字宽/行高才定型，需要再对齐一次 */
         if (document.fonts && document.fonts.ready) {
-            document.fonts.ready.then(function () { syncBox(); renderMirror(); });
+            document.fonts.ready.then(function () { needSync = true; schedule(); });
         }
 
-        syncBox();
         applyTransparent();
-        renderMirror();
+        paint();
 
-        /* 暴露刷新（外部赋值 value 后、或翻页后可手动调用） */
-        input.__tfxRefresh = function () { syncBox(); renderMirror(); };
+        /* 暴露刷新（外部赋值 value 后、或翻页后可手动调用）：保持同步语义 */
+        input.__tfxRefresh = function () {
+            if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+            needSync = true;
+            lastRendered = null;
+            paint();
+        };
     }
 
     function attachAll(root, selector, words) {

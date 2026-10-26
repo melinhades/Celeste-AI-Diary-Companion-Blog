@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -6,7 +6,7 @@
 <link rel="icon" href="icon/OIP.webp" type="image/webp">
 <title>cassette.exe - BerryOS</title>
 <link rel="stylesheet" href="css/common.css?v=20261003f">
-<link rel="stylesheet" href="css/cassette.css?v=20261016b">
+<link rel="stylesheet" href="css/cassette.css?v=20261025a">
 
 </head>
 <body>
@@ -34,7 +34,10 @@
                 <span class="win-caption">SIDE A · 环境循环</span>
             </div>
 
-            <p class="cx-now" id="cxNow">SIDE A · 磁带</p>
+            <p class="cx-now" id="cxNow">
+                <span class="now-txt" id="cxNowText" aria-live="polite">SIDE A · 磁带</span>
+                <span class="now-time" id="cxTime" aria-hidden="true">00:00</span>
+            </p>
 
             <div class="cx-ctrl">
                 <button class="cx-key" id="cxPlay" type="button" aria-label="播放"><i>▶</i><em>PLAY</em></button>
@@ -42,11 +45,16 @@
                 <button class="cx-key" id="cxStop" type="button" aria-label="停止"><i>⏹</i><em>STOP</em></button>
             </div>
 
-            <label class="cx-vol" for="cxVol">
-                <span class="vol-l">VOL</span>
-                <input id="cxVol" type="range" min="0" max="100" value="90">
-                <span class="vol-r">90</span>
-            </label>
+            <div class="cx-vol-row">
+                <label class="cx-vol" for="cxVol">
+                    <span class="vol-l">VOL</span>
+                    <input id="cxVol" type="range" min="0" max="100" value="90" aria-label="主音量">
+                    <span class="vol-r">90</span>
+                </label>
+                <button class="cx-mute" id="cxMute" type="button" aria-pressed="false" title="静音 (M)">MUTE</button>
+            </div>
+
+            <p class="cx-hint">空格 播放/暂停 · M 静音 · 对准面板 ↑↓ 调音量</p>
         </aside>
 
         <!-- 右：音源与场景控制 -->
@@ -122,6 +130,6 @@
     </div>
 </div>
 
-<script src="js/cassette.js?v=20261016d"></script>
+<script src="js/cassette.js?v=20261025a"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -283,6 +283,27 @@
   @keyframes dissolveOut { from{opacity:1; filter:none;} to{opacity:0; filter: blur(6px);} }
   @keyframes fadeOut     { from{opacity:1;} to{opacity:0;} }
   @keyframes spinOut     { 0%{opacity:1; transform:none;} 100%{opacity:0; transform: scale(.25) rotate(420deg);} }
+
+  /* ---- 真立方体转场（仅 tr = cube3d，目前只有第 3 页用）----
+     两页分居立方体相邻两面，整盒绕 Y 轴转 90°。
+     与 tr-cube（绕页边缘掀一页，只有单页单轴）不同，这里有共同 3D 枢轴，才转得出"盒子"。 */
+  #pptCube {
+    position: absolute; inset: 0;
+    transform-style: preserve-3d;
+    transform-origin: center center;
+    transition: transform 1.17s cubic-bezier(.45,.05,.25,1);
+    will-change: transform;
+    pointer-events: none;
+  }
+  /* 两个面由 JS 内联 transform 定位（正面 translateZ(+hw)，侧面 rotateY(±90deg) translateZ(+hw)） */
+  #pptCube > .slide {
+    display: block !important;
+    inset: 0;
+    animation: none !important;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+
   /* 新闻闪白屏 */
   #pptFlash {
     position: absolute; inset: 0; z-index: 5;
@@ -515,7 +536,8 @@
         { cls: 't-big anim-rot', d: 10.5, x: 53.06, y: 36.93, w: 46, t: '根本学不会？' },
         { kind: 'img', cls: 'anim-rise', d: 10.5, x: 63.90, y: 38.47, w: 35.21, src: 'Atlases/WaveDashing/Guy Clip Art.png' }
       ]},
-      { bg: '#D9EAD3', tr: 'dissolve', dur: 10000, items: [
+      // 只有这一页用 cube3d：2→3 走真立方体，其余页仍用原转场
+      { bg: '#D9EAD3', tr: 'cube3d', dur: 10000, items: [
         { cls: 't-head-en white', chars: true, stream: true, d: .5, x: 5.36, y: 11.47, w: 90, t: '介绍…凌波微步与我.ppt!!' },
         { kind: 'ph', cls: 'anim-rise', d: 2.5, x: 29.63, y: 21.27, w: 40.76, ratio: 10.87/6.11, t: '本月配图位' },
         { cls: 't-body anim-rise', d: 3.5, x: 34.43, y: 62.47, w: 33, t: '凌波微步与我.ppt 可以让你学习凌波微步，而且教程很详细！' },
@@ -546,7 +568,7 @@
     var PAGE_SFX = {
       1: [], // 封面：BGM 起播后才展示，无转场
       2: [['cube', 0], ['impossible', 10500]],                 // p1→2 cube；小人从下浮现与文字同步 → impossible
-      3: [['dissolve', 0], ['whoosh', 2500], ['easy', 5000]],  // p2→3 dissolve；配图展现 whoosh；「这很简单」iteasy
+      3: [['cube', 0], ['whoosh', 2500], ['easy', 5000]],      // p2→3 cube3d 立方体；配图展现 whoosh；「这很简单」iteasy
       4: [], // p3→4 fade 转场无专属音效
       5: [['spin', 0]],                                        // p4→5 spinningtransition
       6: [['happy', 3492]]                                      // Bird Clip Art 完成(≈2.54s)后等 2s → happy
@@ -619,16 +641,99 @@
         (PAGE_SFX[i + 1] || []).forEach(function (p) { playSfx(p[0], Math.round(p[1] * 1.3)); });
       }
 
+      // 一页"落脚"后的公共收尾：音效、提示、打字、自动翻页
+      function landOn(n, next) {
+        cur = n;
+        enterSfx(n);
+        // hint 只在最后一页（点击=退出）显示，其他页隐藏
+        if (n === SLIDES.length - 1) {
+          hint.textContent = '点击 / 方向键 退出 · Esc 退出';
+          hint.style.opacity = '.6';
+          setTimeout(function(){ hint.style.opacity = '0'; }, 3000);
+        } else {
+          hint.style.opacity = '0';
+        }
+        // 触发当前页的流式打字（逐句/逐字）
+        triggerStream(next);
+        var dur = SLIDES[n].dur;
+        if (dur) autoTimer = setTimeout(function () { go(n + 1); }, dur * 1.3);
+      }
+
+      // 真立方体转场（仅 tr = cube3d）：两页分居立方体相邻两面，整盒绕 Y 轴转 90°
+      function cubeTo(n) {
+        var prev = slideEls[cur];
+        var next = slideEls[n];
+        if (!prev || !next) return false;
+        busy = true;
+        clearTimeout(autoTimer);
+
+        var hw = player.clientWidth / 2;         // 立方体半宽 = 半页宽
+        var forward = n > cur;                    // 前进从右边转进来，后退从左边
+        var sideDeg = forward ? 90 : -90;
+        var endDeg  = forward ? -90 : 90;
+
+        var box = document.createElement('div');
+        box.id = 'pptCube';
+
+        // 只摘掉残留的 tr-* / leaving，不要整串重写 className：
+        // 出场页必须保留 active，否则 `.slide.active .it` 失效，整页文字瞬间透明（立方体一面变白）
+        var TR_CLS = ['leaving', 'tr-cube', 'tr-dissolve', 'tr-fade', 'tr-spin'];
+        var stripTr = function (el) { TR_CLS.forEach(function (c) { el.classList.remove(c); }); };
+        stripTr(prev);
+        stripTr(next);
+        next.classList.remove('active');   // 到位前先空着，700ms 再统一登场
+        prev.style.transform = 'translateZ(' + hw + 'px)';
+        next.style.transform = 'rotateY(' + sideDeg + 'deg) translateZ(' + hw + 'px)';
+        box.appendChild(prev);
+        box.appendChild(next);
+        player.appendChild(box);
+        cur = n;
+
+        // 先把立方体中心推到屏幕平面上（z = -hw），否则整盒会朝观众"鼓"出来
+        box.style.transform = 'translateZ(-' + hw + 'px) rotateY(0deg)';
+        void box.offsetWidth;                     // 强制重排，让起始帧被浏览器记住
+        box.style.transform = 'translateZ(-' + hw + 'px) rotateY(' + endDeg + 'deg)';
+        enterSfx(n);
+
+        // 转到一半再让内容登场：太早会被切在屏幕外，太晚像卡住了
+        setTimeout(function () {
+          next.classList.add('active');
+          triggerStream(next);
+        }, 700);
+
+        setTimeout(function () {
+          prev.className = 'slide';
+          next.className = 'slide active';
+          prev.style.transform = '';
+          next.style.transform = '';
+          player.appendChild(prev);
+          player.appendChild(next);
+          box.remove();
+          busy = false;
+          if (n === SLIDES.length - 1) {
+            hint.textContent = '点击 / 方向键 退出 · Esc 退出';
+            hint.style.opacity = '.6';
+            setTimeout(function(){ hint.style.opacity = '0'; }, 3000);
+          }
+          if (SLIDES[n].dur) autoTimer = setTimeout(function () { go(n + 1); }, SLIDES[n].dur * 1.3);
+        }, 1180);
+        return true;
+      }
+
       function go(n) {
         if (n < 0 || n >= SLIDES.length || busy) return;
+        // 真立方体页单独分流，其余页沿用原有转场逻辑
+        if (SLIDES[n].tr === 'cube3d' && cur >= 0 && cur !== n && cubeTo(n)) return;
         clearTimeout(autoTimer);
         var prev = slideEls[cur];
         var next = slideEls[n];
         var same = (cur === n);
         if (prev && !same) {
           busy = true;
+          // 从立方体页离开时没有对应的出场动画类，退回淡出，避免两页叠在一起
+          var leaveTr = SLIDES[cur].tr === 'cube3d' ? 'fade' : SLIDES[cur].tr;
           prev.classList.remove('active');
-          prev.classList.add('leaving', 'tr-' + SLIDES[cur].tr);
+          prev.classList.add('leaving', 'tr-' + leaveTr);
           (function (old) { setTimeout(function () {
             old.classList.remove('leaving', 'tr-cube', 'tr-dissolve', 'tr-fade', 'tr-spin');
           }, 1300); })(prev);
@@ -765,6 +870,13 @@
         setSlides: function (newSlides) {
           SLIDES = newSlides;
           rendered = false;
+          // 【安全】重建 DOM 前把播放状态归零：否则异步热更新时若正处在转场中，
+          // 旧的 #pptCube 会被清掉、busy 永远停在 true，整个播放器就翻不动了
+          clearTimeout(autoTimer);
+          cur = -1;
+          busy = false;
+          var staleCube = document.getElementById('pptCube');
+          if (staleCube) staleCube.remove();
           // 清掉旧 DOM
           while (player.firstChild) player.removeChild(player.firstChild);
           player.appendChild(document.getElementById('pptFlash') || (function(){ var d=document.createElement('div'); d.id='pptFlash'; return d; })());
@@ -844,7 +956,7 @@
   </script>
   <script src="js/api.js?v=20261002"></script>
   <script src="js/detect.js"></script>
-  <script src="js/pptgen.js?v=20261004"></script>
+  <script src="js/pptgen.js?v=20261025a"></script>
   <script>
     // berryos 页面一打开就自动跑：detect → generate → setSlides（如果检测到困恼的话）
     (function () {

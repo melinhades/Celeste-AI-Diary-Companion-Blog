@@ -1,0 +1,127 @@
+/* 登录 / 注册页共用样式（login.css、register.css 均引用，须先于二者加载） */
+
+body { display:flex; align-items:center; justify-content:center; min-height:100vh; background:#050514; padding:20px; }
+
+/* ===== 夜空：月光晕 + 两层闪烁星星 ===== */
+body::before {
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background-image:
+        radial-gradient(circle at 78% 16%, rgba(180,200,255,.16), transparent 32%),
+        radial-gradient(circle at 18% 82%, rgba(90,110,180,.10), transparent 40%);
+}
+.stars, .stars2 { position:fixed; inset:0; pointer-events:none; z-index:0; width:1px; height:1px; background:transparent; }
+.stars {
+    box-shadow: 12vw 8vh 0 1px rgba(255,255,255,.8), 34vw 22vh 0 rgba(255,255,255,.5), 58vw 6vh 0 1px rgba(255,255,255,.7),
+                82vw 18vh 0 rgba(255,255,255,.4), 46vw 12vh 0 rgba(255,255,255,.55), 90vw 40vh 0 1px rgba(255,255,255,.6),
+                8vw 34vh 0 rgba(255,255,255,.45), 68vw 30vh 0 rgba(255,255,255,.5), 24vw 46vh 0 1px rgba(255,255,255,.65),
+                94vw 8vh 0 rgba(255,255,255,.4), 52vw 40vh 0 rgba(255,255,255,.35), 16vw 16vh 0 rgba(255,255,255,.5);
+    animation:starTwinkle 4.5s ease-in-out infinite;
+}
+.stars2 {
+    box-shadow: 20vw 12vh 0 rgba(255,255,255,.5), 42vw 5vh 0 1px rgba(255,255,255,.7), 72vw 22vh 0 rgba(255,255,255,.45),
+                6vw 26vh 0 rgba(255,255,255,.5), 60vw 34vh 0 rgba(255,255,255,.4), 86vw 12vh 0 1px rgba(255,255,255,.6),
+                30vw 38vh 0 rgba(255,255,255,.35), 96vw 30vh 0 rgba(255,255,255,.45), 48vw 24vh 0 rgba(255,255,255,.5),
+                14vw 42vh 0 rgba(255,255,255,.3), 64vw 10vh 0 rgba(255,255,255,.4), 38vw 48vh 0 rgba(255,255,255,.35);
+    animation:starTwinkle 6s ease-in-out 1.6s infinite;
+}
+@keyframes starTwinkle { 0%,100%{opacity:.25} 50%{opacity:.9} }
+
+/* ===== 卡片 ===== */
+.login-box, .register-box {
+    background:url('../celeste-gui/poempage.webp') center/100% 100% no-repeat;
+    border:none; border-radius:0;
+    width:440px; max-width:100%;
+    position:relative; z-index:1;
+    filter:drop-shadow(0 8px 32px rgba(0,0,0,.6));
+    opacity:0;
+    transform:translateX(-120%) rotate(-8deg);
+    transition:opacity .8s ease, transform 1s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.login-box.slide-in, .register-box.slide-in { opacity:1; transform:translateX(0) rotate(0deg); }
+.login-box h2, .register-box h2 {
+    text-align:center; font-size:20px; color:#3a2018;
+    font-family:'Renogare','CelesteZH',sans-serif; letter-spacing:2px; margin-bottom:6px;
+}
+
+/* ===== 表单控件 ===== */
+.login-box .form-control, .register-box .form-control {
+    background:rgba(255,252,245,.75); border:1px solid #c4a882; color:#3a2018;
+    font-family:'Renogare','CelesteZH',sans-serif; padding-right:42px;
+}
+.login-box .form-control::placeholder, .register-box .form-control::placeholder { color:#b09a82; }
+.login-box .form-control:focus, .register-box .form-control:focus {
+    border-color:#5a3e36; box-shadow:0 0 10px rgba(196,168,130,.45); background:rgba(255,252,245,.95);
+}
+.login-box .form-control.error, .register-box .form-control.error { border-color:#c0392b; box-shadow:0 0 10px rgba(192,57,43,.3); }
+.login-box .form-control.valid, .register-box .form-control.valid { border-color:#27ae60; }
+
+/* ===== 主按钮 ===== */
+.login-box .btn-primary, .register-box .btn-primary {
+    width:100%; padding:11px 32px; font-size:14px; display:flex; align-items:center; justify-content:center; gap:8px;
+    border:2px solid #c4a882; background:rgba(255,248,240,.8); color:#5a3e36; font-weight:bold;
+    border-radius:4px; box-shadow:none;
+    font-family:'Renogare','CelesteZH',sans-serif; letter-spacing:2px;
+    cursor:pointer; transition:all .25s;
+}
+.login-box .btn-primary:hover:not(:disabled), .register-box .btn-primary:hover:not(:disabled) {
+    background:#c4a882; color:#fff; transform:translateY(-1px); box-shadow:0 4px 12px rgba(196,168,130,.4);
+}
+.btn-spinner {
+    width:16px; height:16px; border:2px solid rgba(90,62,54,.3); border-top-color:#5a3e36;
+    border-radius:50%; animation:spin .7s linear infinite; display:none;
+}
+.btn-primary.loading .btn-spinner { display:inline-block; }
+@keyframes spin { to{transform:rotate(360deg)} }
+
+/* ===== 错误提示 ===== */
+.form-error {
+    color:#c0392b; font-size:12px; margin-top:6px; display:none;
+    padding:8px 12px; background:rgba(192,57,43,.08); border-radius:4px; border-left:3px solid #c0392b;
+    font-family:'Renogare','CelesteZH',sans-serif;
+}
+.form-error.show { display:block; animation:shake .4s; }
+@keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
+@keyframes fadeIn { from{opacity:0} to{opacity:1} }
+
+/* ===== 底部雪带 ===== */
+.snow-strip {
+    position:fixed; left:0; right:0; bottom:0; height:80px;
+    background:url('../celeste-areas/snow-front.webp') repeat-x bottom/220px auto;
+    animation:snowDrift 45s linear infinite; pointer-events:none; z-index:2; opacity:.5;
+}
+@keyframes snowDrift { from{background-position-x:0} to{background-position-x:-440px} }
+
+/* ===== 加载动画 ===== */
+#loginLoadingOverlay, #regLoadingOverlay {
+    position:fixed; inset:0; z-index:9999;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    opacity:0; pointer-events:none; transition:opacity .35s ease;
+}
+#loginLoadingOverlay.show, #regLoadingOverlay.show { opacity:1; pointer-events:auto; }
+#loginLoadingOverlay .loading-madeline, #regLoadingOverlay .loading-madeline {
+    width:120px; height:120px; position:relative; z-index:1;
+    background-size:100% 100%; background-repeat:no-repeat; background-position:center;
+    image-rendering:pixelated;
+    /* 10 帧均分，00 同时放在 0% 与 100%，循环首尾衔接无跳变 */
+    animation:loadingRun 0.8s steps(10) infinite;
+}
+@keyframes loadingRun {
+    0%   { background-image:url('../celeste-gui/loading/00.png'); }
+    10%  { background-image:url('../celeste-gui/loading/01.png'); }
+    20%  { background-image:url('../celeste-gui/loading/02.png'); }
+    30%  { background-image:url('../celeste-gui/loading/03.png'); }
+    40%  { background-image:url('../celeste-gui/loading/04.png'); }
+    50%  { background-image:url('../celeste-gui/loading/05.png'); }
+    60%  { background-image:url('../celeste-gui/loading/06.png'); }
+    70%  { background-image:url('../celeste-gui/loading/07.png'); }
+    80%  { background-image:url('../celeste-gui/loading/08.png'); }
+    90%  { background-image:url('../celeste-gui/loading/09.png'); }
+    100% { background-image:url('../celeste-gui/loading/00.png'); }
+}
+#loginLoadingOverlay .loading-text, #regLoadingOverlay .loading-text {
+    margin-top:20px; color:#ffe36d; position:relative; z-index:1;
+    font-family:'Renogare','CelesteZH',sans-serif; font-size:18px; letter-spacing:3px;
+    text-shadow:0 0 12px rgba(255,227,109,.4);
+}
+#loginLoadingOverlay .loading-dots::after, #regLoadingOverlay .loading-dots::after { content:''; animation:dots 1.5s steps(4, end) infinite; }
+@keyframes dots { 0%{content:''} 25%{content:'.'} 50%{content:'..'} 75%{content:'...'} }

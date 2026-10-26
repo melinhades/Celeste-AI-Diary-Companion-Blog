@@ -3,7 +3,7 @@
 > **让每一个字都有温度，让每一天都有意义。**
 
 [![Java](https://img.shields.io/badge/Java-17%2B-orange.svg?style=for-the-badge&logo=openjdk&logoColor=white)](https://www.oracle.com/java/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.5.0-brightgreen.svg?style=for-the-badge&logo=spring&logoColor=white)](https://spring.io/projects/spring-boot)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.6-brightgreen.svg?style=for-the-badge&logo=spring&logoColor=white)](https://spring.io/projects/spring-boot)
 [![Frontend](https://img.shields.io/badge/Frontend-Vanilla%20JS-blueviolet.svg?style=for-the-badge&logo=javascript&logoColor=white)](https://developer.mozilla.org/docs/Web/JavaScript)
 [![AI](https://img.shields.io/badge/AI-GLM--4%20%2B%20bge--m3-purple.svg?style=for-the-badge&logo=openai&logoColor=white)](https://siliconflow.cn/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
@@ -279,7 +279,7 @@ If the copyright holder requests removal, relevant content will be removed immed
 │  │   blog-ui/       │      │   blog-api/      │      │  blog-admin/     │  │
 │  │  (Frontend)      │◄────►│  (Core API)      │◄────►│  (Admin Panel)   │  │
 │  │  Vanilla HTML/   │ REST │  Spring Boot     │      │  Spring Boot +   │  │
-│  │  CSS/JS          │      │  2.5.0 + MP      │      │  Spring Security │  │
+│  │  CSS/JS          │      │  3.2.6 + MP      │      │  Spring Security │  │
 │  │  Port: 8080      │      │  Port: 8888      │      │  Port: 8889      │  │
 │  └──────────────────┘      └────────┬─────────┘      └──────────────────┘  │
 │                                     │                                      │
@@ -300,9 +300,9 @@ If the copyright holder requests removal, relevant content will be removed immed
 | Layer | Technology | Version | Purpose |
 |-------|------------|---------|---------|
 | **Language** | Java | 17 LTS | Type-safe, performant backend |
-| **Framework** | Spring Boot | 2.5.0 | Convention-over-configuration |
-| **ORM** | MyBatis-Plus | 3.5.3.1 | Enhanced MyBatis with CRUD, pagination |
-| **Security** | Spring Security + JWT | 5.x / 0.9.1 | Stateless auth, BCrypt passwords |
+| **Framework** | Spring Boot | 3.2.6 | Convention-over-configuration |
+| **ORM** | MyBatis-Plus | 3.5.11 | Enhanced MyBatis with CRUD, pagination |
+| **Security** | Spring Security + JWT | 6.x / 0.9.1 | Stateless auth, BCrypt passwords |
 | **Cache/Session** | Redis + Lettuce | 6.x | Distributed cache, token store |
 | **AI Gateway** | SiliconFlow | — | GLM-4 (chat), bge-m3 (embedding) |
 | **Database** | MySQL | 5.7+/8.0 | Primary persistence |
@@ -758,9 +758,11 @@ blog-ui/
 ## 🧪 Testing & Quality
 
 ### Current State
-- Unit tests: Minimal (placeholder `spring-boot-starter-test` only)
-- Integration tests: None
+- Unit tests: **10 test classes / 57 cases** — auth chain (`JWTUtils`, `LoginServiceImpl`, `LoginIntercepter`), prod config validation (`ConfigValidator`) + roundtable engine; all green (`RoundtableEngineE2eTest` requires the external AI service and is skipped in CI-style runs)
+- Integration tests: None yet (Testcontainers planned)
+- Coverage gate: Not yet configured (JaCoCo planned)
 - Static analysis: None configured
+- CI: None configured yet
 
 ### Recommended Additions (Testcontainers)
 
@@ -1040,6 +1042,12 @@ git push origin feature/your-feature-name
 ---
 
 ## 📈 Roadmap
+
+### Recently Completed
+- [x] Spring Boot 2.5.0 → **3.2.6** (Jakarta migration + Spring Security 6 rewrite, see `docs/spring-boot-3.2.6-upgrade.md`)
+- [x] Security: log desensitization (no full JWT in logs), prod startup secret validation
+- [x] Debug residue cleanup (no `Thread.sleep` debug blocks / `System.out.println` in main sources)
+- [x] Auth-chain unit tests (T1: 29 cases)
 
 ### Near Term (v1.1)
 - [ ] Monthly snapshot lazy-fill verification + backend restart resilience

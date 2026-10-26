@@ -11,6 +11,10 @@ import java.util.Map;
  */
 public class RosterBuilder {
 
+    private RosterBuilder() {
+        // 工具类禁止实例化
+    }
+
     public static List<Map<String, Object>> build(RoundtableSession session) {
         List<Map<String, Object>> list = new ArrayList<>();
         for (RoundtablePersonas p : RoundtablePersonas.seats()) {

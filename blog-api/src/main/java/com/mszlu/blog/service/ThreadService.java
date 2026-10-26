@@ -3,7 +3,6 @@ package com.mszlu.blog.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.mszlu.blog.dao.mapper.ArticleMapper;
 import com.mszlu.blog.dao.pojo.Article;
-import com.mszlu.blog.vo.params.ArticleVo;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
@@ -22,14 +21,5 @@ public class ThreadService {
         //update article set view_count=100 where view_count=00 and id=11
 
         articleMapper.update(articleUpdate,updateWrapper);
-
-        try{
-            Thread.sleep(5000);
-
-            System.out.println("更新完成了....");
-
-        }catch(InterruptedException e){
-            e.printStackTrace();
-        }
     }
 }

@@ -33,71 +33,7 @@
         })();
     })();
 
-    // ===== 雪花粒子系统 =====
-    const snowCanvas = document.getElementById('snowCanvas');
-    const snowCtx = snowCanvas.getContext('2d');
-    let snowflakes = [];
-    let snowAnimFrame = null;
-
-    function resizeSnowCanvas() {
-        snowCanvas.width = window.innerWidth;
-        snowCanvas.height = window.innerHeight;
-    }
-
-    function createSnowflake() {
-        return {
-            x: Math.random() * snowCanvas.width,
-            y: -10,
-            r: Math.random() * 3 + 1,
-            speed: Math.random() * 1.5 + 0.5,
-            wind: Math.random() * 0.5 - 0.25,
-            opacity: Math.random() * 0.6 + 0.2,
-            swing: Math.random() * Math.PI * 2,
-            swingSpeed: Math.random() * 0.02 + 0.01
-        };
-    }
-
-    function initSnowflakes() {
-        snowflakes = [];
-        for (let i = 0; i < 80; i++) {
-            const f = createSnowflake();
-            f.y = Math.random() * snowCanvas.height;
-            snowflakes.push(f);
-        }
-    }
-
-    function drawSnowflakes() {
-        snowCtx.clearRect(0, 0, snowCanvas.width, snowCanvas.height);
-        for (const f of snowflakes) {
-            f.y += f.speed;
-            f.swing += f.swingSpeed;
-            f.x += Math.sin(f.swing) * 0.5 + f.wind;
-            if (f.y > snowCanvas.height + 10) { f.y = -10; f.x = Math.random() * snowCanvas.width; }
-            if (f.x > snowCanvas.width + 10) f.x = -10;
-            if (f.x < -10) f.x = snowCanvas.width + 10;
-            snowCtx.beginPath();
-            snowCtx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
-            snowCtx.fillStyle = `rgba(255,255,255,${f.opacity})`;
-            snowCtx.fill();
-        }
-        snowAnimFrame = requestAnimationFrame(drawSnowflakes);
-    }
-
-    function startSnow() { resizeSnowCanvas(); initSnowflakes(); drawSnowflakes(); }
-    window.addEventListener('resize', resizeSnowCanvas);
-    // 文章页常驻雪花（原条件沿用 index 的 pathname 判断，在 article.html 恒为 false 导致雪花从不启动）
-    startSnow();
-
-    // BGM
-    const bgmPlayer = document.getElementById('bgmPlayer');
-    const savedTime = parseFloat(localStorage.getItem('bgmTime') || '0');
-    if (savedTime > 0) bgmPlayer.currentTime = savedTime;
-    bgmPlayer.volume = 0.25;
-    bgmPlayer.play().catch(() => {});
-    setInterval(() => { localStorage.setItem('bgmTime', bgmPlayer.currentTime); }, 2000);
-    function tryPlayBGM() { bgmPlayer.play().then(() => { document.removeEventListener('click', tryPlayBGM); document.removeEventListener('keydown', tryPlayBGM); }).catch(() => {}); }
-    document.addEventListener('click', tryPlayBGM);
-    document.addEventListener('keydown', tryPlayBGM);
+    // 雪花粒子系统与 BGM 由 js/snow-bgm.js 统一提供
 
     // 阅读进度条 + 回顶
     const readProgress = document.getElementById('readProgress');

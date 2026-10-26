@@ -28,7 +28,7 @@ public interface DiaryService {
     Result companion(String draftSnippet);
 
     /** 日记伴侣流式版（v1 扩展）：多轮会话记忆 + 实时中断 + 双模态情绪 + 人格检查 + 全链路日志 */
-    void companionStream(CompanionParam param, javax.servlet.http.HttpServletResponse response);
+    void companionStream(CompanionParam param, jakarta.servlet.http.HttpServletResponse response);
 
     /** 获取日记详情 */
     Result getById(String diaryId);

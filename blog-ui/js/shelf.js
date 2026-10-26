@@ -1768,11 +1768,11 @@ function stopPeSnow() {
         var fxLayer = document.getElementById('dsFeathers');
         var featherN = 0, featherPlaced = [];
 
-        // 羽毛尺寸与 CSS #dsFeathers .feather 同步：整体放大一倍后是 104px（对角约 147px）
-        var FEATHER_SIZE = 104;
-        var FEATHER_GAP_MIN = Math.round(FEATHER_SIZE * 2.5);   // 260：最小距离（≈2.5 倍尺寸，彼此不重叠又留呼吸感）
-        var FEATHER_GAP_MAX = Math.round(FEATHER_SIZE * 4);     // 416：最大距离（≈4 倍尺寸，防止某一根飘成孤点）
-        var FEATHER_GAP_FLOOR = Math.round(FEATHER_SIZE * 1.5); // 156：迭代下限，是「不重叠」的物理底线（1.5 倍 > √2）
+        // 羽毛尺寸与 CSS #dsFeathers .feather 同步：104px 的 60% = 62px（对角约 88px）
+        var FEATHER_SIZE = 62;
+        var FEATHER_GAP_MIN = Math.round(FEATHER_SIZE * 2.5);   // ≈155：最小距离（≈2.5 倍尺寸，彼此不重叠又留呼吸感）
+        var FEATHER_GAP_MAX = Math.round(FEATHER_SIZE * 4);     // ≈248：最大距离（≈4 倍尺寸，防止某一根飘成孤点）
+        var FEATHER_GAP_FLOOR = Math.round(FEATHER_SIZE * 1.5); // ≈93：迭代下限，是「不重叠」的物理底线（1.5 倍 > √2）
 
         // 拒绝采样：天空区 [4vw,70vw]×[7vh,35vh] 内随机点。
         // 要求：与所有已放羽毛的屏幕距离 ≥ need（最小距离），且与最近那根的屏幕距离 ≤ FEATHER_GAP_MAX（最大距离；第一根不受限）

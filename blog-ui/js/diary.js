@@ -1035,58 +1035,7 @@
         }
     });
 
-    // ===== 雪花粒子系统 =====
-    const snowCanvas = document.getElementById('snowCanvas');
-    const snowCtx = snowCanvas.getContext('2d');
-    let snowflakes = [];
-    let snowAnimFrame = null;
-
-    function resizeSnowCanvas() {
-        snowCanvas.width = window.innerWidth;
-        snowCanvas.height = window.innerHeight;
-    }
-
-    function createSnowflake() {
-        return {
-            x: Math.random() * snowCanvas.width,
-            y: -10,
-            r: Math.random() * 3 + 1,
-            speed: Math.random() * 1.5 + 0.5,
-            wind: Math.random() * 0.5 - 0.25,
-            opacity: Math.random() * 0.6 + 0.2,
-            swing: Math.random() * Math.PI * 2,
-            swingSpeed: Math.random() * 0.02 + 0.01
-        };
-    }
-
-    function initSnowflakes() {
-        snowflakes = [];
-        for (let i = 0; i < 80; i++) {
-            const f = createSnowflake();
-            f.y = Math.random() * snowCanvas.height;
-            snowflakes.push(f);
-        }
-    }
-
-    function drawSnowflakes() {
-        snowCtx.clearRect(0, 0, snowCanvas.width, snowCanvas.height);
-        for (const f of snowflakes) {
-            f.y += f.speed;
-            f.swing += f.swingSpeed;
-            f.x += Math.sin(f.swing) * 0.5 + f.wind;
-            if (f.y > snowCanvas.height + 10) { f.y = -10; f.x = Math.random() * snowCanvas.width; }
-            if (f.x > snowCanvas.width + 10) f.x = -10;
-            if (f.x < -10) f.x = snowCanvas.width + 10;
-            snowCtx.beginPath();
-            snowCtx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
-            snowCtx.fillStyle = `rgba(255,255,255,${f.opacity})`;
-            snowCtx.fill();
-        }
-        snowAnimFrame = requestAnimationFrame(drawSnowflakes);
-    }
-
-    function startSnow() { resizeSnowCanvas(); initSnowflakes(); drawSnowflakes(); }
-    function stopSnow() { if (snowAnimFrame) cancelAnimationFrame(snowAnimFrame); snowCtx.clearRect(0, 0, snowCanvas.width, snowCanvas.height); }
+    // ===== 雪花粒子系统（实现见 js/snow-bgm.js） =====
 
     // ===== 明信片打字机 =====
     async function typewritePostcard(el, text) {
@@ -1356,7 +1305,6 @@ function inferReplyEmotion(text) {
         JUDGE_DEBOUNCE_MS: 2000,          // v1 扩展：修改触发防抖 2s（原 700ms）
         PAUSE_TRIGGER_MS: 3000,           // v1 扩展：打字停顿 >3s 触发弱信号反应
         SILENCE_COOLDOWN: 8000,
-        SENTENCE_ENDERS: ['。', '！', '？', '…', '...', '!', '?', '\n'],
         EMOTION_WORDS: {
             '不安': ['担心','焦虑','害怕','紧张','不安','忐忑','恐慌','患得患失','迷茫','彷徨','不知所措','心慌'],
             '惊讶': ['惊讶','意外','震惊','吃惊','惊喜','诧异','惊愕','目瞪口呆','没想到','居然','竟然','万万没想到'],
@@ -1369,9 +1317,7 @@ function inferReplyEmotion(text) {
             '默认': '#A8E6CF', '不安': '#FF6B6B', '惊讶': '#7DCFFF',
             '怨恨': '#FF4444', '不开心': '#9B59B6', '可爱': '#FF69B4', '无语': '#B0B0B0'
         },
-        EMOTION_WEIGHTS: { '不安':1.2, '惊讶':1.0, '怨恨':1.3, '不开心':1.2, '可爱':1.0, '无语':0.8 },
-        MAX_LOCAL_REACTIONS: 2,
-        LOCAL_REACT_COOLDOWN: 20000
+        EMOTION_WEIGHTS: { '不安':1.2, '惊讶':1.0, '怨恨':1.3, '不开心':1.2, '可爱':1.0, '无语':0.8 }
     };
     // 暴露情绪词表/色板给 TextFx（日记关键词波浪高亮）
     window.__DIARY_EMOTION_WORDS = REALTIME_CONFIG.EMOTION_WORDS;
@@ -1384,15 +1330,15 @@ function inferReplyEmotion(text) {
         currentEmotion: '默认',
         previousEmotion: '默认',
         emotionHistory: [],
-        localReactionCount: 0,
         lastJudgeTime: 0,
         isAiPending: false,
+        // 决策锁：IDLE=边写边看（允许分析）/ REPLYING=已开口，冻结稿本、不再跟进新内容
+        phase: 'IDLE',
+        // 回复期间用户又写了新内容 → 说完后补读一次
+        pendingCatchup: false,
         isTyping: false,
         typeTimer: null,
         peakEmotion: null,
-        peakIntensity: 0,
-        lastLocalReactTime: 0,
-        lastReactionLine: '',
         // v1 扩展：会话 + 打字轨迹 + v2 按键级原始事件流
         sessionId: (localStorage.getItem('diaryChatSessionId') || ''),
         typingSignal: { delete: 0, undo: 0, pause: 0, lastInputAt: Date.now(), modifyFreq: 0 },
@@ -1443,52 +1389,7 @@ function inferReplyEmotion(text) {
     }
 
 
-    // ===== 检测新增的句子 =====
-    function getNewSentences(oldText, newText) {
-        if (newText.length <= oldText.length) return [];
-        const addedPart = newText.substring(oldText.length);
-        const sentences = [];
-        for (const ender of REALTIME_CONFIG.SENTENCE_ENDERS) {
-            let idx = addedPart.indexOf(ender);
-            if (idx !== -1) {
-                const ctxStart = Math.max(0, oldText.length - 20);
-                const sentenceText = newText.substring(ctxStart, oldText.length + idx + ender.length);
-                sentences.push(sentenceText.trim());
-            }
-        }
-        return sentences;
-    }
-
-    // ===== 本地快速反应（不等 AI，即时反馈） =====
-    function localReact(analysis, newText) {
-        if (companionState.localReactionCount >= REALTIME_CONFIG.MAX_LOCAL_REACTIONS) return;
-        if (Date.now() - companionState.lastLocalReactTime < REALTIME_CONFIG.LOCAL_REACT_COOLDOWN) return;
-        const prevEmotion = companionState.currentEmotion;
-        const newEmotion = analysis.emotion;
-
-        if (newEmotion !== prevEmotion && newEmotion !== '默认') {
-            const reactions = {
-                '不安': ['…怎么了？', '感觉到你有点不安…', '慢慢写，我在。'],
-                '惊讶': ['哦？发生了什么！', '然后呢？！', '哇…'],
-                '怨恨': ['…', '深呼吸…', '我听着呢。'],
-                '不开心': ['…我在。', '写出来会好一些。', '嗯，继续写。'],
-                '可爱': ['♥', '嗯嗯！', '看到你开心我也开心。'],
-                '无语': ['…嗯。', '有时候就是会这样。', '无语也没关系。']
-            };
-            const all = reactions[newEmotion] || ['…'];
-            const pool = all.filter(l => l !== companionState.lastReactionLine);
-            const reaction = pool[Math.floor(Math.random() * pool.length)];
-            companionState.localReactionCount++;
-            companionState.currentEmotion = newEmotion;
-            companionState.lastReactionLine = reaction;
-            companionState.lastLocalReactTime = Date.now();
-            updateThemeByEmotion(newEmotion);
-            if (isPositive(newEmotion)) pmBounce();
-            addMadelineMessage(reaction, newEmotion);
-        }
-
-        companionState.peakIntensity = Math.max(companionState.peakIntensity, analysis.intensity);
-    }
+    // ===== 新句子检测与本地快反已移除：情绪不再由关键词扫描决定，改由 AI 读完整日记后选情绪池 =====
 // ===== 说话去重：同样的话、开头雷同的话不再重复 =====
     const spokenLines = [];
     function isRepeatedSpeech(line) {
@@ -1512,10 +1413,29 @@ function inferReplyEmotion(text) {
     function isDistressText(t) {
         return DISTRESS_WORDS.some(w => String(t || '').indexOf(w) !== -1);
     }
+    // ===== 决策锁释放：说完才放开；期间漏掉的内容只在这里补读一次 =====
+    function releaseReply() {
+        // 幂等：成功路径已释放过，finally 再调一次不会重复补读
+        if (companionState.phase !== 'REPLYING' && !companionState.isAiPending) return;
+        companionState.isAiPending = false;
+        companionState.phase = 'IDLE';
+        if (!companionState.pendingCatchup) return;
+        companionState.pendingCatchup = false;
+        const t = contentInput.value.trim();
+        // 没有新增内容、或太短（沿用 pause 触发门槛），就不打扰她
+        if (t.length <= companionState.lastAnalyzedLen || t.length < 20) return;
+        companionState.lastAnalyzedLen = t.length;
+        companionState.lastJudgeTime = Date.now();
+        setTimeout(() => { triggerAiAnalysis(t, 'catchup'); }, 600);
+    }
+
     // ===== 触发 AI 分析（真流式：边生成边逐句说；失败回退整段接口） =====
     async function triggerAiAnalysis(text, triggerType) {
-        if (companionState.isAiPending) return;
+        if (companionState.isAiPending || companionState.phase === 'REPLYING') return;
         companionState.isAiPending = true;
+        // 决策点：从这一刻起冻结稿本，本轮回复不再跟进用户后续输入
+        companionState.phase = 'REPLYING';
+        companionState.pendingCatchup = false;
         companionState.lastAnalyzedText = text;
         companionState.lastAnalyzedLen = text.length;
 
@@ -1525,7 +1445,6 @@ function inferReplyEmotion(text) {
             companionState.previousEmotion = userEmotion;
             if (userEmotion === '不开心') pmComfort();
             else if (isPositive(userEmotion)) pmBounce();
-            companionState.localReactionCount = 0;
             companionState.emotionHistory.push({
                 emotion: userEmotion, time: Date.now(), trigger: triggerType
             });
@@ -1593,7 +1512,7 @@ function inferReplyEmotion(text) {
             if (!resp.ok || !resp.body) throw new Error('流式不可用 HTTP ' + resp.status);
             const reader = resp.body.getReader();
             const decoder = new TextDecoder('utf-8');
-            let raw = '', emotion = '默认', firstSpoken = false, silent = false;
+            let raw = '', emotion = '默认', firstSpoken = false, silent = false, busy = false;
             let streamer = null;
             // AI 句内情绪标记剥离器：delta 进去，纯文本 + 切换点出来（跨分块安全）
             const moodFeeder = window.MadelineMood ? MadelineMood.feeder() : null;
@@ -1621,6 +1540,9 @@ function inferReplyEmotion(text) {
                     } else if (event === 'silent') {
                         // 她判断此刻不该开口：安静陪着，不落任何消息
                         silent = true;
+                    } else if (event === 'busy') {
+                        // 同会话已有一轮在回复（多标签页/重试）：不重试、不回退，避免重复调用 AI
+                        busy = true;
                     } else if (event === 'done') {
                         // v1 扩展：提取 sessionId/turnId 存回
                         try {
@@ -1658,9 +1580,15 @@ function inferReplyEmotion(text) {
             }
             // 收尾：把最后不足一帧的残余解完（服务端每帧都以 \n\n 结尾，这里兜底）
             parseFrames(decoder.decode());
+            // 后端说忙：这轮由别的请求负责，直接放弃（绝不走整段回退再调一次 AI）
+            if (busy) {
+                companionState.pendingCatchup = false;
+                releaseReply();
+                return;
+            }
             // 她选择沉默：正常结束，不走整段回退（8s 后内容再变可重新判断）
             if (silent) {
-                companionState.isAiPending = false;
+                releaseReply();
                 return;
             }
             // 没收到任何 delta：当成失败走整段回退，而不是静默无反应
@@ -1677,9 +1605,9 @@ function inferReplyEmotion(text) {
             // 整段去重记录（流式显示已实时，这里只做记忆防复读）
             const fullText = raw.trim();
             if (fullText && !isRepeatedSpeech(fullText)) rememberSpeech(fullText);
-            const analysis = analyzeLocalEmotion(text);
-            finishMeta((analysis && analysis.emotion) || '默认');
-            companionState.isAiPending = false;
+            // 表情由 AI 在回复里用 [m:情绪] 指定（emotion 事件），不再用关键词扫描覆盖
+            finishMeta(emotion || '默认');
+            releaseReply();
             return;
         } catch (e) {
             console.warn('流式反馈失败，回退整段接口:', e);
@@ -1702,12 +1630,15 @@ function inferReplyEmotion(text) {
             console.warn('AI 分析失败:', e);
             localComfort(text);
         } finally {
-            companionState.isAiPending = false;
+            // 统一释放决策锁：无论成功/失败/中断，都在这里解冻并决定是否补读
+            releaseReply();
             // v1 扩展：保存触发后，Madeline 反应结束 → 自动判断是否出羽毛
             if (triggerType === 'save' && window.featherTrigger && window.featherTrigger.isBadMood(companionState.currentEmotion)) {
                 window.featherTrigger.requestFromSave(companionState.currentEmotion);
             }
         }
+    }
+
     function localComfort(text) {
         if (!isDistressText(text)) return;
         const pool = [
@@ -1770,6 +1701,15 @@ function inferReplyEmotion(text) {
         lastUserInputTime = Date.now();
         const text = contentInput.value.trim();
 
+        // 决策锁：她已经开口 → 本轮回复只认已冻结的稿本，不再跟进新内容。
+        // 这里只记「有新内容待补读」，不排任何定时器、不发请求；说完后由 releaseReply() 补读一次。
+        if (companionState.phase === 'REPLYING') {
+            clearTimeout(aiJudgeTimer);
+            clearTimeout(companionState.pauseTimer);
+            if (text.length > companionState.lastAnalyzedLen) companionState.pendingCatchup = true;
+            return;
+        }
+
         companionState.isTyping = true;
         clearTimeout(companionState.typeTimer);
         companionState.typeTimer = setTimeout(() => {
@@ -1781,9 +1721,7 @@ function inferReplyEmotion(text) {
             return;
         }
 
-        localReact(analyzeLocalEmotion(text), text);
-
-        // 内容一有变化就请她判断要不要回应（防抖合并连续击键；由 AI 决定开口还是沉默）
+        // 表情/反应完全交给 AI：内容变化后由防抖请求让她先读日记再决定情绪，本地不再用关键词抢先变脸
         clearTimeout(aiJudgeTimer);
         aiJudgeTimer = setTimeout(() => {
             const t = contentInput.value.trim();
@@ -1812,7 +1750,10 @@ function inferReplyEmotion(text) {
                     interrupt: true
                 })
             }).catch(() => {});
+            // 用户主动喊停：立刻解冻，且不补读（他要的就是这一刻安静）
             companionState.isAiPending = false;
+            companionState.phase = 'IDLE';
+            companionState.pendingCatchup = false;
         }
     });
 
@@ -2019,9 +1960,7 @@ function inferReplyEmotion(text) {
             if (res.success) {
                 companionState.lastAnalyzedText = '';
                 companionState.lastAnalyzedLen = 0;
-                companionState.localReactionCount = 0;
                 companionState.emotionHistory = [];
-                companionState.peakIntensity = 0;
                 updateThemeByEmotion('默认');
 
                 // 两个请求串行：先拿总结（必须先说），再流式 companion 反应（排在总结之后）
