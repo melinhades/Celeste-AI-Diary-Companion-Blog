@@ -5,7 +5,7 @@
 [![Java](https://img.shields.io/badge/Java-17%2B-orange.svg?style=for-the-badge&logo=openjdk&logoColor=white)](https://www.oracle.com/java/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.6-brightgreen.svg?style=for-the-badge&logo=spring&logoColor=white)](https://spring.io/projects/spring-boot)
 [![Frontend](https://img.shields.io/badge/Frontend-Vanilla%20JS-blueviolet.svg?style=for-the-badge&logo=javascript&logoColor=white)](https://developer.mozilla.org/docs/Web/JavaScript)
-[![AI](https://img.shields.io/badge/AI-GLM--4%20%2B%20bge--m3-purple.svg?style=for-the-badge&logo=openai&logoColor=white)](https://siliconflow.cn/)
+[![AI](https://img.shields.io/badge/AI-Qwen2.5%20%2B%20bge--m3-purple.svg?style=for-the-badge&logo=openai&logoColor=white)](https://siliconflow.cn/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 [![Architecture](https://img.shields.io/badge/Architecture-Monorepo%20(Modular)-orange.svg?style=for-the-badge)](pom.xml)
 
@@ -84,7 +84,7 @@ This dual-platform flow creates meaning: **intimate personal reflections in the 
 | 👕 | **Customization** | Themes, decorations & personalization options | 🔄 |
 | 📊 | **Analytics** | Emotion tracking, writing insights & engagement metrics | 🔄 |
 | 🔒 | **Security Hardened** | BCrypt, JWT env-config, bounded pools, magic-number uploads | ✅ |
-| 📈 | **Observability Ready** | Actuator + Prometheus metrics, structured logging, health probes | ✅ |
+| 📈 | **Observability Ready** | Actuator + Prometheus metrics, full-link TraceId, AI health probe | ✅ |
 
 ---
 
@@ -287,7 +287,7 @@ If the copyright holder requests removal, relevant content will be removed immed
 │                    │                │                │                     │
 │              ┌─────▼─────┐    ┌─────▼─────┐    ┌─────▼─────┐             │
 │              │  MySQL    │    │   Redis   │    │ SiliconFlow│             │
-│              │  (blog)   │    │  (Cache/  │    │  (GLM-4 +  │             │
+│              │  (blog)   │    │  (Cache/  │    │ (Qwen2.5 + │             │
 │              │  :3306    │    │  Session/ │    │  bge-m3)   │             │
 │              │           │    │  Token)   │    │  AI Gateway│             │
 │              └───────────┘    └───────────┘    └─────────────┘             │
@@ -304,7 +304,7 @@ If the copyright holder requests removal, relevant content will be removed immed
 | **ORM** | MyBatis-Plus | 3.5.11 | Enhanced MyBatis with CRUD, pagination |
 | **Security** | Spring Security + JWT | 6.x / 0.9.1 | Stateless auth, BCrypt passwords |
 | **Cache/Session** | Redis + Lettuce | 6.x | Distributed cache, token store |
-| **AI Gateway** | SiliconFlow | — | GLM-4 (chat), bge-m3 (embedding) |
+| **AI Gateway** | SiliconFlow | — | Qwen2.5-7B (chat), bge-m3 (embedding) |
 | **Database** | MySQL | 5.7+/8.0 | Primary persistence |
 | **Monitoring** | Actuator + Micrometer + Prometheus | 2.5.x / 1.10+ | Metrics, health checks |
 | **Build** | Maven | 3.6+ | Multi-module build |
@@ -360,7 +360,7 @@ blog/
 │       │   ├── impl/                    # Service implementations
 │       │   ├── service/                 # Service interfaces
 │       │   │       ├── ai/
-│       │   │       │   ├── AiClient.java           # GLM-4 client (JSON mode, throttle, 429 retry, circuit breaker)
+│       │   │       │   ├── AiClient.java           # Qwen2.5 client (JSON mode, throttle, 429 retry, circuit breaker)
 │       │   │       │   ├── PromptBuilder.java      # Centralized prompt engineering
 │       │   │       │   ├── MemorySearchService.java
 │       │   │       │   └── roundtable/             # AI roundtable engine
@@ -417,7 +417,7 @@ blog/
 - **Maven 3.6+**
 - **MySQL 5.7+ / 8.0**
 - **Redis 6+** (caching & token storage)
-- **SiliconFlow API Key** (GLM-4 & bge-m3)
+- **SiliconFlow API Key** (Qwen2.5 & bge-m3)
 - **Node.js 18+** (optional, for frontend dev server)
 
 ### 1. Clone & Configure
@@ -445,7 +445,7 @@ export QINIU_ACCESS_KEY="your_qiniu_ak"
 export QINIU_SECRET_KEY="your_qiniu_sk"
 export AI_API_KEY="your_siliconflow_api_key"
 export AI_BASE_URL="https://api.siliconflow.cn/v1"
-export AI_MODEL="THUDM/GLM-4-9B-0414"
+export AI_MODEL="Qwen/Qwen2.5-7B-Instruct"
 export AI_EMBEDDING_MODEL="BAAI/bge-m3"
 
 # === Database (if not localhost) ===
@@ -534,7 +534,7 @@ qiniu.accessSecretKey=${QINIU_ACCESS_SECRET_KEY:your-secret-key}
 # AI (SiliconFlow)
 ai.base-url=${AI_BASE_URL:https://api.siliconflow.cn/v1}
 ai.api-key=${AI_API_KEY:your-api-key}
-ai.model=${AI_MODEL:THUDM/GLM-4-9B-0414}
+ai.model=${AI_MODEL:Qwen/Qwen2.5-7B-Instruct}
 ai.embedding-model=${AI_EMBEDDING_MODEL:BAAI/bge-m3}
 # AI resilience: global throttle, 429 backoff, circuit breaker
 ai.min-interval-ms=800          # min gap between any two AI requests
@@ -590,7 +590,7 @@ logging:
 
 ### 1. AI Companionship System
 
-**Madeline** (GLM-4) — Warm, sincere, delicate personality:
+**Madeline** (Qwen2.5-7B) — Warm, sincere, delicate personality:
 - **Real-time chat** with streaming responses
 - **Emotion analysis**: 7 valid states (default, cute, anxious, unhappy, surprised, resentful, speechless)
 - **Proactive care**: Daily 9:30 AM check-in via `ThreadService` + cron
@@ -758,11 +758,11 @@ blog-ui/
 ## 🧪 Testing & Quality
 
 ### Current State
-- Unit tests: **10 test classes / 57 cases** — auth chain (`JWTUtils`, `LoginServiceImpl`, `LoginIntercepter`), prod config validation (`ConfigValidator`) + roundtable engine; all green (`RoundtableEngineE2eTest` requires the external AI service and is skipped in CI-style runs)
+- Unit tests: **17 test classes / 123 cases** — auth chain (`JWTUtils`, `LoginServiceImpl`, `LoginIntercepter`, `TokenServiceImpl`), prod config validation (`ConfigValidator`), TraceId filter, roundtable engine (session CAS/concurrency, consensus, roster, turn scheduling, session bus), Badeline stage rules, diary persona checker, faceEmotion mapping; all green (`RoundtableEngineE2eTest` requires the external AI service and is skipped in CI-style runs)
 - Integration tests: None yet (Testcontainers planned)
 - Coverage gate: Not yet configured (JaCoCo planned)
-- Static analysis: None configured
-- CI: None configured yet
+- Static analysis: **Checkstyle + SpotBugs** (zero-baseline, enforced via `mvn verify`)
+- CI: **GitHub Actions** (`mvn verify` gate on push/PR) + **Qodana** code quality scan
 
 ### Recommended Additions (Testcontainers)
 
@@ -794,36 +794,9 @@ blog-ui/
 </dependency>
 ```
 
-### CI/CD Pipeline (Suggested)
+### CI Pipeline (Actual)
 
-```yaml
-# .github/workflows/ci.yml
-name: CI
-on: [push, pull_request]
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    services:
-      mysql:
-        image: mysql:8.0
-        env: { MYSQL_ROOT_PASSWORD: test, MYSQL_DATABASE: blog }
-        ports: [3306:3306]
-        options: --health-cmd="mysqladmin ping" --health-interval=10s
-      redis:
-        image: redis:7-alpine
-        ports: [6379:6379]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with: { distribution: 'temurin', java-version: '17' }
-      - name: Cache Maven
-        uses: actions/cache@v4
-        with: { path: ~/.m2, key: maven-${{ hashFiles('**/pom.xml') }} }
-      - run: mvn clean verify -B
-      - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@v2
-        env: { SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }} }
-```
+`.github/workflows/ci.yml` runs on every push/PR: JDK 17 setup → Maven cache → `mvn clean verify -B` (compile + 123 unit tests + Checkstyle + SpotBugs). A separate `qodana_code_quality.yml` runs Qodana static analysis with a baseline.
 
 ---
 
@@ -1015,7 +988,7 @@ git push origin feature/your-feature-name
 | **What is this project?** | Immersive AI diary + blog platform with Celeste theme |
 | **Do I need coding skills to use?** | No — end-user ready; coding only for dev/customization |
 | **Mobile support?** | Responsive, but optimized for desktop/tablet |
-| **AI Models?** | GLM-4 (chat), bge-m3 (embeddings) via SiliconFlow |
+| **AI Models?** | Qwen2.5-7B (chat), bge-m3 (embeddings) via SiliconFlow |
 | **Data privacy?** | MySQL storage; prod requires encryption, backups, access control |
 | **Own AI key?** | Yes — set `AI_API_KEY` env var |
 
@@ -1044,10 +1017,13 @@ git push origin feature/your-feature-name
 ## 📈 Roadmap
 
 ### Recently Completed
-- [x] Spring Boot 2.5.0 → **3.2.6** (Jakarta migration + Spring Security 6 rewrite, see `docs/spring-boot-3.2.6-upgrade.md`)
+- [x] Full-link TraceId tracing (filter + MDC + log pattern + response header)
+- [x] AI health indicator driven by circuit-breaker state (`/actuator/health`)
+- [x] faceEmotion mapping: Plutchik 8-category → diary-page 7-emotion pool
+- [x] RAG retrieval depth: vector cache + time decay (τ=30d) + importance fusion + per-source quota rerank
 - [x] Security: log desensitization (no full JWT in logs), prod startup secret validation
 - [x] Debug residue cleanup (no `Thread.sleep` debug blocks / `System.out.println` in main sources)
-- [x] Auth-chain unit tests (T1: 29 cases)
+- [x] Unit tests across auth chain, roundtable engine, emotion pipeline (123 cases)
 
 ### Near Term (v1.1)
 - [ ] Monthly snapshot lazy-fill verification + backend restart resilience
@@ -1081,7 +1057,6 @@ git push origin feature/your-feature-name
 
 | Document | Purpose |
 |----------|---------|
-| [如何在浏览器访问.md](如何在浏览器访问.md) | Frontend access instructions |
 | [blog-ui/AI交接文档.md](blog-ui/AI交接文档.md) | Detailed dev handover (Aug 2026) |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution guidelines |
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Exhaustive troubleshooting |
@@ -1107,7 +1082,7 @@ git push origin feature/your-feature-name
 ### 🙏 Acknowledgments
 
 - [Celeste](https://celestegame.com/) — Inspiring art, characters, and music by **Extremely OK Games (Maddy Makes Games)**
-- [SiliconFlow](https://siliconflow.cn/) — GLM-4 & bge-m3 model access
+- [SiliconFlow](https://siliconflow.cn/) — Qwen2.5 & bge-m3 model access
 - [MyBatis-Plus](https://baomidou.com/) — Elegant database operations
 - [Spring Boot](https://spring.io/projects/spring-boot) — Productivity framework
 - All contributors who shaped this project 🍓
