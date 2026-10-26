@@ -4,7 +4,7 @@
 
 [![Java](https://img.shields.io/badge/Java-17%2B-orange.svg?style=for-the-badge&logo=openjdk&logoColor=white)](https://www.oracle.com/java/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.6-brightgreen.svg?style=for-the-badge&logo=spring&logoColor=white)](https://spring.io/projects/spring-boot)
-[![Frontend](https://img.shields.io/badge/Frontend-Vanilla%20JS-blueviolet.svg?style=for-the-badge&logo=javascript&logoColor=white)](https://developer.mozilla.org/docs/Web/JavaScript)
+[![Frontend](https://img.shields.io/badge/Frontend-Vue%203%20(CDN)-blueviolet.svg?style=for-the-badge&logo=vuedotjs&logoColor=white)](https://vuejs.org/)
 [![AI](https://img.shields.io/badge/AI-Qwen2.5%20%2B%20bge--m3-purple.svg?style=for-the-badge&logo=openai&logoColor=white)](https://siliconflow.cn/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 [![Architecture](https://img.shields.io/badge/Architecture-Monorepo%20(Modular)-orange.svg?style=for-the-badge)](pom.xml)
@@ -278,7 +278,7 @@ If the copyright holder requests removal, relevant content will be removed immed
 │  ┌──────────────────┐      ┌──────────────────┐      ┌──────────────────┐  │
 │  │   blog-ui/       │      │   blog-api/      │      │  blog-admin/     │  │
 │  │  (Frontend)      │◄────►│  (Core API)      │◄────►│  (Admin Panel)   │  │
-│  │  Vanilla HTML/   │ REST │  Spring Boot     │      │  Spring Boot +   │  │
+│  │  Vue 3 (CDN)     │ REST │  Spring Boot     │      │  Spring Boot +   │  │
 │  │  CSS/JS          │      │  3.2.6 + MP      │      │  Spring Security │  │
 │  │  Port: 8080      │      │  Port: 8888      │      │  Port: 8889      │  │
 │  └──────────────────┘      └────────┬─────────┘      └──────────────────┘  │
@@ -308,7 +308,7 @@ If the copyright holder requests removal, relevant content will be removed immed
 | **Database** | MySQL | 5.7+/8.0 | Primary persistence |
 | **Monitoring** | Actuator + Micrometer + Prometheus | 2.5.x / 1.10+ | Metrics, health checks |
 | **Build** | Maven | 3.6+ | Multi-module build |
-| **Frontend** | Vanilla HTML/CSS/JS | ES6+ | Zero-build, framework-free |
+| **Frontend** | Vue 3 (CDN global build) | 3.x | Zero-build, reactive data binding, component reuse |
 | **Fonts** | Renogare + CelesteZH | — | Pixel-perfect Celeste aesthetic |
 
 ---
