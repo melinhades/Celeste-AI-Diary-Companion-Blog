@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>Celeste · HiresSnow 启动雪花特效还原</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #05060a; }
+  #wrap { position: fixed; inset: 0; display: grid; place-items: center; }
+  /* 逻辑分辨率固定 1920x1080（Engine.Width/Height），等比缩放到窗口 */
+  #stage { position: relative; width: 1920px; height: 1080px;
+           transform-origin: center; background: #05060a; }
+  canvas { display: block; width: 1920px; height: 1080px; }
+  #hud { position: fixed; left: 12px; bottom: 10px; color: #7f8ea8;
+         font: 12px/1.6 ui-monospace, Consolas, monospace; pointer-events: none; }
+  #err { position: fixed; left: 12px; top: 10px; color: #ff8080;
+         font: 12px/1.6 ui-monospace, Consolas, monospace; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<div id="wrap"><div id="stage"><canvas id="cv" width="1920" height="1080"></canvas></div></div>
+<div id="hud">Celeste.HiresSnow 还原 · 50 particles · Direction=(-1,0) · overlayAlpha=0.45 · dt=1/60</div>
+<div id="err"></div>
+
+<script src="./snow-effect.js"></script>
+<script>
+(function () {
+  var CV = document.getElementById('cv');
+  var ctx = CV.getContext('2d');
+  var errEl = document.getElementById('err');
+  // 素材：游戏内 GFX.Overworld["snow"] / ["overlay"]（本仓库已解包的 PNG）
+  var ASSET = '../blog-ui/Atlases/Overworld/';
+
+  function loadImage(src) {
+    return new Promise(function (res, rej) {
+      var img = new Image();
+      img.onload = function () { res(img); };
+      img.onerror = function () { rej(new Error('素材加载失败: ' + src)); };
+      img.src = src;
+    });
+  }
+
+  function fit() {
+    var s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+    document.getElementById('stage').style.transform = 'scale(' + s + ')';
+  }
+  window.addEventListener('resize', fit); fit();
+
+  Promise.all([loadImage(ASSET + 'snow.png'), loadImage(ASSET + 'overlay.png')])
+    .then(function (imgs) {
+      var snowImg = imgs[0], overlayImg = imgs[1];
+      // overlay 的重复图案：等价于 SamplerState.LinearWrap
+      var pattern = ctx.createPattern(overlayImg, 'repeat');
+
+      var snow = new CelesteSnow.HiresSnow({
+        width: 1920, height: 1080,
+        overlayAlpha: CelesteSnow.IL.DEFAULT_OVERLAY_ALPHA, // 0.45
+        snowImage: snowImg,
+        overlayImage: overlayImg
+      });
+
+      // Celeste 使用固定步长 1/60，这里用累加器复刻
+      var STEP = 1 / 60, acc = 0, last = performance.now();
+
+      function frame(now) {
+        var dt = Math.min((now - last) / 1000, 0.25);
+        last = now;
+        acc += dt;
+        while (acc >= STEP) { snow.Update(STEP); acc -= STEP; }
+
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#05060a';                 // 场景底色（黑）
+        ctx.fillRect(0, 0, 1920, 1080);
+
+        snow.Render(ctx, pattern);
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    })
+    .catch(function (e) { errEl.textContent = e.message; });
+})();
+</script>
+</body>
+</html>
