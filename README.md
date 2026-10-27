@@ -4,7 +4,6 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t002-dark.webp"><img src="assets/readme/t002.webp" width="452" alt="'Every step up the mountain is a word in your story.'"></picture>
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t003-dark.webp"><img src="assets/readme/t003.webp" width="294" alt="让每一个字都有温度，让每一天都有意义。"></picture>
 
 [![Java](https://img.shields.io/badge/Java-17%2B-orange.svg?style=for-the-badge&logo=openjdk&logoColor=white)](https://www.oracle.com/java/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.6-brightgreen.svg?style=for-the-badge&logo=spring&logoColor=white)](https://spring.io/projects/spring-boot)
