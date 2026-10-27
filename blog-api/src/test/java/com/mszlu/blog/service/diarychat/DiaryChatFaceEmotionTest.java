@@ -59,21 +59,21 @@ class DiaryChatFaceEmotionTest {
 
     @Test
     void sadness_不开心() {
-        when(aiClient.chat(anyList(), eq(true))).thenReturn(aiJson("sadness", -1, 0.8));
+        when(aiClient.chat(anyList(), eq(true), any())).thenReturn(aiJson("sadness", -1, 0.8));
         DiaryChatEmotionExtractor.EmotionResult r = extractor.extract("悲伤的一天，情绪低落", null, "u1");
         assertThat(r.faceEmotion).isEqualTo("不开心");
     }
 
     @Test
     void anger_怨恨() {
-        when(aiClient.chat(anyList(), eq(true))).thenReturn(aiJson("anger", -1, 0.8));
+        when(aiClient.chat(anyList(), eq(true), any())).thenReturn(aiJson("anger", -1, 0.8));
         DiaryChatEmotionExtractor.EmotionResult r = extractor.extract("愤怒的一天", null, "u1");
         assertThat(r.faceEmotion).isEqualTo("怨恨");
     }
 
     @Test
     void fear_不安() {
-        when(aiClient.chat(anyList(), eq(true))).thenReturn(aiJson("fear", -1, 0.8));
+        when(aiClient.chat(anyList(), eq(true), any())).thenReturn(aiJson("fear", -1, 0.8));
         DiaryChatEmotionExtractor.EmotionResult r = extractor.extract("害怕的一天", null, "u1");
         assertThat(r.faceEmotion).isEqualTo("不安");
     }
@@ -81,21 +81,21 @@ class DiaryChatFaceEmotionTest {
     @Test
     void joy高分_可爱() {
         // raw_score=1.0：自适应融合会把文本分与轨迹分(0)加权，需足够高才能越过 joy 的 0.55 阈值
-        when(aiClient.chat(anyList(), eq(true))).thenReturn(aiJson("joy", 1, 1.0));
+        when(aiClient.chat(anyList(), eq(true), any())).thenReturn(aiJson("joy", 1, 1.0));
         DiaryChatEmotionExtractor.EmotionResult r = extractor.extract("快乐的一天", null, "u1");
         assertThat(r.faceEmotion).isEqualTo("可爱");
     }
 
     @Test
     void joy低分_默认() {
-        when(aiClient.chat(anyList(), eq(true))).thenReturn(aiJson("joy", 1, 0.4));
+        when(aiClient.chat(anyList(), eq(true), any())).thenReturn(aiJson("joy", 1, 0.4));
         DiaryChatEmotionExtractor.EmotionResult r = extractor.extract("快乐的一天", null, "u1");
         assertThat(r.faceEmotion).isEqualTo("默认");
     }
 
     @Test
     void 情绪强度低于阈值_默认() {
-        when(aiClient.chat(anyList(), eq(true))).thenReturn(aiJson("sadness", -1, 0.1));
+        when(aiClient.chat(anyList(), eq(true), any())).thenReturn(aiJson("sadness", -1, 0.1));
         DiaryChatEmotionExtractor.EmotionResult r = extractor.extract("悲伤的一天", null, "u1");
         assertThat(r.faceEmotion).isEqualTo("默认");
     }
@@ -103,7 +103,7 @@ class DiaryChatFaceEmotionTest {
     @Test
     void 情绪矛盾_无语() {
         // 否定词「不」+ 正向词「开心」邻接 → detectConflict 判定矛盾(score=0.7) → 无语
-        when(aiClient.chat(anyList(), eq(true))).thenReturn(aiJson("joy", 1, 1.0));
+        when(aiClient.chat(anyList(), eq(true), any())).thenReturn(aiJson("joy", 1, 1.0));
         DiaryChatEmotionExtractor.EmotionResult r = extractor.extract("不开心的一天", null, "u1");
         assertThat(r.faceEmotion).isEqualTo("无语");
     }

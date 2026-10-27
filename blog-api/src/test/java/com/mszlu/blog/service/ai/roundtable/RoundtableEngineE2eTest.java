@@ -1,7 +1,11 @@
 package com.mszlu.blog.service.ai.roundtable;
 
 import com.mszlu.blog.controller.RoundtableController;
+import com.mszlu.blog.dao.mapper.MemoryMapper;
+import com.mszlu.blog.dao.mapper.RoundtableSessionMapper;
 import com.mszlu.blog.dao.pojo.SysUser;
+import com.mszlu.blog.service.AgentTraceService;
+import com.mszlu.blog.service.MemoryService;
 import com.mszlu.blog.service.TokenService;
 import com.mszlu.blog.service.ai.AiClient;
 import com.mszlu.blog.service.ai.AiMessage;
@@ -90,6 +94,8 @@ class RoundtableEngineE2eTest {
                         ? tag + "主持人开场：各位好，今天聊的议题很有意思，玛德琳你先来。"
                         : tag + "主持人总结：大家意见收拢了，先迈出一小步试试看。";
             }
+            // 插话门控：脚本角色对刚才的观点不反对，回复 [PASS] 跳过（保持每轮一条发言的节奏）
+            if (all.contains("[PASS]")) return "[PASS]";
             // 角色发言：从 prompt 里识别被轮到的是谁
             String id = detectPersona(all);
             speakerTurn++;
@@ -202,6 +208,11 @@ class RoundtableEngineE2eTest {
             setField(engine, RoundtableEngine.class, "turnScheduler", new TurnScheduler(ai));
             setField(engine, RoundtableEngine.class, "consensusTracker", new ConsensusTracker(ai));
             setField(engine, RoundtableEngine.class, "aiExecutor", executor);
+            // 引擎的其余 Spring 协作者：mock 掉（追踪/落库/记忆检索不影响事件流断言）
+            setField(engine, RoundtableEngine.class, "agentTraceService", mock(AgentTraceService.class));
+            setField(engine, RoundtableEngine.class, "memoryService", mock(MemoryService.class));
+            setField(engine, RoundtableEngine.class, "memoryMapper", mock(MemoryMapper.class));
+            setField(engine, RoundtableEngine.class, "sessionMapper", mock(RoundtableSessionMapper.class));
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
