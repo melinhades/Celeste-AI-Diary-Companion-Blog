@@ -25,6 +25,29 @@ alpha = alpha * np.clip((bright - 0.30) / 0.20, 0.0, 1.0)  # 暗背景直接透�
 
 # 轻微清噪: alpha < 0.15 的直接归零
 alpha[alpha < 0.15] = 0.0
+
+# ---- 追加更多雪花点(避开中央文字区) ----
+from PIL import ImageDraw
+import random
+random.seed(20261027)
+H, W = alpha.shape
+dots = Image.new("L", (W, H), 0)
+dd = ImageDraw.Draw(dots)
+placed = 0
+for _ in range(260):
+    if placed >= 120:
+        break
+    x = random.uniform(0, W); y = random.uniform(0, H)
+    # 避开中央文字带 (文字集中在中间 ~55% 宽度、~85% 高度)
+    if abs(x - W/2) < W*0.27 and H*0.05 < y < H*0.95:
+        continue
+    r = random.choice([2, 2, 3, 3, 3, 4, 5, 7])
+    da = random.choice([255, 255, 255, 220, 190, 160])
+    dd.ellipse([x-r, y-r, x+r, y+r], fill=da)
+    placed += 1
+dot_a = np.asarray(dots).astype(np.float32) / 255.0
+alpha = np.maximum(alpha, dot_a)
+
 A = (alpha * 255).astype(np.uint8)
 
 # ---- 深色主题版: 保留原白字 ----
