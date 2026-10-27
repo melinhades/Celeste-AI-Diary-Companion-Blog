@@ -2,13 +2,9 @@
 
 <br><br><br>
 
-<img src="assets/readme/header-banner.png" width="900" alt="CELESTE AI DIARY COMPANION BLOG">
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/header-banner-dark.png"><img src="assets/readme/header-banner.png" width="900" alt="CELESTE AI DIARY COMPANION BLOG"></picture>
 
-<br><br><br>
-
-<img src="assets/readme/divider-snow.png" width="900" alt="">
-
-<br><br><br>
+<br><br><br><br><br><br>
 
 <img src="assets/readme/tagline-new.png" width="640" alt="Every step up the mountain is a word in your story.">
 
