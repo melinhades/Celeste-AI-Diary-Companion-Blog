@@ -1,8 +1,17 @@
 <div align="center">
 
+
+
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t001-dark.webp"><img src="assets/readme/t001.webp" width="500" alt="CELESTE AI DIARY COMPANION BLOG"></picture>
 
+
+
+
 <img src="assets/readme/tagline-new.png" width="640" alt="Every step up the mountain is a word in your story.">
+
+
+
+
 
 <img src="assets/readme/tech-stack-celeste.webp" width="760" alt="Tech Stack: Java 17 · Spring Boot 3.2.6 · Vue 3 · Redis · MyBatis-Plus">
 
