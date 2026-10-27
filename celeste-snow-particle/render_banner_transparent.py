@@ -26,27 +26,36 @@ alpha = alpha * np.clip((bright - 0.30) / 0.20, 0.0, 1.0)  # 暗背景直接透�
 # 轻微清噪: alpha < 0.15 的直接归零
 alpha[alpha < 0.15] = 0.0
 
-# ---- 追加更多雪花点(避开中央文字区) ----
-from PIL import ImageDraw
-import random
-random.seed(20261027)
-H, W = alpha.shape
-dots = Image.new("L", (W, H), 0)
-dd = ImageDraw.Draw(dots)
-placed = 0
-for _ in range(260):
-    if placed >= 120:
-        break
-    x = random.uniform(0, W); y = random.uniform(0, H)
-    # 避开中央文字带 (文字集中在中间 ~55% 宽度、~85% 高度)
-    if abs(x - W/2) < W*0.27 and H*0.05 < y < H*0.95:
+# 雪花点已全部移除（用户确认无雪花更干净好看）。
+# 脚本追加的 120 点层已删；以下为去除**源图本身**烤入的残留雪花：
+# 连通域几何判定 —— 雪花 = bbox ≤28px 的小团块；'i'/'j' 的 tittle 也是小团块，
+# 但它位于某个大字母正上方（x 对齐、垂直间距 ≤25、且大字母在其下方），予以保留。
+# （下限安全：tagline 最小字母 bbox 高 42px，最大雪花 23×23。）
+import scipy.ndimage as ndi
+binary = alpha > 0.0
+lab, n = ndi.label(binary)
+sz = np.bincount(lab.ravel())
+large_ids = [L for L in range(1, n + 1) if sz[L] >= 300]
+large_boxes = []
+for L in large_ids:
+    lys, lxs = np.where(lab == L)
+    large_boxes.append((lxs.min(), lxs.max(), lys.min(), lys.max()))
+remove_mask = np.zeros_like(binary)
+for i in range(1, n + 1):
+    if sz[i] == 0:
         continue
-    r = random.choice([2, 2, 3, 3, 3, 4, 5, 7])
-    da = random.choice([255, 255, 255, 220, 190, 160])
-    dd.ellipse([x-r, y-r, x+r, y+r], fill=da)
-    placed += 1
-dot_a = np.asarray(dots).astype(np.float32) / 255.0
-alpha = np.maximum(alpha, dot_a)
+    ys, xs = np.where(lab == i)
+    x0, x1, y0, y1 = xs.min(), xs.max(), ys.min(), ys.max()
+    if (x1 - x0 + 1) > 28 or (y1 - y0 + 1) > 28:
+        continue
+    protected = False
+    for (lx0, lx1, ly0, ly1) in large_boxes:
+        if lx0 - 15 <= x0 and x1 <= lx1 + 15 and 0 <= ly0 - y1 <= 25:
+            protected = True
+            break
+    if not protected:
+        remove_mask[lab == i] = True
+alpha[remove_mask] = 0.0
 
 A = (alpha * 255).astype(np.uint8)
 
