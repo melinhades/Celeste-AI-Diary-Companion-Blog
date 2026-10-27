@@ -1,6 +1,6 @@
 <div align="center">
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t001-dark.webp"><img src="assets/readme/t001.webp" width="500" alt="CELESTE AI DIARY COMPANION BLOG"></picture>
+<img src="assets/readme/header-banner.png" width="760" alt="CELESTE · AI COMPANION BLOG · a project by MELINHADES">
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t002-dark.webp"><img src="assets/readme/t002.webp" width="452" alt="'Every step up the mountain is a word in your story.'"></picture>
 
