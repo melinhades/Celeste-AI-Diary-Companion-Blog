@@ -1,6 +1,8 @@
 <div align="center">
 
-<img src="assets/readme/header-banner.png" width="900" alt="CELESTE AI DIARY COMPANION BLOG — Every step up the mountain is a word in your story. by MELINHADES">
+<img src="assets/readme/header-banner.png" width="900" alt="CELESTE AI DIARY COMPANION BLOG — by MELINHADES">
+
+<img src="assets/readme/tagline-postcard.png" width="520" alt="Postcard — Every step up the mountain is a word in your story.">
 
 <img src="assets/readme/tech-stack-celeste.webp" width="760" alt="Tech Stack: Java 17 · Spring Boot 3.2.6 · Vue 3 · Redis · MyBatis-Plus">
 
