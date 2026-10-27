@@ -1,10 +1,10 @@
 <div align="center">
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t001-dark.webp"><img src="assets/readme/t001.webp" width="707" alt="CELESTE AI DIARY COMPANION BLOG"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t001-dark.webp"><img src="assets/readme/t001.webp" width="500" alt="CELESTE AI DIARY COMPANION BLOG"></picture>
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t002-dark.webp"><img src="assets/readme/t002.webp" width="471" alt="'Every step up the mountain is a word in your story.'"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t002-dark.webp"><img src="assets/readme/t002.webp" width="452" alt="'Every step up the mountain is a word in your story.'"></picture>
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t003-dark.webp"><img src="assets/readme/t003.webp" width="312" alt="让每一个字都有温度，让每一天都有意义。"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t003-dark.webp"><img src="assets/readme/t003.webp" width="294" alt="让每一个字都有温度，让每一天都有意义。"></picture>
 
 [![Java](https://img.shields.io/badge/Java-17%2B-orange.svg?style=for-the-badge&logo=openjdk&logoColor=white)](https://www.oracle.com/java/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.6-brightgreen.svg?style=for-the-badge&logo=spring&logoColor=white)](https://spring.io/projects/spring-boot)
@@ -19,7 +19,7 @@
 
 <a name="quick-links"></a>
 
-## 🌐 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t004-dark.webp"><img src="assets/readme/t004.webp" width="150" alt="Quick Links"></picture>
+## 🌐 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t004-dark.webp"><img src="assets/readme/t004.webp" width="111" alt="Quick Links"></picture>
 
 <table>
 <tr><th align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t005-dark.webp"><img src="assets/readme/t005.webp" width="114" alt="🚀 Live Demo"></picture></th><th align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t006-dark.webp"><img src="assets/readme/t006.webp" width="132" alt="🎥 Demo Video"></picture></th><th align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t007-dark.webp"><img src="assets/readme/t007.webp" width="67" alt="📚 Docs"></picture></th></tr>
@@ -32,7 +32,7 @@
 
 <a name="table-of-contents"></a>
 
-## 📖 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t014-dark.webp"><img src="assets/readme/t014.webp" width="231" alt="Table of Contents"></picture>
+## 📖 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t014-dark.webp"><img src="assets/readme/t014.webp" width="174" alt="Table of Contents"></picture>
 
 - <a href="#the-vision"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t015-dark.webp"><img src="assets/readme/t015.webp" width="110" alt="💫 The Vision"></picture></a>
 - <a href="#core-features"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t016-dark.webp"><img src="assets/readme/t016.webp" width="148" alt="✨ Core Features"></picture></a>
@@ -56,11 +56,11 @@
 
 <a name="the-vision"></a>
 
-## 💫 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t032-dark.webp"><img src="assets/readme/t032.webp" width="133" alt="The Vision"></picture>
+## 💫 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t032-dark.webp"><img src="assets/readme/t032.webp" width="100" alt="The Vision"></picture>
 
-> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t033-dark.webp"><img src="assets/readme/t033.webp" width="554" alt="In Celeste, Madeline climbs a mountain to confront her anxiety. Here, you climb your own mountain — one diary entry at a time."></picture>
+> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t033-dark.webp"><img src="assets/readme/t033.webp" width="547" alt="In Celeste, Madeline climbs a mountain to confront her anxiety. Here, you climb your own mountain — one diary entry at a time."></picture>
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t034-dark.webp"><img src="assets/readme/t034.webp" width="880" alt="The Celeste AI Diary Companion Blog is a dual-platform system that merges private AI-assisted diary writing with optional public blog sharing. Inspired by the indie masterpiece Celeste (Extremely OK Games), every pixel, sound, and interaction is themed around Madeline's journey to the summit."></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t034-dark.webp"><img src="assets/readme/t034.webp" width="874" alt="The Celeste AI Diary Companion Blog is a dual-platform system that merges private AI-assisted diary writing with optional public blog sharing. Inspired by the indie masterpiece Celeste (Extremely OK Games), every pixel, sound, and interaction is themed around Madeline's journey to the summit."></picture>
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t035-dark.webp"><img src="assets/readme/t035.webp" width="870" alt="Write your diaries here, and Madeline — warm, sincere, delicate — will be your constant climbing companion: offering writing feedback, proactive check-ins, cozy chats, feather-breathing gameplay, daily postcards, and bookshelf snapshots. In the dream world behind the bookshelf lives Badeline — your sharp-tongued shadow self: shatter the mirror to summon her, talk through the night, and open the crystal Heart Door. The tsundere innkeeper Oshiro permanently resides in the shop."></picture>
 
@@ -72,7 +72,7 @@
 
 <a name="core-features"></a>
 
-## ✨ <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t038-dark.webp"><img src="assets/readme/t038.webp" width="186" alt="Core Features"></picture>
+## ✨ <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t038-dark.webp"><img src="assets/readme/t038.webp" width="139" alt="Core Features"></picture>
 
 <table>
 <tr><th align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t039-dark.webp"><img src="assets/readme/t039.webp" width="20" alt="🏷️"></picture></th><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t040-dark.webp"><img src="assets/readme/t040.webp" width="67" alt="Feature"></picture></th><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t041-dark.webp"><img src="assets/readme/t041.webp" width="99" alt="Description"></picture></th><th align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t042-dark.webp"><img src="assets/readme/t042.webp" width="55" alt="Status"></picture></th></tr>
@@ -102,9 +102,9 @@
 
 <a name="screenshots-gallery"></a>
 
-## 🖼️ <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t119-dark.webp"><img src="assets/readme/t119.webp" width="262" alt="Screenshots Gallery"></picture>
+## 🖼️ <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t119-dark.webp"><img src="assets/readme/t119.webp" width="198" alt="Screenshots Gallery"></picture>
 
-### 🔐 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t120-dark.webp"><img src="assets/readme/t120.webp" width="480" alt="Login — 'This is Madeline. Let's climb together.'"></picture>
+### 🔐 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t120-dark.webp"><img src="assets/readme/t120.webp" width="409" alt="Login — 'This is Madeline. Let's climb together.'"></picture>
 
 <p align="center">
   <img src="docs/screenshots/login.png" alt="Login Page" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -112,7 +112,7 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t121-dark.webp"><img src="assets/readme/t121.webp" width="829" alt="The gateway to your climbing journey — a parchment-textured card floats on a starry night sky, Madeline's avatar greets you at the top."></picture>
 
-### 🏠 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t122-dark.webp"><img src="assets/readme/t122.webp" width="629" alt="Index — Where your reflections become stories worth sharing."></picture>
+### 🏠 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t122-dark.webp"><img src="assets/readme/t122.webp" width="533" alt="Index — Where your reflections become stories worth sharing."></picture>
 
 <p align="center">
   <img src="docs/screenshots/index.png" alt="Blog Index" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -120,7 +120,7 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t123-dark.webp"><img src="assets/readme/t123.webp" width="850" alt="The public blog hub — elegant dark cards with metadata, category filters (All / Tech / Life / Study), search bar, Popular posts and Tags cloud."></picture>
 
-### 📖 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t124-dark.webp"><img src="assets/readme/t124.webp" width="572" alt="Diary — Every word has warmth, every day has meaning."></picture>
+### 📖 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t124-dark.webp"><img src="assets/readme/t124.webp" width="487" alt="Diary — Every word has warmth, every day has meaning."></picture>
 
 <p align="center">
   <img src="docs/screenshots/diary.png" alt="Diary Page" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -128,7 +128,7 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t125-dark.webp"><img src="assets/readme/t125.webp" width="857" alt="The heart of the app — a postcard-style diary reader where Madeline presents your past entries as mailed letters (stamps &amp; postmarks included), with real-time companionship in a Celeste dialogue box."></picture>
 
-### 🌟 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t126-dark.webp"><img src="assets/readme/t126.webp" width="580" alt="My Space — Your personal summit — every step counted."></picture>
+### 🌟 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t126-dark.webp"><img src="assets/readme/t126.webp" width="492" alt="My Space — Your personal summit — every step counted."></picture>
 
 <p align="center">
   <img src="docs/screenshots/namespace.png" alt="My Space" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -136,7 +136,7 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t127-dark.webp"><img src="assets/readme/t127.webp" width="810" alt="A character-themed profile dashboard against Celeste's rocky backdrop — ticket-card with collected stickers, and a stats panel tracking strawberry 🍓, cassette 📼, and chili 🌶️ balances."></picture>
 
-### ✍️ <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t128-dark.webp"><img src="assets/readme/t128.webp" width="687" alt="Write — From private thoughts to public stories — one Publish away."></picture>
+### ✍️ <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t128-dark.webp"><img src="assets/readme/t128.webp" width="582" alt="Write — From private thoughts to public stories — one Publish away."></picture>
 
 <p align="center">
   <img src="docs/screenshots/write.png" alt="Write Article" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -144,7 +144,7 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t129-dark.webp"><img src="assets/readme/t129.webp" width="843" alt="A full Markdown editor under a dreamy purple twilight sky — toolbar supports rich formatting plus Madeline refs, 润色/Polish (AI refinement), and 生成文章/Generate."></picture>
 
-### 🏪 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t130-dark.webp"><img src="assets/readme/t130.webp" width="657" alt="Shop — Oshiro's Strawberry Inn — the tsundere innkeeper awaits."></picture>
+### 🏪 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t130-dark.webp"><img src="assets/readme/t130.webp" width="558" alt="Shop — Oshiro's Strawberry Inn — the tsundere innkeeper awaits."></picture>
 
 <p align="center">
   <img src="docs/screenshots/shop.png" alt="Oshiro Shop" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -152,7 +152,7 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t131-dark.webp"><img src="assets/readme/t131.webp" width="845" alt="Oshiro's cozy inn — pixel-perfect Celeste interior with purple curtains, campfire chimneys curling smoke, and the sharp-tongued innkeeper herself. Spend your 🍓 strawberries on decorations, chat with Oshiro, and explore the resort."></picture>
 
-### 💻 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t132-dark.webp"><img src="assets/readme/t132.webp" width="930" alt="BerryOS — A retro desktop inside the mountain — files, clock, and a strawberry Start button."></picture>
+### 💻 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t132-dark.webp"><img src="assets/readme/t132.webp" width="790" alt="BerryOS — A retro desktop inside the mountain — files, clock, and a strawberry Start button."></picture>
 
 <p align="center">
   <img src="docs/screenshots/berryos.png" alt="BerryOS Desktop" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -160,7 +160,7 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t133-dark.webp"><img src="assets/readme/t133.webp" width="856" alt="A fully simulated retro operating system. Double-click 我的大山 to return to the blog, open the auto-generated monthly 总结.ppt, or empty the 回收站 — complete with a taskbar, live clock, custom bird cursor, and a strawberry BerryOS Start menu."></picture>
 
-### 📊 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t134-dark.webp"><img src="assets/readme/t134.webp" width="895" alt="Monthly PPT Player — Cube, dissolve, and spin transitions — your month, slideshow-style."></picture>
+### 📊 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t134-dark.webp"><img src="assets/readme/t134.webp" width="758" alt="Monthly PPT Player — Cube, dissolve, and spin transitions — your month, slideshow-style."></picture>
 
 <p align="center">
   <img src="docs/screenshots/berryos-ppt.png" alt="Monthly PPT" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -168,7 +168,7 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t135-dark.webp"><img src="assets/readme/t135.webp" width="875" alt="Double-click the monthly PPT icon on BerryOS: a splash expands from the icon, BGM kicks in, and the slideshow plays with cube / dissolve / spin 3D transitions, pixel typewriter text, and per-slide sound effects. Click or use arrow keys to page through; Esc exits. The slide data is fully decoupled from the renderer — future AI-generated monthly JSON simply replaces the data."></picture>
 
-### 🌃 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t136-dark.webp"><img src="assets/readme/t136.webp" width="575" alt="Internet Cafe — Neon signs flicker; step inside the dome."></picture>
+### 🌃 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t136-dark.webp"><img src="assets/readme/t136.webp" width="486" alt="Internet Cafe — Neon signs flicker; step inside the dome."></picture>
 
 <p align="center">
   <img src="docs/screenshots/internet-cafe.png" alt="Internet Cafe" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -176,7 +176,7 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t137-dark.webp"><img src="assets/readme/t137.webp" width="868" alt="A starry Celeste street scene: Madeline waits by the parked car while a 15-frame neon-sign animation flickers above the dome entrance, surrounded by drifting sparkle particles that cover the full screen. Click the building — the exterior surface fades away to reveal the interior layered beneath, the environment dims smoothly, and the camera pushes in."></picture>
 
-### ☎️ <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t138-dark.webp"><img src="assets/readme/t138.webp" width="744" alt="Madeline Sings at the Payphone — Pick up the receiver; listen to her sing."></picture>
+### ☎️ <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t138-dark.webp"><img src="assets/readme/t138.webp" width="632" alt="Madeline Sings at the Payphone — Pick up the receiver; listen to her sing."></picture>
 
 <p align="center">
   <img src="docs/screenshots/payphone.png" alt="Madeline Singing Payphone" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -184,7 +184,7 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t139-dark.webp"><img src="assets/readme/t139.webp" width="809" alt="A quiet snow-night scene under glowing pixel stars. Click the payphone: the receiver lifts, and Madeline sings a song that plays exactly once and rests on its final frame."></picture>
 
-### 💬 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t140-dark.webp"><img src="assets/readme/t140.webp" width="644" alt="Realtime Chatroom — The mountain talks back — live, together."></picture>
+### 💬 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t140-dark.webp"><img src="assets/readme/t140.webp" width="544" alt="Realtime Chatroom — The mountain talks back — live, together."></picture>
 
 <p align="center">
   <img src="docs/screenshots/realtime-chat.png" alt="Realtime Chatroom" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -192,7 +192,7 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t141-dark.webp"><img src="assets/readme/t141.webp" width="878" alt="A Server-Sent-Events (SSE) live chatroom — left rail switches between 山间聊天 (group chat) and notify (like/comment feed). Self/other message bubbles, a live online-presence badge, a typing indicator, and a pixel-sticker emoji panel. Messages are broadcast to all connected clients in real time; the notification column surfaces likes and comments on your writing as they happen."></picture>
 
-### 🐦 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t142-dark.webp"><img src="assets/readme/t142.webp" width="756" alt="AI Roundtable — Five Celeste souls at the table, debating until consensus."></picture>
+### 🐦 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t142-dark.webp"><img src="assets/readme/t142.webp" width="638" alt="AI Roundtable — Five Celeste souls at the table, debating until consensus."></picture>
 
 <p align="center">
   <img src="docs/screenshots/roundtable.png" alt="AI Roundtable" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -213,13 +213,13 @@
 
 <a name="golden-feather-system"></a>
 
-## 🪶 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t151-dark.webp"><img src="assets/readme/t151.webp" width="306" alt="Golden Feather System"></picture>
+## 🪶 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t151-dark.webp"><img src="assets/readme/t151.webp" width="231" alt="Golden Feather System"></picture>
 
 <p align="center">
   <img src="docs/screenshots/feather-game.png" alt="Golden Feather" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
 </p>
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t152-dark.webp"><img src="assets/readme/t152.webp" width="767" alt="A dual-core healing module inspired by Celeste: Reflective Journaling + Anxiety Relief."></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t152-dark.webp"><img src="assets/readme/t152.webp" width="761" alt="A dual-core healing module inspired by Celeste: Reflective Journaling + Anxiety Relief."></picture>
 
 <table>
 <tr><th align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t153-dark.webp"><img src="assets/readme/t153.webp" width="63" alt="Module"></picture></th><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t154-dark.webp"><img src="assets/readme/t154.webp" width="107" alt="How it works"></picture></th></tr>
@@ -229,11 +229,11 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t159-dark.webp"><img src="assets/readme/t159.webp" width="651" alt="🎯 Workflow: Awareness (Write) ➔ Relief (Breathe) ➔ Reward (Get Feather) ➔ Restart"></picture>
 
-> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t160-dark.webp"><img src="assets/readme/t160.webp" width="531" alt="Let every reflection be heard, and every anxiety find an exit."></picture>
+> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t160-dark.webp"><img src="assets/readme/t160.webp" width="524" alt="Let every reflection be heard, and every anxiety find an exit."></picture>
 
 ---
 
-### 🌙 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t161-dark.webp"><img src="assets/readme/t161.webp" width="860" alt="Dream Scene — Behind the bookshelf — snow night, aurora, and a sleeping Madeline."></picture>
+### 🌙 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t161-dark.webp"><img src="assets/readme/t161.webp" width="730" alt="Dream Scene — Behind the bookshelf — snow night, aurora, and a sleeping Madeline."></picture>
 
 <p align="center">
   <img src="docs/screenshots/dream.png" alt="Dream Snow Night" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -241,7 +241,7 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t162-dark.webp"><img src="assets/readme/t162.webp" width="846" alt="Enter the dream world by clicking the campfire behind the bookshelf. Madeline sleeps by the flickering flames while the aurora dances above — golden feather transformation balls float in the sky for reflective journaling. A cinematic camera pan carries you into the mirror room."></picture>
 
-### 🪞 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t163-dark.webp"><img src="assets/readme/t163.webp" width="697" alt="Mirror Room — Purple space, shattered glass, and the shadow within."></picture>
+### 🪞 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t163-dark.webp"><img src="assets/readme/t163.webp" width="591" alt="Mirror Room — Purple space, shattered glass, and the shadow within."></picture>
 
 <p align="center">
   <img src="docs/screenshots/mirror.png" alt="Mirror Room" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -253,7 +253,7 @@
 
 <a name="dream-mirror-badeline"></a>
 
-## 🪞 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t165-dark.webp"><img src="assets/readme/t165.webp" width="316" alt="Dream Mirror &amp; Badeline"></picture>
+## 🪞 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t165-dark.webp"><img src="assets/readme/t165.webp" width="238" alt="Dream Mirror &amp; Badeline"></picture>
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t166-dark.webp"><img src="assets/readme/t166.webp" width="869" alt="Behind the bookshelf lies a two-part dream world — a snow-night campfire on the left and a purple mirror room on the right, joined by a cinematic one-viewport camera pan. Click the mirror to shatter it and summon Badeline, the part of you that is sharp, honest, and over-protective."></picture>
 
@@ -267,7 +267,7 @@
 <tr><td align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t185-dark.webp"><img src="assets/readme/t185.webp" width="22" alt="💎"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t186-dark.webp"><img src="assets/readme/t186.webp" width="163" alt="Crystal Heart Door"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t187-dark.webp"><img src="assets/readme/t187.webp" width="387" alt="White flash → door splits → star-dust burst → crystal-heart ceremony"></picture></td></tr>
 </table>
 
-### 🔊 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t188-dark.webp"><img src="assets/readme/t188.webp" width="303" alt="Emotion-driven Voice System"></picture>
+### 🔊 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t188-dark.webp"><img src="assets/readme/t188.webp" width="256" alt="Emotion-driven Voice System"></picture>
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t189-dark.webp"><img src="assets/readme/t189.webp" width="161" alt="A dedicated utility"></picture> <a href="blog-ui/js/badeline-voice.js"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t190-dark.webp"><img src="assets/readme/t190.webp" width="157" alt="`badeline-voice.js`"></picture></a> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t191-dark.webp"><img src="assets/readme/t191.webp" width="997" alt="(window.BadelineVoice) plays real voice samples, keeping the same style/pacing as Madeline's voice in the diary page:"></picture>
 
@@ -276,13 +276,13 @@
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t194-dark.webp"><img src="assets/readme/t194.webp" width="823" alt="Playback rate &amp; volume shift per emotion; the typewriter triggers one blip every 3 characters — identical pacing to Madeline"></picture>
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t195-dark.webp"><img src="assets/readme/t195.webp" width="815" alt="`sad_solo`: a single standalone clip on its own channel, triggered only when the AI detects the special deep-sorrow emotion (sad); it never enters the loop"></picture>
 
-> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t196-dark.webp"><img src="assets/readme/t196.webp" width="637" alt="🎙️ Audio unlocks after your first click/keypress (browser autoplay policy)."></picture>
+> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t196-dark.webp"><img src="assets/readme/t196.webp" width="631" alt="🎙️ Audio unlocks after your first click/keypress (browser autoplay policy)."></picture>
 
 ---
 
 <a name="disclaimer"></a>
 
-## 🛡️ <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t197-dark.webp"><img src="assets/readme/t197.webp" width="139" alt="Disclaimer"></picture>
+## 🛡️ <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t197-dark.webp"><img src="assets/readme/t197.webp" width="104" alt="Disclaimer"></picture>
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t198-dark.webp"><img src="assets/readme/t198.webp" width="843" alt="This project is an unofficial, non-commercial fan project for learning and exchange only. Celeste-related art, characters, music, and fonts belong to Extremely OK Games (Maddy Makes Games). If the copyright holder requests removal, relevant content will be removed immediately."></picture>
 
@@ -290,7 +290,7 @@
 
 <a name="system-architecture"></a>
 
-## 🏗️ <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t199-dark.webp"><img src="assets/readme/t199.webp" width="267" alt="System Architecture"></picture>
+## 🏗️ <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t199-dark.webp"><img src="assets/readme/t199.webp" width="200" alt="System Architecture"></picture>
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -317,7 +317,7 @@
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t200-dark.webp"><img src="assets/readme/t200.webp" width="220" alt="Tech Stack Summary"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t200-dark.webp"><img src="assets/readme/t200.webp" width="186" alt="Tech Stack Summary"></picture>
 
 <table>
 <tr><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t201-dark.webp"><img src="assets/readme/t201.webp" width="49" alt="Layer"></picture></th><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t202-dark.webp"><img src="assets/readme/t202.webp" width="101" alt="Technology"></picture></th><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t203-dark.webp"><img src="assets/readme/t203.webp" width="65" alt="Version"></picture></th><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t204-dark.webp"><img src="assets/readme/t204.webp" width="70" alt="Purpose"></picture></th></tr>
@@ -338,7 +338,7 @@
 
 <a name="project-structure"></a>
 
-## 📁 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t249-dark.webp"><img src="assets/readme/t249.webp" width="220" alt="Project Structure"></picture>
+## 📁 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t249-dark.webp"><img src="assets/readme/t249.webp" width="164" alt="Project Structure"></picture>
 
 ```
 blog/
@@ -436,9 +436,9 @@ blog/
 
 <a name="quick-start"></a>
 
-## 🚀 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t250-dark.webp"><img src="assets/readme/t250.webp" width="146" alt="Quick Start"></picture>
+## 🚀 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t250-dark.webp"><img src="assets/readme/t250.webp" width="109" alt="Quick Start"></picture>
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t251-dark.webp"><img src="assets/readme/t251.webp" width="135" alt="Prerequisites"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t251-dark.webp"><img src="assets/readme/t251.webp" width="114" alt="Prerequisites"></picture>
 
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t252-dark.webp"><img src="assets/readme/t252.webp" width="319" alt="Java 17+ (JDK 17 LTS recommended)"></picture>
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t253-dark.webp"><img src="assets/readme/t253.webp" width="96" alt="Maven 3.6+"></picture>
@@ -447,7 +447,7 @@ blog/
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t256-dark.webp"><img src="assets/readme/t256.webp" width="348" alt="SiliconFlow API Key (Qwen2.5 &amp; bge-m3)"></picture>
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t257-dark.webp"><img src="assets/readme/t257.webp" width="393" alt="Node.js 18+ (optional, for frontend dev server)"></picture>
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t258-dark.webp"><img src="assets/readme/t258.webp" width="204" alt="1. Clone &amp; Configure"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t258-dark.webp"><img src="assets/readme/t258.webp" width="173" alt="1. Clone &amp; Configure"></picture>
 
 ```bash
 git clone <repository-url>
@@ -457,7 +457,7 @@ cd blog
 mysql -u root -p -e "CREATE DATABASE blog CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 ```
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t259-dark.webp"><img src="assets/readme/t259.webp" width="255" alt="2. Environment Variables"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t259-dark.webp"><img src="assets/readme/t259.webp" width="216" alt="2. Environment Variables"></picture>
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t260-dark.webp"><img src="assets/readme/t260.webp" width="250" alt="Create .env or export in shell:"></picture>
 
@@ -485,7 +485,7 @@ export REDIS_PORT="6379"
 
 > <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t261-dark.webp"><img src="assets/readme/t261.webp" width="760" alt="Development: application.properties has defaults; only JWT_SECRET is mandatory to override."></picture>
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t262-dark.webp"><img src="assets/readme/t262.webp" width="231" alt="3. Build &amp; Run Backend"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t262-dark.webp"><img src="assets/readme/t262.webp" width="196" alt="3. Build &amp; Run Backend"></picture>
 
 ```bash
 # From project root
@@ -496,14 +496,14 @@ cd blog-api
 mvn spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t263-dark.webp"><img src="assets/readme/t263.webp" width="243" alt="4. Run Admin (Optional)"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t263-dark.webp"><img src="assets/readme/t263.webp" width="205" alt="4. Run Admin (Optional)"></picture>
 
 ```bash
 cd ../blog-admin
 mvn spring-boot:run -Dspring-boot.run.profiles=dev   # Port 8889
 ```
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t264-dark.webp"><img src="assets/readme/t264.webp" width="178" alt="5. Serve Frontend"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t264-dark.webp"><img src="assets/readme/t264.webp" width="152" alt="5. Serve Frontend"></picture>
 
 ```bash
 cd ../blog-ui
@@ -511,7 +511,7 @@ python3 -m http.server 8080        # Option A: Python (simplest)
 # npx serve .                      # Option B: Node.js
 ```
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t265-dark.webp"><img src="assets/readme/t265.webp" width="97" alt="6. Access"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t265-dark.webp"><img src="assets/readme/t265.webp" width="82" alt="6. Access"></picture>
 
 <table>
 <tr><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t266-dark.webp"><img src="assets/readme/t266.webp" width="44" alt="Page"></picture></th><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t267-dark.webp"><img src="assets/readme/t267.webp" width="34" alt="URL"></picture></th></tr>
@@ -532,9 +532,9 @@ python3 -m http.server 8080        # Option A: Python (simplest)
 
 <a name="configuration-deep-dive"></a>
 
-## ⚙️ <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t279-dark.webp"><img src="assets/readme/t279.webp" width="324" alt="Configuration Deep-Dive"></picture>
+## ⚙️ <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t279-dark.webp"><img src="assets/readme/t279.webp" width="242" alt="Configuration Deep-Dive"></picture>
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t280-dark.webp"><img src="assets/readme/t280.webp" width="618" alt="Core Config (blog-api/src/main/resources/application.properties)"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t280-dark.webp"><img src="assets/readme/t280.webp" width="496" alt="Core Config (blog-api/src/main/resources/application.properties)"></picture>
 
 ```properties
 # Server
@@ -584,7 +584,7 @@ management.endpoint.health.show-details=always
 management.prometheus.metrics.export.enabled=true
 ```
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t281-dark.webp"><img src="assets/readme/t281.webp" width="573" alt="Production Config (application-prod.yml) — Key Hardening"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t281-dark.webp"><img src="assets/readme/t281.webp" width="475" alt="Production Config (application-prod.yml) — Key Hardening"></picture>
 
 ```yaml
 spring:
@@ -618,9 +618,9 @@ logging:
 
 <a name="core-features-explained"></a>
 
-## 🎯 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t282-dark.webp"><img src="assets/readme/t282.webp" width="322" alt="Core Features Explained"></picture>
+## 🎯 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t282-dark.webp"><img src="assets/readme/t282.webp" width="243" alt="Core Features Explained"></picture>
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t283-dark.webp"><img src="assets/readme/t283.webp" width="290" alt="1. AI Companionship System"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t283-dark.webp"><img src="assets/readme/t283.webp" width="246" alt="1. AI Companionship System"></picture>
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t284-dark.webp"><img src="assets/readme/t284.webp" width="530" alt="Madeline (Qwen2.5-7B) — Warm, sincere, delicate personality:"></picture>
 
@@ -644,7 +644,7 @@ logging:
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t297-dark.webp"><img src="assets/readme/t297.webp" width="557" alt="ContextChunk{source, text, label, relevanceScore} augmenting prompts"></picture>
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t298-dark.webp"><img src="assets/readme/t298.webp" width="375" alt="Lazy-fill monthly snapshots via snapReflect()"></picture>
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t299-dark.webp"><img src="assets/readme/t299.webp" width="198" alt="2. Diary &amp; Blog Flow"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t299-dark.webp"><img src="assets/readme/t299.webp" width="170" alt="2. Diary &amp; Blog Flow"></picture>
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
@@ -662,7 +662,7 @@ logging:
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t301-dark.webp"><img src="assets/readme/t301.webp" width="640" alt="Blog: Markdown editor, categories, tags, cover images, SEO-friendly URLs"></picture>
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t302-dark.webp"><img src="assets/readme/t302.webp" width="552" alt="One-click publish: Select diary entries → transform → blog post"></picture>
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t303-dark.webp"><img src="assets/readme/t303.webp" width="283" alt="3. Memory &amp; Review System"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t303-dark.webp"><img src="assets/readme/t303.webp" width="241" alt="3. Memory &amp; Review System"></picture>
 
 <table>
 <tr><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t304-dark.webp"><img src="assets/readme/t304.webp" width="67" alt="Feature"></picture></th><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t305-dark.webp"><img src="assets/readme/t305.webp" width="63" alt="Trigger"></picture></th><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t306-dark.webp"><img src="assets/readme/t306.webp" width="59" alt="Output"></picture></th></tr>
@@ -671,13 +671,13 @@ logging:
 <tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t313-dark.webp"><img src="assets/readme/t313.webp" width="129" alt="Bookshelf View"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t314-dark.webp"><img src="assets/readme/t314.webp" width="102" alt="On-demand"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t315-dark.webp"><img src="assets/readme/t315.webp" width="327" alt="Card gallery of snapshots, exportable"></picture></td></tr>
 </table>
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t316-dark.webp"><img src="assets/readme/t316.webp" width="236" alt="4. Interactive Elements"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t316-dark.webp"><img src="assets/readme/t316.webp" width="199" alt="4. Interactive Elements"></picture>
 
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t317-dark.webp"><img src="assets/readme/t317.webp" width="797" alt="Feather Breathing Game: Physics-based (gravity, wind, collision), precision landing scoring, feather-landed custom event"></picture>
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t318-dark.webp"><img src="assets/readme/t318.webp" width="758" alt="Strawberry Economy: Earn 🍓 by writing, spend in Oshiro's shop for themes/decorations"></picture>
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t319-dark.webp"><img src="assets/readme/t319.webp" width="521" alt="Pixel Avatars: 8-direction Madeline sprite with spatial audio"></picture>
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t320-dark.webp"><img src="assets/readme/t320.webp" width="220" alt="5. Security Hardening"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t320-dark.webp"><img src="assets/readme/t320.webp" width="187" alt="5. Security Hardening"></picture>
 
 <table>
 <tr><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t321-dark.webp"><img src="assets/readme/t321.webp" width="43" alt="Area"></picture></th><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t322-dark.webp"><img src="assets/readme/t322.webp" width="136" alt="Implementation"></picture></th></tr>
@@ -690,7 +690,7 @@ logging:
 <tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t335-dark.webp"><img src="assets/readme/t335.webp" width="116" alt="Observability"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t336-dark.webp"><img src="assets/readme/t336.webp" width="465" alt="Actuator health/info/prometheus, Prometheus export"></picture></td></tr>
 </table>
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t337-dark.webp"><img src="assets/readme/t337.webp" width="245" alt="6. AI Roundtable Engine"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t337-dark.webp"><img src="assets/readme/t337.webp" width="207" alt="6. AI Roundtable Engine"></picture>
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t338-dark.webp"><img src="assets/readme/t338.webp" width="604" alt="A five-character multi-agent debate over SSE, in service/ai/roundtable/."></picture>
 
@@ -724,7 +724,7 @@ logging:
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t365-dark.webp"><img src="assets/readme/t365.webp" width="839" alt="Frontend (roundtable.html): manual controlled SSE reconnect (up to 4 attempts with backoff, '网络抖动，正在回到同一场讨论') instead of native EventSource retries; a buffered sentence-aware typewriter with TextFx animations; interject input pinned under the stage; observer → participant reattachment for the owner; double-click stage for fullscreen."></picture>
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t366-dark.webp"><img src="assets/readme/t366.webp" width="221" alt="7. Realtime Chatroom"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t366-dark.webp"><img src="assets/readme/t366.webp" width="188" alt="7. Realtime Chatroom"></picture>
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t367-dark.webp"><img src="assets/readme/t367.webp" width="805" alt="A human-to-human live chat over SSE (no AI) — RealtimeChatController, base path /realtime-chat."></picture>
 
@@ -751,9 +751,9 @@ logging:
 
 <a name="technical-deep-dive"></a>
 
-## 📚 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t385-dark.webp"><img src="assets/readme/t385.webp" width="271" alt="Technical Deep-Dive"></picture>
+## 📚 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t385-dark.webp"><img src="assets/readme/t385.webp" width="203" alt="Technical Deep-Dive"></picture>
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t386-dark.webp"><img src="assets/readme/t386.webp" width="237" alt="Backend Service Layer"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t386-dark.webp"><img src="assets/readme/t386.webp" width="201" alt="Backend Service Layer"></picture>
 
 <table>
 <tr><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t387-dark.webp"><img src="assets/readme/t387.webp" width="65" alt="Service"></picture></th><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t388-dark.webp"><img src="assets/readme/t388.webp" width="174" alt="Key Responsibilities"></picture></th></tr>
@@ -768,7 +768,7 @@ logging:
 <tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t405-dark.webp"><img src="assets/readme/t405.webp" width="244" alt="ConsensusTracker / TurnScheduler"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t406-dark.webp"><img src="assets/readme/t406.webp" width="432" alt="Roundtable agreement extraction &amp; next-speaker scheduling"></picture></td></tr>
 </table>
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t407-dark.webp"><img src="assets/readme/t407.webp" width="227" alt="Frontend Architecture"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t407-dark.webp"><img src="assets/readme/t407.webp" width="192" alt="Frontend Architecture"></picture>
 
 ```
 blog-ui/
@@ -800,9 +800,9 @@ blog-ui/
 
 <a name="testing-quality"></a>
 
-## 🧪 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t414-dark.webp"><img src="assets/readme/t414.webp" width="221" alt="Testing &amp; Quality"></picture>
+## 🧪 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t414-dark.webp"><img src="assets/readme/t414.webp" width="168" alt="Testing &amp; Quality"></picture>
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t415-dark.webp"><img src="assets/readme/t415.webp" width="138" alt="Current State"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t415-dark.webp"><img src="assets/readme/t415.webp" width="117" alt="Current State"></picture>
 
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t416-dark.webp"><img src="assets/readme/t416.webp" width="840" alt="Unit tests: 19 test classes / 127 cases — auth chain (JWTUtils, LoginServiceImpl, LoginIntercepter, TokenServiceImpl), prod config validation (ConfigValidator), TraceId filter, roundtable engine (session CAS/concurrency, consensus, roster, turn scheduling, session bus), Badeline stage rules, diary persona checker, faceEmotion mapping; all green (RoundtableEngineE2eTest requires the external AI service and is skipped in CI-style runs)"></picture>
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t417-dark.webp"><img src="assets/readme/t417.webp" width="452" alt="Integration tests: None yet (Testcontainers planned)"></picture>
@@ -810,7 +810,7 @@ blog-ui/
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t419-dark.webp"><img src="assets/readme/t419.webp" width="676" alt="Static analysis: Checkstyle + SpotBugs (zero-baseline, enforced via mvn verify)"></picture>
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t420-dark.webp"><img src="assets/readme/t420.webp" width="656" alt="CI: GitHub Actions (mvn verify gate on push/PR) + Qodana code quality scan"></picture>
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t421-dark.webp"><img src="assets/readme/t421.webp" width="436" alt="Recommended Additions (Testcontainers)"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t421-dark.webp"><img src="assets/readme/t421.webp" width="367" alt="Recommended Additions (Testcontainers)"></picture>
 
 ```xml
 <!-- Parent pom.xml <dependencyManagement> -->
@@ -840,7 +840,7 @@ blog-ui/
 </dependency>
 ```
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t422-dark.webp"><img src="assets/readme/t422.webp" width="198" alt="CI Pipeline (Actual)"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t422-dark.webp"><img src="assets/readme/t422.webp" width="167" alt="CI Pipeline (Actual)"></picture>
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t423-dark.webp"><img src="assets/readme/t423.webp" width="836" alt=".github/workflows/ci.yml runs on every push/PR: JDK 17 setup → Maven cache → mvn clean verify -B (compile + 127 unit tests + Checkstyle + SpotBugs). A separate qodana_code_quality.yml runs Qodana static analysis with a baseline."></picture>
 
@@ -848,9 +848,9 @@ blog-ui/
 
 <a name="deployment-guide"></a>
 
-## 📦 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t424-dark.webp"><img src="assets/readme/t424.webp" width="243" alt="Deployment Guide"></picture>
+## 📦 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t424-dark.webp"><img src="assets/readme/t424.webp" width="183" alt="Deployment Guide"></picture>
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t425-dark.webp"><img src="assets/readme/t425.webp" width="442" alt="Docker Compose (Recommended for Prod)"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t425-dark.webp"><img src="assets/readme/t425.webp" width="374" alt="Docker Compose (Recommended for Prod)"></picture>
 
 ```yaml
 # docker-compose.yml
@@ -961,7 +961,7 @@ http {
 }
 ```
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t427-dark.webp"><img src="assets/readme/t427.webp" width="289" alt="Kubernetes (Helm) — Sketch"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t427-dark.webp"><img src="assets/readme/t427.webp" width="243" alt="Kubernetes (Helm) — Sketch"></picture>
 
 ```yaml
 # helm/values.yaml (key configs)
@@ -988,11 +988,11 @@ nginx:      { replicaCount: 2 }   # TLS via cert-manager + Let's Encrypt
 
 <a name="contribution-guide"></a>
 
-## 🤝 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t428-dark.webp"><img src="assets/readme/t428.webp" width="247" alt="Contribution Guide"></picture>
+## 🤝 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t428-dark.webp"><img src="assets/readme/t428.webp" width="185" alt="Contribution Guide"></picture>
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t429-dark.webp"><img src="assets/readme/t429.webp" width="342" alt="We welcome contributions! Please read"></picture> <a href="CONTRIBUTING.md"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t430-dark.webp"><img src="assets/readme/t430.webp" width="166" alt="CONTRIBUTING.md"></picture></a> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t431-dark.webp"><img src="assets/readme/t431.webp" width="36" alt="first."></picture>
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t432-dark.webp"><img src="assets/readme/t432.webp" width="245" alt="Quick Contribution Flow"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t432-dark.webp"><img src="assets/readme/t432.webp" width="207" alt="Quick Contribution Flow"></picture>
 
 ```bash
 git clone https://github.com/your-username/blog.git
@@ -1005,7 +1005,7 @@ git push origin feature/your-feature-name
 # Open PR against main branch
 ```
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t433-dark.webp"><img src="assets/readme/t433.webp" width="491" alt="Coding Standards (Iron Laws from AI Handover)"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t433-dark.webp"><img src="assets/readme/t433.webp" width="416" alt="Coding Standards (Iron Laws from AI Handover)"></picture>
 
 1. <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t434-dark.webp"><img src="assets/readme/t434.webp" width="634" alt="Verify Before Trust — After any fix, re-read the file to confirm actual state"></picture>
 2. <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t435-dark.webp"><img src="assets/readme/t435.webp" width="640" alt="No Placeholder Comments — Never write // ... existing code ... in real files"></picture>
@@ -1016,7 +1016,7 @@ git push origin feature/your-feature-name
 7. <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t440-dark.webp"><img src="assets/readme/t440.webp" width="573" alt="GIF/Pixel Art — No canvas scanning for size; use fixed pixel values"></picture>
 8. <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t441-dark.webp"><img src="assets/readme/t441.webp" width="574" alt="Commit Messages — Conventional Commits: type(scope): description"></picture>
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t442-dark.webp"><img src="assets/readme/t442.webp" width="244" alt="Code Quality Gates (CI)"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t442-dark.webp"><img src="assets/readme/t442.webp" width="207" alt="Code Quality Gates (CI)"></picture>
 
 <table>
 <tr><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t443-dark.webp"><img src="assets/readme/t443.webp" width="55" alt="Check"></picture></th><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t444-dark.webp"><img src="assets/readme/t444.webp" width="37" alt="Tool"></picture></th><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t445-dark.webp"><img src="assets/readme/t445.webp" width="85" alt="Threshold"></picture></th></tr>
@@ -1032,9 +1032,9 @@ git push origin feature/your-feature-name
 
 <a name="faq-troubleshooting"></a>
 
-## ❓ <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t464-dark.webp"><img src="assets/readme/t464.webp" width="298" alt="FAQ &amp; Troubleshooting"></picture>
+## ❓ <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t464-dark.webp"><img src="assets/readme/t464.webp" width="225" alt="FAQ &amp; Troubleshooting"></picture>
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t465-dark.webp"><img src="assets/readme/t465.webp" width="81" alt="General"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t465-dark.webp"><img src="assets/readme/t465.webp" width="69" alt="General"></picture>
 
 <table>
 <tr><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t466-dark.webp"><img src="assets/readme/t466.webp" width="77" alt="Question"></picture></th><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t467-dark.webp"><img src="assets/readme/t467.webp" width="64" alt="Answer"></picture></th></tr>
@@ -1046,7 +1046,7 @@ git push origin feature/your-feature-name
 <tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t478-dark.webp"><img src="assets/readme/t478.webp" width="106" alt="Own AI key?"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t479-dark.webp"><img src="assets/readme/t479.webp" width="231" alt="Yes — set AI_API_KEY env var"></picture></td></tr>
 </table>
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t480-dark.webp"><img src="assets/readme/t480.webp" width="163" alt="Common Issues"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t480-dark.webp"><img src="assets/readme/t480.webp" width="137" alt="Common Issues"></picture>
 
 <table>
 <tr><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t481-dark.webp"><img src="assets/readme/t481.webp" width="83" alt="Symptom"></picture></th><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t482-dark.webp"><img src="assets/readme/t482.webp" width="139" alt="Diagnosis Steps"></picture></th></tr>
@@ -1071,9 +1071,9 @@ git push origin feature/your-feature-name
 
 <a name="roadmap"></a>
 
-## 📈 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t510-dark.webp"><img src="assets/readme/t510.webp" width="126" alt="Roadmap"></picture>
+## 📈 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t510-dark.webp"><img src="assets/readme/t510.webp" width="95" alt="Roadmap"></picture>
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t511-dark.webp"><img src="assets/readme/t511.webp" width="209" alt="Recently Completed"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t511-dark.webp"><img src="assets/readme/t511.webp" width="176" alt="Recently Completed"></picture>
 
 - [x] <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t512-dark.webp"><img src="assets/readme/t512.webp" width="606" alt="Full-link TraceId tracing (filter + MDC + log pattern + response header)"></picture>
 - [x] <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t513-dark.webp"><img src="assets/readme/t513.webp" width="583" alt="AI health indicator driven by circuit-breaker state (/actuator/health)"></picture>
@@ -1083,21 +1083,21 @@ git push origin feature/your-feature-name
 - [x] <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t517-dark.webp"><img src="assets/readme/t517.webp" width="758" alt="Debug residue cleanup (no Thread.sleep debug blocks / System.out.println in main sources)"></picture>
 - [x] <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t518-dark.webp"><img src="assets/readme/t518.webp" width="665" alt="Unit tests across auth chain, roundtable engine, emotion pipeline (127 cases)"></picture>
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t519-dark.webp"><img src="assets/readme/t519.webp" width="162" alt="Near Term (v1.1)"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t519-dark.webp"><img src="assets/readme/t519.webp" width="138" alt="Near Term (v1.1)"></picture>
 
 - [ ] <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t520-dark.webp"><img src="assets/readme/t520.webp" width="571" alt="Monthly snapshot lazy-fill verification + backend restart resilience"></picture>
 - [ ] <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t521-dark.webp"><img src="assets/readme/t521.webp" width="363" alt="Address AI handover doc §6 legacy items"></picture>
 - [ ] <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t522-dark.webp"><img src="assets/readme/t522.webp" width="418" alt="Unit test coverage ≥ 50% (Service layer priority)"></picture>
 - [ ] <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t523-dark.webp"><img src="assets/readme/t523.webp" width="461" alt="Integration tests with Testcontainers (MySQL + Redis)"></picture>
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t524-dark.webp"><img src="assets/readme/t524.webp" width="152" alt="Mid Term (v1.2)"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t524-dark.webp"><img src="assets/readme/t524.webp" width="129" alt="Mid Term (v1.2)"></picture>
 
 - [ ] <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t525-dark.webp"><img src="assets/readme/t525.webp" width="523" alt="Performance optimization: query + render for large datasets"></picture>
 - [ ] <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t526-dark.webp"><img src="assets/readme/t526.webp" width="508" alt="Enhanced diary→blog workflow (batch publish, scheduling)"></picture>
 - [ ] <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t527-dark.webp"><img src="assets/readme/t527.webp" width="507" alt="Blog features: comments, tags, categories, RSS/Atom feed"></picture>
 - [ ] <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t528-dark.webp"><img src="assets/readme/t528.webp" width="512" alt="More AI interaction scenarios (prompt templates, few-shot)"></picture>
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t529-dark.webp"><img src="assets/readme/t529.webp" width="172" alt="Long Term (v2.0)"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t529-dark.webp"><img src="assets/readme/t529.webp" width="146" alt="Long Term (v2.0)"></picture>
 
 - [ ] <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t530-dark.webp"><img src="assets/readme/t530.webp" width="576" alt="Microservice split: Gateway + Auth + Content + Interaction + Admin"></picture>
 - [ ] <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t531-dark.webp"><img src="assets/readme/t531.webp" width="713" alt="Community features: lightweight social for blog readers (preserving diary privacy)"></picture>
@@ -1108,7 +1108,7 @@ git push origin feature/your-feature-name
 
 <a name="contributors"></a>
 
-## 👥 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t534-dark.webp"><img src="assets/readme/t534.webp" width="163" alt="Contributors"></picture>
+## 👥 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t534-dark.webp"><img src="assets/readme/t534.webp" width="122" alt="Contributors"></picture>
 
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t535-dark.webp"><img src="assets/readme/t535.webp" width="216" alt="Initial development team"></picture>
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t536-dark.webp"><img src="assets/readme/t536.webp" width="429" alt="AI handover document maintainers (2026-08-30)"></picture>
@@ -1118,7 +1118,7 @@ git push origin feature/your-feature-name
 
 <a name="related-documents"></a>
 
-## 📄 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t539-dark.webp"><img src="assets/readme/t539.webp" width="257" alt="Related Documents"></picture>
+## 📄 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t539-dark.webp"><img src="assets/readme/t539.webp" width="193" alt="Related Documents"></picture>
 
 <table>
 <tr><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t540-dark.webp"><img src="assets/readme/t540.webp" width="89" alt="Document"></picture></th><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t541-dark.webp"><img src="assets/readme/t541.webp" width="70" alt="Purpose"></picture></th></tr>
@@ -1132,7 +1132,7 @@ git push origin feature/your-feature-name
 
 <a name="production-readiness-note"></a>
 
-## ⚠️ <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t550-dark.webp"><img src="assets/readme/t550.webp" width="353" alt="Production Readiness Note"></picture>
+## ⚠️ <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t550-dark.webp"><img src="assets/readme/t550.webp" width="266" alt="Production Readiness Note"></picture>
 
 > <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t551-dark.webp"><img src="assets/readme/t551.webp" width="763" alt="This is an educational/demonstration project. Before production deployment, complete:"></picture>
 > - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t552-dark.webp"><img src="assets/readme/t552.webp" width="501" alt="Security assessment (penetration test, dependency scan)"></picture>
@@ -1145,11 +1145,11 @@ git push origin feature/your-feature-name
 
 <a name="license-acknowledgments"></a>
 
-## 📄 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t557-dark.webp"><img src="assets/readme/t557.webp" width="372" alt="License &amp; Acknowledgments"></picture>
+## 📄 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t557-dark.webp"><img src="assets/readme/t557.webp" width="280" alt="License &amp; Acknowledgments"></picture>
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t558-dark.webp"><img src="assets/readme/t558.webp" width="155" alt="MIT License — see"></picture> <a href="LICENSE"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t559-dark.webp"><img src="assets/readme/t559.webp" width="74" alt="LICENSE"></picture></a> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t560-dark.webp"><img src="assets/readme/t560.webp" width="91" alt="for details."></picture>
 
-### 🙏 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t561-dark.webp"><img src="assets/readme/t561.webp" width="190" alt="Acknowledgments"></picture>
+### 🙏 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t561-dark.webp"><img src="assets/readme/t561.webp" width="160" alt="Acknowledgments"></picture>
 
 - <a href="https://celestegame.com/"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t562-dark.webp"><img src="assets/readme/t562.webp" width="65" alt="Celeste"></picture></a> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t563-dark.webp"><img src="assets/readme/t563.webp" width="748" alt="— Inspiring art, characters, and music by Extremely OK Games (Maddy Makes Games)"></picture>
 - <a href="https://siliconflow.cn/"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t564-dark.webp"><img src="assets/readme/t564.webp" width="96" alt="SiliconFlow"></picture></a> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t565-dark.webp"><img src="assets/readme/t565.webp" width="303" alt="— Qwen2.5 &amp; bge-m3 model access"></picture>
@@ -1161,9 +1161,9 @@ git push origin feature/your-feature-name
 
 <div align="center">
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t571-dark.webp"><img src="assets/readme/t571.webp" width="819" alt="Celeste AI Diary Companion Blog — Let every word have warmth, let every day have meaning."></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t571-dark.webp"><img src="assets/readme/t571.webp" width="813" alt="Celeste AI Diary Companion Blog — Let every word have warmth, let every day have meaning."></picture>
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t572-dark.webp"><img src="assets/readme/t572.webp" width="231" alt="🏔️ Onward and upward. 🏔️"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t572-dark.webp"><img src="assets/readme/t572.webp" width="225" alt="🏔️ Onward and upward. 🏔️"></picture>
 
 <br>
 

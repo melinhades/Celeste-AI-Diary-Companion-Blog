@@ -156,7 +156,8 @@ def parse_inline(text: str) -> list[tuple[str, str, str | None, bool]]:
         elif m.group(3) is not None:
             segs.append(("text", m.group(3), None, True))
         elif m.group(4) is not None:
-            segs.append(("italic", m.group(4), None, False))
+            # 用户反馈斜体没必要——合并进正体，不再走 faux shear
+            segs.append(("text", m.group(4), None, False))
         else:
             segs.append(("code", m.group(5), None, False))
         pos = m.end()
@@ -447,9 +448,9 @@ def convert(md: str) -> str:
     quotes = [l.strip()[1:].lstrip() for l in head if l.strip().startswith(">")]
     out += ["<div align=\"center\">", ""]
     out += [pic(bake([[("text", "CELESTE AI DIARY COMPANION BLOG", None, False)]],
-                     34, color="head", bold=True)), ""]
+                     24, color="head", bold=True)), ""]
     for q in quotes:
-        out += [pic(bake([parse_inline(q)], 17, color="quote")), ""]
+        out += [pic(bake([parse_inline(q)], 16, color="quote")), ""]
     out += badges + ["", "</div>", ""]
 
     i = first_hr
@@ -488,7 +489,7 @@ def convert(md: str) -> str:
             level = len(m.group(1))
             emoji_pref, rest = split_emoji_prefix(m.group(2).strip())
             segs = parse_inline(rest)
-            size = {2: 24, 3: 19}.get(level, 16)
+            size = {2: 18, 3: 16}.get(level, 16)
             slug = bake([segs], size, color="head", bold=True)
             if level == 2:
                 block(f'<a name="{slugify(plain(segs))}"></a>', "")
