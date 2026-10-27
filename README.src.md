@@ -299,17 +299,17 @@ If the copyright holder requests removal, relevant content will be removed immed
 
 | Layer | Technology | Version | Purpose |
 |-------|------------|---------|---------|
-| **Language** | Java | 17 LTS | Type-safe, performant backend |
-| **Framework** | Spring Boot | 3.2.6 | Convention-over-configuration |
-| **ORM** | MyBatis-Plus | 3.5.11 | Enhanced MyBatis with CRUD, pagination |
-| **Security** | Spring Security + JWT | 6.x / 0.9.1 | Stateless auth, BCrypt passwords |
-| **Cache/Session** | Redis + Lettuce | 6.x | Distributed cache, token store |
-| **AI Gateway** | SiliconFlow | — | Qwen2.5-7B (chat), bge-m3 (embedding) |
-| **Database** | MySQL | 5.7+/8.0 | Primary persistence |
-| **Monitoring** | Actuator + Micrometer + Prometheus | 2.5.x / 1.10+ | Metrics, health checks |
-| **Build** | Maven | 3.6+ | Multi-module build |
-| **Frontend** | Vue 3 (CDN global build) | 3.x | Zero-build, reactive data binding, component reuse |
-| **Fonts** | Renogare + CelesteZH | — | Pixel-perfect Celeste aesthetic |
+| Language | Java | 17 LTS | Type-safe, performant backend |
+| Framework | Spring Boot | 3.2.6 | Convention-over-configuration |
+| ORM | MyBatis-Plus | 3.5.11 | Enhanced MyBatis with CRUD, pagination |
+| Security | Spring Security + JWT | 6.x / 0.9.1 | Stateless auth, BCrypt passwords |
+| Cache/Session | Redis + Lettuce | 6.x | Distributed cache, token store |
+| AI Gateway | SiliconFlow | — | Qwen2.5-7B (chat), bge-m3 (embedding) |
+| Database | MySQL | 5.7+/8.0 | Primary persistence |
+| Monitoring | Actuator + Micrometer + Prometheus | 2.5.x / 1.10+ | Metrics, health checks |
+| Build | Maven | 3.6+ | Multi-module build |
+| Frontend | Vue 3 (CDN global build) | 3.x | Zero-build, reactive data binding, component reuse |
+| Fonts | Renogare + CelesteZH | — | Pixel-perfect Celeste aesthetic |
 
 ---
 

@@ -429,8 +429,8 @@ def align_of(sep_cell: str) -> str:
 
 def cell_html(cell: str, header: bool, align: str) -> str:
     tag = "th" if header else "td"
-    if "<img" in cell or re.fullmatch(r"https?://\S+", cell):
-        inner = cell                      # icon cells / bare URLs stay raw
+    if "<img" in cell:                   # 仅 icon cells 保留原文，URL 也走烘焙
+        inner = cell
     else:
         inner = segs_html(parse_inline(cell), 16, wrap=(300 if header else 480),
                           bold_all=header)
