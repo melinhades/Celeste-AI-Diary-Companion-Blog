@@ -2,7 +2,7 @@
 
 <img src="assets/readme/header-banner.png" width="760" alt="CELESTE · AI COMPANION BLOG · a project by MELINHADES">
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t002-dark.webp"><img src="assets/readme/t002.webp" width="452" alt="'Every step up the mountain is a word in your story.'"></picture>
+<img src="assets/readme/tagline-postcard.png" width="640" alt="Postcard — Every step up the mountain is a word in your story.">
 
 <img src="assets/readme/tech-stack-celeste.webp" width="760" alt="Tech Stack: Java 17 · Spring Boot 3.2.6 · Vue 3 · Redis · MyBatis-Plus">
 
