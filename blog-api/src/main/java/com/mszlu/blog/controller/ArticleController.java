@@ -1,6 +1,7 @@
 package com.mszlu.blog.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.mszlu.blog.common.aop.LogAnnotation;
 import com.mszlu.blog.utils.UserThreadLocal;
 import com.mszlu.blog.dao.mapper.ArticleMapper;
@@ -56,6 +57,47 @@ public class ArticleController {
     @PostMapping("update")
     public Result update(@RequestBody ArticleParam articleParam){
         return articleService.update(articleParam);
+    }
+
+    /** 日记一键发布为博客（默认私密） */
+    @PostMapping("publish-from-diary")
+    public Result publishFromDiary(@RequestBody java.util.Map<String, String> body) {
+        String diaryId = body == null ? null : body.get("diaryId");
+        if (diaryId == null || diaryId.trim().isEmpty()) {
+            return Result.fail(400, "缺少 diaryId");
+        }
+        return articleService.publishFromDiary(diaryId);
+    }
+
+    /** 切换文章可见性：1=公开 0=私密 */
+    @PostMapping("visibility")
+    public Result updateVisibility(@RequestBody java.util.Map<String, Object> body) {
+        if (body == null || body.get("articleId") == null || body.get("visibility") == null) {
+            return Result.fail(400, "缺少 articleId 或 visibility");
+        }
+        String articleId = String.valueOf(body.get("articleId"));
+        int visibility = Integer.parseInt(String.valueOf(body.get("visibility")));
+        if (visibility != Article.VISIBILITY_PUBLIC && visibility != Article.VISIBILITY_PRIVATE) {
+            return Result.fail(400, "visibility 只能为 0 或 1");
+        }
+        return articleService.updateVisibility(articleId, visibility);
+    }
+
+    /** 我的文章列表（含私密），数据隔离：只查自己的 */
+    @GetMapping("mine")
+    public Result myArticles(@RequestParam(defaultValue = "1") int page,
+                             @RequestParam(defaultValue = "10") int pageSize) {
+        SysUser user = UserThreadLocal.get();
+        if (user == null) return Result.fail(401, "未登录");
+        LambdaQueryWrapper<Article> qw = new LambdaQueryWrapper<>();
+        qw.eq(Article::getAuthorId, user.getId())
+          .orderByDesc(Article::getCreateDate);
+        Page<Article> p = new Page<>(page, pageSize);
+        Page<Article> result = articleMapper.selectPage(p, qw);
+        java.util.Map<String, Object> data = new java.util.HashMap<>();
+        data.put("records", result.getRecords());
+        data.put("total", result.getTotal());
+        return Result.success(data);
     }
 
     /** 当前登录用户的文章数（数据隔离：只算自己的） */

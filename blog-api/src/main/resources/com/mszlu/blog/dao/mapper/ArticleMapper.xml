@@ -14,15 +14,18 @@
         <result column="weight" property="weight"/>
         <result column="body_id" property="bodyId"/>
         <result column="category_id" property="categoryId"/>
+        <result column="visibility" property="visibility"/>
+        <result column="source_type" property="sourceType"/>
+        <result column="source_id" property="sourceId"/>
     </resultMap>
 
     <select id="listArchives" resultType="com.mszlu.blog.dao.dos.Archives">
-        select id, title, FROM_UNIXTIME(create_date/1000,'%Y') as year, FROM_UNIXTIME(create_date/1000,'%m') as month, create_date as createDate from ms_article order by create_date desc
+        select id, title, FROM_UNIXTIME(create_date/1000,'%Y') as year, FROM_UNIXTIME(create_date/1000,'%m') as month, create_date as createDate from ms_article where visibility = 1 order by create_date desc
     </select>
     <select id="listArticle" resultMap="articleMap">
             select * from ms_article
         <where>
-            1=1
+            1=1 and visibility = 1
                      <if test="categoryId != null">
                             and category_id=#{categoryId}
                             </if>

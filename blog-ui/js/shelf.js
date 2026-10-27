@@ -487,6 +487,31 @@ function stopPeSnow() {
         if (res.success) { showToast('这一页合上了'); showList(); load(); }
         else showToast(res.msg || '删除失败');
     });
+    // 一键发成博客：后端默认私密，再点一次可切换公开/私密
+    detail.querySelector('.publish').addEventListener('click', async () => {
+        if (!cur) return;
+        const btn = detail.querySelector('.publish');
+        btn.disabled = true;
+        try {
+            const res = await api('/articles/publish-from-diary', 'POST', { diaryId: cur.id });
+            if (!res.success) { showToast(res.msg || '发布失败'); return; }
+            const articleId = res.data && res.data.id;
+            const current = res.data && res.data.visibility === 1 ? 1 : 0;
+            if (res.data && res.data.existed) {
+                // 已发布过：这一下当作切换可见性（公开 ↔ 私密）
+                const to = current === 1 ? 0 : 1;
+                const r2 = await api('/articles/visibility', 'POST', { articleId, visibility: to });
+                if (!r2.success) { showToast(r2.msg || '切换失败'); return; }
+                btn.dataset.vis = String(to);
+                showToast(to === 1 ? '这篇公开了' : '这篇收回私密了');
+            } else {
+                btn.dataset.vis = '0';
+                showToast('已发到博客（私密，再点一次公开）');
+            }
+        } finally {
+            btn.disabled = false;
+        }
+    });
     await load();
 
     // ================================================================

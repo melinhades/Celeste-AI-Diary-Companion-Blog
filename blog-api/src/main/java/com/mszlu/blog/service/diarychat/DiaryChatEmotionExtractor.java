@@ -395,7 +395,7 @@ public class DiaryChatEmotionExtractor {
         msgs.add(new AiMessage("user", prompt));
 
         try {
-            String raw = aiClient.chat(msgs, true);
+            String raw = aiClient.chat(msgs, true, aiClient.getFastModel());
             if (raw != null) {
                 JSONObject obj = JSON.parseObject(raw.trim());
                 result.put("plutchikPrimary", obj.getString("plutchik_primary"));

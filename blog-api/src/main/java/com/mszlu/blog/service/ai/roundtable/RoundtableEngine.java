@@ -25,7 +25,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * 圆桌讨论引擎（demo 版）。
@@ -86,10 +85,8 @@ public class RoundtableEngine {
     private static final int COMPLETE_AVG_THRESHOLD = 80;
     /** 硬上限发言条数（防烧 token） */
     private static final int MAX_SPEECHES = 120;
-    /** 上一位发言动作偏对抗（反驳/追问）时的插话触发概率（%） */
-    private static final int INTERJECT_AGGRESSIVE_PCT = 55;
-    /** 普通发言后的插话触发概率（%） */
-    private static final int INTERJECT_NORMAL_PCT = 25;
+    /** 插话门控标记：候选角色对刚才的观点不反对时输出此标记，本轮不插话（等别人说完） */
+    private static final String INTERJECT_PASS = "[PASS]";
     /** 滑动窗口外每新增 N 条未摘要发言，触发一次增量滚动摘要 */
     private static final int SUMMARY_EVERY = 6;
     /** 滚动摘要总体积上限，超过则整体再压缩 */
@@ -161,9 +158,9 @@ public class RoundtableEngine {
                     if (pushSpeech(session, target, "ai", content.trim())) return;
                     speechCount = session.getSpeechCount();
 
-                    // 自由插话：别人听完可以忍不住插一句（反驳/追问后概率更高）
+                    // 自由插话：仅当某位角色强烈反对刚才的观点时才插一句，否则等别人说完
                     if (speechCount < MAX_SPEECHES - 1) {
-                        RoundtablePersonas interjector = pickInterjector(session, target, sched.getAction());
+                        RoundtablePersonas interjector = pickInterjectionCandidate(session, target);
                         if (interjector != null) {
                             String inter = callInterjection(session, interjector, target, content.trim(), refs);
                             if (inter != null && !inter.trim().isEmpty()) {
@@ -283,7 +280,8 @@ public class RoundtableEngine {
     }
 
     /**
-     * 自由插话：某位角色听完上一位发言后忍不住快速插一句（一句、超短）。
+     * 自由插话（反对态度门控）：候选角色听完上一位发言后，只有强烈反对才插一句反驳。
+     * 不反对 / 只想补充或追问时输出 [PASS]，本轮不插话。返回 null 表示跳过。
      */
     private String callInterjection(RoundtableSession session, RoundtablePersonas interjector,
                                     RoundtablePersonas lastSpeaker, String lastContent, List<ContextChunk> refs) {
@@ -295,12 +293,20 @@ public class RoundtableEngine {
             String refBlock = referenceBlock(refs);
             if (!refBlock.isEmpty()) user.append(refBlock).append("\n");
             user.append("刚刚 ").append(lastSpeaker.getEnName()).append(" 说：「").append(lastContent).append("」\n");
-            user.append("自由讨论阶段，你听了没忍住要插一句话，不用等主持人点名。\n");
-            user.append("只说一句、不超过 30 个字：可以点名反驳（用英文名）、追问一个细节、或顺着补一句关键的；" +
-                    "不许重复任何人说过的观点。直接说：");
+            user.append("自由讨论阶段。只有当你【强烈反对】他刚才的观点时才插话：\n");
+            user.append("- 直接点名反驳（用英文名），一句、不超过 30 个字，必须针对他说的这个观点本身，说明你为什么不同意；\n");
+            user.append("- 不许自说自话另起话题，不许顺着补充，不许重复任何人说过的观点。\n");
+            user.append("如果你不反对，或者只是想补充、追问、表示赞同，什么都别说，只回复 ").append(INTERJECT_PASS).append("。");
             msgs.add(new AiMessage("user", user.toString()));
             String out = aiClient.chat(msgs, false);
-            return (out == null || out.trim().isEmpty()) ? null : out.trim();
+            if (out == null) return null;
+            String trimmed = out.trim();
+            // 门控：不反对就跳过本次插话
+            if (trimmed.isEmpty() || trimmed.contains(INTERJECT_PASS)) {
+                trace(session, "interject", "speaker=" + lastSpeaker.getId(), interjector.getId() + " pass", 0);
+                return null;
+            }
+            return trimmed;
         } catch (Exception e) {
             log.warn("插话生成失败（跳过本次插话）: {}", e.getMessage());
             return null;
@@ -358,17 +364,10 @@ public class RoundtableEngine {
     // ==================== 插话调度 ====================
 
     /**
-     * 决定要不要在刚结束的发言后来一次插话，并选出插话人（发言次数最少的非上一发言人）。
-     * 上一位动作是反驳/追问时概率更高，其余小概率随机。
+     * 选出本次插话的候选人（发言次数最少的非上一发言人，保证均衡）。
+     * 是否真的插话由 callInterjection 的反对态度门控决定——不反对就等别人说完。
      */
-    private RoundtablePersonas pickInterjector(RoundtableSession session, RoundtablePersonas last, String action) {
-        boolean aggressive = "反驳".equals(action) || "追问".equals(action);
-        int pct = aggressive ? INTERJECT_AGGRESSIVE_PCT : INTERJECT_NORMAL_PCT;
-        if (ThreadLocalRandom.current().nextInt(100) >= pct) {
-            trace(session, "interject", "action=" + action + " pct=" + pct, "skip", 0);
-            return null;
-        }
-
+    private RoundtablePersonas pickInterjectionCandidate(RoundtableSession session, RoundtablePersonas last) {
         Map<String, Integer> counts = new HashMap<>();
         for (RoundtablePersonas p : RoundtablePersonas.aiSpeakers()) counts.put(p.getId(), 0);
         for (Map<String, Object> m : session.getTranscript()) {
@@ -382,8 +381,6 @@ public class RoundtableEngine {
             int c = counts.get(p.getId());
             if (c < bestCount) { bestCount = c; best = p; }
         }
-        trace(session, "interject", "action=" + action + " pct=" + pct,
-                best == null ? "none" : best.getId(), 0);
         return best;
     }
 

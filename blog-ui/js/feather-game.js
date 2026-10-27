@@ -21,18 +21,27 @@
     const particles = [];
     const keys = {};
     let upHeld = false;
-    let featherThrust = 0; // 推力平滑量：0=自由下落，1=全力上升；按键切换时缓缓过渡，避免羽毛突然上下
+    // ===== 物理常数（对齐原作 BreathingMinigame，1080p 坐标系按屏高缩放）=====
+    // 原作：按住=上升、松开=下落，加速度对称 280px/s²，限速 ±200px/s，边界软停
+    const SC = () => GH / 1080;
+    const STABILIZE_GOAL = 30; // 框内累计稳定 30s 过关（原作 StablizeDuration）
+    let speedMult = 1;      // 软边界系数：推到边缘时渐停（原作 speedMultiplier）
+    let particleSpeed = 120; // 气流速度：按住→-1600（强上升流），松开回落 120
+    let particleAlpha = 0;  // 粒子淡入
+    let boxSine = 0;        // 目标框正弦相位（原作 0.12Hz SineWave）
+    let stabilized = 0;     // 框内累计稳定时长（原作 stablizedTimer）
+    let insideTimer = 0;    // 连续在框内时长（>0.2s 才开始累计，原作门槛）
+    let boxAlpha = 0;       // 目标框淡入
 
-    const GRAVITY = 55;      // 下落加速度（原 32 太慢，羽毛追不上下降的框）
-    const LIFT = -135;       // 上升加速度
-    const TERMINAL_VY = 110; // 下落终端速度（原 60 太慢，导致很难落在框上）
+    function approach(v, target, step) { return v < target ? Math.min(target, v + step) : Math.max(target, v - step); }
+    function cubeIn(t) { return t * t * t; }
 
     const BREATH = [
         { name: '吸气……', dur: 4 },
         { name: '轻轻停一下', dur: 2 },
         { name: '呼气……', dur: 9 }
     ];
-    let breathIdx = 0, breathT = 0;
+    let breathIdx = 0;
     let lastInGlow = false;
 
     const GUIDES = [
@@ -79,7 +88,6 @@
 
     // ===== 羽毛呼吸：自动定速 + 着陆 =====
     let featherSpeed = 1; // 1=正常, 0.8=略慢（情绪低落时自动放慢，但不至于追不上框）
-    let breathCycles = 0;
     let landingPhase = false;
     let landingT = 0;
     let closing = false; // 收尾淡出阶段：保留画面与台词，避免被立即清空
@@ -217,19 +225,24 @@
         window.addEventListener('keyup', e => { keys[e.key] = false; });
     }
 
+    // ===== 粒子：对齐原作 Particle.Reset —— random⁴ 加权（绝大多数是小粒子），
+    // Scale∈[0.05,0.8]，Speed=Scale×[2,8]（大粒子被气流推得更快）=====
+    function resetParticle(p) {
+        let n = Math.random();
+        n *= n * n * n; // random⁴
+        p.x = Math.random() * GW;
+        p.y = Math.random() * GH;
+        p.scale = 0.05 + n * 0.75;
+        p.speed = p.scale * (2 + Math.random() * 6);
+        p.sin = Math.random() * Math.PI * 2;
+    }
+
     function initParticles() {
         particles.length = 0;
-        const count = Math.min(120, Math.round((GW * GH) / 14000));
-        for (let i = 0; i < Math.max(50, count); i++) {
-            particles.push({
-                x: Math.random() * GW,
-                y: Math.random() * GH,
-                r: 1 + Math.random() * 3,
-                speed: 20 + Math.random() * 30,
-                len: 2 + Math.random() * 3,
-                alpha: 0.3 + Math.random() * 0.4,
-                stretch: 0
-            });
+        for (let i = 0; i < 50; i++) {
+            const p = {};
+            resetParticle(p);
+            particles.push(p);
         }
     }
 
@@ -239,7 +252,6 @@
     }
 
     function startBreathGame() {
-        breathCycles = 0;
         landingPhase = false;
         lastTs = performance.now();
         animId = requestAnimationFrame(loop);
@@ -256,74 +268,87 @@
                 finishLanding();
             }
             for (const p of particles) {
-                p.stretch = Math.max(0, p.stretch - dt * 3);
-                p.y += p.speed * 0.3 * dt;
-                if (p.y > GH + 5) { p.y = -5; p.x = Math.random() * GW; }
+                p.y += (30 + p.scale * 90) * SC() * dt;
+                p.sin += dt;
+                if (p.y > GH + 10) { p.y = -10; p.x = Math.random() * GW; }
             }
             return;
         }
 
         elapsed += dt;
+        const S = SC() * featherSpeed; // 速度整体缩放（情绪低落时 featherSpeed=0.8，节奏放慢）
 
-        const phase = BREATH[breathIdx];
-        breathT += dt;
-        if (breathT >= phase.dur) {
-            breathT = 0;
-            breathIdx = (breathIdx + 1) % BREATH.length;
-            if (breathIdx === 0) {
-                breathCycles++;
-                if (breathCycles >= 2) {
-                    startLanding();
-                    return;
-                }
+        upHeld = !!(keys['ArrowUp'] || keys['w'] || keys['W'] || keys[' ']);
+
+        // ===== 物理：对齐原作 —— 对称加速度 ±280，限速 ±200，越界软停 =====
+        const rel = feather.y - GH / 2;
+        const bounds = 450 * SC();
+        if (upHeld) {
+            if (rel > -bounds) feather.vy -= 280 * S * dt;
+            particleSpeed -= 2800 * S * dt;
+        } else {
+            if (rel < bounds) feather.vy += 280 * S * dt;
+            particleSpeed += 2800 * S * dt;
+        }
+        feather.vy = Math.max(-200 * S, Math.min(200 * S, feather.vy));
+        particleSpeed = Math.max(-1600 * S, Math.min(120 * S, particleSpeed));
+        const pushTop = rel < -bounds && feather.vy < 0;
+        const pushBottom = rel > bounds && feather.vy > 0;
+        speedMult = approach(speedMult, (pushTop || pushBottom) ? 0 : 1, dt * 4);
+        if (pushTop && speedMult === 0) feather.vy = 0;
+        if (pushBottom && speedMult === 0) feather.vy = 0;
+        feather.y += feather.vy * speedMult * dt;
+        feather.x = GW / 2;
+
+        // ===== 目标框：0.12Hz 正弦驱动，振幅 300 随进度 CubeIn 收缩，半高 160→100 =====
+        boxSine += dt;
+        const num = Math.min(1, stabilized / STABILIZE_GOAL);
+        const amp = 300 * SC() * (1 - cubeIn(num));
+        goal.y = GH / 2 - Math.sin(boxSine * Math.PI * 2 * 0.12) * amp;
+        goal.h = approach(goal.h, (160 - 60 * num) * 2 * SC(), dt * 32 * SC());
+        boxAlpha = Math.min(1, boxAlpha + dt);
+        particleAlpha = Math.min(1, particleAlpha + dt);
+        goal.glow = Math.max(0, goal.glow - dt * 0.4);
+
+        // ===== 稳定判定：框内累计 30s 过关；出框立即罚 0.5s 并持续衰减 =====
+        const inGlow = Math.abs(feather.y - goal.y) < goal.h / 2;
+        if (inGlow) {
+            insideTimer += dt;
+            if (insideTimer > 0.2) stabilized += dt;
+            if (!lastInGlow) {
+                playSoftChime();
+                goal.glow = 1;
+                addFloater('~', feather.x, feather.y - 40, 'rgba(255,227,109,.9)', 20);
             }
-            // 每换一个呼吸阶段，Madeline 说一句对应引导（降低频率：每3个阶段才说1次）
+        } else {
+            if (insideTimer > 0.2) stabilized = Math.max(0, stabilized - 0.5);
+            if (stabilized > 0) stabilized -= 0.5 * dt;
+            insideTimer = 0;
+        }
+        lastInGlow = inGlow;
+
+        if (stabilized >= STABILIZE_GOAL) {
+            startLanding();
+            return;
+        }
+
+        // ===== 呼吸相位：由目标框运动方向推导（框升=吸气、框降=呼气、转向=停），
+        // Madeline 台词随之切换，始终和框的真实节奏一致 =====
+        const c = Math.cos(boxSine * Math.PI * 2 * 0.12);
+        const newIdx = c > 0.35 ? 0 : (c < -0.35 ? 2 : 1);
+        if (newIdx !== breathIdx) {
+            breathIdx = newIdx;
             breathPhaseCount++;
             const lines = BREATH_LINES[BREATH[breathIdx].name];
             if (lines && breathPhaseCount % 3 === 1) madelineSay(pick(lines));
         }
 
-        upHeld = !!(keys['ArrowUp'] || keys['w']);
+        // ===== 羽毛旋转：独立 0.25Hz 正弦（原作 featherWave，value*0.25+0.1）=====
+        feather.rot = Math.sin(elapsed * Math.PI * 2 * 0.25) * 0.25 + 0.1;
 
-        // 推力平滑：按下/松开不瞬间切换，而是缓缓加力或卸力，羽毛起落更连贯自然
-        featherThrust += ((upHeld ? 1 : 0) - featherThrust) * Math.min(1, dt * 3.5);
-        const grav = GRAVITY * featherSpeed;
-        const lift = LIFT * featherSpeed;
-        feather.vy += (grav + (lift - grav) * featherThrust) * dt;
-        feather.vy = Math.max(-105, Math.min(TERMINAL_VY, feather.vy));
-        feather.y += feather.vy * dt;
-        feather.x = GW / 2;
-
-        const pad = 20;
-        if (feather.y < pad) { feather.y = pad; feather.vy = 0; }
-        if (feather.y > GH - pad) { feather.y = GH - pad; feather.vy = 0; }
-
-        // 呼吸框上下：按相位进度走 easeInOutSine——两端慢、中间稍快，
-        // 像"慢慢升起 → 缓缓落下(中段略快) → 到底停一下 → 再升起"，不再线性突兀地移动
-        const cur = BREATH[breathIdx];
-        const topY = GH * 0.3, botY = GH * 0.7;
-        const p = Math.min(1, breathT / cur.dur);
-        const eased = 0.5 - 0.5 * Math.cos(Math.PI * p);
-        if (cur.name === '吸气……') {
-            goal.y = botY + (topY - botY) * eased;   // 慢慢上升
-        } else if (cur.name === '呼气……') {
-            goal.y = topY + (botY - topY) * eased;   // 缓缓下降，中段稍快
-        }
-        // 「轻轻停一下」阶段：goal.y 保持不变，自然悬停
-        goal.glow = Math.max(0, goal.glow - dt * 0.4);
-
-        const inGlow = Math.abs(feather.y - goal.y) < goal.h / 2;
-        if (inGlow && !lastInGlow) {
-            playSoftChime();
-            goal.glow = 1;
-            addFloater('~', feather.x, feather.y - 40, 'rgba(255,227,109,.9)', 20);
-        }
-        lastInGlow = inGlow;
-
-        feather.rot = Math.max(-0.3, Math.min(0.3, feather.vy * 0.004)) + Math.sin(elapsed * 2.2) * 0.04;
-
-        const flapSpeed = Math.max(2, Math.min(8, Math.abs(feather.vy) * 0.06));
-        feather.frameT += dt * flapSpeed;
+        // ===== 帧动画：框内 hover 慢速、框外 flutter 快速 =====
+        const flapRate = inGlow ? 3 : 9;
+        feather.frameT += dt * flapRate;
         if (feather.frameT >= 1) {
             feather.frameT = 0;
             feather.frame += feather.dir;
@@ -331,24 +356,19 @@
             if (feather.frame <= 0) { feather.frame = 0; feather.dir = 1; }
         }
 
+        // ===== 粒子：y 由气流驱动，气流弱时正弦横摆，出界从另一端重置 =====
         for (const p of particles) {
-            if (upHeld) {
-                p.stretch = Math.min(1, p.stretch + dt * 2.5);
-            } else {
-                p.stretch = Math.max(0, p.stretch - dt * 2);
+            p.y += p.speed * particleSpeed * dt;
+            if (particleSpeed > -400 * S) {
+                p.x += (particleSpeed + 400 * S) * Math.sin(p.sin) * 0.1 * dt;
             }
-            const dir = p.stretch > 0.5 ? -1 : 1;
-            const spd = p.speed * (1 + p.stretch * 3);
-            p.y += dir * spd * dt;
-            p.len = 2 + p.stretch * (10 + p.speed * 0.3);
-
-            if (dir === 1 && p.y > GH + p.len) {
-                p.y = -p.len;
-                p.x = Math.random() * GW;
-            } else if (dir === -1 && p.y < -p.len) {
-                p.y = GH + p.len;
-                p.x = Math.random() * GW;
+            p.sin += dt;
+            if (p.y < -128 * SC() || p.y > GH + 128 * SC()) {
+                resetParticle(p);
+                p.y = particleSpeed < 0 ? GH + 128 * SC() : -128 * SC();
             }
+            if (p.x < -20) p.x = GW + 20;
+            else if (p.x > GW + 20) p.x = -20;
         }
 
         for (let i = floaters.length - 1; i >= 0; i--) {
@@ -391,18 +411,18 @@
     }
     function drawGoal() {
         const cur = BREATH[breathIdx];
-        // 判定框左右轻微晃动：两层不同频率正弦叠加，慢而自然，画面更生动
-        const sway = Math.sin(elapsed * 0.8) * (GW * 0.018) + Math.sin(elapsed * 1.9) * (GW * 0.006);
-        const cx = GW / 2 + sway;
+        const cx = GW / 2;
         const x = cx - goal.w / 2;
         const y = goal.y - goal.h / 2;
+        // 原作：框体填充 0.25 透明度，边框在稳定累计中全亮、否则 0.6
+        const edgeAlpha = (insideTimer > 0.2 ? 1 : 0.6) * boxAlpha;
         if (images.box) {
             ctx.save();
-            ctx.globalAlpha = 0.85 + goal.glow * 0.15;
+            ctx.globalAlpha = (0.25 + goal.glow * 0.15) * boxAlpha;
             ctx.drawImage(images.box, x, y, goal.w, goal.h);
             ctx.restore();
         } else {
-            ctx.fillStyle = 'rgba(255,227,109,' + (0.06 + goal.glow * 0.1) + ')';
+            ctx.fillStyle = 'rgba(255,227,109,' + ((0.06 + goal.glow * 0.1) * boxAlpha) + ')';
             ctx.fillRect(x, y, goal.w, goal.h);
         }
 
@@ -411,7 +431,7 @@
             const s = (goal.w * 0.62) / b.width;
             const bw = b.width * s, bh = b.height * s;
             ctx.save();
-            ctx.globalAlpha = 0.55 + goal.glow * 0.45;
+            ctx.globalAlpha = Math.min(1, edgeAlpha + goal.glow * 0.4);
             ctx.drawImage(b, x, y - bh * 0.25, bw, bh);
             ctx.save();
             ctx.translate(x + goal.w, y + goal.h + bh * 0.25);
@@ -424,7 +444,7 @@
         ctx.save();
         ctx.font = '16px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillStyle = 'rgba(255,240,214,' + (0.55 + 0.35 * Math.sin(elapsed * 1.6)) + ')';
+        ctx.fillStyle = 'rgba(255,240,214,' + ((0.55 + 0.35 * Math.sin(elapsed * 1.6)) * boxAlpha) + ')';
         ctx.fillText(cur.name, cx, goal.y + goal.h / 2 + 34);
         ctx.restore();
     }
@@ -435,37 +455,37 @@
 
     function render() {
         ctx.clearRect(0, 0, GW, GH);
-        ctx.fillStyle = '#0a0d18';
+        // 原作 bgAlpha 随稳定进度加深背景（0.65 → 1.0），这里用底色插值表达
+        const bgNum = Math.min(1, stabilized / STABILIZE_GOAL);
+        const bgR = Math.round(10 - 10 * bgNum), bgG = Math.round(13 - 13 * bgNum), bgB = Math.round(24 - 24 * bgNum);
+        ctx.fillStyle = 'rgb(' + bgR + ',' + bgG + ',' + bgB + ')';
         ctx.fillRect(0, 0, GW, GH);
 
+        // ===== 粒子：原作 DrawCentered(scale = p.Scale * vector)，
+        // 强上升气流时垂直拉长、横向压扁（m = -particleSpeed*0.004）=====
+        let vecX = 1, vecY = 1;
+        if (particleSpeed < 0) {
+            const m = -particleSpeed * 0.004 / SC();
+            vecX = Math.min(1, 1 / m);
+            vecY = Math.max(1, m);
+        }
+        const pimg = images.particle;
         ctx.save();
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
         for (const p of particles) {
-            if (p.stretch < 0.3) {
-                ctx.moveTo(p.x + p.r, p.y);
-                ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            const a = 0.5 * particleAlpha;
+            if (a <= 0.01) continue;
+            const pw = (pimg ? pimg.width : 24) * p.scale * vecX * SC();
+            const ph = (pimg ? pimg.height : 24) * p.scale * vecY * SC();
+            ctx.globalAlpha = a;
+            if (pimg) {
+                ctx.drawImage(pimg, p.x - pw / 2, p.y - ph / 2, pw, ph);
+            } else {
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, Math.max(1, pw / 4), 0, Math.PI * 2);
+                ctx.fill();
             }
         }
-        ctx.globalAlpha = 0.45;
-        ctx.fill();
-        ctx.restore();
-
-        ctx.save();
-        ctx.strokeStyle = '#fff';
-        ctx.lineCap = 'round';
-        ctx.globalAlpha = 0.5;
-        ctx.beginPath();
-        for (const p of particles) {
-            if (p.stretch >= 0.3) {
-                const dir = p.stretch > 0.5 ? -1 : 1;
-                const lineLen = p.len + p.stretch * p.speed * 0.4;
-                ctx.moveTo(p.x, p.y);
-                ctx.lineTo(p.x, p.y + lineLen * dir);
-            }
-        }
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
         ctx.restore();
 
         if (!landingPhase) drawGoal();
@@ -507,6 +527,7 @@
         if (canvas) { canvas.width = GW; canvas.height = GH; }
         feather.x = GW / 2;
         feather.y = Math.min(Math.max(feather.y, 20), GH - 20);
+        goal.w = 400 * SC();
     }
     window.addEventListener('resize', () => { if (opened) resizeCanvas(); });
 
@@ -520,16 +541,26 @@
         feather.x = GW / 2;
         feather.y = GH / 2;
         feather.vy = 0;
-        featherThrust = 0;
+        feather.rot = 0.1;
         floaters = [];
-        breathIdx = 0; breathT = 0;
+        breathIdx = 0;
         breathPhaseCount = 0;
         guideIdx = -1;
         lastInGlow = false;
         landingPhase = false;
+        // 原作状态重置：软边界、气流、正弦框、稳定进度
+        speedMult = 1;
+        particleSpeed = 120 * SC();
+        particleAlpha = 0;
+        boxSine = 0;
+        stabilized = 0;
+        insideTimer = 0;
+        boxAlpha = 0;
         initParticles();
-        // 呼吸框从底部起，配合第一段「吸气」缓缓升起
-        goal.y = goal.ty = GH * 0.7;
+        // 目标框从屏幕中心起（正弦初始值 0），宽度按 1080p 的 400 等比缩放
+        goal.y = GH / 2;
+        goal.w = 400 * SC();
+        goal.h = 320 * SC();
         goal.glow = 0;
         overlay.classList.add('show');
         opened = true;

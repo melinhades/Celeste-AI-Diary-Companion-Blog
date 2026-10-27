@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
 /**
@@ -85,6 +86,35 @@ public class DiaryServiceImpl implements DiaryService {
     @Autowired private DiaryChatPersonaChecker personaChecker;
     @Autowired private DiaryChatEmotionExtractor emotionExtractor;
     @Autowired private DiaryChatIntentClassifier intentClassifier;
+
+    // ===== 前处理缓存（深度审计第二步） =====
+    // 预跑重启时 draft 变化很小（多写 20 字），情绪/意图/RAG 结果大概率相同。
+    // 用 draft 前 60 字做 key，TTL 5 分钟，避免重复跑 AI。
+    private static final java.util.concurrent.ConcurrentHashMap<String, CacheEntry<?>> PRE_PROCESS_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long CACHE_TTL_MS = 5 * 60 * 1000L;
+    private static final int CACHE_PREFIX_LEN = 60;
+
+    private static class CacheEntry<T> {
+        final T value;
+        final long expireAt;
+        CacheEntry(T value) { this.value = value; this.expireAt = System.currentTimeMillis() + CACHE_TTL_MS; }
+        boolean isExpired() { return System.currentTimeMillis() > expireAt; }
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> T getCached(String key) {
+        CacheEntry<?> e = PRE_PROCESS_CACHE.get(key);
+        if (e == null) return null;
+        if (e.isExpired()) { PRE_PROCESS_CACHE.remove(key); return null; }
+        return (T) e.value;
+    }
+    private <T> void putCached(String key, T value) {
+        PRE_PROCESS_CACHE.put(key, new CacheEntry<>(value));
+    }
+    private String cacheKey(String prefix, String userId, String draft) {
+        String head = draft.length() > CACHE_PREFIX_LEN ? draft.substring(0, CACHE_PREFIX_LEN) : draft;
+        return prefix + ":" + userId + ":" + head.hashCode();
+    }
 
     @Override
     public Result save(DiaryParam param) {
@@ -469,11 +499,18 @@ public class DiaryServiceImpl implements DiaryService {
                 ? UUID.randomUUID().toString().replace("-", "").substring(0, 16)
                 : rawSid;
 
-        // —— 中断入口：如果前端传了 interrupt=true，直接标记中断并返回（新请求不启动生成） ——
-        if (Boolean.TRUE.equals(param.getInterrupt()) || "interrupt".equals(param.getTriggerType())) {
+        // —— 中断入口两种语义：
+        // 1) 纯打断（interrupt=true 但没带 draft）→ 标记后直接 return，不启动新生成
+        // 2) 打断+重开（interrupt=true 同时带了新 draft）→ 标记旧请求中断后继续走新请求
+        //    「边写边预跑」机制靠这条：用户中途继续写 → 前端发 interrupt + 新 draft → 后端让旧线程退出、新线程 acquire
+        boolean interruptRequested = Boolean.TRUE.equals(param.getInterrupt()) || "interrupt".equals(param.getTriggerType());
+        if (interruptRequested) {
             interruptManager.markInterrupted(sessionId);
-            log.info("日记伴侣会话中断标记 sessionId={}", sessionId);
-            return;
+            if (draftSnippet.isEmpty()) {
+                log.info("日记伴侣会话中断标记（纯打断） sessionId={}", sessionId);
+                return;
+            }
+            log.info("日记伴侣会话中断标记（打断+重开） sessionId={}", sessionId);
         }
 
         if (draftSnippet.isEmpty()) {
@@ -482,9 +519,15 @@ public class DiaryServiceImpl implements DiaryService {
             return;
         }
 
-        // 决策锁：同一会话只允许一轮回复在跑。她一旦决定开口，就冻结这一版稿本、专心说完；
-        // 期间前端不再发新请求，多标签页/网络重试也在这里被挡掉，不再重复调用 AI。
-        if (!interruptManager.tryAcquireReply(sessionId)) {
+        // 决策锁：同一会话只允许一轮回复在跑。
+        // 如果 interrupt 已标记（说明有旧请求在跑但被打断），短暂等待旧线程释放锁后再 acquire。
+        // 旧线程在 delta 回调或 pre-AI 中断检查点会抛异常 → finally releaseReply。
+        boolean acquired = interruptManager.tryAcquireReply(sessionId);
+        if (!acquired && interruptRequested) {
+            try { Thread.sleep(150); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+            acquired = interruptManager.tryAcquireReply(sessionId);
+        }
+        if (!acquired) {
             try {
                 response.setContentType("text/event-stream;charset=UTF-8");
                 response.setHeader("Cache-Control", "no-cache");
@@ -509,19 +552,24 @@ public class DiaryServiceImpl implements DiaryService {
     private void doCompanionReply(CompanionParam param, jakarta.servlet.http.HttpServletResponse response,
                                   String userId, String draftSnippet, String sessionId) {
 
+        // 判断异常链是否是「客户端中断」——CompletableFuture 会把 supplyAsync 里的异常包成 CompletionException
+        java.util.function.Function<Throwable, Boolean> isInterrupt = ex -> {
+            Throwable cur = ex;
+            while (cur != null) {
+                String msg = cur.getMessage();
+                if (msg != null && msg.contains("interrupted")) return true;
+                cur = cur.getCause();
+            }
+            return false;
+        };
+
         // === v1 扩展：会话记忆 ===
         long t0 = System.currentTimeMillis();
         DiaryChatMemory.SessionBuffer buf = chatMemory.getOrCreate(userId, sessionId);
         int turnId = buf.turnCount + 1;
 
-        // === v2 扩展：深度情绪提取（Plutchik 三层 + embed 交叉验证 + 跨日记趋势 + 自适应融合） ===
-        DiaryChatEmotionExtractor.EmotionResult emotion = emotionExtractor.extract(draftSnippet, param.getTypingSignal(), userId);
-
-        // === v1 扩展：意图分类 ===
-        String intent = intentClassifier.classify(draftSnippet, buf.summary);
-
-        // —— 草稿太短（< 4 字）或情绪极平静：保持 v0 行为，发 silent 事件直接返回 ——
-        if (draftSnippet.length() < 4 || emotion.getScore().doubleValue() < 0.15) {
+        // —— 草稿太短（< 4 字）：不跑任何 AI，直接 silent ——
+        if (draftSnippet.length() < 4) {
             response.setContentType("text/event-stream;charset=UTF-8");
             response.setHeader("Cache-Control", "no-cache");
             response.setHeader("X-Accel-Buffering", "no");
@@ -532,9 +580,82 @@ public class DiaryServiceImpl implements DiaryService {
             return;
         }
 
-        // —— v0 原有逻辑：人设 + RAG + 情绪画像 ——
+        // === 深度审计第一步：前处理并行化 + 第二步：缓存 ===
+        // 情绪/意图/RAG 三者独立，并行跑；预跑重启时 draft 变化小，优先命中缓存跳过 AI。
+        final String finalDraft = draftSnippet;
+        final String finalSummary = buf.summary;
+        final String finalTypingSignal = param.getTypingSignal();
+        final String emoKey = cacheKey("emo", userId, finalDraft);
+        final String intentKey = cacheKey("int", userId, finalDraft);
+        final String ragKey = cacheKey("rag", userId, finalDraft);
+
+        DiaryChatEmotionExtractor.EmotionResult cachedEmo = getCached(emoKey);
+        CompletableFuture<DiaryChatEmotionExtractor.EmotionResult> emotionFuture = cachedEmo != null
+                ? CompletableFuture.completedFuture(cachedEmo)
+                : CompletableFuture.supplyAsync(() -> {
+                    if (interruptManager.isInterrupted(sessionId)) throw new RuntimeException("interrupted");
+                    DiaryChatEmotionExtractor.EmotionResult r = emotionExtractor.extract(finalDraft, finalTypingSignal, userId);
+                    putCached(emoKey, r);
+                    return r;
+                }, aiExecutor).exceptionally(ex -> {
+                    if (isInterrupt.apply(ex)) throw new RuntimeException("interrupted");
+                    log.warn("情绪提取失败，降级为默认情绪", ex);
+                    DiaryChatEmotionExtractor.EmotionResult fb = new DiaryChatEmotionExtractor.EmotionResult(
+                            "默认", BigDecimal.valueOf(0.5), BigDecimal.ZERO, BigDecimal.ZERO, null, "low");
+                    fb.setFaceEmotion("默认");
+                    return fb;
+                });
+
+        String cachedIntent = getCached(intentKey);
+        CompletableFuture<String> intentFuture = cachedIntent != null
+                ? CompletableFuture.completedFuture(cachedIntent)
+                : CompletableFuture.supplyAsync(() -> {
+                    if (interruptManager.isInterrupted(sessionId)) throw new RuntimeException("interrupted");
+                    String r = intentClassifier.classify(finalDraft, finalSummary);
+                    putCached(intentKey, r);
+                    return r;
+                }, aiExecutor).exceptionally(ex -> {
+                    if (isInterrupt.apply(ex)) throw new RuntimeException("interrupted");
+                    log.warn("意图分类失败，降级为未知", ex);
+                    return "未知";
+                });
+
+        List<Memory> cachedRag = getCached(ragKey);
+        CompletableFuture<List<Memory>> memoryFuture = cachedRag != null
+                ? CompletableFuture.completedFuture(cachedRag)
+                : CompletableFuture.supplyAsync(() -> {
+                    if (interruptManager.isInterrupted(sessionId)) throw new RuntimeException("interrupted");
+                    List<Memory> r = memoryService.getRelevant(userId, finalDraft);
+                    putCached(ragKey, r);
+                    return r;
+                }, aiExecutor).exceptionally(ex -> {
+                    if (isInterrupt.apply(ex)) throw new RuntimeException("interrupted");
+                    log.warn("RAG 检索失败，降级为空", ex);
+                    return new ArrayList<>();
+                });
+
+        // 等三个前处理全部完成
+        CompletableFuture.allOf(emotionFuture, intentFuture, memoryFuture).join();
+        DiaryChatEmotionExtractor.EmotionResult emotion = emotionFuture.join();
+        String intent = intentFuture.join();
+        List<Memory> memories = memoryFuture.join();
+
+        // 被打断：三个 future 里任意一个检测到中断后抛异常，join 会把异常传上来
+        // （exceptionally 只兜底业务异常，不兜 RuntimeException("interrupted")）
+        // —— 情绪极平静：发 silent 直接返回 ——
+        if (emotion.getScore().doubleValue() < 0.15) {
+            response.setContentType("text/event-stream;charset=UTF-8");
+            response.setHeader("Cache-Control", "no-cache");
+            response.setHeader("X-Accel-Buffering", "no");
+            try {
+                sseEvent(response, "silent", "");
+                sseEvent(response, "done", "{\"silent\":true,\"sessionId\":\"" + sessionId + "\",\"turnId\":" + turnId + "}");
+            } catch (Exception ignored) {}
+            return;
+        }
+
+        // —— v0 原有逻辑：人设 + 情绪画像 ——
         Persona persona = personaService.getActive(userId);
-        List<Memory> memories = memoryService.getRelevant(userId, draftSnippet);
         String emotionNote = recentEmotionNote(userId);
 
         // === v1 扩展：组装 system prompt（记忆 + 情绪 + 意图 + 羽毛/圆桌联动） ===

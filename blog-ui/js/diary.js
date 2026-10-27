@@ -1302,9 +1302,19 @@ function inferReplyEmotion(text) {
 
     // ===== 配置常量 =====
     const REALTIME_CONFIG = {
-        JUDGE_DEBOUNCE_MS: 2000,          // v1 扩展：修改触发防抖 2s（原 700ms）
+        // 自适应防抖：不看字数一律等 2s 是「迟钝感」的主因。
+        // 短稿 900ms；长稿回到 2s（避免她写到一半被打断）；句子打完立刻读。
+        JUDGE_DEBOUNCE_MS: 900,
+        JUDGE_DEBOUNCE_LONG_MS: 2000,
+        JUDGE_DEBOUNCE_SENTENCE_MS: 500,
+        JUDGE_LONG_TEXT_LEN: 80,
         PAUSE_TRIGGER_MS: 3000,           // v1 扩展：打字停顿 >3s 触发弱信号反应
-        SILENCE_COOLDOWN: 8000,
+        SILENCE_COOLDOWN: 4000,           // 她沉默后 4s 即可重新判断（原 8s 过于保守）
+        // v3 预跑：首次预跑阈值 + 中断重启阈值
+        PRERUN_MIN_LEN: 30,               // 写到 30 字就起一次预跑（不等防抖）
+        PRERUN_TAIL_MARKS: '，。！？!?…；,\n',  // 句末标点 → 立刻预跑
+        PRERUN_RESTART_DELTA: 20,         // 预跑期间用户多写 20 字 → 中断重启
+
         EMOTION_WORDS: {
             '不安': ['担心','焦虑','害怕','紧张','不安','忐忑','恐慌','患得患失','迷茫','彷徨','不知所措','心慌'],
             '惊讶': ['惊讶','意外','震惊','吃惊','惊喜','诧异','惊愕','目瞪口呆','没想到','居然','竟然','万万没想到'],
@@ -1349,7 +1359,11 @@ function inferReplyEmotion(text) {
         deleteInsertPairs: 0,   // 检测：delete 后 1s 内 insert 次数 → deleteRetypeRatio 分子
         modifyFreqCounter: 0,
         modifyFreqTimer: null,
-        pauseTimer: null
+        pauseTimer: null,
+        // v3 预跑（边写边预跑）：首次触发后标记，fetch 存 AbortController 供中断重启
+        preRunTriggered: false,
+        preRunAbort: null,
+        preRunDraftLenAtStart: 0
     };
     // ===== 本地快速情绪分析（每次输入都触发） =====
     function analyzeLocalEmotion(text) {
@@ -1431,7 +1445,12 @@ function inferReplyEmotion(text) {
 
     // ===== 触发 AI 分析（真流式：边生成边逐句说；失败回退整段接口） =====
     async function triggerAiAnalysis(text, triggerType) {
-        if (companionState.isAiPending || companionState.phase === 'REPLYING') return;
+        // 正常路径：isAiPending 和 REPLYING 都要挡
+        // 例外：pendingPreRunRestart=true（预跑期间被中断重启）→ 允许进入
+        const isPreRunRestart = !!companionState.pendingPreRunRestart;
+        if (companionState.isAiPending || companionState.phase === 'REPLYING') {
+            if (!isPreRunRestart) return;
+        }
         companionState.isAiPending = true;
         // 决策点：从这一刻起冻结稿本，本轮回复不再跟进用户后续输入
         companionState.phase = 'REPLYING';
@@ -1461,6 +1480,8 @@ function inferReplyEmotion(text) {
                 draft: text,
                 sessionId: companionState.sessionId || undefined,
                 triggerType: triggerType || 'save',
+                // v3 预跑重启：告诉后端「打断旧的 + 起新的」
+                interrupt: isPreRunRestart ? true : undefined,
                 // v2 扩展：按键级原始事件流 + 计算好的轨迹特征
                 typingSignal: JSON.stringify((() => {
                     const intervals = companionState.keyIntervals;
@@ -1501,13 +1522,19 @@ function inferReplyEmotion(text) {
             companionState.keyIntervals = [];
             companionState.lastKeyTs = 0;
             companionState.keyEvents = [];
+
+            // v3 预跑：用 AbortController 存句柄，供 input handler 触发中断
+            const abortCtrl = new AbortController();
+            companionState.preRunAbort = abortCtrl;
+
             const resp = await fetch(BASE_URL + '/diary/companion/stream', {
                 method: 'POST',
                 headers: Object.assign(
                     { 'Content-Type': 'application/json' },
                     token ? { 'Authorization': token } : {}
                 ),
-                body: JSON.stringify(payload)
+                body: JSON.stringify(payload),
+                signal: abortCtrl.signal
             });
             if (!resp.ok || !resp.body) throw new Error('流式不可用 HTTP ' + resp.status);
             const reader = resp.body.getReader();
@@ -1610,6 +1637,11 @@ function inferReplyEmotion(text) {
             releaseReply();
             return;
         } catch (e) {
+            // v3 预跑中断：AbortController.abort() 是预期行为，跳过回退接口，等 finally 里 pendingPreRunRestart 重启
+            if (e && (e.name === 'AbortError' || e.code === 20)) {
+                console.info('[v3 prerun] stream aborted, waiting restart');
+                return;
+            }
             console.warn('流式反馈失败，回退整段接口:', e);
         }
 
@@ -1631,7 +1663,22 @@ function inferReplyEmotion(text) {
             localComfort(text);
         } finally {
             // 统一释放决策锁：无论成功/失败/中断，都在这里解冻并决定是否补读
+            // v3 预跑：先清 abort 句柄（否则下次 input 又会误判「还在预跑」）
+            companionState.preRunAbort = null;
             releaseReply();
+
+            // v3 预跑重启：input handler 在 REPLYING 阶段触发了 abort 并设了 pendingPreRunRestart
+            // 旧请求已结束，这里立刻起新请求（带 interrupt=true），让后端 mark 旧的 + acquire 新的
+            if (companionState.pendingPreRunRestart) {
+                companionState.pendingPreRunRestart = false;
+                const t = contentInput.value.trim();
+                if (t.length >= REALTIME_CONFIG.PRERUN_MIN_LEN) {
+                    companionState.preRunTriggered = true;   // 重启也算触发过了
+                    companionState.preRunDraftLenAtStart = t.length;
+                    triggerAiAnalysis(t, 'prerun');
+                }
+            }
+
             // v1 扩展：保存触发后，Madeline 反应结束 → 自动判断是否出羽毛
             if (triggerType === 'save' && window.featherTrigger && window.featherTrigger.isBadMood(companionState.currentEmotion)) {
                 window.featherTrigger.requestFromSave(companionState.currentEmotion);
@@ -1702,11 +1749,24 @@ function inferReplyEmotion(text) {
         const text = contentInput.value.trim();
 
         // 决策锁：她已经开口 → 本轮回复只认已冻结的稿本，不再跟进新内容。
-        // 这里只记「有新内容待补读」，不排任何定时器、不发请求；说完后由 releaseReply() 补读一次。
+        // 但如果是预跑期间（preRunAbort 存在），用户继续写且内容变化足够大 → 中断重启
         if (companionState.phase === 'REPLYING') {
             clearTimeout(aiJudgeTimer);
             clearTimeout(companionState.pauseTimer);
             if (text.length > companionState.lastAnalyzedLen) companionState.pendingCatchup = true;
+
+            // v3 预跑重启：预跑期间用户多写了 20 字以上 或 出现句末标点 → 中断旧请求 + 立刻重启
+            if (companionState.preRunAbort) {
+                const delta = text.length - companionState.preRunDraftLenAtStart;
+                const tailMarked = REALTIME_CONFIG.PRERUN_TAIL_MARKS.indexOf(text.slice(-1)) !== -1;
+                if (delta >= REALTIME_CONFIG.PRERUN_RESTART_DELTA || tailMarked) {
+                    companionState.preRunAbort.abort();
+                    companionState.preRunAbort = null;
+                    // 后端会在 delta 回调里看到 isInterrupted 并 release 锁
+                    // 前端标记一下，等旧请求 finally 里释放 isAiPending 后立刻重启
+                    companionState.pendingPreRunRestart = true;
+                }
+            }
             return;
         }
 
@@ -1718,23 +1778,54 @@ function inferReplyEmotion(text) {
 
         if (text.length === 0) {
             clearTimeout(aiJudgeTimer);
+            companionState.preRunTriggered = false; // 清空：下次输入可以重新预跑
+            return;
+        }
+
+        // v3 预跑（边写边预跑）：首次输入就起一次请求，不等防抖
+        // 条件：还没触发过预跑 且 (≥30 字 或 句末标点)
+        const tail = text.slice(-1);
+        const tailMarked = REALTIME_CONFIG.PRERUN_TAIL_MARKS.indexOf(tail) !== -1;
+        if (!companionState.preRunTriggered && !companionState.isAiPending
+                && (text.length >= REALTIME_CONFIG.PRERUN_MIN_LEN || tailMarked)) {
+            companionState.preRunTriggered = true;
+            companionState.preRunDraftLenAtStart = text.length;
+            companionState.lastJudgeTime = Date.now();
+            companionState.preRunIsFirstRun = true;
+            triggerAiAnalysis(text, tailMarked ? 'input' : 'prerun');
+            clearTimeout(aiJudgeTimer);   // 预跑已经起了，取消原来的防抖
             return;
         }
 
         // 表情/反应完全交给 AI：内容变化后由防抖请求让她先读日记再决定情绪，本地不再用关键词抢先变脸
         clearTimeout(aiJudgeTimer);
+        // 自适应防抖：句子写完立刻读（500ms）；短稿 900ms；长稿 2s 防止打断思路
+        const delay = judgeDelayFor(text);
         aiJudgeTimer = setTimeout(() => {
             const t = contentInput.value.trim();
             if (t.length === 0) return;
             if (t.length <= companionState.lastAnalyzedLen) return; // 没有新内容
             if (companionState.isAiPending) return;
-            // 不设说话冷却：开不开口完全交给 AI 判断；仅保留沉默后 8s 间隔防请求轰炸
+            // 不设说话冷却：开不开口完全交给 AI 判断；仅保留沉默后 4s 间隔防请求轰炸
             const now = Date.now();
             if (now - companionState.lastJudgeTime <= REALTIME_CONFIG.SILENCE_COOLDOWN) return; // 刚判断过（多半刚沉默）
             companionState.lastJudgeTime = now;
-            triggerAiAnalysis(t, 'modify');   // v1 扩展：明确传 triggerType='modify'（debounce 2s 触发）
-        }, REALTIME_CONFIG.JUDGE_DEBOUNCE_MS);
+            triggerAiAnalysis(t, 'modify');   // v1 扩展：triggerType='modify'（自适应防抖触发）
+        }, delay);
     });
+
+    /**
+     * 自适应防抖时长：
+     * - 句末标点收尾 → 她读得懂整句，立刻开口（500ms）
+     * - 长稿（≥80 字）→ 回到 2s，避免写到一半被打断
+     * - 其余短稿 → 900ms
+     */
+    function judgeDelayFor(text) {
+        const tail = text.slice(-1);
+        if ('。！？!?…\n；;'.indexOf(tail) !== -1) return REALTIME_CONFIG.JUDGE_DEBOUNCE_SENTENCE_MS;
+        if (text.length >= REALTIME_CONFIG.JUDGE_LONG_TEXT_LEN) return REALTIME_CONFIG.JUDGE_DEBOUNCE_LONG_MS;
+        return REALTIME_CONFIG.JUDGE_DEBOUNCE_MS;
+    }
 
     // v1 扩展：ESC 键中断当前流式生成（Madeline 正在说话时按）
     document.addEventListener('keydown', (e) => {

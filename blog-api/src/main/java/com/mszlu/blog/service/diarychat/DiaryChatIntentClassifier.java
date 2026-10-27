@@ -43,7 +43,7 @@ public class DiaryChatIntentClassifier {
         msgs.add(new AiMessage("user", prompt));
 
         try {
-            String raw = aiClient.chat(msgs, true);
+            String raw = aiClient.chat(msgs, true, aiClient.getFastModel());
             if (raw != null) {
                 JSONObject obj = JSON.parseObject(raw.trim());
                 String intent = obj.getString("intent");

@@ -20,5 +20,11 @@ public interface ArticleService {
     Result publish(ArticleParam articleParam);
     Result update(ArticleParam articleParam);
 
+    /** 日记一键发布为博客（默认私密；同一篇日记重复调用返回已发布的文章） */
+    Result publishFromDiary(String diaryId);
+
+    /** 切换文章可见性：Article.VISIBILITY_PUBLIC / VISIBILITY_PRIVATE */
+    Result updateVisibility(String articleId, int visibility);
+
 }
 

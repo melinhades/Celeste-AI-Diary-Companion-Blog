@@ -38,6 +38,12 @@ public class AiClient {
     @Value("${ai.model:THUDM/GLM-4-9B-0414}")
     private String model;
 
+    /** 前处理快模型：情绪提取/意图分类不需要强推理，用小模型省延迟 */
+    @Value("${ai.fast-model:Qwen/Qwen2.5-3B-Instruct}")
+    private String fastModel;
+
+    public String getFastModel() { return fastModel; }
+
     @Value("${ai.embedding-model:BAAI/bge-m3}")
     private String embeddingModel;
 
@@ -157,6 +163,11 @@ public class AiClient {
     }
 
     public String chat(List<AiMessage> messages, boolean jsonMode) {
+        return chat(messages, jsonMode, this.model);
+    }
+
+    /** 带自定义模型的 chat：前处理（情绪/意图）用快模型，主回复用主模型 */
+    public String chat(List<AiMessage> messages, boolean jsonMode, String model) {
         throttle();
         if (!tryAcquire()) {
             log.warn("AI 熔断器打开中，本次请求快速失败");
