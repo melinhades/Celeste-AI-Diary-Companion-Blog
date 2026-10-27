@@ -1,0 +1,696 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第九章 · 铭记（Remembered）场景演示</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; height: 100%; overflow: hidden;
+      background: #050916; color: #e8f2ff;
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    #scene { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; }
+    .vignette {
+      position: fixed; inset: 0; pointer-events: none;
+      background: radial-gradient(ellipse at 50% 55%, transparent 38%, rgba(3, 6, 18, .58) 100%);
+    }
+    header {
+      position: fixed; left: clamp(20px, 4vw, 64px); top: clamp(20px, 5vh, 56px);
+      pointer-events: none; text-shadow: 0 2px 22px #04101f;
+    }
+    .eyebrow { font-size: 11px; letter-spacing: .34em; color: #9fc0d8; }
+    h1 {
+      margin: 10px 0 6px; font-size: clamp(34px, 5vw, 58px);
+      font-weight: 300; letter-spacing: .18em; color: #eaf6ff;
+    }
+    .sub { font-size: 12px; letter-spacing: .2em; color: #93b4cc; }
+    .hint {
+      position: fixed; left: clamp(20px, 4vw, 64px); bottom: 22px;
+      font-size: 11px; letter-spacing: .12em; color: #9cb6c9; opacity: .82;
+    }
+    .hint b { color: #d8c489; font-weight: 400; }
+    .hud {
+      position: fixed; right: clamp(20px, 4vw, 64px); bottom: 22px;
+      font-size: 11px; letter-spacing: .16em; color: #a7c2d5;
+    }
+    .mute {
+      position: fixed; right: clamp(20px, 4vw, 64px); top: clamp(20px, 5vh, 56px);
+      width: 38px; height: 38px; border-radius: 50%; cursor: pointer;
+      border: 1px solid rgba(160, 200, 230, .35);
+      background: rgba(8, 16, 32, .5); color: #cfe6f6; font-size: 15px;
+      backdrop-filter: blur(6px);
+    }
+    .mute:hover { border-color: #a9d9db; background: rgba(18, 40, 58, .65); }
+    .toast {
+      position: fixed; left: 50%; bottom: 17%; transform: translateX(-50%);
+      padding: 10px 20px; border: 1px solid rgba(190, 225, 245, .3); border-radius: 999px;
+      background: rgba(6, 14, 30, .62); font-size: 13px; letter-spacing: .18em;
+      color: #dff2ff; opacity: 0; transition: opacity .55s ease; pointer-events: none;
+      white-space: nowrap;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <canvas id="scene" aria-label="第九章铭记场景：浅蓝色太空中的月亮岩平台"></canvas>
+  <div class="vignette"></div>
+  <header>
+    <div class="eyebrow">CHAPTER IX &middot; FAREWELL</div>
+    <h1>铭记</h1>
+    <div class="sub">REMEMBERED &middot; 空无之室</div>
+  </header>
+  <div class="hint"><b>&larr; &rarr;</b> 移动 &nbsp;&middot;&nbsp; <b>Space</b> 跳跃 &nbsp;&middot;&nbsp; <b>R</b> 重来 &nbsp;&middot;&nbsp; <b>M</b> 静音</div>
+  <div class="hud" id="hud">空无&nbsp; 0 / 1</div>
+  <button class="mute" id="mute" type="button" title="静音（M）">&#9835;</button>
+  <div class="toast" id="toast">拾起「空无」</div>
+
+  <script src="js/celeste-hair.js"></script>
+  <script src="js/celeste-character.js"></script>
+  <script>
+  (async function () {
+    'use strict';
+    const BASE = 'Atlases/Gameplay/';
+    // 1 游戏单位 = Z 屏幕像素；矮屏幕降到 3×，保证竖屏也能看清人物
+    const Z = window.innerHeight >= 700 ? 4 : 3;
+    const TEST = location.search.indexOf('scenetest') >= 0;
+
+    const cv = document.getElementById('scene');
+    const ctx = cv.getContext('2d');
+    const hudEl = document.getElementById('hud');
+    const toastEl = document.getElementById('toast');
+    const muteBtn = document.getElementById('mute');
+    let W = 0, H = 0, dpr = 1;
+
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      W = window.innerWidth; H = window.innerHeight;
+      cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.imageSmoothingEnabled = false;
+    }
+    window.addEventListener('resize', resize);
+
+    // ===== 素材加载（全部来自 Atlases）=====
+    function loadImage(src) {
+      return new Promise(res => {
+        const i = new Image();
+        i.onload = () => res(i);
+        i.onerror = () => res(null);
+        i.src = src;
+      });
+    }
+    const IMG = {};
+    // 贴花/粒子原是纯白剪影，按原 alpha 填色（source-in），避免直接乘色发灰
+    function tintImg(img, color) {
+      if (!img) return null;
+      const c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      const g = c.getContext('2d');
+      g.drawImage(img, 0, 0);
+      g.globalCompositeOperation = 'source-in';
+      g.fillStyle = color;
+      g.fillRect(0, 0, c.width, c.height);
+      return c;
+    }
+    function preload() {
+      const jobs = [];
+      const put = (key, path) => jobs.push(loadImage(path).then(i => { IMG[key] = i; }));
+      const putCloud = (key, path) => jobs.push(loadImage(path).then(i => { IMG[key] = tintImg(i, '#eef9ff'); }));
+      const putStar = (key, path) => jobs.push(loadImage(path).then(i => { IMG[key] = tintImg(i, '#bfe4ff'); }));
+      put('sky', BASE + 'bgs/10/skybrighter.png');
+      put('tiles', BASE + 'tilesets/starJump.png');
+      for (let i = 0; i < 3; i++) put('big' + i, BASE + 'bgs/10/big0' + i + '.png');
+      for (let i = 0; i < 7; i++) put('small' + i, BASE + 'bgs/10/small0' + i + '.png');
+      for (let i = 0; i < 4; i++) putStar('sf' + i, BASE + 'particles/starfield/0' + i + '.png');
+      ['a', 'b', 'c', 'd'].forEach(c => putCloud('cloud' + c, BASE + 'decals/10-farewell/clouds/cloud_' + c + '.png'));
+      for (let i = 0; i < 10; i++) put('jelly' + i, BASE + 'objects/glider/idle' + i + '.png');
+      for (let i = 0; i < 12; i++) put('puffer' + i, BASE + 'objects/puffer/idle' + String(i).padStart(2, '0') + '.png');
+      for (let i = 0; i < 14; i++) put('heart' + i, BASE + 'collectables/heartGem/ghost' + String(i).padStart(2, '0') + '.png');
+      for (let i = 0; i < 4; i++) put('bird' + i, BASE + 'characters/bird/fly0' + i + '.png');
+      return Promise.all(jobs);
+    }
+
+    // ===== 场景：铭记段的三块月亮岩浮台 =====
+    const PLATS = [
+      { x0: -220, x1: 330, top: 0 },
+      { x0: 360, x1: 700, top: -14 },
+      { x0: 730, x1: 1120, top: -30 }
+    ];
+    const VOID = 9999;
+    function groundY(x) {
+      for (let i = 0; i < PLATS.length; i++) {
+        const p = PLATS[i];
+        if (x >= p.x0 && x <= p.x1) return p.top;
+      }
+      return VOID;
+    }
+
+    // ===== 输入 =====
+    const keys = Object.create(null);
+    let jumpEdge = false;
+    window.addEventListener('keydown', e => {
+      const k = e.key.toLowerCase();
+      keys[k] = true;
+      if (e.code === 'Space' || k === ' ') { keys[' '] = true; jumpEdge = true; e.preventDefault(); }
+      if (k === 'r') respawn();
+      if (k === 'm') toggleMute();
+      startAudio();
+    });
+    window.addEventListener('keyup', e => {
+      const k = e.key.toLowerCase();
+      keys[k] = false;
+      if (e.code === 'Space') keys[' '] = false;
+    });
+    window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; jumpEdge = false; });
+
+    // ===== BGM =====
+    const bgm = new Audio('bgm/farewell.mp3');
+    bgm.loop = true; bgm.volume = 0.24; bgm.preload = 'auto';
+    let audioStarted = false, muted = false;
+    function startAudio() {
+      if (audioStarted) return;
+      audioStarted = true;
+      bgm.play().catch(() => {});
+    }
+    function toggleMute() {
+      muted = !muted;
+      bgm.muted = muted;
+      muteBtn.innerHTML = muted ? '&#128263;' : '&#9835;';
+      if (!muted) startAudio();
+    }
+    muteBtn.addEventListener('click', e => { e.stopPropagation(); toggleMute(); });
+    window.addEventListener('pointerdown', startAudio);
+
+    // ===== 背景层：逐行对齐反编译 Starfield.cs / Planets.cs（第九章 Farewell·铭记）=====
+    // 原作在 320×180 逻辑屏上绘制背景，这里等比映射到实际画布；随机分布用固定种子，构图不随 resize 跳变
+    function makeRng(seed) {
+      let s = seed;
+      return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
+    }
+    const mod = (x, m) => ((x % m) + m) % m;
+    const cubeIn = t => t * t * t;   // Ease.CubeIn
+
+    // Starfield.cs：15 个 Y 节点连成横向流带（StepSize=32），128 颗星沿带流动并沿法线方向呼吸摆动
+    class Starfield {
+      constructor(speed, scrollX, scrollY, seed) {
+        this.speed = speed;
+        this.scrollX = scrollX; this.scrollY = scrollY;
+        const rnd = makeRng(seed);
+        const nodes = [];
+        let y = rnd() * 180;
+        for (let i = 0; i < 15; i++) {                    // Steps = 15
+          nodes.push(y);
+          y += (rnd() < 0.5 ? -1 : 1) * (16 + rnd() * 24);
+        }
+        for (let i = 0; i < 4; i++) {                     // 末 4 节点向首节点插值闭合
+          const idx = nodes.length - 1 - i;
+          nodes[idx] += (nodes[0] - nodes[idx]) * (1 - i / 4);
+        }
+        this.nodes = nodes;
+        this.stars = [];
+        for (let i = 0; i < 128; i++) {
+          const r = rnd();
+          const star = {
+            nodeIndex: Math.floor(rnd() * (nodes.length - 1)),
+            nodePercent: rnd(),
+            distance: 4 + r * 20,                         // MinDist 4 ~ MaxDist 24
+            sine: rnd() * Math.PI * 2,
+            alpha: 1 - r * 0.5,                           // Color.Lerp(color, Transparent, r*0.5)
+            tex: Math.max(0, Math.min(3, Math.floor(cubeIn(1 - r) * 4))),
+            x: 0, y: 0
+          };
+          const p = this.targetOf(star);
+          star.x = p.x; star.y = p.y;
+          this.stars.push(star);
+        }
+      }
+      targetOf(s) {
+        const x1 = s.nodeIndex * 32, y1 = this.nodes[s.nodeIndex];
+        const x2 = (s.nodeIndex + 1) * 32, y2 = this.nodes[s.nodeIndex + 1];
+        const px = x1 + (x2 - x1) * s.nodePercent;
+        const py = y1 + (y2 - y1) * s.nodePercent;
+        const dx = x2 - x1, dy = y2 - y1;
+        const len = Math.hypot(dx, dy) || 1;
+        const d = s.distance * Math.sin(s.sine);          // 法线 (-dy, dx) 方向偏移
+        return { x: px + (-dy / len) * d, y: py + (dx / len) * d };
+      }
+      update(dt) {
+        const k = dt * 60;                                // 原作趋近是逐帧 /50，按 60fps 归一
+        for (const s of this.stars) {
+          s.sine += dt * this.speed;
+          s.nodePercent += dt * 0.25 * this.speed;
+          if (s.nodePercent >= 1) {
+            s.nodePercent -= 1;
+            s.nodeIndex++;
+            if (s.nodeIndex >= this.nodes.length - 1) { s.nodeIndex = 0; s.x -= 448; }
+          }
+          const t = this.targetOf(s);
+          s.x += (t.x - s.x) / 50 * k;
+          s.y += (t.y - s.y) / 50 * k;
+        }
+      }
+      render(camX, camY) {
+        const sx = W / 320, sy = H / 180;
+        for (const s of this.stars) {
+          const img = IMG['sf' + s.tex];
+          if (!img) continue;
+          const lx = -64 + mod(s.x - camX * this.scrollX, 448);
+          const ly = -16 + mod(s.y - camY * this.scrollY, 212);
+          const w = img.width * sx, h = img.height * sy;
+          ctx.globalAlpha = s.alpha;
+          ctx.drawImage(img, Math.round(lx * sx - w / 2), Math.round(ly * sy - h / 2), w, h);
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // Planets.cs：固定散布在 640×360 逻辑区内，DrawCentered + wrap；大星远层、小星近层
+    class Planets {
+      constructor(count, prefix, texCount, scroll, seed) {
+        this.scroll = scroll;
+        this.texKey = prefix;
+        const rnd = makeRng(seed);
+        this.planets = [];
+        for (let i = 0; i < count; i++) {
+          this.planets.push({ tex: Math.floor(rnd() * texCount), x: rnd() * 640, y: rnd() * 360 });
+        }
+      }
+      render(camX, camY) {
+        const sx = W / 320, sy = H / 180;
+        for (const p of this.planets) {
+          const img = IMG[this.texKey + p.tex];
+          if (!img) continue;
+          const lx = -32 + mod(p.x - camX * this.scroll, 640);
+          const ly = -32 + mod(p.y - camY * this.scroll, 360);
+          const w = img.width * sx, h = img.height * sy;
+          ctx.drawImage(img, Math.round(lx * sx - w / 2), Math.round(ly * sy - h / 2), w, h);
+        }
+      }
+    }
+
+    // 铭记段配置：浅青流动星带(Scroll 1) + 品红大星远层(0.2) + 青色小星近层(0.4)
+    const starfield = new Starfield(1, 1, 1, 20260);
+    const planetsBig = new Planets(8, 'big', 3, 0.2, 31001);
+    const planetsSmall = new Planets(24, 'small', 7, 0.4, 77002);
+    // 贴花里只有 cloud_a/b/c 是真正的云朵轮廓，d/e/f 是实心方块/半圆（给着色器遮罩用的），不能直接铺
+    // 每朵云叠 2~3 片并做轻微模糊，避免读成一堆灰色硬边多边
+    const CLOUDS = [
+      { x: 30, y: 0.13, drift: 4, a: 0.2, parts: [{ img: 'clouda', s: 4.2, dx: 0, dy: 0 }, { img: 'cloudb', s: 3.0, dx: 86, dy: 20 }, { img: 'cloudc', s: 2.4, dx: 150, dy: 6 }] },
+      { x: 560, y: 0.26, drift: 6, a: 0.17, parts: [{ img: 'cloudb', s: 3.6, dx: 0, dy: 0 }, { img: 'clouda', s: 2.6, dx: 96, dy: 22 }] },
+      { x: 940, y: 0.09, drift: 3, a: 0.15, parts: [{ img: 'cloudc', s: 3.0, dx: 0, dy: 0 }, { img: 'clouda', s: 2.2, dx: 64, dy: 18 }] },
+      { x: 1420, y: 0.33, drift: 5, a: 0.18, parts: [{ img: 'clouda', s: 4.0, dx: 0, dy: 0 }, { img: 'cloudb', s: 3.2, dx: 74, dy: 24 }] }
+    ];
+
+    // ===== 角色 =====
+    let m = null;
+    const cam = { x: 0, y: 0 };
+    const dust = [];
+    const particles = [];
+    let time = 0, flash = 0, toastTimer = 0, deathTimer = 0;
+
+    const heart = { x: 1010, y: -62, collected: false, t: 0 };
+    const jellies = [
+      { x: 96, y: -92, ph: 0.0 },
+      { x: 470, y: -70, ph: 2.1 },
+      { x: 880, y: -96, ph: 4.2 }
+    ];
+    const puffer = { x: -60, y: 0, t: 0 };
+    const bird = { x: 150, y: -100, vx: -62, t: 0 };
+
+    // ===== 相机 =====
+    function updateCam(dt) {
+      const k = Math.min(1, dt * 4);
+      cam.x += (m.x - cam.x) * k;
+      const gy = groundY(m.x);
+      const ty = gy === VOID ? m.y : gy;
+      cam.y += (ty - cam.y) * Math.min(1, dt * 3);
+    }
+
+    // ===== 工具：月亮岩（starJump 图集是一整块 48×120 的连续噪点纹理，不是离散砖块）=====
+    // 用 CanvasPattern 平铺整张图集，平台表面才是连续的，不会出现一块块孤立的小方格
+    let tilePat = null;
+    function getTilePat() {
+      if (tilePat !== null) return tilePat;
+      const t = IMG.tiles;
+      if (!t) return null;
+      const c = document.createElement('canvas');
+      c.width = t.width; c.height = t.height;
+      c.getContext('2d').drawImage(t, 0, 0);
+      tilePat = ctx.createPattern(c, 'repeat');
+      return tilePat;
+    }
+    function drawTileBlock(sx, sy, wPx, hPx) {
+      const pat = getTilePat();
+      if (!pat) return;
+      ctx.save();
+      ctx.translate(Math.round(sx), Math.round(sy));
+      ctx.scale(Z, Z);
+      ctx.fillStyle = pat;
+      ctx.fillRect(0, 0, wPx / Z, hPx / Z);
+      ctx.restore();
+    }
+
+    // ===== 渲染 =====
+    function toScreen(n) {
+      return { x: (n.x - cam.x) * Z + W * 0.32, y: (n.y - cam.y) * Z + H * 0.66 };
+    }
+
+    // 原作天空是 Parallax 贴图：小 Scroll 视差，横向平铺；竖向直接拉伸（本作镜头竖移幅度极小）
+    function drawSky() {
+      const img = IMG.sky;
+      if (!img) { ctx.fillStyle = '#12335c'; ctx.fillRect(0, 0, W, H); return; }
+      let ox = mod(-cam.x * 0.05 * (W / 320), W);
+      if (ox > 0) ox -= W;
+      ctx.drawImage(img, Math.round(ox), 0, W, H);
+      ctx.drawImage(img, Math.round(ox + W), 0, W, H);
+    }
+
+    function drawClouds() {
+      const span = W + 620;
+      ctx.save();
+      ctx.filter = 'blur(' + Math.round(Z * 1.6) + 'px)';
+      for (const c of CLOUDS) {
+        const sx = ((c.x - time * c.drift - cam.x * Z * 0.22) % span + span) % span - 310;
+        const sy = c.y * H;
+        for (const part of c.parts) {
+          const img = IMG[part.img];
+          if (!img) continue;
+          ctx.globalAlpha = c.a;
+          ctx.drawImage(img, Math.round(sx + part.dx), Math.round(sy + part.dy), 32 * part.s, 32 * part.s);
+        }
+      }
+      ctx.restore();
+    }
+
+    function drawPlatforms() {
+      for (const p of PLATS) {
+        const a = toScreen({ x: p.x0, y: p.top });
+        const b = toScreen({ x: p.x1, y: p.top });
+        if (b.x < -80 || a.x > W + 80) continue;
+        const wPx = Math.round(b.x - a.x);
+        const hPx = 5 * 8 * Z;          // 5 格厚 = 40 游戏单位，足够挡住下方星空
+        drawTileBlock(a.x, a.y, wPx, hPx);
+
+        // 顶面薄荷高光，让浮台在夜色里有一条清晰的落脚线
+        ctx.globalAlpha = 0.55;
+        ctx.fillStyle = '#d9f7f7';
+        ctx.fillRect(Math.round(a.x), Math.round(a.y), wPx, Math.max(2, Math.round(Z * 0.6)));
+
+        // 岩体下半部渐隐进夜色，避免整块方形岩体的生硬边界
+        const grad = ctx.createLinearGradient(0, a.y + hPx * 0.35, 0, a.y + hPx);
+        grad.addColorStop(0, 'rgba(4,10,24,0)');
+        grad.addColorStop(1, 'rgba(4,10,24,.92)');
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = grad;
+        ctx.fillRect(Math.round(a.x), Math.round(a.y + hPx * 0.35), wPx, Math.ceil(hPx * 0.65));
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function drawJellies() {
+      for (const j of jellies) {
+        const img = IMG['jelly' + (Math.floor(time * 5 + j.ph) % 10)];
+        if (!img) continue;
+        const p = toScreen({ x: j.x, y: j.y + Math.sin(time * 0.9 + j.ph) * 5 });
+        const s = 48 * Z * 0.9;
+        // 冷光晕，深蓝夜空里先看到雾团再看到水母本体
+        const g = ctx.createRadialGradient(p.x, p.y, s * 0.1, p.x, p.y, s * 0.95);
+        g.addColorStop(0, 'rgba(150,215,255,.30)');
+        g.addColorStop(0.55, 'rgba(110,180,240,.12)');
+        g.addColorStop(1, 'rgba(80,150,220,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(p.x - s, p.y - s, s * 2, s * 2);
+        ctx.drawImage(img, Math.round(p.x - s / 2), Math.round(p.y - s / 2), s, s);
+      }
+    }
+
+    function drawPuffer() {
+      const img = IMG['puffer' + String(Math.floor(puffer.t * 7) % 12).padStart(2, '0')];
+      if (!img) return;
+      const p = toScreen({ x: puffer.x, y: puffer.y });
+      const s = 64 * Z * 0.7;
+      ctx.drawImage(img, Math.round(p.x - s / 2), Math.round(p.y - s), s, s);
+    }
+
+    function drawHeart() {
+      if (heart.collected) return;
+      const p = toScreen({ x: heart.x, y: heart.y + Math.sin(time * 1.6) * 3 });
+      const s = 20 * Z;
+      const g = ctx.createRadialGradient(p.x, p.y, 2, p.x, p.y, s * 0.95);
+      g.addColorStop(0, 'rgba(200,232,255,.42)');
+      g.addColorStop(0.45, 'rgba(120,190,240,.16)');
+      g.addColorStop(1, 'rgba(70,140,220,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(p.x - s, p.y - s, s * 2, s * 2);
+      const img = IMG['heart' + (Math.floor(time * 8) % 4)];
+      if (img) ctx.drawImage(img, Math.round(p.x - s / 2), Math.round(p.y - s / 2), s, s);
+    }
+
+    function drawBird() {
+      const img = IMG['bird' + (Math.floor(bird.t / 0.11) % 4)];
+      if (!img) return;
+      const p = toScreen({ x: bird.x, y: bird.y + Math.sin(bird.t * 1.4) * 6 });
+      const w = 32 * Z, h = 24 * Z;
+      ctx.save();
+      ctx.translate(Math.round(p.x), Math.round(p.y));
+      ctx.scale(bird.vx >= 0 ? 1 : -1, 1);
+      ctx.drawImage(img, -w / 2, -h / 2, w, h);
+      ctx.restore();
+    }
+
+    function drawDust() {
+      ctx.fillStyle = '#c6ecff';
+      for (const d of dust) {
+        const p = toScreen(d);
+        ctx.globalAlpha = Math.max(0, Math.min(1, d.life / 0.4));
+        ctx.fillRect(Math.round(p.x), Math.round(p.y), 3, 3);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function drawParticles() {
+      for (const p of particles) {
+        const s = toScreen(p);
+        ctx.globalAlpha = Math.max(0, p.life / p.ttl);
+        ctx.fillStyle = p.c;
+        ctx.fillRect(Math.round(s.x), Math.round(s.y), p.sz, p.sz);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function render() {
+      ctx.clearRect(0, 0, W, H);
+      drawSky();
+      planetsBig.render(cam.x, cam.y);
+      planetsSmall.render(cam.x, cam.y);
+      starfield.render(cam.x, cam.y);
+      drawClouds();
+      drawPlatforms();
+      drawJellies();
+      drawPuffer();
+      drawHeart();
+      drawBird();
+      drawDust();
+      drawParticles();
+      m.draw(ctx, toScreen, Z);
+      if (flash > 0) {
+        ctx.globalAlpha = Math.min(1, flash);
+        ctx.fillStyle = '#eaf6ff';
+        ctx.fillRect(0, 0, W, H);
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // ===== 逻辑 =====
+    function spawnDust(x, y, n) {
+      for (let i = 0; i < n; i++) {
+        const a = -Math.PI / 2 + (Math.random() - 0.5) * 1.9;
+        const sp = 18 + Math.random() * 34;
+        dust.push({ x: x, y: y - 1, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.6, life: 0.3 + Math.random() * 0.35, ttl: 0.65 });
+      }
+    }
+
+    function collectHeart() {
+      heart.collected = true;
+      flash = 0.85;
+      hudEl.textContent = '空无 1 / 1';
+      toastEl.textContent = '拾起「空无」· Empty Space';
+      toastEl.classList.add('show');
+      toastTimer = 2.6;
+      for (let i = 0; i < 26; i++) {
+        const a = Math.random() * 6.283, sp = 26 + Math.random() * 60;
+        particles.push({
+          x: heart.x, y: heart.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+          life: 0.7 + Math.random() * 0.5, ttl: 1.2, sz: Math.random() < 0.5 ? 2 : 3,
+          c: Math.random() < 0.5 ? '#eaf6ff' : '#9ad8ff'
+        });
+      }
+    }
+
+    function respawn() {
+      m.x = 0; m.y = 0; m.vx = 0; m.vy = 0;
+      m.onGround = true; m.ducking = false; m.fastJump = false;
+      m.scaleX = m.scaleY = 1; m.maxFall = 160; m.highestAirY = 0;
+      m.varJumpTimer = 0; m.jumpGraceTimer = 0; m.jumpBufferTimer = 0;
+      m.sprite.play('idle');
+      m.hair.reset(0, 0, 1);
+      cam.x = 0; cam.y = 0;
+      dust.length = 0; particles.length = 0;
+      deathTimer = 0.45;
+      flash = Math.max(flash, 0.35);
+    }
+
+    function tick(dt) {
+      time += dt;
+      starfield.update(dt);
+      puffer.t += dt;
+      bird.t += dt;
+      bird.x += bird.vx * dt;
+      if (bird.x < -200) { bird.x = 260; bird.y = -70 - Math.random() * 45; }
+
+      if (deathTimer > 0) { deathTimer -= dt; return; }
+
+      const input = {
+        left: !!(keys['a'] || keys['arrowleft']),
+        right: !!(keys['d'] || keys['arrowright']),
+        down: !!(keys['s'] || keys['arrowdown']),
+        up: !!(keys['w'] || keys['arrowup']),
+        jumpHeld: !!keys[' '],
+        jumpPressed: jumpEdge
+      };
+      jumpEdge = false;
+
+      m.update(dt, input);
+      updateCam(dt);
+
+      // 拾起空无之心
+      if (!heart.collected && Math.abs(m.x - heart.x) < 24 && Math.abs(m.y - heart.y) < 30) collectHeart();
+
+      // 掉出浮台
+      if (m.y > 220) respawn();
+
+      // 粒子 / 尘土
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        p.vy += 12 * dt; p.life -= dt;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+      for (let i = dust.length - 1; i >= 0; i--) {
+        const d = dust[i];
+        d.x += d.vx * dt; d.y += d.vy * dt; d.vy += 240 * dt; d.life -= dt;
+        if (d.life <= 0) dust.splice(i, 1);
+      }
+
+      if (flash > 0) flash = Math.max(0, flash - dt * 1.5);
+      if (toastTimer > 0) {
+        toastTimer -= dt;
+        if (toastTimer <= 0) toastEl.classList.remove('show');
+      }
+    }
+
+    // ===== 自检（?scenetest，无头浏览器下用 setInterval 驱动）=====
+    function runSelfTest() {
+      const out = document.createElement('pre');
+      out.id = 'testout';
+      out.style.cssText = 'position:fixed;left:10px;bottom:10px;z-index:99;color:#8ef;background:rgba(5,10,25,.85);padding:10px;font:12px/1.6 monospace;white-space:pre';
+      document.body.appendChild(out);
+      const lines = [];
+      let pass = 0, fail = 0;
+      const log = (name, ok, extra) => {
+        ok ? pass++ : fail++;
+        lines.push((ok ? 'PASS ' : 'FAIL ') + name + (extra !== undefined ? '  (' + extra + ')' : ''));
+      };
+      const reset = (x, y) => {
+        m.x = x; m.y = y; m.vx = 0; m.vy = 0; m.onGround = true;
+        m.ducking = false; m.fastJump = false; m.scaleX = m.scaleY = 1;
+        m.maxFall = 160; m.highestAirY = y; m.varJumpTimer = 0;
+        m.jumpGraceTimer = 0; m.jumpBufferTimer = 0; m.sprite.play('idle');
+        m.hair.reset(x, y, 1);
+      };
+      const step = (n, inp) => {
+        for (let i = 0; i < n; i++) m.update(1 / 60, typeof inp === 'function' ? inp(i) : inp);
+      };
+
+      log('地面剖面', groundY(-100) === 0 && groundY(350) === VOID && groundY(500) === -14 && groundY(900) === -30,
+        [groundY(-100), groundY(350), groundY(500), groundY(900)].join(' / '));
+
+      reset(0, 0); step(30, {});
+      log('待机落稳 idle', m.onGround && m.y === 0 && m.anim === 'idle', m.anim + ' y=' + m.y);
+
+      reset(0, 0); step(90, { right: true });
+      log('跑步极速 90', Math.abs(m.vx - 90) < 0.01 && m.y === 0, 'vx=' + m.vx.toFixed(2));
+
+      reset(322, 0); m.vx = 90;
+      step(60, i => ({ right: true, jumpHeld: i < 20, jumpPressed: i === 0 }));
+      log('跨断崖落 B 台', m.onGround && Math.abs(m.y + 14) < 0.6, 'x=' + m.x.toFixed(1) + ' y=' + m.y.toFixed(1));
+
+      reset(1008, -58); m.onGround = false; heart.collected = false;
+      tick(1 / 60); tick(1 / 60);
+      log('拾起空无之心', heart.collected === true, 'collected=' + heart.collected);
+
+      out.textContent = lines.join('\n') + '\n' + pass + ' pass / ' + fail + ' fail';
+      window.__scene.testDone = true;
+    }
+
+    // ===== 启动 =====
+    async function main() {
+      resize();
+      await preload();
+      m = await CelesteCharacter.create({
+        base: 'Atlases/Gameplay/characters/player',
+        color: CelesteHair.MADELINE,
+        fidgets: true,
+        x: 0, y: 0
+      });
+      m.setGround(groundY);
+      m.onLand = vy => { if (vy >= 80) spawnDust(m.x, m.y, 8); };
+      cam.x = 0; cam.y = 0;
+
+      window.__scene = {
+        get p() { return m; },
+        cam: cam,
+        heart: heart,
+        jellies: jellies,
+        puffer: puffer,
+        bird: bird,
+        IMG: IMG,
+        Z: Z,
+        groundY: groundY,
+        PLATS: PLATS,
+        starfield: starfield,
+        planetsBig: planetsBig,
+        planetsSmall: planetsSmall,
+        get collected() { return heart.collected; }
+      };
+
+      if (TEST) {
+        runSelfTest();
+        // 自检跑完后把世界复位到展示状态，方便对画面做视觉核对
+        heart.collected = false;
+        hudEl.textContent = '空无  0 / 1';
+        toastEl.classList.remove('show');
+        toastEl.style.display = 'none';
+        respawn();
+        flash = 0;
+        setInterval(() => { time += 1 / 60; starfield.update(1 / 60); if (flash > 0) flash = Math.max(0, flash - 0.03); render(); }, 40);
+      } else {
+        let last = 0;
+        (function frame(ts) {
+          const dt = last ? Math.min((ts - last) / 1000, 0.05) : 1 / 60;
+          last = ts;
+          tick(dt);
+          render();
+          requestAnimationFrame(frame);
+        })(0);
+      }
+    }
+
+    main();
+  })();
+  </script>
+</body>
+</html>
