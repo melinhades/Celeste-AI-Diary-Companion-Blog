@@ -618,23 +618,6 @@ body:has(.ds-world.panned) #strawberryBonfire { opacity:0; pointer-events:none; 
 #dreamNightBtn:hover { filter:drop-shadow(0 0 12px rgba(190,120,255,.9)); transform:translateY(-2px); }
 #dreamNightBtn:active { transform:translateY(1px); }
 
-/* ===== 金羽毛：随笔数量（≤6）随机散布 dream 天空，点击写羽毛随笔。
-   尺寸与最小/最大间隔都随「整体放大一倍」重算，数值见 js/shelf.js 的 FEATHER_* 常量 ===== */
-#dsFeathers { position:absolute; inset:0; pointer-events:none; z-index:4; }
-#dsFeathers .feather {
-    position:absolute; width:62px; height:62px; padding:0;
-    background:transparent; border:none; cursor:pointer; pointer-events:auto;
-    filter:drop-shadow(0 4px 12px rgba(255,170,60,.65));
-}
-#dsFeathers .feather img { width:100%; height:100%; object-fit:contain; display:block; }
-
-/* ===== 金羽毛飞行：canvas overlay，z-index 在 dreamScene 之上、随笔弹框之下 ===== */
-#featherFlyCanvas { position:fixed; inset:0; z-index:1690; pointer-events:none;
-    image-rendering:pixelated; image-rendering:crisp-edges; }
-#featherFlyHint { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:1691;
-    color:rgba(255,200,120,.85); font-size:12px; font-family:inherit; letter-spacing:.5px;
-    pointer-events:none; text-shadow:0 0 8px rgba(0,0,0,.6); }
-
 /* ===== dreamScene 内部双屏容器 ===== */
 
 /* ===== 梦境面板：更暗的底 · 半透明文字 · 飘浮光尘（区别于书架纸页质感） ===== */
