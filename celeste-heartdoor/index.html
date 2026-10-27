@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>Celeste · HeartGemDoor 心门特效还原</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #05060a; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; }
+  #err { position: fixed; left: 12px; top: 10px; color: #ff8080;
+         font: 12px/1.6 ui-monospace, Consolas, monospace; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="err"></div>
+
+<script src="./heartdoor-effect.js"></script>
+<script>
+(function () {
+  var CV = document.getElementById('cv');
+  var ctx = CV.getContext('2d');
+  var errEl = document.getElementById('err');
+  var ASSET = '../blog-ui/Atlases/Gameplay/objects/heartdoor/';
+
+  // 逻辑分辨率 = Celeste 原生 320x180，ZOOM 按窗口自适应（整数倍、居中）
+  var LW = 320, LH = 180;
+  var ZOOM = 2, offX = 0, offY = 0;
+  function fit() {
+    ZOOM = Math.max(1, Math.floor(Math.min(window.innerWidth / LW, window.innerHeight / LH)));
+    offX = Math.floor((window.innerWidth - LW * ZOOM) / 2);
+    offY = Math.floor((window.innerHeight - LH * ZOOM) / 2);
+  }
+  fit();
+  window.addEventListener('resize', fit);
+
+  var door = null;
+  var playerX = 60;
+  var gems = 6, requires = 4;
+  var camX = 0, camY = 0, camDrift = true;
+  var mouseX = 60;
+
+  function loadImage(src) {
+    return new Promise(function (res, rej) {
+      var img = new Image();
+      img.onload = function () { res(img); };
+      img.onerror = function () { rej(new Error('素材加载失败: ' + src)); };
+      img.src = src;
+    });
+  }
+
+  function makeDoor() {
+    door = CelesteHeartDoor.create({
+      size: 32, requires: requires, levelHeight: LH,
+      x: 200, y: LH / 2, camX: 0,
+      textures: textures
+    });
+    door.gems = gems;
+  }
+
+  var textures = null;
+  var loads = [loadImage(ASSET + 'mist.png'), loadImage(ASSET + 'edge.png'), loadImage(ASSET + 'top.png')];
+  for (var i = 0; i < 7; i++) loads.push(loadImage(ASSET + 'icon0' + i + '.png'));
+
+  Promise.all(loads).then(function (imgs) {
+    textures = { mist: imgs[0], edge: imgs[1], top: imgs[2], icons: imgs.slice(3) };
+    makeDoor();
+
+    window.addEventListener('mousemove', function (e) {
+      mouseX = Math.round((e.clientX - offX) / ZOOM);
+      playerX = mouseX;
+    });
+    window.addEventListener('keydown', function (e) {
+      if (e.key === 'r' || e.key === 'R') makeDoor();
+      else if (e.key === 'g') { gems = Math.min(15, gems + 1); door.gems = gems; }
+      else if (e.key === 'G') { gems = Math.max(0, gems - 1); door.gems = gems; }
+      else if (e.key === '=' || e.key === '+') { requires = Math.min(12, requires + 1); makeDoor(); }
+      else if (e.key === '-') { requires = Math.max(1, requires - 1); makeDoor(); }
+      else if (e.key === 'c' || e.key === 'C') camDrift = !camDrift;
+    });
+
+    var STEP = 1 / 60, acc = 0, last = performance.now();
+    function frame(now) {
+      var dt = Math.min((now - last) / 1000, 0.25);
+      last = now;
+      acc += dt;
+      while (acc >= STEP) {
+        if (camDrift) {
+          // 相机随鼠标轻微漂移，展示雾/粒子视差（drawPos = pos + cam*0.2）
+          camX = Math.round((mouseX - LW / 2) * 0.1);
+          camY = Math.round(Math.sin(now / 3000) * 6);
+        }
+        door.playerX = playerX;
+        door.update(STEP, playerX, LW);
+        acc -= STEP;
+      }
+
+      CV.width = window.innerWidth; CV.height = window.innerHeight;
+      ctx.imageSmoothingEnabled = false;
+
+      // 世界层
+      ctx.setTransform(ZOOM, 0, 0, ZOOM, (offX - camX * ZOOM), (offY - camY * ZOOM));
+      ctx.fillStyle = '#0a0d18';
+      ctx.fillRect(camX - 16, camY - 16, LW + 32, LH + 32);
+      // 简单洞穴地面/顶
+      ctx.fillStyle = '#1a2338';
+      ctx.fillRect(camX - 16, LH - 8, LW + 32, 24);
+      ctx.fillRect(camX - 16, -16, LW + 32, 16);
+
+      // 玩家标记（粉色小方块 = Madeline 发色）
+      ctx.fillStyle = '#ff5ea8';
+      ctx.fillRect(playerX - 3, LH - 8 - 11, 7, 11);
+
+      door.render(ctx, camX, camY);
+
+      // 震屏后补绘（Shake 近似：渲染期抖动由 flash/震动层承担，本 demo 不位移世界）
+
+      // HUD（屏幕空间）
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = '#cfe3ff';
+      ctx.font = '12px ui-monospace, Consolas, monospace';
+      var info = [
+        'HeartGemDoor  |  phase=' + door._phase +
+        '  counter=' + door.counter.toFixed(2) + '/' + door.requires +
+        '  gems=' + door.gems + '  openPercent=' + door.openPercent.toFixed(3),
+        '鼠标=移动玩家（站门左 80px 内填充）  G/g=宝石±1  +/-=需求数  R=重置  C=相机漂移'
+      ];
+      for (var k = 0; k < info.length; k++) ctx.fillText(info[k], 10, 18 + k * 16);
+
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }).catch(function (e) { errEl.textContent = e.message; });
+})();
+</script>
+</body>
+</html>
