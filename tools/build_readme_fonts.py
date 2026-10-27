@@ -441,17 +441,19 @@ def convert(md: str) -> str:
     lines = md.split("\n")
     out: list[str] = []
 
-    # ---- header: everything before the first '---' (quote + shields badges)
+    # ---- header: everything before the first '---' (quote + badges / raw html)
     first_hr = next(i for i, l in enumerate(lines) if l.strip() == "---")
     head = lines[:first_hr]
-    badges = [l for l in head if l.startswith("[![")]
+    payload = [l for l in head
+               if l.startswith("[![") or (l.strip().startswith("<")
+                                          and not l.strip().startswith("</"))]
     quotes = [l.strip()[1:].lstrip() for l in head if l.strip().startswith(">")]
     out += ["<div align=\"center\">", ""]
     out += [pic(bake([[("text", "CELESTE AI DIARY COMPANION BLOG", None, False)]],
                      24, color="head", bold=True)), ""]
     for q in quotes:
         out += [pic(bake([parse_inline(q)], 16, color="quote")), ""]
-    out += badges + ["", "</div>", ""]
+    out += payload + ["", "</div>", ""]
 
     i = first_hr
     n = len(lines)

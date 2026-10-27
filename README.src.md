@@ -1,13 +1,7 @@
 
 > *"Every step up the mountain is a word in your story."*
-> **让每一个字都有温度，让每一天都有意义。**
 
-[![Java](https://img.shields.io/badge/Java-17%2B-orange.svg?style=for-the-badge&logo=openjdk&logoColor=white)](https://www.oracle.com/java/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.6-brightgreen.svg?style=for-the-badge&logo=spring&logoColor=white)](https://spring.io/projects/spring-boot)
-[![Frontend](https://img.shields.io/badge/Frontend-Vue%203%20(CDN)-blueviolet.svg?style=for-the-badge&logo=vuedotjs&logoColor=white)](https://vuejs.org/)
-[![AI](https://img.shields.io/badge/AI-Qwen2.5%20%2B%20bge--m3-purple.svg?style=for-the-badge&logo=openai&logoColor=white)](https://siliconflow.cn/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
-[![Architecture](https://img.shields.io/badge/Architecture-Monorepo%20(Modular)-orange.svg?style=for-the-badge)](pom.xml)
+<img src="assets/readme/tech-stack-celeste.webp" width="760" alt="Tech Stack: Java 17 · Spring Boot 3.2.6 · Vue 3 · Redis · MyBatis-Plus">
 
 </div>
 
