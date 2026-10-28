@@ -75,7 +75,7 @@ This dual-platform flow creates meaning: **intimate personal reflections in the 
 | <img src="assets/readme/icons/strawberry.png" height="28"> | **Strawberry Economy** | Earn 🍓 through writing, spend in Oshiro's shop | ✅ |
 | <img src="assets/readme/icons/badeline-roll.gif" height="28"> | **Badeline Night Talk** | Shatter the mirror to summon your shadow self; 15 emotion portraits + emotion-driven voice sfx | ✅ |
 | <img src="assets/readme/icons/campfire.gif" height="28"> | **Dream World** | Snow-night campfire & mirror room with smooth cinematic camera pan | ✅ |
-| 💻 | **BerryOS Desktop** | Simulated retro OS: desktop icons, taskbar, clock, strawberry Start menu | ✅ |
+| <img src="assets/readme/icons/berryos-desktop.gif" height="28"> | **BerryOS Desktop** | Simulated retro OS: desktop icons, taskbar, clock, strawberry Start menu | ✅ |
 | <img src="assets/readme/icons/monthly-ppt.png" height="28"> | **Monthly PPT Player** | Auto-generated monthly slideshow with cube/dissolve/spin 3D transitions & BGM | ✅ |
 | ☎️ | **Madeline Sings** | Click the payphone on a snow night to hear her sing | ✅ |
 | 💬 | **Realtime Chatroom** | SSE live chat, online badge, emoji stickers, real-time like/comment notifications | ✅ |
