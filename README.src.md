@@ -39,7 +39,7 @@
 
 ---
 
-## <img src="blog-ui/Atlases/Gui/cs_assistmode.png"> The Vision
+## <img src="assets/readme/icons/vision.png"> The Vision
 
 > *In Celeste, Madeline climbs a mountain to confront her anxiety.*
 > *Here, you climb your own mountain — one diary entry at a time.*
@@ -54,25 +54,25 @@ This dual-platform flow creates meaning: **intimate personal reflections in the 
 
 ---
 
-## <img src="blog-ui/Atlases/WaveDashing/Bird Clip Art.png"> Core Features
+## <img src="assets/readme/icons/core-features.png"> Core Features
 
 
 | 🏷️ | Feature | Description | Status |
 |:---:|---------|-------------|:---:|
-| <img src="blog-ui/Atlases/WaveDashing/desktop/cursor.png" height="28"> | **AI Roundtable** | Madeline, Theo, Granny, Badeline & Oshiro debate your topic until consensus — SSE streamed, idempotent reconnect, observe/participate modes, anti-repetition prompts, rate-limit guarded | ✅ |
-| <img src="blog-ui/celeste-gui/bounceline.gif" height="28"> | **AI Companionship** | Madeline provides intelligent, emotionally-aware interactions (7 emotion states) | ✅ |
-| <img src="blog-ui/Atlases/Gui/save/nonanimated.png" height="28"> | **Memory System** | Daily postcards & monthly snapshot reflections (RAG-powered) | ✅ |
+| <img src="assets/readme/icons/ai-roundtable.png" height="28"> | **AI Roundtable** | Madeline, Theo, Granny, Badeline & Oshiro debate your topic until consensus — SSE streamed, idempotent reconnect, observe/participate modes, anti-repetition prompts, rate-limit guarded | ✅ |
+| <img src="assets/readme/icons/ai-companionship.gif" height="28"> | **AI Companionship** | Madeline provides intelligent, emotionally-aware interactions (7 emotion states) | ✅ |
+| <img src="assets/readme/icons/memory-system.png" height="28"> | **Memory System** | Daily postcards & monthly snapshot reflections (RAG-powered) | ✅ |
 | <img src="assets/readme/icons/golden-feather.gif" height="28"> | **Feather Breathing Game** | Physics-based falling feather for anxiety relief | ✅ |
-| <img src="blog-ui/Atlases/Gui/collectables/strawberry.png" height="28"> | **Strawberry Economy** | Earn 🍓 through writing, spend in Oshiro's shop | ✅ |
+| <img src="assets/readme/icons/strawberry.png" height="28"> | **Strawberry Economy** | Earn 🍓 through writing, spend in Oshiro's shop | ✅ |
 | 🪞 | **Badeline Night Talk** | Shatter the mirror to summon your shadow self; 15 emotion portraits + emotion-driven voice sfx | ✅ |
 | 🌙 | **Dream World** | Snow-night campfire & mirror room with smooth cinematic camera pan | ✅ |
 | 💻 | **BerryOS Desktop** | Simulated retro OS: desktop icons, taskbar, clock, strawberry Start menu | ✅ |
-| <img src="blog-ui/Atlases/WaveDashing/Guy Clip Art.png" height="28"> | **Monthly PPT Player** | Auto-generated monthly slideshow with cube/dissolve/spin 3D transitions & BGM | ✅ |
+| <img src="assets/readme/icons/monthly-ppt.png" height="28"> | **Monthly PPT Player** | Auto-generated monthly slideshow with cube/dissolve/spin 3D transitions & BGM | ✅ |
 | ☎️ | **Madeline Sings** | Click the payphone on a snow night to hear her sing | ✅ |
 | 💬 | **Realtime Chatroom** | SSE live chat, online badge, emoji stickers, real-time like/comment notifications | ✅ |
 | 📝 | **Private Diary Writing** | Secure, formatted text with auto-save & AI feedback | ✅ |
 | 🔄 | **Diary → Blog Flow** | Seamless transition from private reflection to public sharing | ✅ |
-| <img src="blog-ui/Atlases/WaveDashing/desktop/wavedashing_icon.png" height="28"> | **Analytics** | Emotion tracking, writing insights & engagement metrics | 🔄 |
+| <img src="assets/readme/icons/analytics.png" height="28"> | **Analytics** | Emotion tracking, writing insights & engagement metrics | 🔄 |
 | 🔒 | **Security Hardened** | BCrypt, JWT env-config, bounded pools, magic-number uploads | ✅ |
 | 📈 | **Observability Ready** | Actuator + Prometheus metrics, full-link TraceId, AI health probe | ✅ |
 
