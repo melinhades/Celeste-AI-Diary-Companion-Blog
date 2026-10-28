@@ -452,19 +452,15 @@ def convert(md: str) -> str:
     lines = md.split("\n")
     out: list[str] = []
 
-    # ---- header: everything before the first '---' (quote + badges / raw html)
+    # ---- header: emitted verbatim (banner / postcard / badges are pre-baked art)
     first_hr = next(i for i, l in enumerate(lines) if l.strip() == "---")
     head = lines[:first_hr]
-    payload = [l for l in head
-               if l.startswith("[![") or (l.strip().startswith("<")
-                                          and not l.strip().startswith("</"))]
-    quotes = [l.strip()[1:].lstrip() for l in head if l.strip().startswith(">")]
-    out += ["<div align=\"center\">", ""]
-    out += [pic(bake([[("text", "CELESTE AI DIARY COMPANION BLOG", None, False)]],
-                     24, color="head", bold=True)), ""]
-    for q in quotes:
-        out += [pic(bake([parse_inline(q)], 16, color="quote")), ""]
-    out += payload + ["", "</div>", ""]
+    while head and not head[0].strip():
+        head.pop(0)
+    while head and not head[-1].strip():
+        head.pop()
+    if head:
+        out += head + [""]
 
     i = first_hr
     n = len(lines)

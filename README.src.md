@@ -1,8 +1,17 @@
 
-> *"Every step up the mountain is a word in your story."*
+<div align="center">
+
+<br><br><br>
+
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/header-banner-dark.png"><img src="assets/readme/header-banner.png" width="900" alt="CELESTE AI DIARY COMPANION BLOG"></picture>
+
+<br><br><br><br><br><br>
+
+<img src="assets/readme/tagline-new.png" width="640" alt="Every step up the mountain is a word in your story.">
+
+<br><br><br><br><br><br>
 
 <img src="assets/readme/tech-stack-celeste.webp" width="760" alt="Tech Stack: Java 17 · Spring Boot 3.2.6 · Vue 3 · Redis · MyBatis-Plus">
-
 </div>
 
 ---
