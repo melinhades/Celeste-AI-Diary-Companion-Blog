@@ -33,6 +33,8 @@ function doLogout() {
     } catch (e) { /* 无声降级 */ }
     localStorage.removeItem('token');
     localStorage.removeItem('nickname');
+    // 明信片署名等展示缓存随登出作废，否则未登录/下个账号会看到上一个人的名字
+    if (typeof clearSessionDisplayStorage === 'function') clearSessionDisplayStorage();
     if (token) {
         fetch('http://localhost:8888/logout', { headers: { 'Authorization': token } }).catch(() => {});
     }

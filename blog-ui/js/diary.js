@@ -1088,7 +1088,9 @@
         const today = new Date().toDateString();
         try {
             const cached = JSON.parse(localStorage.getItem('dailyPostcardCache') || 'null');
-            if (cached && cached.date === today && cached.message) {
+            const me = localStorage.getItem('nickname');
+            // 署名与当前账号不符的缓存直接作废，避免串号显示上一个人的名字
+            if (cached && cached.date === today && cached.message && (!me || cached.userName === me)) {
                 return { date: cached.date, userName: cached.userName, message: capPostcardWords(cached.message) };
             }
         } catch (e) {}
@@ -1958,7 +1960,7 @@ function inferReplyEmotion(text) {
             '<div class="sb-straw"><img src="celeste-collectables/strawberry.png" alt="strawberry"><span id="sbCount">0</span></div>';
         document.body.appendChild(w);
         w.addEventListener('click', () => {
-            addMadelineMessage('你现在有 ' + berryBalanceLocal() + ' 颗草莓，慢慢攒，山顶有好东西等着你～', '可爱');
+            addMadelineMessage('为草莓数欢呼吧！那是你成长过程的见证', '可爱');
         });
         refreshShopUI();
         // 草莓数变化（写日记/草莓籽组合/商店消费）时实时刷新这一栏

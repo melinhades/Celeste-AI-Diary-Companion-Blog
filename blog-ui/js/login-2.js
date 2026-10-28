@@ -136,6 +136,8 @@
                         const d = res.data;
                         const token = typeof d === 'string' ? d : d.token;
                         const nickname = typeof d === 'string' ? acc : (d.nickname || d.account || acc);
+                        // 换账号时先清掉上个账号残留的本地状态，再写入凭据
+                        bindAccount(typeof d === 'string' ? acc : (d.account || acc), nickname);
                         localStorage.setItem('token', token);
                         localStorage.setItem('nickname', nickname);
                         if (rememberMe.value) {

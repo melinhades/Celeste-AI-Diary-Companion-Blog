@@ -123,3 +123,57 @@ function flushPendingBerries() {
     });
 }
 flushPendingBerries();
+
+// ===== 用户级本地状态隔离 =====
+// 这些 key 是「某个账号的」数据，存在全局 localStorage 里，换账号不清理就会出现
+// 「登录 test 却看到上个账号的明信片署名 / 已点亮的心门」这类串号。
+const USER_SCOPED_KEYS = [
+    'badelineChatLog', 'berryBalance', 'berryOwned', 'berryPendingCredit', 'berrySpent',
+    'crystalHeart', 'dailyPostcardCache', 'diaryChatSessionId', 'diaryFarewell',
+    'diaryLastSaveDate', 'diarySaveCount', 'diarySnapshots', 'diaryStreak', 'diaryUnsaved',
+    'heartCrystalDay', 'heartDoorHearts', 'heartDoorLit', 'heartDoorSplit',
+    'lastEmotion', 'madeline_emotion', 'mirrorBroken', 'mirrorReroll',
+    'pmLastVisit', 'postcardDate'
+];
+/** 纯展示/缓存类：登出即作废，避免下一个账号看到上一个人的明信片 */
+const SESSION_DISPLAY_KEYS = ['dailyPostcardCache', 'postcardDate', 'pmLastVisit',
+                              'lastEmotion', 'madeline_emotion'];
+
+function clearUserScopedStorage() {
+    USER_SCOPED_KEYS.forEach(k => localStorage.removeItem(k));
+}
+
+/**
+ * 登录成功后绑定账号指纹。账号变化时清掉上一个账号的全部本地状态。
+ * 无 __account（老数据）时用昵称差异兜底判断，覆盖「历史残留 + 直接换号登录」。
+ */
+function bindAccount(account, nickname) {
+    const prevAccount = localStorage.getItem('__account');
+    const prevNick = localStorage.getItem('nickname');
+    const switched = prevAccount
+        ? prevAccount !== account
+        : !!(prevNick && nickname && prevNick !== nickname);
+    if (switched) clearUserScopedStorage();
+    localStorage.setItem('__account', account || '');
+}
+
+/** 登出：只作废展示缓存，保留本地游戏进度，同账号回来仍可续上 */
+function clearSessionDisplayStorage() {
+    SESSION_DISPLAY_KEYS.forEach(k => localStorage.removeItem(k));
+}
+
+/**
+ * 一次性迁移历史串号数据：老版本没有 __account，且登出只清 token/nickname，
+ * 所以本地可能留着上一个账号的明信片署名、心门进度等。升级后首次加载直接清空并按当前账号重建。
+ * 之后 __account 存在即跳过；currentUser 失败（网络错误/token 无效）时不动数据，避免误删。
+ */
+(function reconcileAccountOnce() {
+    if (localStorage.getItem('__account')) return;
+    if (!localStorage.getItem('token')) return;
+    api('/users/currentUser', 'GET', null, 5000).then(res => {
+        if (!res || !res.success || !res.data) return;
+        clearUserScopedStorage();
+        localStorage.setItem('__account', res.data.account || '');
+        location.reload();
+    }).catch(() => {});
+})();
