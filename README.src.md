@@ -26,10 +26,10 @@
 
 ---
 
-## 📖 Table of Contents
+## <img src="assets/readme/icons/journal.png"> Table of Contents
 
-- [💫 The Vision](#-the-vision)
-- [✨ Core Features](#-core-features)
+- <img src="assets/readme/icons/vision.png" height="18"> [The Vision](#the-vision)
+- <img src="assets/readme/icons/core-features.png" height="18"> [Core Features](#core-features)
 - [🖼️ Screenshots Gallery](#️-screenshots-gallery)
 - [🪶 Golden Feather System](#-golden-feather-system)
 - [🪞 Dream Mirror & Badeline](#dream-mirror--badeline)
@@ -73,16 +73,14 @@ This dual-platform flow creates meaning: **intimate personal reflections in the 
 | <img src="assets/readme/icons/memory-system.png" height="28"> | **Memory System** | Daily postcards & monthly snapshot reflections (RAG-powered) | ✅ |
 | <img src="assets/readme/icons/golden-feather.gif" height="28"> | **Feather Breathing Game** | Physics-based falling feather for anxiety relief | ✅ |
 | <img src="assets/readme/icons/strawberry.png" height="28"> | **Strawberry Economy** | Earn 🍓 through writing, spend in Oshiro's shop | ✅ |
-| 🪞 | **Badeline Night Talk** | Shatter the mirror to summon your shadow self; 15 emotion portraits + emotion-driven voice sfx | ✅ |
-| 🌙 | **Dream World** | Snow-night campfire & mirror room with smooth cinematic camera pan | ✅ |
+| <img src="assets/readme/icons/badeline-roll.gif" height="28"> | **Badeline Night Talk** | Shatter the mirror to summon your shadow self; 15 emotion portraits + emotion-driven voice sfx | ✅ |
+| <img src="assets/readme/icons/campfire.gif" height="28"> | **Dream World** | Snow-night campfire & mirror room with smooth cinematic camera pan | ✅ |
 | 💻 | **BerryOS Desktop** | Simulated retro OS: desktop icons, taskbar, clock, strawberry Start menu | ✅ |
 | <img src="assets/readme/icons/monthly-ppt.png" height="28"> | **Monthly PPT Player** | Auto-generated monthly slideshow with cube/dissolve/spin 3D transitions & BGM | ✅ |
 | ☎️ | **Madeline Sings** | Click the payphone on a snow night to hear her sing | ✅ |
 | 💬 | **Realtime Chatroom** | SSE live chat, online badge, emoji stickers, real-time like/comment notifications | ✅ |
-| 📝 | **Private Diary Writing** | Secure, formatted text with auto-save & AI feedback | ✅ |
-| 🔄 | **Diary → Blog Flow** | Seamless transition from private reflection to public sharing | ✅ |
 | <img src="assets/readme/icons/analytics.png" height="28"> | **Analytics** | Emotion tracking, writing insights & engagement metrics | 🔄 |
-| 🔒 | **Security Hardened** | BCrypt, JWT env-config, bounded pools, magic-number uploads | ✅ |
+| <img src="assets/readme/icons/lock.png" height="28"> | **Security Hardened** | BCrypt, JWT env-config, bounded pools, magic-number uploads | ✅ |
 | 📈 | **Observability Ready** | Actuator + Prometheus metrics, full-link TraceId, AI health probe | ✅ |
 
 ---
@@ -196,7 +194,7 @@ The most fully-realized feature. Bring any dilemma to the table and **Madeline, 
 
 ---
 
-## 🪶 Golden Feather System
+## <img src="assets/readme/icons/flyfeather.gif"> Golden Feather System
 
 <p align="center">
   <img src="docs/screenshots/feather-game.png" alt="Golden Feather" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -233,7 +231,7 @@ The camera slides into a purple-brick mirror room. A **framed mirror** stands at
 
 ---
 
-## 🪞 Dream Mirror & Badeline
+## <img src="assets/readme/icons/dream-mirror-spin.gif"> Dream Mirror & Badeline
 
 Behind the bookshelf lies a **two-part dream world** — a snow-night campfire on the left and a purple mirror room on the right, joined by a cinematic one-viewport camera pan. Click the mirror to **shatter it** and summon **Badeline**, the part of you that is sharp, honest, and over-protective.
 
@@ -501,7 +499,7 @@ python3 -m http.server 8080        # Option A: Python (simplest)
 
 ---
 
-## ⚙️ Configuration Deep-Dive
+## <img src="assets/readme/icons/options.png"> Configuration Deep-Dive
 
 ### Core Config (`blog-api/src/main/resources/application.properties`)
 
@@ -799,7 +797,7 @@ blog-ui/
 
 ---
 
-## 📦 Deployment Guide
+## <img src="assets/readme/icons/farewell.png"> Deployment Guide
 
 ### Docker Compose (Recommended for Prod)
 
@@ -937,7 +935,7 @@ nginx:      { replicaCount: 2 }   # TLS via cert-manager + Let's Encrypt
 
 ---
 
-## 🤝 Contribution Guide
+## <img src="assets/readme/icons/credits.png"> Contribution Guide
 
 We welcome contributions! Please read [CONTRIBUTING.md](CONTRIBUTING.md) first.
 
@@ -978,7 +976,7 @@ git push origin feature/your-feature-name
 
 ---
 
-## ❓ FAQ & Troubleshooting
+## <img src="assets/readme/icons/troubleshooting.png"> FAQ & Troubleshooting
 
 ### General
 

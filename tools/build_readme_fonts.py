@@ -498,17 +498,21 @@ def convert(md: str) -> str:
             level = len(m.group(1))
             body = m.group(2).strip()
             icon = None
+            icon_tag = ""
             im = re.match(r'<img\s+src="([^"]+)"[^>]*>\s*(.*)$', body)
             if im:                                       # game icon replaces emoji
                 icon, body = im.group(1), im.group(2)
             emoji_pref, rest = split_emoji_prefix(body)
             segs = parse_inline(rest)
             size = {2: 18, 3: 16}.get(level, 16)
+            if icon and icon.lower().endswith(".gif"):   # animated: keep as <img>
+                icon_tag = f'<img src="{icon}" height="{int(size * 1.25)}"> '
+                icon = None
             slug = bake([segs], size, color="head", bold=True, icon=icon)
             if level == 2:
                 block(f'<a name="{slugify(plain(segs))}"></a>', "")
             block("#" * level + " " + (emoji_pref + " " if emoji_pref else "")
-                  + pic(slug), "")
+                  + icon_tag + pic(slug), "")
             i += 1
         elif s.startswith("|"):                          # table
             tbl = []
@@ -557,7 +561,11 @@ def convert(md: str) -> str:
             while i < n and (lm := re.match(r"((?:-|\d+\.)\s+)(\[[ xX]\]\s+)?(.*)",
                                             lines[i])):
                 marker, box, text = lm.group(1), lm.group(2) or "", lm.group(3)
-                items.append(marker + box + segs_html(parse_inline(text), 16, wrap=860))
+                prefix = ""
+                if pm := re.match(r"<img\s[^>]*>\s*", text):   # leading icon: raw
+                    prefix, text = pm.group(0), text[pm.end():]
+                items.append(marker + box + prefix
+                             + segs_html(parse_inline(text), 16, wrap=860))
                 i += 1
             block(*items, "")
         else:                                            # paragraph
