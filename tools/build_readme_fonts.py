@@ -269,7 +269,8 @@ def italic_tile(text: str, px: int, fg, stroke: int) -> Image.Image:
                           resample=Image.BICUBIC)
 
 
-def render(lines, px: int, theme: str, color: str, bold_all: bool) -> Image.Image:
+def render(lines, px: int, theme: str, color: str, bold_all: bool,
+           icon: Image.Image | None = None) -> Image.Image:
     fg = {
         "body": BODY_LIGHT if theme == "" else BODY_DARK,
         "head": HEAD_LIGHT if theme == "" else HEAD_DARK,
@@ -280,13 +281,17 @@ def render(lines, px: int, theme: str, color: str, bold_all: bool) -> Image.Imag
     stroke = max(1, px // 24)
     lh = int(px * 1.7)
     asc, desc, widths = _line_metrics(lines, px)
-    W = int(max(widths)) + 8
+    gap = int(px * 0.45) if icon else 0
+    icon_w = (icon.width + gap) if icon else 0
+    W = int(max(widths)) + 8 + icon_w
     H = asc + desc + 8 + lh * (len(lines) - 1)
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    if icon:
+        img.alpha_composite(icon, (4, 4 + (asc + desc) // 2 - icon.height // 2))
     d = ImageDraw.Draw(img)
     for li, line in enumerate(lines):
         y_base = 4 + asc + li * lh
-        x = 4.0
+        x = 4.0 + icon_w
         for kind, text, _, b in line:
             bold = b or bold_all
             if kind == "italic":
@@ -322,7 +327,7 @@ def render(lines, px: int, theme: str, color: str, bold_all: bool) -> Image.Imag
 
 
 def bake(payload, disp_px: int, color: str = "body", bold: bool = False,
-         wrap: float | None = None) -> str:
+         wrap: float | None = None, icon: str | None = None) -> str:
     """payload: [line]; line = [seg]. Bakes light+dark, returns slug."""
     global _counter
     _counter += 1
@@ -332,9 +337,15 @@ def bake(payload, disp_px: int, color: str = "body", bold: bool = False,
         payload = [[(k, t, u, True) for k, t, u, _ in line] for line in payload]
     lines = wrap_payload(payload, px, wrap * 2 if wrap else None)
     alt = esc_alt(" ".join(plain(l) for l in payload))
+    icon_img = None
+    if icon:
+        art = Image.open(ROOT / icon).convert("RGBA")
+        h = int(px * 1.15)
+        icon_img = art.resize((max(1, round(art.width * h / art.height)), h),
+                              Image.LANCZOS)
     img = None
     for theme in ("", "-dark"):
-        img = render(lines, px, theme, color, bold_all=False)
+        img = render(lines, px, theme, color, bold_all=False, icon=icon_img)
         path = OUT / f"{slug}{theme}.webp"
         path.parent.mkdir(parents=True, exist_ok=True)
         img.save(path, "WEBP", quality=Q_UI, method=4)
@@ -489,10 +500,15 @@ def convert(md: str) -> str:
             block(*html_lines, "")
         elif m := re.match(r"(#{1,6})\s+(.*)", l):       # heading
             level = len(m.group(1))
-            emoji_pref, rest = split_emoji_prefix(m.group(2).strip())
+            body = m.group(2).strip()
+            icon = None
+            im = re.match(r'<img\s+src="([^"]+)"[^>]*>\s*(.*)$', body)
+            if im:                                       # game icon replaces emoji
+                icon, body = im.group(1), im.group(2)
+            emoji_pref, rest = split_emoji_prefix(body)
             segs = parse_inline(rest)
             size = {2: 18, 3: 16}.get(level, 16)
-            slug = bake([segs], size, color="head", bold=True)
+            slug = bake([segs], size, color="head", bold=True, icon=icon)
             if level == 2:
                 block(f'<a name="{slugify(plain(segs))}"></a>', "")
             block("#" * level + " " + (emoji_pref + " " if emoji_pref else "")
