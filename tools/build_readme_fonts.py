@@ -506,7 +506,7 @@ def convert(md: str) -> str:
             segs = parse_inline(rest)
             size = {2: 18, 3: 16}.get(level, 16)
             if icon and icon.lower().endswith(".gif"):   # animated: keep as <img>
-                icon_tag = f'<img src="{icon}" height="{int(size * 1.25)}"> '
+                icon_tag = f'<img src="{icon}" height="{int(size * 1.875)}"> '
                 icon = None
             slug = bake([segs], size, color="head", bold=True, icon=icon)
             if level == 2:
