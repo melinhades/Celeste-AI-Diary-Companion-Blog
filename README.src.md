@@ -69,17 +69,17 @@ This dual-platform flow creates meaning: **intimate personal reflections in the 
 | 🏷️ | Feature | Description | Status |
 |:---:|---------|-------------|:---:|
 | <img src="assets/readme/icons/ai-roundtable.png" height="56"> | **AI Roundtable** | Madeline, Theo, Granny, Badeline & Oshiro debate your topic until consensus — SSE streamed, idempotent reconnect, observe/participate modes, anti-repetition prompts, rate-limit guarded | ✅ |
-| <img src="assets/readme/icons/ai-companionship.gif" height="42"> | **AI Companionship** | Madeline provides intelligent, emotionally-aware interactions (7 emotion states) | ✅ |
-| <img src="assets/readme/icons/memory-system.png" height="42"> | **Memory System** | Daily postcards & monthly snapshot reflections (RAG-powered) | ✅ |
-| <img src="assets/readme/icons/golden-feather.gif" height="42"> | **Feather Breathing Game** | Physics-based falling feather for anxiety relief | ✅ |
-| <img src="assets/readme/icons/strawberry.png" height="42"> | **Strawberry Economy** | Earn 🍓 through writing, spend in Oshiro's shop | ✅ |
-| <img src="assets/readme/icons/badeline-walk.gif" height="56"> | **Badeline Night Talk** | Shatter the mirror to summon your shadow self; 15 emotion portraits + emotion-driven voice sfx | ✅ |
+| <img src="assets/readme/icons/ai-companionship.gif" height="56"> | **AI Companionship** | Madeline provides intelligent, emotionally-aware interactions (7 emotion states) | ✅ |
+| <img src="assets/readme/icons/memory-system.png" height="56"> | **Memory System** | Daily postcards & monthly snapshot reflections (RAG-powered) | ✅ |
+| <img src="assets/readme/icons/golden-feather.gif" height="40"> | **Feather Breathing Game** | Physics-based falling feather for anxiety relief | ✅ |
+| <img src="assets/readme/icons/strawberry.png" height="56"> | **Strawberry Economy** | Earn 🍓 through writing, spend in Oshiro's shop | ✅ |
+| <img src="assets/readme/icons/badeline-spin.gif" height="56"> | **Badeline Night Talk** | Shatter the mirror to summon your shadow self; 15 emotion portraits + emotion-driven voice sfx | ✅ |
 | <img src="assets/readme/icons/campfire.gif" height="56"> | **Dream World** | Snow-night campfire & mirror room with smooth cinematic camera pan | ✅ |
 | <img src="assets/readme/icons/berryos-desktop.gif" height="56"> | **BerryOS Desktop** | Simulated retro OS: desktop icons, taskbar, clock, strawberry Start menu | ✅ |
 | <img src="assets/readme/icons/monthly-ppt.png" height="56"> | **Monthly PPT Player** | Auto-generated monthly slideshow with cube/dissolve/spin 3D transitions & BGM | ✅ |
-| <img src="assets/readme/icons/madeline-sing.gif" height="42"> | **Madeline Sings** | Click the payphone on a snow night to hear her sing | ✅ |
+| <img src="assets/readme/icons/madeline-sing.gif" height="56"> | **Madeline Sings** | Click the payphone on a snow night to hear her sing | ✅ |
 | 💬 | **Realtime Chatroom** | SSE live chat, online badge, emoji stickers, real-time like/comment notifications | ✅ |
-| <img src="assets/readme/icons/analytics.png" height="42"> | **Analytics** | Emotion tracking, writing insights & engagement metrics | 🔄 |
+| <img src="assets/readme/icons/analytics.png" height="56"> | **Analytics** | Emotion tracking, writing insights & engagement metrics | 🔄 |
 | <img src="assets/readme/icons/lock.png" height="56"> | **Security Hardened** | BCrypt, JWT env-config, bounded pools, magic-number uploads | ✅ |
 | 📈 | **Observability Ready** | Actuator + Prometheus metrics, full-link TraceId, AI health probe | ✅ |
 
