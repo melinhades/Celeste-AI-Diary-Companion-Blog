@@ -340,7 +340,7 @@ def bake(payload, disp_px: int, color: str = "body", bold: bool = False,
     icon_img = None
     if icon:
         art = Image.open(ROOT / icon).convert("RGBA")
-        h = int(px * 1.15)
+        h = int(px * 1.55)
         icon_img = art.resize((max(1, round(art.width * h / art.height)), h),
                               Image.LANCZOS)
     img = None
