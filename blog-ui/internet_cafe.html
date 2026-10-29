@@ -1,46 +1,28 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" href="icon/OIP.webp" type="image/webp">
 <title>Celeste · Internet Cafe</title>
-<link rel="stylesheet" href="css/internet_cafe.css?v=20261015a">
+<link rel="stylesheet" href="css/internet_cafe.css?v=20261028c">
 </head>
 <body>
-  <!-- 镜头：内外两层叠放，整体缩放即镜头向近靠 -->
-  <div id="world" :class="{zoomed: entered}">
-    <!-- 内部层：叠在表层下方并全屏铺满，表层透明化后直接显露 -->
-    <div id="interior" :class="{show: entered}">
-      <div id="interiorStage">
-        <img id="interiorImg" src="Atlases/Gameplay/objects/wavedashtutorial/building_back.png" alt="">
-        <div id="noiseBox" title="电视" @click="enterTv"><canvas></canvas></div>
-      </div>
-    </div>
+  <!-- 整个房间由画布实时绘制：背景星空 → 瓦片 → 装饰 → 咖啡厅 → Madeline -->
+  <canvas id="scene" aria-label="第九章铭记之后的网吧房间：可操控 Madeline 走进网络咖啡厅"></canvas>
+  <div class="vignette"></div>
 
-    <!-- 外观表层：透明化后显露内部 -->
-    <div id="camera" :class="{entered: entered}">
-      <!-- 背景：Celeste 游戏截图充满全屏 -->
-      <div id="sky"></div>
+  <div class="hud" id="hud">门外 &middot; 走近咖啡厅</div>
+  <button class="mute" id="mute" type="button" title="静音（M）">&#9835;</button>
+  <div class="tvPrompt" id="tvPrompt">点击屏幕 &middot; 启动 berryOS</div>
+  <div class="fade" id="fade"></div>
 
-      <!-- 招牌周围漂浮小粒子 -->
-      <canvas id="sparkleCanvas"></canvas>
-
-      <!-- 霓虹招牌（15 帧逐帧动画，位置已固定对齐背景） -->
-      <div id="neonSign"><canvas></canvas></div>
-
-      <!-- 建筑物点击热区 -->
-      <div id="buildHotspot" @click="enter"></div>
-    </div>
-  </div>
-
-  <!-- 四周环境压暗层 -->
-  <div id="dimLayer"></div>
-
-<script src="js/vue.global.prod.js?v=20261008a"></script>
-<script src="js/internet_cafe-1.js?v=20261015a"></script>
-<script src="js/internet_cafe-2.js?v=20261015a"></script>
+<script src="js/celeste-hair.js?v=8"></script>
+<script src="js/celeste-character.js?v=12"></script>
+<script src="js/internet_cafe-map.js?v=20261028a"></script>
+<script src="js/internet_cafe-2.js?v=20261028a"></script>
+<script src="js/internet_cafe-1.js?v=20261029c"></script>
 <script src="js/api.js?v=20261002"></script>
-<script src="js/seed.js?v=20261011a"></script>
+<script src="js/seed.js?v=20261028b"></script>
 </body>
 </html>

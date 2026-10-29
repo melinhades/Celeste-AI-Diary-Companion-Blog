@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
@@ -7,7 +7,7 @@
 <link rel="icon" href="icon/OIP.webp" type="image/webp">
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/text-fx.css?v=20261004a">
-<link rel="stylesheet" href="css/shop.css?v=20261015a">
+<link rel="stylesheet" href="css/shop.css?v=20261028e">
 
 </head>
 <body>
@@ -41,9 +41,6 @@
     <img class="dot-layer dot-hover" src="Atlases/Gui/hover/highlight.png" alt="">
 </button>
 
-<!-- 煤球精灵：图层由 JS 动态叠加 -->
-<div id="dustSprite"><div class="dust-inner"></div></div>
-
 <!-- 两侧烟囱烟雾粒子层 -->
 <div id="chimneySmoke"></div>
 
@@ -72,25 +69,23 @@
     </div>
 </div>
 
-<!-- 商品展示区已预留：后续商品销售方案优化时在此启用 -->
-<div class="wrap" id="shopStage"></div>
-
-<!-- 心之水晶获取仪式：暗场 + 放射光 + 破心音效 + 命名牌 -->
+<!-- 水晶之心收集仪式：Poem —— 心/粒子/文字/装饰全部由 #hgFx 画布绘制（透明底，露出房间场景） -->
 <div id="heartGet">
-    <div class="hg-rays"></div>
-    <div class="hg-flash"></div>
-    <img id="hgFakeHeart" src="heartdoor/icon06.png" alt="" loading="lazy" decoding="async">
-    <div id="hgShards"></div>
-    <img class="hg-heart" id="hgHeartImg" src="celeste-icons/heartgem_outline.png" alt="heart" loading="lazy" decoding="async">
-    <div class="hg-title" id="hgTitle"></div>
-    <div class="hg-desc" id="hgDesc"></div>
-    <div class="hg-tip">点击收下</div>
+    <canvas id="hgFx"></canvas>
+    <div class="hg-poem-tip">点击继续</div>
 </div>
+
+<!-- 水晶之心游戏层：Madeline 漫游 + 冲刺收集（canvas，与房间背景 cover 对齐） -->
+<canvas id="gameStage"></canvas>
 
 <script src="js/api.js?v=20261002"></script>
 <script src="js/text-fx.js?v=20261005b"></script>
 <script src="js/vue.global.prod.js?v=20261008a"></script>
-<script src="js/shop.js?v=20261015a"></script>
-<script src="js/seed.js?v=20261011a"></script>
+<script src="js/celeste-hair.js?v=8"></script>
+<script src="js/celeste-character.js?v=8"></script>
+<script src="js/celeste-dust-bunny.js?v=20261029b"></script>
+<script src="js/gapless-audio.js?v=20261028b"></script>
+<script src="js/shop.js?v=20261029c"></script>
+<script src="js/seed.js?v=20261028b"></script>
 </body>
 </html>

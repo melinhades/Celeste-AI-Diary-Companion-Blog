@@ -2,112 +2,72 @@
    cassette.js
    ① window.CassetteAudio —— 磁带三联音控制器：intro → loop（无限循环）→ outro（停下时）
       供 cassette.html（白噪音 App）与 shelf.html（点开往期日记）共用。
+      底层走 GaplessAudio（Web Audio）：intro 的末帧和 loop 的首帧排在同一条时间线上，
+      loop 在音频渲染线程内部回绕 —— 不再是「element 放完 → 重置管线 → 再 play」那样卡一下。
    ② 下方 IIFE 只在 cassette.html（页面里有 #cxApp）初始化磁带机，
       shelf.html 引入本文件时只会用到 ①，不会碰到 App 逻辑。
    ===================================================================== */
 window.CassetteAudio = (function () {
     var DIR = 'celeste-sounds/cassette_preview_';
     var vol = 0.9;
-    var parts = null;
+    var seq = null;
     var active = false;   // 是否处于「开过、还没停」的状态；没开过就不放 outro
-    var introDone = false; // intro 是否已经自然走完（走完以后磁带机里只动 loop，不再来 intro）
 
     function ensure() {
-        if (parts) return parts;
-        parts = {
-            intro: new Audio(DIR + 'intro.wav'),
-            loop: new Audio(DIR + 'loop.wav'),
-            outro: new Audio(DIR + 'outro.wav')
-        };
-        parts.loop.loop = true;
-        applyVolume();
-        // intro 自然放完 → 接上循环（中途被 pause 不会触发 ended）
-        parts.intro.addEventListener('ended', function () {
-            introDone = true;
-            startLoop();
-        });
-        return parts;
-    }
-    function applyVolume() {
-        if (!parts) return;
-        parts.intro.volume = vol;
-        parts.loop.volume = vol;
-        parts.outro.volume = vol;
+        if (!seq && window.GaplessAudio) {
+            seq = window.GaplessAudio.sequence({
+                intro: DIR + 'intro.wav',
+                loop: DIR + 'loop.wav',
+                outro: DIR + 'outro.wav',
+                volume: vol
+            });
+        }
+        return seq;
     }
     function setVolume(v) {
         vol = Math.max(0, Math.min(1, v));
-        applyVolume();
-    }
-    function startLoop() {
-        var p = ensure();
-        p.loop.currentTime = 0;
-        p.loop.play().catch(function () {});
+        if (seq) seq.setVolume(vol);
     }
 
-    /* 点开：先放 intro，结束后自动进 loop 循环。返回播放 Promise，供页面做自动播放兜底。
-       shelf 点开日记 / 磁带机首次入场用。 */
+    /* 点开：先放 intro，结束处无缝接 loop。返回 Promise，供页面做自动播放兜底。 */
     function play() {
-        var p = ensure();
-        p.outro.pause(); p.outro.currentTime = 0;
-        p.loop.pause(); p.loop.currentTime = 0;
-        p.intro.currentTime = 0;
-        introDone = false;
+        var s = ensure();
+        if (!s) return Promise.resolve();
         active = true;
-        var pr = p.intro.play();
-        // 被浏览器拦截时不强行 startLoop（同样会被拦），交给调用方在首次手势里重试 play()
-        if (pr && pr.catch) pr.catch(function () {});
-        return pr;
+        return s.start();
     }
 
     /* 磁带机 PAUSE：静默挂起，保留位置，不放 outro、不重置 */
-    function suspendTape() {
-        if (!parts) return;
-        parts.intro.pause();
-        parts.loop.pause();
-    }
+    function suspendTape() { if (seq) seq.suspend(); }
 
     /* 磁带机 PLAY：续播 —— intro 没走完续 intro，走完了就一直是 loop */
     function resumeTape() {
-        var p = ensure();
+        var s = ensure();
+        if (!s) return Promise.resolve();
         active = true;
-        var a = introDone ? p.loop : p.intro;
-        var pr = a.play();
-        if (pr && pr.catch) pr.catch(function () {});
-        return pr;
+        return s.resume();
     }
 
     /* 磁带机切回磁带：入场 intro 已过，直接从 loop 开始，不再举行 intro 仪式 */
     function enterTape() {
-        if (!introDone) return play();
-        var p = ensure();
-        p.outro.pause(); p.outro.currentTime = 0;
-        p.intro.pause(); p.intro.currentTime = 0;
-        p.loop.currentTime = 0;
+        var s = ensure();
+        if (!s) return Promise.resolve();
         active = true;
-        var pr = p.loop.play();
-        if (pr && pr.catch) pr.catch(function () {});
-        return pr;
+        return s.state() === 'loop' ? s.playLoop() : s.start();
     }
 
     /* 点出：停掉循环并放 outro（没开过则什么都不做）。三联音整套结束，下次 play 从 intro 开始 */
     function stop() {
         if (!active) return;
-        var p = ensure();
-        p.intro.pause(); p.intro.currentTime = 0;
-        p.loop.pause(); p.loop.currentTime = 0;
-        p.outro.currentTime = 0;
         active = false;
-        introDone = false;
-        p.outro.play().catch(function () {});
+        var s = ensure();
+        if (s) s.stop();
     }
 
     /* 静默停下：切歌 / 离开页面用，不放 outro */
     function halt() {
         active = false;
-        if (!parts) return;
-        parts.intro.pause(); parts.intro.currentTime = 0;
-        parts.loop.pause(); parts.loop.currentTime = 0;
-        parts.outro.pause(); parts.outro.currentTime = 0;
+        if (seq) seq.halt();
     }
 
     return {
@@ -125,80 +85,51 @@ window.CassetteAudio = (function () {
 /* =====================================================================
    window.CampfireAudio —— 篝火双联音：start → loop（无限循环）
    供 cassette.html（篝火源）与 shelf.html（书架常态 + dream 场景）共用。
+   底层同样走 GaplessAudio：start 的末尾与 loop 首帧对齐，loop 本身无接缝。
    注意：loop 文件名带一个空格「campfire_loop .wav」，src 原样写即可，浏览器自行编码。
    ===================================================================== */
 window.CampfireAudio = (function () {
     var vol = 0.14;
-    var parts = null;
-    var phase = 'off';      // off | intro | loop
-    var suspended = false;
+    var seq = null;
+    var on = false;         // 已点火（含挂起）
 
     function ensure() {
-        if (parts) return parts;
-        parts = {
-            intro: new Audio('celeste-sounds/campfire_start.wav'),
-            loop: new Audio('celeste-sounds/campfire_loop .wav')
-        };
-        parts.loop.loop = true;
-        applyVolume();
-        parts.intro.addEventListener('ended', function () {
-            if (phase !== 'intro') return;
-            phase = 'loop';
-            parts.loop.currentTime = 0;
-            parts.loop.play().catch(function () {});
-        });
-        return parts;
-    }
-    function applyVolume() {
-        if (!parts) return;
-        parts.intro.volume = vol;
-        parts.loop.volume = vol;
+        if (!seq && window.GaplessAudio) {
+            seq = window.GaplessAudio.sequence({
+                intro: 'celeste-sounds/campfire_start.wav',
+                loop: 'celeste-sounds/campfire_loop .wav',
+                volume: vol
+            });
+        }
+        return seq;
     }
     function setVolume(v) {
         vol = Math.max(0, Math.min(1, v));
-        applyVolume();
+        if (seq) seq.setVolume(vol);
     }
 
     /* 开始烧火：start → loop。已在烧则忽略（不重来 intro） */
     function play() {
-        if (phase !== 'off') return;
-        var p = ensure();
-        p.intro.currentTime = 0;
-        phase = 'intro';
-        suspended = false;
-        var pr = p.intro.play();
-        if (pr && pr.catch) pr.catch(function () {});
-        return pr;
+        if (on) return Promise.resolve();
+        var s = ensure();
+        if (!s) return Promise.resolve();
+        on = true;
+        return s.start();
     }
 
     /* 挂起：保留位置，恢复时接着烧（镜之房间让位用） */
-    function suspend() {
-        if (phase === 'off' || suspended) return;
-        parts.intro.pause();
-        parts.loop.pause();
-        suspended = true;
-    }
+    function suspend() { if (on && seq) seq.suspend(); }
     function resume() {
-        // 没挂起过：要么已经点着（无事可做），要么起播被浏览器拦过 / 已熄火 —— 得重新点着，
+        // 没点火过：要么已经点着（无事可做），要么起播被浏览器拦过 / 已熄火 —— 得重新点着，
         // 否则会出现「面板显示在播、其实一点声都没有」
-        if (!suspended) {
-            if (phase === 'off') return play();
-            return;
-        }
-        suspended = false;
-        var a = phase === 'intro' ? parts.intro : parts.loop;
-        var pr = a.play();
-        if (pr && pr.catch) pr.catch(function () {});
-        return pr;
+        if (!on) return play();
+        return seq ? seq.resume() : Promise.resolve();
     }
 
     /* 熄火：静默全停归零（切歌 / 离开页面） */
     function halt() {
-        phase = 'off';
-        suspended = false;
-        if (!parts) return;
-        parts.intro.pause(); parts.intro.currentTime = 0;
-        parts.loop.pause(); parts.loop.currentTime = 0;
+        on = false;
+        if (seq) seq.halt();
     }
 
     return { play: play, suspend: suspend, resume: resume, halt: halt, setVolume: setVolume };
@@ -274,9 +205,26 @@ window.CampfireAudio = (function () {
     // 静音也走同一个出口：所有音量都乘它，不另存一份状态
     function effVol() { return muted ? 0 : gVol; }
 
-    var amb = new Audio();
-    amb.loop = true;
-    amb.volume = effVol();
+    // 单段环境声（破窗风 / 各类 SINGLES）：底层同样走 GaplessAudio，循环在音频渲染线程内回绕
+    var amb = null, ambUrl = null;
+    function ambHalt() { if (amb) amb.halt(); }
+    function ambSuspend() { if (amb) amb.suspend(); }
+    function ambSet(url, autoplay) {
+        if (amb && ambUrl === url) {
+            if (autoplay && amb.state() !== 'playing') ambStart();
+            return;
+        }
+        ambHalt();
+        ambUrl = url;
+        amb = window.GaplessAudio.loop(url, { volume: effVol() });
+        if (autoplay) ambStart();
+    }
+    function ambStart() {
+        if (!amb) return null;
+        var p = amb.start();
+        if (p && p.catch) p.catch(function (err) { blocked(err); });
+        return p;
+    }
 
     // 传输键 / 开关组集中取一次，下面所有同步都只读这几个引用
     var winSegs = app.querySelectorAll('[data-win]');
@@ -429,11 +377,7 @@ window.CampfireAudio = (function () {
     }
     function wfTeardown() {
         for (var i = 0; i < wf.chans.length; i++) {
-            var a = wf.chans[i].a;
-            a.pause();
-            // 不能写 a.src = ''：空串会解析成当前页面地址，浏览器会当媒体去加载，控制台报错
-            if (a.removeAttribute) a.removeAttribute('src');
-            if (a.load) a.load();
+            wf.chans[i].l.halt();
         }
         wf.chans = [];
         wf.chansSize = null;
@@ -443,10 +387,11 @@ window.CampfireAudio = (function () {
         wfTeardown();
         var files = wfFiles();
         for (var i = 0; i < files.length; i++) {
-            var a = new Audio(AMB + files[i].f);
-            a.loop = true;
-            a.volume = wfGain(files[i].key) * effVol();
-            wf.chans.push({ key: files[i].key, a: a });
+            // 每个通道都是独立的无缝循环，推子只改它自己的增益
+            wf.chans.push({
+                key: files[i].key,
+                l: window.GaplessAudio.loop(AMB + files[i].f, { volume: wfGain(files[i].key) * effVol() })
+            });
         }
         wf.chansSize = wf.size;
         if (autoplay) wfPlay();
@@ -454,19 +399,18 @@ window.CampfireAudio = (function () {
     function wfApplyGains() {
         var v = effVol();
         for (var i = 0; i < wf.chans.length; i++) {
-            wf.chans[i].a.volume = wfGain(wf.chans[i].key) * v;
+            wf.chans[i].l.setVolume(wfGain(wf.chans[i].key) * v);
         }
     }
     function wfPlay() {
         for (var i = 0; i < wf.chans.length; i++) {
-            var pr = wf.chans[i].a.play();
+            var pr = wf.chans[i].l.start();
             if (pr && pr.catch) pr.catch(function (err) { blocked(err); });
         }
     }
     function wfPause(reset) {
         for (var i = 0; i < wf.chans.length; i++) {
-            wf.chans[i].a.pause();
-            if (reset) wf.chans[i].a.currentTime = 0;
+            wf.chans[i].l[reset ? 'halt' : 'suspend']();
         }
     }
     function wfDescribe() {
@@ -487,25 +431,16 @@ window.CampfireAudio = (function () {
     function silenceAll() {
         window.CassetteAudio.halt();   // 切走磁带：静默收尾，不放 outro
         window.CampfireAudio.halt();   // 切走篝火：熄火
-        amb.pause();
+        ambHalt();
         wfPause(false);
     }
     
     // 单文件源（破窗/其他场景）统一走这两个装载入口：换文件与“要不要出声”分开
-    function playAmb() {
-        var pr = amb.play();
-        if (pr && pr.catch) pr.catch(function (err) { blocked(err); });
-        return pr;
-    }
     function loadWindow(autoplay) {
-        amb.src = AMB + WINDS[wind].f;
-        try { amb.currentTime = 0; } catch (e) {}
-        if (autoplay) playAmb();
+        ambSet(AMB + WINDS[wind].f, autoplay);
     }
     function loadSingle(name) {
-        amb.src = AMB + SINGLES[name].f;
-        try { amb.currentTime = 0; } catch (e) {}
-        playAmb();
+        ambSet(AMB + SINGLES[name].f, true);
     }
     
     /* 自动播放被拦：只认 NotAllowedError；用户主动暂停引发的 AbortError 不算 */
@@ -582,7 +517,7 @@ window.CampfireAudio = (function () {
         if (cur === 'cassette') window.CassetteAudio.suspendTape();
         else if (cur === 'campfire') window.CampfireAudio.suspend();
         else if (cur === 'waterfall') wfPause(false);
-        else amb.pause();
+        else ambSuspend();
         playing = false;
         spin(false); stopClock();
         say('暂停 · 再点 ▶ 继续', false);
@@ -594,7 +529,7 @@ window.CampfireAudio = (function () {
         if (cur === 'cassette') window.CassetteAudio.halt();
         else if (cur === 'campfire') window.CampfireAudio.halt();
         else if (cur === 'waterfall') wfPause(true);
-        else { amb.pause(); amb.currentTime = 0; }
+        else { ambHalt(); }
         playing = false;
         spin(false); stopClock();
         elapsed = 0; paintClock();
@@ -608,7 +543,7 @@ window.CampfireAudio = (function () {
         if (!cur) { activate('cassette'); return; }
         playing = true;
         spin(true); startClock();
-        if (cur === 'cassette') window.CassetteAudio.resumeTape();
+        if (cur === 'cassette') { var pr3 = window.CassetteAudio.resumeTape(); if (pr3 && pr3.catch) pr3.catch(function () {}); }
         else if (cur === 'campfire') window.CampfireAudio.resume();
         else if (cur === 'waterfall') {
             // 暂停期间换过大小：必须先按新尺寸重建通道，否则播的是旧那套
@@ -618,7 +553,7 @@ window.CampfireAudio = (function () {
             // 暂停期间换过风档：按当前 wind 重新装文件
             loadWindow(true);
         } else {
-            playAmb();
+            ambStart();
         }
         say(describeCur(), true);
         syncUI();
@@ -636,7 +571,7 @@ window.CampfireAudio = (function () {
     /* ---------- 音量：一条口径管到底（静音 = 乘 0） ---------- */
     function applyVolumes() {
         var v = effVol();
-        amb.volume = v;
+        if (amb) amb.setVolume(v);
         window.CassetteAudio.setVolume(v);
         window.CampfireAudio.setVolume(v * 0.38);   // 篝火做底噪，永远压一头
         wfApplyGains();
@@ -764,7 +699,7 @@ window.CampfireAudio = (function () {
     window.addEventListener('pagehide', function () {
         window.CassetteAudio.halt();
         window.CampfireAudio.halt();
-        amb.pause();
+        ambHalt();
         wfPause(false);
         stopClock();
     });

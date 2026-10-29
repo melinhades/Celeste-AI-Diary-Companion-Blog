@@ -39,18 +39,6 @@
     }
     memoEl.addEventListener('click', hideOpeningMemo);
 
-    if (localStorage.getItem('berryFix20260822') !== '1') {
-        localStorage.setItem('berryFix20260822', '1');
-        localStorage.setItem('berryBalance', '3');
-        try {
-            var keep = JSON.parse(localStorage.getItem('berryOwned') || '[]').filter(function (id) {
-                return ['goldberry', 'heartgem', 'moonberry'].indexOf(id) >= 0;
-            });
-            localStorage.setItem('berryOwned', JSON.stringify(keep));
-        } catch (e) {}
-        localStorage.removeItem('berryBgm');
-    }
-
     // ===== Oshiro 立绘帧动画 =====
     var OSHIRO_FRAMES = { normal:13, nervous:8, worried:8, drama:6, lostcontrol:6, serious:8, sidehappy:8, sidesuspicious:8, sideworried:9 };
     var OSHIRO_EMOTION = { '默认':'normal', '不安':'nervous', '不开心':'worried', '怨恨':'drama', '惊讶':'lostcontrol', '无语':'serious', '可爱':'sidehappy' };
@@ -578,35 +566,12 @@
         if (e.key === 'Enter') document.getElementById('ochSendBtn').click();
     });
 
-    // ===== 商品逻辑 =====
-    var SHOP_ITEMS = [
-        { id: 'goldberry', name: '金草莓荣誉', icon: 'celeste-collectables/goldberry/idle00.png', price: 5, desc: '书架右上角点亮金草莓徽章。' },
-        { id: 'crystalheart', name: '心之水晶', icon: 'celeste-icons/heartgem_outline.png', price: 10, desc: '山民们管这叫「炼金」——把最近的日记情绪投进坩埚，炼出一颗独一无二的水晶心。可以反复炼制，每一颗都会成为 Badeline 人格的一部分。' },
-        { id: 'heartgem', name: '心之宝石', icon: 'celeste-icons/heartgem0.png', price: 15, desc: '山顶的终极成就。写满 100 篇，它会升满四色。' },
-        { id: 'moonberry', name: '月亮莓', icon: 'celeste-collectables/moonberry/normal00.png', price: 30, desc: '山里藏得最深的传说收藏。拿到它，说明你写到了山顶。' }
-    ];
-    var SAY_BUY = ['太好了！这件收藏品终于找到主人了！', '眼光真好，旅馆的品味有保障～', '恭喜！我这就帮您包好，请收好。'];
-    var SAY_POOR = ['草莓还差一些呢，再写几篇日记吧～', '别急，好东西值得多努力几步。'];
-
-    // ===== 心之水晶：颜色 / 光晕 / AI 命名兜底 =====
-    var CRYSTAL_PRICE = 10;
-    var CRYSTAL_ICON = { blue: 'celeste-icons/heartgem0.png', red: 'celeste-icons/heartgem1.png', yellow: 'celeste-icons/heartgem2.png' };
-    var CRYSTAL_GLOW = { blue: 'rgba(110,180,255,.8)', red: 'rgba(255,110,120,.8)', yellow: 'rgba(255,214,110,.85)' };
+    // ===== 心之水晶：AI 命名兜底 =====
     var CRYSTAL_FALLBACK = {
         blue:   { color: 'blue',   title: '不知所谓的机器', desc: '山底的冰凉水声，替你把心事泡得很轻。' },
         red:    { color: 'red',    title: '不肯熄的心',     desc: '那些没说出口的火，烧着烧着就成了灯。' },
         yellow: { color: 'yellow', title: '甜得过分的心',   desc: '草莓攒出来的小太阳，专照阴天。' }
     };
-    function getCrystal() { try { return JSON.parse(localStorage.getItem('crystalHeart') || '{}'); } catch (e) { return {}; } }
-    // 已收集的心数组（heartDoorHearts 优先，兜底单心 crystalHeart）
-    function getHearts() {
-        try {
-            var arr = JSON.parse(localStorage.getItem('heartDoorHearts') || 'null');
-            if (Array.isArray(arr) && arr.length) return arr;
-        } catch (e) {}
-        var c = getCrystal();
-        return (c && c.color) ? [c] : [];
-    }
     function fxSound(name, volume) {
         if (!window.__audioGestured) return;
         try {
@@ -616,301 +581,1104 @@
         } catch (e) {}
     }
 
-    function balance() { return berryBalance(); }
-    function owned() {
-        try { return JSON.parse(localStorage.getItem('berryOwned') || '[]'); } catch (e) { return []; }
-    }
-    function say(txt) { var el = document.getElementById('mSay'); if (el) el.textContent = '「' + txt + '」—— Oshiro'; }
-
-    function render() {
-        if (!document.getElementById('items')) return;
-        var bal = balance(), own = owned(), ch = getCrystal();
-        var hearts = getHearts();
-        document.getElementById('balNum').textContent = bal;
-        document.getElementById('items').innerHTML = SHOP_ITEMS.map(function(it) {
-            var has = own.indexOf(it.id) >= 0;
-            var iconTag = '<img src="' + it.icon + '" alt="" loading="lazy" decoding="async">';
-            var descTxt = it.desc;
-            var canBuy = !has && bal >= it.price;
-            var itName = it.name;
-            if (it.id === 'crystalheart') {
-                canBuy = bal >= it.price; // 心可反复炼制（炼金）
-                if (hearts.length) {
-                    var color = ch.color || 'blue';
-                    itName = it.name + ' ×' + hearts.length; // 商店显示炼心数量
-                    iconTag = '<img src="' + (CRYSTAL_ICON[color] || CRYSTAL_ICON.blue) + '" alt="" loading="lazy" decoding="async" class="heart-loop" style="--hg-glow:' + (CRYSTAL_GLOW[color] || CRYSTAL_GLOW.blue) + '">';
-                    descTxt = '「' + (ch.title || '心之水晶') + '」' + (ch.desc || '') + '<br>已炼 <b>' + hearts.length + '</b> 颗' + (hearts.length >= 4 ? '，心门已开' : '，集满 4 颗开启心门');
-                }
-            }
-            var btn = has ? '✓ 已拥有' : ((it.id === 'crystalheart' && hearts.length) ? '再炼一颗？ · ' + it.price + ' 🍓' : it.price + ' 🍓');
-            return '<div class="item' + (has && it.id !== 'crystalheart' ? ' owned' : '') + '">' +
-                iconTag +
-                '<div class="info"><div class="name">' + itName + '</div><div class="desc">' + descTxt + '</div></div>' +
-                '<button class="buy" data-id="' + it.id + '"' + (canBuy ? '' : ' disabled') + '>' +
-                btn + '</button></div>';
-        }).join('');
-        document.querySelectorAll('.buy').forEach(function(b) { b.addEventListener('click', function() { buy(b.dataset.id, b); }); });
-    }
-    function buy(id, btn) {
-        var it = SHOP_ITEMS.find(function(x) { return x.id === id; });
-        if (!it) return;
-        if (id === 'crystalheart') { buyCrystal(btn); return; }
-        var own = owned();
-        if (own.indexOf(id) >= 0) return;
-        if (balance() < it.price) {
-            var poor = SAY_POOR[Math.floor(Math.random() * SAY_POOR.length)];
-            say(poor);
-            showOshiroDialog(poor, '不开心');
-            return;
-        }
-        own.push(id);
-        localStorage.setItem('berryOwned', JSON.stringify(own));
-        spendBerries(it.price);
-        var line = SAY_BUY[Math.floor(Math.random() * SAY_BUY.length)];
-        say(line);
-        osCelebrate();
-        showOshiroDialog(line, '可爱');
-        render();
-    }
-    render();
-    // 草莓籽组合成草莓等场景下余额变化时，商店余额实时同步
-    window.addEventListener('berries:change', render);
-    // 进商店先拉后端权威余额（他端消费/获得后保持一致）
-    if (typeof window.syncBerryBalance === 'function') syncBerryBalance();
-
-    // ===== 心之水晶兑换：可反复炼制，每颗追加进 heartDoorHearts（Badeline 人格光谱） =====
-    function buyCrystal(btn) {
-        if (balance() < CRYSTAL_PRICE) {
-            var poor = SAY_POOR[Math.floor(Math.random() * SAY_POOR.length)];
-            say(poor);
-            showOshiroDialog(poor, '不开心');
-            return;
-        }
-        if (btn) { btn.disabled = true; btn.textContent = '炼心中…'; }
-        function finish(cr) {
-            spendBerries(CRYSTAL_PRICE);
-            var hearts = getHearts();
-            hearts.push(cr);
-            try { localStorage.setItem('heartDoorHearts', JSON.stringify(hearts)); } catch (e) {}
-            localStorage.setItem('crystalHeart', JSON.stringify(cr)); // 兼容旧展示：同步最新一颗
-            heartGetSequence(cr, hearts.length);
-        }
-        api('/diary/heart-crystal', 'GET', null, 12000).then(function(res) {
-            if (res && res.success && res.data && res.data.color && CRYSTAL_ICON[res.data.color]) {
-                finish({ color: res.data.color, title: res.data.title || CRYSTAL_FALLBACK[res.data.color].title, desc: res.data.desc || CRYSTAL_FALLBACK[res.data.color].desc });
-            } else {
-                finish(CRYSTAL_FALLBACK.blue); // 无情绪数据 → 正典蓝心
-            }
-        }).catch(function() {
-            finish(CRYSTAL_FALLBACK.blue);
-        });
-    }
-
-    // 获取仪式：暗场 → 放射光 → 心坠落定（破心音效+震屏+白闪）→ 命名牌 → 点击收下
-    // 按心色选专属音效集（intro/loop/outro 三段式；黄心用 gold 目录）
+    // 获取仪式音效：按心色选专属集（intro/loop/outro 三段式；黄心用 gold 目录）
     function heartSfxBase(color) {
         if (color === 'red') return 'crystalredheart/crystalheart_red_get_';
         if (color === 'yellow') return 'crystalgoldheart/crystalheart_gold_get_';
         return 'crystalblueheart/crystalheart_blue_get_';
     }
 
-    // ===== 破心：像素心碎成 shard.png 碎片四散（噪声爆裂 + 水晶 ping） =====
-    function hgCrackSound() {
-        try {
-            var ctx = window.__shopAC || (window.__shopAC = new (window.AudioContext || window.webkitAudioContext)());
-            var dur = 0.4;
-            var buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);
-            var d = buf.getChannelData(0);
-            for (var i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2.4);
-            var src = ctx.createBufferSource();
-            src.buffer = buf;
-            var hp = ctx.createBiquadFilter();
-            hp.type = 'highpass'; hp.frequency.value = 2200;
-            var g = ctx.createGain(); g.gain.value = 0.4;
-            src.connect(hp); hp.connect(g); g.connect(ctx.destination);
-            src.start();
-            [3200, 2400].forEach(function(f, i) {
-                var o = ctx.createOscillator(), og = ctx.createGain();
-                o.type = 'triangle';
-                o.frequency.setValueAtTime(f, ctx.currentTime);
-                o.frequency.exponentialRampToValueAtTime(f * 0.55, ctx.currentTime + 0.25);
-                og.gain.setValueAtTime(i ? 0.08 : 0.12, ctx.currentTime);
-                og.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-                o.connect(og); og.connect(ctx.destination);
-                o.start(); o.stop(ctx.currentTime + 0.32);
-            });
-        } catch (e) {}
-    }
-
-    // 从 (cx,cy) 爆出 14 片碎片，物理与心门破心同参数
-    function hgBurst(cx, cy) {
-        var layer = document.getElementById('hgShards');
-        if (layer) layer.innerHTML = '';
-        var pieces = [];
-        for (var k = 0; k < 14; k++) {
-            var size = 7 + Math.random() * 9;
-            var p = document.createElement('img');
-            p.src = 'heartdoor/shard.png';
-            p.style.width = size + 'px';
-            p.style.height = size + 'px';
-            var x0 = cx - size / 2, y0 = cy - size / 2;
-            p.style.left = x0 + 'px';
-            p.style.top = y0 + 'px';
-            layer.appendChild(p);
-            var ang = Math.random() * Math.PI * 2;
-            var spd = 130 + Math.random() * 210;
-            pieces.push({
-                el: p, x: x0, y: y0, x0: x0, y0: y0,
-                vx: Math.cos(ang) * spd,
-                vy: Math.sin(ang) * spd - 120,
-                rot: Math.random() * 360,
-                vr: (Math.random() * 2 - 1) * 720,
-                life: 0, ttl: 0.65 + Math.random() * 0.25
-            });
+    // ================================================================
+    // ===== 水晶之心：Madeline 漫游 + 冲刺收集 =====
+    // IL 取证（REA / 本地 Celeste.dll + Content/Graphics/Sprites*.xml）：
+    //   Celeste.HeartGem.Awake —— sprite.Play("spin")；Collider = Hitbox(16,16,-8,-8)；
+    //                        ScaleWiggler = Wiggler(0.5s, 4Hz) → Scale = 1 + 0.25*Value；
+    //                        moveWiggler = Wiggler(0.8s, 2Hz, StartZero)；
+    //                        bloom(0.75,16) + light(Lerp(Aqua|Red|Gold, White, .5), 1, 32, 64)；
+    //                        IsFake：ghost 心 Color = White*0.8，bloom/light.Alpha = 0
+    //   HeartGem.Update   —— sprite.Position = UnitY*sin(timer*2)*2 + moveWiggleDir*(-8)*moveWiggle.Value；
+    //                        未收集时每 0.1s 发 1 粒 shine 粒子
+    //   HeartGem.OnPlayer —— collected / level.Frozen 短路；DashAttacking → Collect；
+    //                        否则 bounce 音 + PointBounce + moveWiggler/ScaleWiggler.Start()
+    //   HeartGem.OnLoop("spin") —— pulse 音 + ScaleWiggler.Start() + Displacement.AddBurst(0.35,8,48,0.25)
+    //   HeartGem.CollectRoutine —— 白心闪现 → Freeze(0.2) → TimeRate=0.5 + 10×AbsorbOrb + Shake(0.3)
+    //                        + Flash(White) + FormationBackdrop(Display=1, Alpha=1) + 心 Visible=false
+    //                        → 2s 内 TimeRate→0（rate 0.25/s raw）→ TimeRate=1、level.Frozen=true
+    //                        → Poem 1s CubeOut 淡入 → 按键 → Ease.CubeIn(1-t) 0.5s 淡出（rate 2）
+    //                        → player.Depth=0 → EndCutscene（FormationBackdrop.Display=false）
+    //   Level.Flash       —— flash → Approach(1, dt*10) 后 Approach(0, dt*3)（0.33s 内衰减）
+    //   FormationBackdrop —— fade = Approach(Display?1:0, RawDeltaTime*3)；Render = Black*fade*Alpha*0.85
+    //   Celeste.FakeHeart —— Collect：Freeze(0.05) + Shake(0.3) + SlashFx.Burst(Position, Angle(player.Speed))
+    //                        + player.RefillDash()；**无**音效 / 无碎片 / 无白闪；respawnTimer = 3s
+    //   <DoFakeRoutineWithBird> —— 诗文本淡出（CubeIn(1-p), p += RawDeltaTime/0.2）后
+    //                        Poem.Heart.Play("break")（GUI heartgem3 frames 11-32 @0.07），
+    //                        每帧 Shake += DeltaTime（驱动心抖动/放大），Animating=false → poem.RemoveSelf()
+    //   Celeste.AbsorbOrb —— consumeDelay=0.7+rand*0.3、burstSpeed=80+rand*40、burstDir=rand*2π；
+    //                        飞散(burst→0 @120/s) → SimpleCurve(控制点=中点+垂线*len*(0.05+rand*0.45))
+    //                        → 汇聚 percent→1 (rate RawDeltaTime/duration, duration=0.3+rand*0.25)，
+    //                        位置=curve.GetPoint(CubeIn(percent))，Color=White*(1-eased)
+    //   Sprites.xml        —— 世界心 heartgem0-3 / heartGemGhost / heartGemWhite:
+    //                        spin = frames "0*10,1-13" delay 0.1（24 帧 / 2.4s）
+    //   SpritesGui.xml     —— GUI 心 heartgem0-3: spin = "0*10,1-10" @0.08（20 帧 / 1.6s）；
+    //                        heartgem3 额外有 break = frames "11-32" @0.07
+    //                        （图集实测：26/28/30/32 为 240x240 空帧、25/27/29/31 与 25 同图
+    //                          → 本项目只播 11-25 并补 0.35s 淡出，避免空帧闪烁）
+    // ================================================================
+    (function () {
+        var canvas = document.getElementById('gameStage');
+        if (!canvas || !window.CelesteCharacter) return;
+        var ctx = canvas.getContext('2d');
+        function resize() {
+            canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+            ctx.imageSmoothingEnabled = false;
         }
-        var last = performance.now();
-        function tick(now) {
-            var dt = Math.min(0.05, (now - last) / 1000);
-            last = now;
-            var alive = false;
-            pieces.forEach(function(p) {
-                p.life += dt;
-                if (p.life >= p.ttl) { p.el.style.opacity = '0'; return; }
-                alive = true;
-                p.vy += 950 * dt;
-                p.vx *= Math.pow(0.92, dt * 60);
-                p.x += p.vx * dt;
-                p.y += p.vy * dt;
-                p.rot += p.vr * dt;
-                var fade = p.life > p.ttl * 0.55
-                    ? 1 - (p.life - p.ttl * 0.55) / (p.ttl * 0.45) : 1;
-                p.el.style.opacity = String(fade);
-                p.el.style.transform = 'translate(' + (p.x - p.x0) + 'px,' + (p.y - p.y0) + 'px) rotate(' + p.rot + 'deg)';
-            });
-            if (alive) requestAnimationFrame(tick);
-            else setTimeout(function() { layer.innerHTML = ''; }, 200);
-        }
-        requestAnimationFrame(tick);
-    }
+        window.addEventListener('resize', resize); resize();
 
-    function heartGetSequence(cr, count) {
-        var el = document.getElementById('heartGet');
-        var im = document.getElementById('hgHeartImg');
-        var fake = document.getElementById('hgFakeHeart');
-        var glow = CRYSTAL_GLOW[cr.color] || CRYSTAL_GLOW.blue;
-        im.src = CRYSTAL_ICON[cr.color] || CRYSTAL_ICON.blue;
-        el.style.setProperty('--hg-glow', glow);
-        document.getElementById('hgTitle').textContent = '· ' + (cr.title || '心之水晶') + ' ·' + (count > 1 ? '（第 ' + count + ' 颗）' : '');
-        document.getElementById('hgDesc').textContent = cr.desc || '';
-        // 重置破心状态
-        fake.classList.remove('breaking', 'gone');
-        var sh = document.getElementById('hgShards'); if (sh) sh.innerHTML = '';
-        el.classList.remove('shake');
-        el.classList.add('show');
-        // 假心对齐真心落定位置（布局完成后读几何）
-        requestAnimationFrame(function() {
-            var r = im.getBoundingClientRect(), er = el.getBoundingClientRect();
-            fake.style.left = (r.left - er.left + r.width / 2) + 'px';
-            fake.style.top = (r.top - er.top + r.height / 2) + 'px';
-            requestAnimationFrame(function() { el.classList.add('vis'); });
+        // ===== 世界坐标：1 单位 = 房间原生像素（320×200 空间），脚底 y=0 = 地板（0.803×200） =====
+        var ROOM_W = 320;
+        var FLOOR_NATIVE_Y = ROOM_FLOOR_NY * 200;               // 160.6
+        var WALL_L = 0.104 * ROOM_W, WALL_R = ROOM_W;           // ROOM_POLY_N 左右边界
+        var CEIL_Y = -(FLOOR_NATIVE_Y - 0.097 * 200);           // 屋顶最低处 → 引擎 y 上限
+        var BODY_H = 30;
+        var BLOCKS = [
+            { x1: -1e4, x2: WALL_L, y1: -1e4, y2: 0 },
+            { x1: WALL_R, x2: 1e4,  y1: -1e4, y2: 0 }
+        ];
+        function groundAt() { return 0; }
+        function overlapsY(b, y) { return y > b.y1 + 1 && y - BODY_H < b.y2; }
+        function wallNearAt(x, y, dir) {
+            var best = null;
+            for (var i = 0; i < BLOCKS.length; i++) {
+                var b = BLOCKS[i];
+                if (!overlapsY(b, y)) continue;
+                var fx = dir > 0 ? b.x1 : b.x2;
+                var d = (fx - x) * dir;
+                if (d >= -1 && d <= 6 && (best === null || Math.abs(fx - x) < Math.abs(best - x))) best = fx;
+            }
+            return best;
+        }
+        function wallCollidesAt(edgeX, y, dir) {
+            var best = null;
+            for (var i = 0; i < BLOCKS.length; i++) {
+                var b = BLOCKS[i];
+                if (!overlapsY(b, y)) continue;
+                if (dir > 0) { if (edgeX > b.x1 && edgeX <= b.x2 && (best === null || b.x1 < best)) best = b.x1; }
+                else         { if (edgeX < b.x2 && edgeX >= b.x1 && (best === null || b.x2 > best)) best = b.x2; }
+            }
+            return best;
+        }
+        // 世界 → 屏幕（与 body 背景 center/cover 对齐，复用 nToXY）
+        function toScreen(p) { return nToXY(p.x / ROOM_W, (FLOOR_NATIVE_Y + p.y) / 200); }
+        function zoomNow() { return 8 * roomGeo.scale; }        // 每原生像素 → 屏幕像素
+
+        // ===== 输入（聊天框/输入框聚焦时让位） =====
+        var keys = {};
+        var jumpEdge = false, dashEdge = false;
+        function typingFocus() {
+            var el = document.activeElement;
+            return el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
+        }
+        window.addEventListener('keydown', function (e) {
+            if (typingFocus()) return;
+            var k = e.key.toLowerCase();
+            if (!keys[k]) { if (k === 'c') jumpEdge = true; if (k === 'x') dashEdge = true; }
+            keys[k] = true;
+            if (k === ' ' || k.indexOf('arrow') === 0) e.preventDefault();
         });
-        // 专属心音三段式：Intro 入场 → Loop 停留循环 → Outro 收下
-        var sfx = heartSfxBase(cr.color);
-        var introA = null, loopA = null;
-        try {
-            introA = new Audio('celeste-sounds/' + sfx + 'intro.wav');
-            introA.volume = 0.85;
-        } catch (e) {}
-        // 假心跳动 ~0.8s → 鼓胀 0.2s → t=1s 爆裂（碎片+音效+震屏）
-        setTimeout(function() { fake.classList.add('breaking'); }, 800);
-        setTimeout(function() {
-            var fr = fake.getBoundingClientRect(), e2 = el.getBoundingClientRect();
-            var bx = fr.left - e2.left + fr.width / 2;
-            var by = fr.top - e2.top + fr.height / 2;
-            fake.classList.add('gone');
-            hgBurst(bx, by);
-            hgCrackSound();
-        }, 1000);
-        // 碎片散尽：t=1.95s 真心开始坠落，intro 同步响起
-        setTimeout(function() {
-            if (window.__audioGestured && introA) introA.play().catch(function() {});
-        }, 1950);
-        // t=2.8s 真心落定：wow + 震屏，loop 起，允许点击收下
-        var canTake = false;
-        setTimeout(function() {
-            canTake = true;
-            fxSound('wow_so_secret.wav', 0.9);
-            el.classList.add('shake');
-            setTimeout(function() { el.classList.remove('shake'); }, 400);
-            try {
-                loopA = new Audio('celeste-sounds/' + sfx + 'loop.wav');
-                loopA.loop = true;
-                loopA.volume = 0.3;
-                if (window.__audioGestured) loopA.play().catch(function() {});
-            } catch (e) {}
-        }, 2800);
-        el.onclick = function() {
-            if (!el.classList.contains('vis') || !canTake) return;  // 破心/坠落阶段点击不响应
-            try { if (introA) introA.pause(); if (loopA) loopA.pause(); } catch (e) {}
-            fxSound(sfx + 'outro.wav', 0.85); // Outro：收下
-            el.classList.remove('vis');
-            setTimeout(function() {
-                el.classList.remove('show');
-                render();
-                // 炼金彩蛋台词：首颗与再炼不同
-                showOshiroDialog(count > 1
-                    ? '又来炼金啦？这颗心的颜色……是你当时的样子哦，请收好。'
-                    : '这颗心……是从你自己的日记里长出来的。请收好。', '可爱');
-            }, 480);
+        window.addEventListener('keyup', function (e) { keys[e.key.toLowerCase()] = false; });
+        window.addEventListener('blur', function () { keys = {}; });
+
+        // ===== 素材加载 =====
+        var HG_DIR = 'Atlases/Gameplay/collectables/heartGem';
+        var COLOR_SUBDIR = { blue: '0', red: '1', yellow: '2' };   // IL: AreaMode 0=Aqua 1=Red 2=Gold
+        // Sprites.xml spin: frames="0*10,1-13" delay=0.1
+        var SPIN_SEQ = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
+        var SPIN_DELAY = 0.1;
+        function pad2(i) { return String(i).padStart(2, '0'); }
+        function loadImg(src) {
+            return new Promise(function (res) {
+                var im = new Image();
+                im.onload = function () { res(im); };
+                im.onerror = function () { res(null); };
+                im.src = src;
+            });
+        }
+        var heartFrames = { real: { blue: [], red: [], yellow: [] }, ghost: [] };
+        var orbImg = null;
+        Object.keys(COLOR_SUBDIR).forEach(function (c) {
+            var dir = HG_DIR + '/' + COLOR_SUBDIR[c] + '/';
+            for (var i = 0; i < 14; i++) (function (i, c) {
+                heartFrames.real[c].push(null);
+                loadImg(dir + pad2(i) + '.png').then(function (im) { heartFrames.real[c][i] = im; });
+            })(i, c);
+        });
+        for (var gi = 0; gi < 14; gi++) (function (i) {
+            heartFrames.ghost.push(null);
+            loadImg(HG_DIR + '/ghost' + pad2(i) + '.png').then(function (im) { heartFrames.ghost[i] = im; });
+        })(gi);
+        loadImg(HG_DIR + '/orb.png').then(function (im) { orbImg = im; });
+
+        // IL: CollectRoutine —— SpriteBank.Create("heartGemWhite")（20x20，spin 同 heartgem 序列）
+        heartFrames.white = [];
+        for (var wi = 0; wi < 14; wi++) (function (i) {
+            heartFrames.white.push(null);
+            loadImg(HG_DIR + '/white' + pad2(i) + '.png').then(function (im) { heartFrames.white[i] = im; });
+        })(wi);
+
+        // IL: SpritesGui.xml heartgem0-3：spin = "0*10,1-10" @0.08；heartgem3 另有 break = "11-32" @0.07
+        var GUI_SPIN_SEQ = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        var GUI_FRAME_DELAY = 0.08;
+        var GUI_BREAK_FROM = 11, GUI_BREAK_TO = 25, GUI_BREAK_DELAY = 0.07;
+        // 取证：SpritesGui.xml 写的是 break = "11-32"，但 Gui 图集里 26/28/30/32 是空帧、
+        //       25/27/29/31 与 25 完全同图（同一 md5）→ 直接播 11-32 会「碎裂图 / 空白」交替闪烁。
+        //       故只播 11-25（15 帧 1.05s），再花 0.35s 把最后一片压扁淡出，总时长 1.4s ≈ 原版 21×0.07
+        var GUI_BREAK_SEQ = (function () {
+            var a = [];
+            for (var i = GUI_BREAK_FROM; i <= GUI_BREAK_TO; i++) a.push(i);
+            return a;
+        })();
+        var GUI_BREAK_HOLD = GUI_BREAK_SEQ.length * GUI_BREAK_DELAY;   // 1.05
+        var GUI_BREAK_FADE = 0.35;
+        var GUI_BREAK_TOTAL = GUI_BREAK_HOLD + GUI_BREAK_FADE;         // 1.4
+        // IL: Poem —— GuiSpriteBank "heartgem"+mode：0/1/2 = spin00-10（240x240）；3 = FakeHeart0000-0032
+        var GUI_HG = 'Atlases/Gui/collectables/heartgem';
+        var GUI_HEART_FRAMES = { blue: [], red: [], yellow: [], fake: [] };
+        Object.keys(COLOR_SUBDIR).forEach(function (c) {
+            for (var i = 0; i < 11; i++) (function (c, i) {
+                GUI_HEART_FRAMES[c].push(null);
+                loadImg(GUI_HG + '/' + COLOR_SUBDIR[c] + '/spin' + pad2(i) + '.png')
+                    .then(function (im) { GUI_HEART_FRAMES[c][i] = im; });
+            })(c, i);
+        });
+        for (var fi = 0; fi < 33; fi++) (function (i) {
+            GUI_HEART_FRAMES.fake.push(null);
+            loadImg(GUI_HG + '/3/FakeHeart' + String(i).padStart(4, '0') + '.png')
+                .then(function (im) { GUI_HEART_FRAMES.fake[i] = im; });
+        })(fi);
+
+        // IL: Poem.BeforeRender 粒子贴图 Atlas["snow"]（8x8）
+        var snowImg = null;
+        loadImg('Atlases/Gameplay/particles/snow.png').then(function (im) { snowImg = im; });
+
+        // ===== 灰尘兔（Celeste.DustGraphic）· 场景层节奏 =====
+        // 取证：全库唯一生成点 Celeste.CS07_Credits.<DustyRoutine>d__30 —— 3 只、水平间隔 24、
+        //       Depth -50、左移 26px/s、纵向下沉到 start.Y+16（16px/s）、
+        //       每只 Y = offset.Y + sin(timer*4 + i*0.8)*4。
+        //       原作每只另挂 decals/3-resort/brokenbox_*，按需求不画箱子（与本体重绘无关）。
+        // 场景差异（非原作数值）：原作只跑一趟并在 bounds.Left+120 停住；商店是常驻房间，
+        //       故三只全部越过左墙后从右侧重新入场，形成固定路线循环。
+        var DUST = window.CelesteDustBunny;
+        var dustGroup = null;
+        // 起点放在右墙之外（右墙 = 320）：三只都在屏幕外，3.8s 等待结束后几乎立刻从右侧走进画面。
+        // 下沉 16 后中心 y = -8 → 16×16 贴图贴地。
+        var DUST_START_X = 336, DUST_START_Y = -24;
+        if (DUST) DUST.load();
+
+
+        // IL: SlashFx —— effects/slash/00-03，Sprite.Add("play","",0.1,4帧)
+        var slashFrames = [];
+        for (var sfi = 0; sfi < 4; sfi++) (function (i) {
+            slashFrames.push(null);
+            loadImg('Atlases/Gameplay/effects/slash/' + pad2(i) + '.png')
+                .then(function (im) { slashFrames[i] = im; });
+        })(sfi);
+
+        // 颜色乘法近似：source-in 保留原 alpha，把贴图整体染成目标色
+        function tintCopy(img, cssColor) {
+            if (!img) return null;
+            if (img.__tint && img.__tint[cssColor]) return img.__tint[cssColor];
+            var c = document.createElement('canvas');
+            c.width = img.width; c.height = img.height;
+            var g = c.getContext('2d');
+            g.drawImage(img, 0, 0);
+            g.globalCompositeOperation = 'source-in';
+            g.fillStyle = cssColor;
+            g.fillRect(0, 0, c.width, c.height);
+            img.__tint = img.__tint || {};
+            img.__tint[cssColor] = c;
+            return c;
+        }
+
+        // ===== 水晶之心实体 =====
+        var HEART_POS = { x: 160, y: -20 };                     // 房间中部，心中心在玩家脚底上方 20px
+        var heart = {
+            mode: 'none',          // 'real'（已写日记，三色）| 'fake'（未写日记，ghost 帧）| 'none'（已收集）
+            color: 'blue', title: '', desc: '',
+            timer: 0, frameT: 0, frameI: 0,
+            shineT: 0,
+            bounceSfxDelay: 0,                         // IL: bounceSfxDelay = 0.1
+            scaleWig: newWiggler(0.5, 4, false),       // IL: ScaleWiggler = Wiggler(0.5s, 4Hz)
+            moveWig: newWiggler(0.8, 2, true),         // IL: moveWiggler = Wiggler(0.8s, 2Hz) + StartZero
+            moveDir: { x: 0, y: -1 }                   // IL: moveWiggleDir
         };
-    }
-
-    // 拥有后：预载三色心，商店页持续循环动画由 CSS heart-loop 承担
-    (function preloadCrystals() {
-        Object.keys(CRYSTAL_ICON).forEach(function(k) { var im = new Image(); im.src = CRYSTAL_ICON[k]; });
-    })();
-
-    // Outro：离开商店页时播放收尾音效
-    document.querySelector('.topbar a').addEventListener('click', function(e) {
-        if (!window.__audioGestured) return;
-        e.preventDefault();
-        fxSound('ui_main_postcard_csides_out.wav', 0.6);
-        var href = e.currentTarget.href;
-        setTimeout(function() { location.href = href; }, 240);
-    });
-
-    function mkFrames(prefix, n) { var a = []; for (var i = 0; i < n; i++) a.push(prefix + String(i).padStart(2, '0') + '.png'); return a; }
-    function heartTier() {
-        var c = parseInt(localStorage.getItem('diarySaveCount') || '0');
-        return c >= 100 ? 3 : c >= 60 ? 2 : c >= 30 ? 1 : 0;
-    }
-    var ICON_FRAMES = {
-        goldberry: mkFrames('celeste-collectables/goldberry/idle', 12),
-        moonberry: mkFrames('celeste-collectables/moonberry/normal', 52),
-        strawberry: mkFrames('celeste-collectables/strawberry/normal', 62)
-    };
-    Object.keys(ICON_FRAMES).forEach(function(k) { ICON_FRAMES[k].forEach(function(s) { var im = new Image(); im.src = s; }); });
-    var shopFi = 0;
-    setInterval(function() {
-        document.querySelectorAll('.item').forEach(function(el, idx) {
-            var it = SHOP_ITEMS[idx];
-            var f = it && ICON_FRAMES[it.id];
-            if (!f) return;
-            el.querySelector('img').src = f[shopFi % f.length];
-        });
-        var hg = SHOP_ITEMS.findIndex(function(x) { return x.id === 'heartgem'; });
-        if (hg >= 0) {
-            var hel = document.querySelectorAll('.item')[hg];
-            var tier = heartTier();
-            if (hel) hel.querySelector('img').src = tier >= 3
-                ? 'celeste-collectables/heartgem/3/FakeHeart' + String(shopFi % 33).padStart(4, '0') + '.png'
-                : 'celeste-collectables/heartgem/' + tier + '/spin' + String(shopFi % 11).padStart(2, '0') + '.png';
+        function todayStr() { return new Date().toDateString(); }
+        // 颜色与文案：由后端 /diary/heart-crystal（LLM 按近 10 篇日记投票 + 生成标题/描述）
+        function initHeart() {
+            var wrote = localStorage.getItem('diaryLastSaveDate') === todayStr();
+            if (!wrote) { heart.mode = 'fake'; return; }
+            heart.mode = 'real';
+            var count = localStorage.getItem('diarySaveCount') || '0';
+            try {
+                var cache = JSON.parse(localStorage.getItem('heartCrystalDay') || 'null');
+                if (cache && cache.date === todayStr() && cache.count === count && COLOR_SUBDIR[cache.color]) {
+                    heart.color = cache.color; heart.title = cache.title; heart.desc = cache.desc;
+                }
+            } catch (e) {}
+            api('/diary/heart-crystal', 'GET', null, 12000).then(function (res) {
+                var d = res && res.success && res.data;
+                if (d && COLOR_SUBDIR[d.color]) {
+                    heart.color = d.color;
+                    heart.title = d.title || CRYSTAL_FALLBACK[d.color].title;
+                    heart.desc = d.desc || CRYSTAL_FALLBACK[d.color].desc;
+                    try {
+                        localStorage.setItem('heartCrystalDay', JSON.stringify({
+                            date: todayStr(), count: count, color: heart.color, title: heart.title, desc: heart.desc
+                        }));
+                    } catch (e) {}
+                } else if (!heart.title) {
+                    heart.title = CRYSTAL_FALLBACK[heart.color].title;
+                    heart.desc = CRYSTAL_FALLBACK[heart.color].desc;
+                }
+            }).catch(function () {
+                if (!heart.title) {
+                    heart.title = CRYSTAL_FALLBACK[heart.color].title;
+                    heart.desc = CRYSTAL_FALLBACK[heart.color].desc;
+                }
+            });
         }
-        var bal = document.querySelector('.balance img');
-        if (bal) bal.src = ICON_FRAMES.strawberry[shopFi % ICON_FRAMES.strawberry.length];
-        shopFi++;
-    }, 90);
-    if (!owned().length) say('欢迎光临 Celeste 山庄！我是 Oshiro，这里的每一件收藏品都值得细细品味～');
+
+        // ================================================================
+        // ===== Poem（IL: Celeste.Poem —— 80 粒子 + GUI 240px 巨大心 + 中心文字） =====
+        // colors = ["8cc7fa","ff668a","fffc24","ffffff"]（mode 0/1/2 = 蓝/红/黄，3 = fake）
+        // Update: Percent += DeltaTime/Duration*ParticleSpeed（Duration = 0.5+rand*0.5），>1 重掷
+        // BeforeRender: e=SineIn(Percent)；Position = Heart.Position + Direction*(1-e)*1920；
+        //               Scale = (1+e*2, 0.25*(0.25+(1-e)*0.75))；贴图 snow（8x8）；
+        //               Rotation = Angle(-Direction)；Color*(1-e)；
+        //               然后 Heart.Position += Range(-1,1)*16*Shake；Heart.Scale = 1 + Shake*0.1
+        // 淡入 1s Ease.CubeOut / 淡出 Ease.CubeIn(1-t)，t += RawDeltaTime*2（0.5s）
+        // ================================================================
+        var POEM_COLORS = { blue: '#8cc7fa', red: '#ff668a', yellow: '#fffc24', fake: '#ffffff' };
+        function sineIn(t) { return 1 - Math.cos(t * Math.PI / 2); }        // IL: Ease.SineIn
+        function cubeIn(t) { return t * t * t; }                            // IL: Ease.CubeIn
+        function cubeOut(t) { return 1 - cubeIn(1 - t); }                   // IL: Ease.CubeOut
+        function hexA(hex, a) {
+            var n = parseInt(hex.slice(1), 16);
+            return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+        }
+
+        // IL: Poem.DrawPoem —— 文本两侧 poemside 64px 装饰
+        var poemsideImg = null;
+        loadImg('Atlases/Gui/poemside.png').then(function (im) { poemsideImg = im; });
+        function poemsideFor(col) { return poemsideImg ? tintCopy(poemsideImg, col) : null; }
+
+        var poem = null;
+        var fxc = document.getElementById('hgFx');
+        var fxctx = fxc ? fxc.getContext('2d') : null;
+        var poemSharp = null, poemGlow = null;   // IL: poem RT / smoke RT（离屏）
+        function resizeFx() {
+            if (!fxc) return;
+            fxc.width = window.innerWidth; fxc.height = window.innerHeight;
+            fxctx.imageSmoothingEnabled = true;   // IL: GUI 层线性采样（240px 心）
+        }
+        if (fxc) { window.addEventListener('resize', resizeFx); resizeFx(); }
+
+        function newPoemParticle() {
+            var a = Math.random() * Math.PI * 2;
+            return {
+                dir: { x: Math.cos(a), y: Math.sin(a) },
+                p: Math.random(),                                   // IL: Particle.Reset(NextFloat)
+                dur: 0.5 + Math.random() * 0.5                      // IL: Duration = 0.5 + NextFloat()*0.5
+            };
+        }
+        function openPoem(color, title, desc, flow) {
+            var fake = color === 'fake';
+            poem = {
+                color: color, fake: fake, flow: flow || 'real',
+                spinFrames: fake ? null : GUI_HEART_FRAMES[color],
+                frameI: 0, frameT: 0, delay: GUI_FRAME_DELAY,
+                anim: 'spin', animDone: false,
+                tint: (color === 'yellow' && !fake) ? 0.6 : 1,   // IL: (AreaMode==2 && !fake) ? 0.6
+                title: title || '', desc: desc || '',
+                textAlpha: 1, particleSpeed: 1, shake: 0,        // IL: TextAlpha / ParticleSpeed / Shake
+                breakT: 0, breakFade: 1,                         // 假心 break：帧计时 / 末段淡出
+                particles: [],
+                timer: 0,
+                alpha: 0, t: 0, phase: 'in'
+            };
+            for (var i = 0; i < 80; i++) poem.particles.push(newPoemParticle());
+        }
+        // IL: Poem.Heart —— "heartgem"+mode，spin 为 Loop（0*10,1-10 @0.08）；fake 另有 break（11-32 @0.07）
+        function poemHeartImg() {
+            if (!poem) return null;
+            if (poem.fake) {
+                var idx = poem.anim === 'break' ? poem.frameI : GUI_SPIN_SEQ[poem.frameI];
+                return GUI_HEART_FRAMES.fake[idx] || null;
+            }
+            return poem.spinFrames ? poem.spinFrames[GUI_SPIN_SEQ[poem.frameI]] : null;
+        }
+        function advancePoemHeart(rdt) {
+            if (poem.anim === 'break') {                        // IL: Heart.Play("break")，FrameTimer 累加
+                poem.breakT += rdt;
+                var step = Math.floor(poem.breakT / GUI_BREAK_DELAY);
+                if (step > GUI_BREAK_SEQ.length - 1) step = GUI_BREAK_SEQ.length - 1;
+                poem.frameI = GUI_BREAK_SEQ[step];
+                poem.breakFade = poem.breakT <= GUI_BREAK_HOLD ? 1
+                    : Math.max(0, 1 - (poem.breakT - GUI_BREAK_HOLD) / GUI_BREAK_FADE);
+                if (poem.breakT >= GUI_BREAK_TOTAL) poem.animDone = true;   // IL: !Heart.Animating
+                return;
+            }
+            poem.frameT += rdt;
+            while (poem.frameT >= poem.delay) {
+                poem.frameT -= poem.delay;
+                poem.frameI = (poem.frameI + 1) % GUI_SPIN_SEQ.length;
+            }
+        }
+        function closePoem() {
+            poem = null;
+            if (poemEl) { poemEl.classList.remove('show'); poemEl.style.opacity = '0'; }
+            if (poemTip) poemTip.style.visibility = '';
+        }
+        function updatePoem(rdt) {
+            if (!poem) { if (poemEl) poemEl.style.opacity = '0'; return; }
+            poem.timer += rdt;                                   // IL: timer += Engine.DeltaTime（MagicGlow 用）
+            advancePoemHeart(rdt);
+            for (var i = 0; i < poem.particles.length; i++) {
+                var p = poem.particles[i];
+                p.p += rdt / p.dur * poem.particleSpeed;          // IL: Percent += dt/Duration*ParticleSpeed
+                if (p.p > 1) { var np = newPoemParticle(); np.p = 0; poem.particles[i] = np; }
+            }
+            if (poem.flow === 'fake') {                           // 假心演出由 tickRitual 驱动
+                if (poemEl) poemEl.style.opacity = poem.alpha.toFixed(3);
+                return;
+            }
+            if (poem.phase === 'in') {
+                poem.t += rdt;
+                poem.alpha = poem.t >= 1 ? 1 : cubeOut(poem.t);   // IL: poem.Alpha = Ease.CubeOut(t)，1s
+                if (poem.t >= 1) poem.phase = 'hold';
+            } else if (poem.phase === 'out') {
+                poem.t += rdt * 2;                              // IL: t += RawDeltaTime*2 → 0.5s
+                poem.alpha = poem.t >= 1 ? 0 : cubeIn(1 - poem.t);  // IL: Ease.CubeIn(1-t)
+                if (poem.t >= 1) { closePoem(); return; }
+            }
+            if (poemEl) poemEl.style.opacity = poem.alpha.toFixed(3);
+        }
+
+        // IL: Poem.DrawPoem(Offset, color) —— 整块文本居中于 (960,540)+Offset；
+        // 两侧 poemside 中心 ±(w/2+64)（w = 文本宽度）；四份 Black 副本偏移恒为 ±2（非缩放）；颜色 * TextAlpha
+        function drawPoemText(ctx, cx, cy, g, color, dx, dy) {
+            var title = poem.title || '', desc = poem.desc || '';
+            var ts = Math.max(12, Math.round(84 * g));
+            var ds = Math.max(9, Math.round(34 * g));
+            var family = "'CelesteZH','Renogare','Microsoft YaHei',sans-serif";
+            ctx.save();
+            ctx.translate(dx, dy);
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = color;
+            // 描述折行（IL: PixelFontSize.AutoNewline(text, 1024)）
+            var descLines = [], maxW = 1024 * g, cur = '';
+            if (desc) {
+                ctx.font = ds + 'px ' + family;
+                for (var i = 0; i < desc.length; i++) {
+                    var next = cur + desc[i];
+                    if (ctx.measureText(next).width > maxW && cur) { descLines.push(cur); cur = desc[i]; }
+                    else cur = next;
+                }
+                if (cur) descLines.push(cur);
+            }
+            ctx.font = ts + 'px ' + family;
+            var w = ctx.measureText(title).width;
+            ctx.font = ds + 'px ' + family;
+            for (var k = 0; k < descLines.length; k++) w = Math.max(w, ctx.measureText(descLines[k]).width);
+            var tLH = ts * 1.15, dLH = ds * 1.5, gap = descLines.length ? ts * 0.18 : 0;
+            var totalH = tLH + (descLines.length ? gap + dLH * descLines.length : 0);
+            var top = cy - totalH / 2;
+            ctx.font = ts + 'px ' + family;
+            ctx.fillText(title, cx, top + tLH / 2);
+            if (descLines.length) {
+                ctx.font = ds + 'px ' + family;
+                for (var k2 = 0; k2 < descLines.length; k2++) {
+                    ctx.fillText(descLines[k2], cx, top + tLH + gap + dLH * (k2 + 0.5));
+                }
+            }
+            var side = poemsideFor(color);
+            if (side) {
+                var ss = 64 * g;
+                ctx.drawImage(side, cx - (w / 2 + 64 * g) - ss / 2, cy - ss / 2, ss, ss);
+                ctx.drawImage(side, cx + (w / 2 + 64 * g) - ss / 2, cy - ss / 2, ss, ss);
+            }
+            ctx.restore();
+        }
+
+        // 缺口：原作 smoke 层由 Effects 里的 MagicGlow 着色器（编译产物、无源）生成放射光晕，
+        // 此处用「同色 radial 柔光 + 对 poem RT 强高斯模糊」近似（等效 shader 的 alpha 0.5 / noiseDistort）
+        function drawPoemGlow(ctx, cx, cy, g, col) {
+            var R = 520 * g;
+            var bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
+            bg.addColorStop(0, hexA(col, 0.5));
+            bg.addColorStop(0.45, hexA(col, 0.18));
+            bg.addColorStop(1, hexA(col, 0));
+            ctx.fillStyle = bg;
+            ctx.fillRect(ctx.canvas.width * -0.1, ctx.canvas.height * -0.1, ctx.canvas.width * 1.2, ctx.canvas.height * 1.2);
+        }
+
+        function poemLayer(el, w, h) {
+            if (!el) el = document.createElement('canvas');
+            if (el.width !== w || el.height !== h) { el.width = w; el.height = h; }
+            return el;
+        }
+
+        function drawPoem() {
+            if (!fxctx || !poem) return;
+            var W = fxc.width, H = fxc.height;
+            fxctx.clearRect(0, 0, W, H);
+            var g = Math.min(W / 1920, H / 1080);
+            var cx = W / 2, cy = H / 2;
+            var col = POEM_COLORS[poem.color] || POEM_COLORS.blue;
+
+            // —— poem RT：透明底，粒子 → 心 → 文字/装饰（IL: BeforeRender）——
+            poemSharp = poemLayer(poemSharp, W, H);
+            var p = poemSharp.getContext('2d');
+            p.clearRect(0, 0, W, H);
+            p.imageSmoothingEnabled = true;
+            var snow = tintCopy(snowImg, col);
+            if (snow) {
+                for (var i = 0; i < poem.particles.length; i++) {
+                    var pt = poem.particles[i];
+                    var e = sineIn(pt.p);
+                    var px = cx + pt.dir.x * (1 - e) * 1920 * g;     // IL: Heart.Position + Direction*(1-e)*1920
+                    var py = cy + pt.dir.y * (1 - e) * 1920 * g;
+                    var sx = 1 + e * 2;                               // IL: Scale.X = 1 + e*2
+                    var sy = 0.25 * (0.25 + (1 - e) * 0.75);          // IL: Scale.Y（非等比压扁）
+                    p.save();
+                    p.translate(px, py);
+                    p.rotate(Math.atan2(-pt.dir.y, -pt.dir.x));       // IL: Rotation = Angle(-Direction)
+                    p.globalAlpha = Math.max(0, 1 - e);               // IL: Color = Poem.Color * (1-e)
+                    p.scale(sx, sy);
+                    p.drawImage(snow, -4, -4, 8, 8);
+                    p.restore();
+                }
+                p.globalAlpha = 1;
+            }
+            var img = poemHeartImg();
+            if (img) {
+                // IL: Heart.Position += Range(-1,1)*16*Shake；Heart.Scale = One*(1 + Shake*0.1)
+                var jx = (Math.random() * 2 - 1) * 16 * poem.shake;
+                var jy = (Math.random() * 2 - 1) * 16 * poem.shake;
+                // 图集在 25 帧后没有更强的分离帧（26/28/30/32 是空帧）→ 末段淡出时把整张
+                // 再放大 55%，让三片碎裂「向外炸开」而不是原地消失
+                var burst = poem.anim === 'break' ? 1 + (1 - poem.breakFade) * 0.55 : 1;
+                var hs = img.width * g * (1 + poem.shake * 0.1) * burst;   // GUI 240px
+                p.globalAlpha = poem.tint * poem.breakFade;           // IL: Heart.Color = White * tint
+                p.drawImage(img, cx - hs / 2 + jx, cy - hs / 2 + jy, hs, hs);
+                p.globalAlpha = 1;
+            }
+            if (poem.textAlpha > 0) {
+                var off = 2 * g;                                      // IL: 四份 Black 副本偏移恒为 ±2
+                p.globalAlpha = poem.textAlpha;
+                drawPoemText(p, cx, cy, g, '#000000', -off, 0);
+                drawPoemText(p, cx, cy, g, '#000000', off, 0);
+                drawPoemText(p, cx, cy, g, '#000000', 0, -off);
+                drawPoemText(p, cx, cy, g, '#000000', 0, off);
+                drawPoemText(p, cx, cy, g, col, 0, 0);
+                p.globalAlpha = 1;
+            }
+
+            // —— smoke RT：半分辨率（IL: 960x540），MagicGlow + GaussianBlur ——
+            var hw = Math.max(1, Math.round(W / 2)), hh = Math.max(1, Math.round(H / 2));
+            poemGlow = poemLayer(poemGlow, hw, hh);
+            var q = poemGlow.getContext('2d');
+            q.clearRect(0, 0, hw, hh);
+            q.imageSmoothingEnabled = true;
+            drawPoemGlow(q, hw / 2, hh / 2, g * 0.5, col);
+            q.filter = 'blur(' + Math.max(2, 6 * g) + 'px)';
+            q.drawImage(poemSharp, 0, 0, hw, hh);
+            q.filter = 'none';
+
+            // —— IL: Render —— smoke（White*0.3）→ poem（整体透明度由 #heartGet 的 opacity 承担）——
+            fxctx.globalAlpha = 0.3;
+            fxctx.drawImage(poemGlow, 0, 0, W, H);
+            fxctx.globalAlpha = 1;
+            fxctx.drawImage(poemSharp, 0, 0);
+        }
+
+        // ===== 仪式状态 =====
+        var ritual = null;         // { kind:'real'|'fake', phase, t, orbs, introA, loopA }
+        var freezeT = 0;           // IL: Celeste.Freeze(t) —— 场景全停（raw 计时）
+        var timeRate = 1;          // IL: Engine.TimeRate
+        var frozen = false;        // IL: level.Frozen —— 引擎停走，orb（FrozenUpdate）继续
+        var shakeT = 0, flashA = 0, glitchT = 0;
+        // IL: FormationBackdrop —— fade = Approach(Display ? 1 : 0, RawDeltaTime*3)；Render 铺满 camera 的 85% 黑幕。
+        // 原作是 level 级组件（只压暗房间）；本项目房间 + 商店 UI 同屏 → 用独立黑幕层（z-index 1900，低于 #heartGet）
+        var backdropFade = 0, backdropTarget = 0, veilA = -1;
+        var veil = document.createElement('div');
+        veil.id = 'hgVeil';
+        veil.style.cssText = 'position:fixed;inset:0;z-index:1900;background:#000;opacity:0;pointer-events:none;';
+        document.body.appendChild(veil);
+        function syncVeil() {
+            if (Math.abs(backdropFade - veilA) < 0.002) return;
+            veilA = backdropFade;
+            veil.style.opacity = (0.85 * backdropFade).toFixed(3);
+        }
+        var shines = [], slashes = [], orbs = [];
+
+        function approach(v, target, step) {
+            return v < target ? Math.min(v + step, target) : Math.max(v - step, target);
+        }
+        function yoyo(t) { return t < 0.5 ? t * 2 : (1 - t) * 2; }
+
+        // IL: Monocle.Wiggler —— Value = cos(sineCounter) * Counter，Counter 从 1 线性递减到 0；
+        //     StartZero 时 sineCounter 从 π/2 起（Value 由 0 起步），否则从 0 起（Value 由 1 起步）
+        function newWiggler(dur, freq, startZero) {
+            return {
+                inc: 1 / dur, add: Math.PI * 2 * freq, startZero: !!startZero,
+                counter: 1, sine: 0, value: 0, active: false
+            };
+        }
+        function wigStart(w) {
+            w.counter = 1;
+            w.sine = w.startZero ? Math.PI / 2 : 0;
+            w.value = w.startZero ? 0 : 1;
+            w.active = true;
+        }
+        function wigUpdate(w, dt) {
+            if (!w.active) return;
+            w.sine += w.add * dt;
+            w.counter -= w.inc * dt;
+            if (w.counter <= 0) { w.counter = 0; w.active = false; }
+            w.value = Math.cos(w.sine) * w.counter;
+        }
+
+        // ===== AbsorbOrb（IL 三阶段移植；原作的"目标死亡飞散"分支本项目不可达，省略） =====
+        function newOrb(ox, oy) {
+            return {
+                x: ox == null ? HEART_POS.x : ox, y: oy == null ? HEART_POS.y : oy,
+                alpha: 1,
+                consumeDelay: 0.7 + Math.random() * 0.3,
+                burstSpeed: 80 + Math.random() * 40,
+                burstDir: Math.random() * Math.PI * 2,
+                percent: 0, duration: 0, curve: null,
+                rot: 0, sx: 1, sy: 1, dead: false
+            };
+        }
+        function bezPoint(c, t) {
+            var u = 1 - t;
+            return {
+                x: u * u * c.sx0 + 2 * u * t * c.cx + t * t * c.ex,
+                y: u * u * c.sy0 + 2 * u * t * c.cy + t * t * c.ey
+            };
+        }
+        function bezLen10(c) {   // IL: curve.GetLengthParametric(10)
+            var len = 0, prev = bezPoint(c, 0);
+            for (var i = 1; i <= 10; i++) {
+                var p = bezPoint(c, i / 10);
+                len += Math.sqrt((p.x - prev.x) * (p.x - prev.x) + (p.y - prev.y) * (p.y - prev.y));
+                prev = p;
+            }
+            return len;
+        }
+        function orbScale(v) {   // IL: (Min(2, 0.5+v*0.02), Max(0.05, 0.5-v*0.004))
+            return { x: Math.min(2, 0.5 + v * 0.02), y: Math.max(0.05, 0.5 - v * 0.004) };
+        }
+        function updateOrb(o, rdt) {
+            var tx = madeline.x, ty = madeline.y - 15;          // IL: AbsorbInto.Center
+            if (o.consumeDelay > 0) {
+                o.x += Math.cos(o.burstDir) * o.burstSpeed * rdt;
+                o.y += Math.sin(o.burstDir) * o.burstSpeed * rdt;
+                o.burstSpeed = approach(o.burstSpeed, 0, rdt * 120);
+                o.rot = o.burstDir;
+                var s = orbScale(o.burstSpeed); o.sx = s.x; o.sy = s.y;
+                o.consumeDelay -= rdt;
+                if (o.consumeDelay <= 0) {
+                    // IL: SimpleCurve(start, end, mid + perp*|Δ|*(0.05+rand*0.45))，duration=0.3+rand*0.25
+                    var dx = tx - o.x, dy = ty - o.y;
+                    var len = Math.sqrt(dx * dx + dy * dy) || 1e-6;
+                    var off = len * (0.05 + Math.random() * 0.45) * (Math.random() < 0.5 ? -1 : 1);
+                    o.curve = {
+                        sx0: o.x, sy0: o.y, ex: tx, ey: ty,
+                        cx: (o.x + tx) / 2 - dy / len * off,
+                        cy: (o.y + ty) / 2 + dx / len * off
+                    };
+                    o.duration = 0.3 + Math.random() * 0.25;
+                }
+            } else {
+                o.curve.ex = tx; o.curve.ey = ty;               // IL: curve.End 持续追踪目标
+                o.percent = approach(o.percent, 1, rdt / o.duration);
+                var e = cubeIn(o.percent);
+                var q = bezPoint(o.curve, e);
+                o.x = q.x; o.y = q.y;
+                var v = yoyo(e) * bezLen10(o.curve);
+                var s2 = orbScale(v); o.sx = s2.x; o.sy = s2.y;
+                var q2 = bezPoint(o.curve, cubeIn(Math.min(1, o.percent + 0.01)));
+                o.rot = Math.atan2(q2.y - o.y, q2.x - o.x);
+                o.alpha = 1 - e;                                // IL: Color = White * (1 - eased)
+                if (o.percent >= 1) o.dead = true;
+            }
+        }
+
+        // ===== SlashFx（IL: Celeste.SlashFx.Burst —— 单条 sprite，4 帧 × 0.1s，OnFinish = RemoveSelf） =====
+        // IL: Position = position；Direction = AngleToVector(direction)；Sprite.Play("play",1,0)；
+        //     Rotation = (|direction-π| > 0.01) ? direction : 0；每帧 Position += Direction*8*dt
+        function slashBurst(wx, wy, angle) {
+            slashes.push({
+                x: wx, y: wy, dx: Math.cos(angle), dy: Math.sin(angle),
+                rot: Math.abs(angle - Math.PI) > 0.01 ? angle : 0,
+                frame: 0, t: 0, ttl: 0.4
+            });
+        }
+
+        // ===== 假心 bounce 音（REA: event:/new_content/game/10_farewell/fakeheart_bounce
+        //   + event:/game/general/crystalheart_bounce —— FMOD 内部循环 16 个 sample，
+        //   本地素材 fakeHeart/game_10_fakeheart_bounce_01.wav ~ bounce_16.wav） =====
+        var FAKE_BOUNCE_COUNT = 16;
+        function bouncePing() {
+            if (!window.__audioGestured) return;
+            // 随机选一个 bounce 文件（FMOD event 内部随机选 sample）
+            var idx = (Math.random() * FAKE_BOUNCE_COUNT | 0) + 1;
+            var name = 'fakeHeart/game_10_fakeheart_bounce_' + String(idx).padStart(2, '0') + '.wav';
+            fxSound(name, 0.55);
+        }
+
+        // IL: HeartGem.Collider = Hitbox(16, 16, -8, -8)（中心对齐）；玩家沿用项目 BODY_H
+        function heartHit(m) {
+            return m.x + 4 > HEART_POS.x - 8 && m.x - 4 < HEART_POS.x + 8 &&
+                   m.y > HEART_POS.y - 8 && m.y - BODY_H < HEART_POS.y + 8;
+        }
+        // IL: Player.PointBounce(from) —— v = SafeNormalize(Center - from)；Y∈(-0.2, 0.4] → -0.2；
+        //     Speed = v*220；Speed.X *= 1.5；|X| < 100 → (X == 0 ? -Facing*100 : Sign(X)*100)；
+        //     RefillDash() + RefillStamina()（本项目无体力系统）
+        function pointBounce(m) {
+            var dx = m.x - HEART_POS.x, dy = (m.y - BODY_H / 2) - HEART_POS.y;
+            var len = Math.sqrt(dx * dx + dy * dy) || 1e-6;
+            var nx = dx / len, ny = dy / len;
+            if (ny > -0.2 && ny <= 0.4) ny = -0.2;
+            m.vx = nx * 220 * 1.5;
+            m.vy = ny * 220;
+            if (Math.abs(m.vx) < 100) m.vx = (m.vx === 0 ? -m.facing : (m.vx > 0 ? 1 : -1)) * 100;
+            refillDashOf(m);
+        }
+        // IL: HeartGem.Awake —— bloom(0.75, 16) + light(Lerp(色, White, .5), 1, 32, 64)；fake 时 light.Alpha = 0
+        // 缺口：原作走 Bloom 相机通道（着色器无源）→ 此处用同色 radial 柔光近似
+        var HEART_GLOW = { blue: '#7fffff', red: '#ff7f7f', yellow: '#ffeb7f' };
+        function drawHeartGlow(c, sx, sy, Z2, col) {
+            var R = 34 * Z2;
+            var bg = c.createRadialGradient(sx, sy, 0, sx, sy, R);
+            bg.addColorStop(0, hexA(col, 0.42));
+            bg.addColorStop(0.4, hexA(col, 0.12));
+            bg.addColorStop(1, hexA(col, 0));
+            c.fillStyle = bg;
+            c.beginPath(); c.arc(sx, sy, R, 0, Math.PI * 2); c.fill();
+        }
+
+        // ===== 诗文本 overlay（IL: Poem —— 心/粒子/文字/装饰全部由 #hgFx 画布绘制，透明底露出场景） =====
+        var poemEl = document.getElementById('heartGet');
+        var poemTip = poemEl ? poemEl.querySelector('.hg-poem-tip') : null;
+        function showPoem(clickable) {
+            poemEl.style.opacity = '0';
+            poemEl.classList.add('show');
+            if (poemTip) poemTip.style.visibility = clickable === false ? 'hidden' : '';
+            resizeFx();
+        }
+        poemEl.addEventListener('click', function () {
+            if (!ritual || ritual.kind !== 'real' || ritual.phase !== 'poem') return;
+            if (!poem || poem.phase !== 'hold') return;           // 淡入完成前不可跳过
+            endRealRitual();
+        });
+
+        // ===== 真心收集仪式（IL: HeartGem.CollectRoutine 时间轴） =====
+        function startRealRitual() {
+            ritual = { kind: 'real', phase: 'freeze', t: 0, introA: null, loopA: null };
+            freezeT = 0.2;                                        // IL: Celeste.Freeze(0.2)
+        }
+        function realAfterFreeze() {
+            ritual.phase = 'slow'; ritual.t = 0;
+            timeRate = 0.5;                                       // IL: Engine.TimeRate = 0.5
+            for (var i = 0; i < 10; i++) orbs.push(newOrb());   // IL: 10 × AbsorbOrb(Position)
+            shakeT = 0.3;                                         // IL: level.Shake(0.3)
+            flashA = 1;                                           // IL: level.Flash(White, drawPlayer:false)
+            backdropTarget = 1;                                   // IL: FormationBackdrop.Display=true; Alpha=1
+            heart.mode = 'none';                                  // IL: Visible = false（连白心一起隐去）
+            if (window.__audioGestured) {
+                try {
+                    ritual.introA = new Audio('celeste-sounds/' + heartSfxBase(heart.color) + 'intro.wav');
+                    ritual.introA.volume = 0.85;
+                    ritual.introA.play().catch(function () {});
+                } catch (e) {}
+            }
+        }
+        function realPoemPhase() {
+            ritual.phase = 'poem';
+            timeRate = 1; frozen = true;                          // IL: TimeRate=1; level.Frozen = true
+            if (window.__audioGestured && window.GaplessAudio) {
+                try {
+                    // 心之仪式的 loop 在音频渲染线程内回绕，节点之间不再有 element 起播的卡顿
+                    ritual.loopA = window.GaplessAudio.loop('celeste-sounds/' + heartSfxBase(heart.color) + 'loop.wav', { volume: 0.3 });
+                    var lp = ritual.loopA.start(); if (lp && lp.catch) lp.catch(function () {});
+                } catch (e) {}
+            }
+            showPoem(true);
+            openPoem(heart.color, heart.title, heart.desc, 'real');   // IL: new Poem(text, mode, tint)
+        }
+        function endRealRitual() {
+            try { if (ritual.introA) ritual.introA.pause(); if (ritual.loopA) ritual.loopA.stop(0.08); } catch (e) {}
+            fxSound(heartSfxBase(heart.color) + 'outro.wav', 0.85);   // IL: sfx.Param("end", 1)
+            backdropTarget = 0;                                       // IL: FormationBackdrop.Display = false
+            if (ritual) ritual.phase = 'poemout';
+            if (poem) { poem.phase = 'out'; poem.t = 0; }             // IL: CubeIn(1-t)，t += RawDeltaTime*2
+        }
+
+        // ===== 假心（第九章 emptyheart）：IL Celeste.FakeHeart.Collect + <DoFakeRoutineWithBird> =====
+        // REA 取证：
+        //   FakeHeart.Collect —— Freeze(0.05) + Shake(0.3) + SlashFx.Burst(Position, Angle)
+        //                        + player.RefillDash()；Visible=false；respawnTimer=3s
+        //   DoFakeRoutineWithBird —— 诗文本淡出 → Poem.Heart.Play("break") → 破心动画
+        //                        → 10×AbsorbOrb + Shake(0.3) + Glitch(0.8 @4/s)
+        //   SkipFakeHeartCutscene —— sfx.Play("intermission_heartgroove") → Param("end", 0)
+        //                        （FMOD event 内部 intro→loop，结束时 Param("end", 1) 触发 outro）
+        //   本地素材：fakeHeart/game_10_fakeheart_get_intro_*.wav（9 个版本随机选）
+        //          + fakeHeart/game_10_fakeheart_get_loop.wav（GaplessAudio 循环）
+        //          + fakeHeart/game_10_fakeheart_get_outro.wav（结束）
+        var FAKE_HEART_GET_INTROS = [
+            'fakeHeart/game_10_fakeheart_get_intro_1st.wav',
+            'fakeHeart/game_10_fakeheart_get_intro_birb.wav',
+            'fakeHeart/game_10_fakeheart_get_intro_covert.wav',
+            'fakeHeart/game_10_fakeheart_get_intro_laugher.wav',
+            'fakeHeart/game_10_fakeheart_get_intro_mountain.wav',
+            'fakeHeart/game_10_fakeheart_get_intro_tasbot.wav',
+            'fakeHeart/game_10_fakeheart_get_intro_team_01.wav',
+            'fakeHeart/game_10_fakeheart_get_intro_team_02.wav',
+            'fakeHeart/game_10_fakeheart_get_intro_team_03.wav',
+            'fakeHeart/game_10_fakeheart_get_intro_team_04.wav'
+        ];
+        function startFakeRitual() {
+            var ang = Math.atan2(madeline.vy, madeline.vx);        // IL: Calc.Angle(player.Speed)
+            freezeT = 0.05;                                       // IL: Celeste.Freeze(0.05)
+            shakeT = 0.3;                                         // IL: level.Shake(0.3)
+            slashBurst(HEART_POS.x, HEART_POS.y, ang);            // IL: SlashFx.Burst(Position, angle)
+            refillDashOf(madeline);                               // IL: player.RefillDash()
+            heart.mode = 'none';
+            frozen = true;                                        // IL: level.Frozen = true（Poem 走 FrozenUpdate）
+            // 三段式音效：intro（随机选一个） → loop → outro
+            var fakeIntroName = FAKE_HEART_GET_INTROS[Math.random() * FAKE_HEART_GET_INTROS.length | 0];
+            var fakeIntroA = null;
+            if (window.__audioGestured) {
+                try {
+                    fakeIntroA = new Audio('celeste-sounds/' + fakeIntroName);
+                    fakeIntroA.volume = 0.85;
+                    fakeIntroA.play().catch(function () {});
+                } catch (e) {}
+            }
+            ritual = { kind: 'fake', phase: 'fadein', t: 0, introA: fakeIntroA, loopA: null };
+            backdropTarget = 1;                                   // IL: FormationBackdrop.Display = true
+            showPoem(false);
+            openPoem('fake', '', '', 'fake');
+        }
+
+        function tickRitual(rdt) {
+            if (ritual.kind === 'real') {
+                if (ritual.phase === 'freeze') {
+                    if (freezeT <= 0) realAfterFreeze();
+                } else if (ritual.phase === 'slow') {
+                    ritual.t += rdt;
+                    timeRate = approach(timeRate, 0, rdt * 0.25); // IL: 2s 内 TimeRate→0
+                    if (ritual.t >= 2) realPoemPhase();
+                } else if (ritual.phase === 'poemout') {
+                    if (!poem) { frozen = false; ritual = null; }  // 淡出结束 → 解除 Frozen
+                }
+            } else if (ritual.kind === 'fake') {
+                // IL 时序：心淡入 → 停留 → 文本 0.2s CubeIn(1-p) 淡出（同时 FormationBackdrop.Display=false）
+                //         → Heart.Play("break")（11-25 @0.07 + 0.35s 淡出）→ !Animating → poem.RemoveSelf()
+                //         → 10×AbsorbOrb → Shake(0.3) → Glitch.Value=0.8（4/s 衰减）→ 0.25s
+                if (ritual.phase === 'fadein') {
+                    ritual.t += rdt;
+                    if (poem) poem.alpha = ritual.t >= 0.5 ? 1 : cubeOut(ritual.t / 0.5);
+                    if (ritual.t >= 0.5) { ritual.phase = 'hold'; ritual.t = 0; }
+                } else if (ritual.phase === 'hold') {
+                    ritual.t += rdt;
+                    if (ritual.t >= 0.6) { ritual.phase = 'textout'; ritual.t = 0; }
+                } else if (ritual.phase === 'textout') {
+                    ritual.t += rdt;
+                    backdropTarget = 0;                            // IL: FormationBackdrop.Display = false
+                    if (poem) {
+                        poem.textAlpha = 1 - cubeIn(ritual.t / 0.2); // IL: TextAlpha = CubeIn(1-p)，p += rdt/0.2
+                        poem.particleSpeed = poem.textAlpha;
+                    }
+                    if (ritual.t >= 0.2 && poem) {
+                        poem.anim = 'break';                       // IL: Poem.Heart.Play("break", 0, 0)
+                        poem.frameI = GUI_BREAK_FROM;
+                        poem.frameT = 0;
+                        poem.breakT = 0; poem.breakFade = 1;
+                        poem.delay = GUI_BREAK_DELAY;
+                        poem.textAlpha = 0;
+                        poem.particleSpeed = 0;                    // IL: ParticleSpeed = TextAlpha（淡出后为 0）
+                        // 启动 loop（IL: sfx.Param("end", 0) 触发 FMOD event 从 intro 切 loop）
+                        if (window.__audioGestured && window.GaplessAudio) {
+                            try {
+                                ritual.loopA = window.GaplessAudio.loop(
+                                    'celeste-sounds/fakeHeart/game_10_fakeheart_get_loop.wav',
+                                    { volume: 0.5 });
+                                var lp = ritual.loopA.start(); if (lp && lp.catch) lp.catch(function () {});
+                            } catch (e) {}
+                        }
+                        ritual.phase = 'break';
+                        ritual.t = 0;
+                    }
+                } else if (ritual.phase === 'break') {
+                    if (poem) poem.shake += rdt;                   // IL: Shake += DeltaTime → 心抖动 + 放大
+                    if (!poem || poem.animDone) {                   // IL: !Heart.Animating → poem.RemoveSelf()
+                        // IL: AbsorbOrb 从屏幕中心（camera + (320,180)*0.5）飞向玩家一侧
+                        // 世界坐标换算：nToXY(0.5,0.5) 反解 ⇒ (160, -60.6)
+                        for (var fi2 = 0; fi2 < 10; fi2++) orbs.push(newOrb(HEART_POS.x, -60));
+                        glitchT = 0.8;                              // IL: Glitch.Value = 0.8（4/s 衰减）
+                        shakeT = 0.3;                               // IL: level.Shake(0.3)
+                        ritual.phase = 'out'; ritual.t = 0;
+                    }
+                } else if (ritual.phase === 'out') {
+                    ritual.t += rdt;
+                    if (poem) poem.alpha = Math.max(0, 1 - ritual.t / 0.25);
+                    if (ritual.t >= 0.3) {
+                        // 停 intro/loop（IL: sfx.Param("end", 1) 触发 FMOD event 从 loop 切 outro）
+                        try { if (ritual.introA) ritual.introA.pause(); if (ritual.loopA) ritual.loopA.stop(0.08); } catch (e) {}
+                        fxSound('fakeHeart/game_10_fakeheart_get_outro.wav', 0.85);
+                        if (poem) closePoem();
+                        ritual = null;
+                        frozen = false;
+                        showOshiroDialog('那颗心……是空的。也许，先去日记里写点什么？', '不安');
+                    }
+                }
+            }
+        }
+
+        // 兼容：新版引擎有 dashAttacking getter / refillDash()，旧版只有 dashAttackTimer、dashes/maxDashes 字段
+        function isDashAttacking(m) {
+            return typeof m.dashAttacking === 'boolean' ? m.dashAttacking : m.dashAttackTimer > 0;
+        }
+        function refillDashOf(m) {
+            if (typeof m.refillDash === 'function') m.refillDash();
+            else if (m.dashes < m.maxDashes) m.dashes = m.maxDashes;
+        }
+
+        // ===== 主循环 =====
+        var madeline = null, last = 0;
+        CelesteCharacter.create({
+            base: 'Atlases/Gameplay/characters/player',
+            color: CelesteHair.MADELINE, x: 100, y: 0
+        }).then(function (m) {
+            madeline = m;
+            m.setGround(groundAt);
+            m.setWallAt(wallNearAt);
+            m.setWallCollideFn(wallCollidesAt);
+            initHeart();
+            requestAnimationFrame(frame);
+        });
+
+        function frame(ts) {
+            var rdt = last ? Math.min((ts - last) / 1000, 0.05) : 1 / 60;
+            last = ts;
+            if (freezeT > 0) freezeT -= rdt;
+            if (ritual) tickRitual(rdt);
+            updatePoem(rdt);
+
+            // —— 引擎推进（Freeze/Frozen/TimeRate 作用于引擎 dt；orb 属 FrozenUpdate 走 raw dt） ——
+            var edt = (freezeT > 0 || frozen) ? 0 : rdt * timeRate;
+            if (edt > 0) {
+                var input = {
+                    left: keys['a'] || keys['arrowleft'],
+                    right: keys['d'] || keys['arrowright'],
+                    down: keys['s'] || keys['arrowdown'],
+                    up: keys['w'] || keys['arrowup'],
+                    jumpHeld: !!keys['c'],
+                    jumpPressed: jumpEdge,
+                    grabHeld: !!keys['z'],
+                    grabPressed: !!keys['z'],
+                    dashPressed: dashEdge,
+                    aimX: (keys['d'] || keys['arrowright'] ? 1 : 0) - (keys['a'] || keys['arrowleft'] ? 1 : 0),
+                    aimY: (keys['s'] || keys['arrowdown'] ? 1 : 0) - (keys['w'] || keys['arrowup'] ? 1 : 0)
+                };
+                madeline.update(edt, input);
+                if (madeline.y < CEIL_Y) { madeline.y = CEIL_Y; if (madeline.vy < 0) madeline.vy = 0; }
+            }
+            jumpEdge = false; dashEdge = false;
+
+            // —— 心的 bob / spin / shine / wiggle（未收集时） ——
+            if (heart.mode !== 'none') {
+                var hdt = (freezeT > 0 || frozen) ? 0 : rdt * timeRate;   // IL: 受 Freeze/TimeRate 支配
+                heart.timer += hdt;
+                heart.frameT += hdt;
+                heart.bounceSfxDelay -= hdt;
+                wigUpdate(heart.scaleWig, hdt);                        // IL: ScaleWiggler.Value
+                wigUpdate(heart.moveWig, hdt);                         // IL: moveWiggler.Value
+                while (heart.frameT >= SPIN_DELAY) {
+                    heart.frameT -= SPIN_DELAY;
+                    heart.frameI = (heart.frameI + 1) % SPIN_SEQ.length;
+                    if (heart.frameI === 0) {                          // IL: OnLoop("spin") → pulse + ScaleWiggler.Start()
+                        fxSound('crystalheart_pulse.wav', 0.3);
+                        wigStart(heart.scaleWig);
+                    }
+                }
+                heart.shineT -= hdt;
+                if (heart.shineT <= 0) {                        // IL: 每 0.1s Emit(shine, 1, Center, One*8)
+                    heart.shineT = 0.1;
+                    shines.push({
+                        x: HEART_POS.x + (Math.random() * 2 - 1) * 8,
+                        y: HEART_POS.y + (Math.random() * 2 - 1) * 8,
+                        t: 0, ttl: 0.7
+                    });
+                }
+                // —— 命中（IL: HeartGem.OnPlayer —— collected / level.Frozen 短路；
+                //          DashAttacking → Collect；否则 bounce 音 + PointBounce + 两个 Wiggler.Start） ——
+                if (!ritual && !frozen && madeline && heartHit(madeline)) {
+                    if (isDashAttacking(madeline)) {
+                        if (heart.mode === 'real') startRealRitual();
+                        else startFakeRitual();
+                    } else if (heart.bounceSfxDelay <= 0) {
+                        heart.bounceSfxDelay = 0.1;
+                        // IL: moveWiggleDir = (Center - player.Center).UnitY（决定心被顶开的方向）
+                        heart.moveDir.y = (HEART_POS.y < madeline.y - BODY_H / 2) ? -1 : 1;
+                        pointBounce(madeline);
+                        wigStart(heart.scaleWig);
+                        wigStart(heart.moveWig);
+                        bouncePing();                        // 缺口：无 gem_gem_bounce 音源，合成近似
+                    }
+                }
+            }
+
+            // —— 灰尘兔（引擎 dt：Freeze / TimeRate 同样作用于它们，IL: DustGraphic 走 Engine.DeltaTime）——
+            if (DUST && DUST.ready()) {
+                if (dustGroup) {
+                    dustGroup.step(edt);
+                    // 三只（offset.x + i*24，i=0..2）全部越过左墙才换组
+                    if (dustGroup.offset.x + 2 * DUST.SPACING <= WALL_L) dustGroup = null;
+                } else {
+                    dustGroup = DUST.createGroup(DUST_START_X, DUST_START_Y);
+                }
+            }
+
+            // —— 粒子/特效推进 ——
+            for (var i = shines.length - 1; i >= 0; i--) {
+                var sh = shines[i];
+                sh.t += rdt; sh.y -= 12 * rdt;
+                if (sh.t >= sh.ttl) shines.splice(i, 1);
+            }
+            for (var si = slashes.length - 1; si >= 0; si--) {
+                var sl = slashes[si];
+                sl.t += rdt;
+                sl.x += sl.dx * 8 * rdt; sl.y += sl.dy * 8 * rdt;   // IL: Position += Direction*8*dt
+                sl.frame = Math.min(3, Math.floor(sl.t / 0.1));    // IL: Sprite "play" 0.1s/帧
+                if (sl.t >= sl.ttl) slashes.splice(si, 1);
+            }
+            if (shakeT > 0) shakeT -= rdt;
+            // IL: Level.Flash —— flash → Approach(1, dt*10) 后 Approach(0, dt*3)
+            if (flashA > 0) flashA = Math.max(0, flashA - (edt > 0 ? edt : rdt) * 3);
+            // IL: FormationBackdrop —— fade = Approach(Display ? 1 : 0, RawDeltaTime*3)
+            backdropFade = approach(backdropFade, backdropTarget, rdt * 3);
+            syncVeil();
+            // IL: Celeste.Glitch.Value -= DeltaTime*4（碰到 0 为止）
+            if (glitchT > 0) glitchT = Math.max(0, glitchT - (edt > 0 ? edt : rdt) * 4);
+            for (var oi = orbs.length - 1; oi >= 0; oi--) {
+                updateOrb(orbs[oi], rdt);
+                if (orbs[oi].dead) orbs.splice(oi, 1);
+            }
+
+            // ===== 绘制 =====
+            var Z = zoomNow();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            if (shakeT > 0) {
+                var amp = 3 * Z * (shakeT / 0.3);
+                ctx.translate((Math.random() * 2 - 1) * amp, (Math.random() * 2 - 1) * amp);
+            }
+            // shine 粒子（缺口：ParticleType 参数未取证 → 白色小光点上飘淡出近似）
+            shines.forEach(function (sh) {
+                var p = toScreen(sh);
+                ctx.fillStyle = 'rgba(255,255,255,' + (0.85 * (1 - sh.t / sh.ttl)).toFixed(3) + ')';
+                var s2 = 2 * Z;
+                ctx.fillRect(p.x - s2 / 2, p.y - s2 / 2, s2, s2);
+            });
+            // 心（IL: sprite.Position = UnitY*sin(timer*2)*2 + moveWiggleDir*(-8)*moveWiggle.Value；
+            //     Scale = 1 + 0.25*ScaleWiggler.Value；fake → ghost 帧 * White*0.8 且无 bloom/light）
+            if (heart.mode !== 'none') {
+                var frames = heart.mode === 'real' ? heartFrames.real[heart.color] : heartFrames.ghost;
+                var img = frames && frames[SPIN_SEQ[heart.frameI]];
+                if (img) {
+                    var bob = Math.sin(heart.timer * 2) * 2;    // IL: UnitY * (sin(timer*2)*2)
+                    var mvy = -8 * heart.moveWig.value * heart.moveDir.y;
+                    var hp = toScreen({ x: HEART_POS.x, y: HEART_POS.y + bob + mvy });
+                    var sc = 1 + 0.25 * heart.scaleWig.value;
+                    var w = img.width * Z * sc, h = img.height * Z * sc;
+                    if (heart.mode === 'real') {
+                        drawHeartGlow(ctx, hp.x, hp.y, Z, HEART_GLOW[heart.color] || HEART_GLOW.blue);
+                    } else {
+                        ctx.globalAlpha = 0.8;                  // IL: Color = White * 0.8（ghost）
+                    }
+                    ctx.drawImage(img, hp.x - w / 2, hp.y - h / 2, w, h);
+                    ctx.globalAlpha = 1;
+                }
+            }
+            // 白心（IL: CollectRoutine —— heartGemWhite 只在 Freeze(0.2) 期间闪现；
+            //     随后 Entity.Visible=false 并心一同隐去，故不在 slow 阶段全程存在）
+            if (ritual && ritual.kind === 'real' && ritual.phase === 'freeze') {
+                var wImg = heartFrames.white[SPIN_SEQ[heart.frameI]];
+                if (wImg) {
+                    var wsc = 1 + 0.25 * heart.scaleWig.value;
+                    var wp = toScreen({ x: HEART_POS.x, y: HEART_POS.y });
+                    var ww = wImg.width * Z * wsc, wh = wImg.height * Z * wsc;
+                    ctx.drawImage(wImg, wp.x - ww / 2, wp.y - wh / 2, ww, wh);
+                }
+            }
+            // AbsorbOrb（orb.png CenterOrigin + 旋转 + 非等比缩放 + 淡出）
+            if (orbs.length && orbImg) {
+                orbs.forEach(function (o) {
+                    var p = toScreen(o);
+                    ctx.save();
+                    ctx.translate(p.x, p.y);
+                    ctx.rotate(o.rot);
+                    ctx.globalAlpha = Math.max(0, o.alpha);
+                    var ow = orbImg.width * Z * o.sx, oh = orbImg.height * Z * o.sy;
+                    ctx.drawImage(orbImg, -ow / 2, -oh / 2, ow, oh);
+                    ctx.restore();
+                });
+                ctx.globalAlpha = 1;
+            }
+            // SlashFx 精灵（FakeHeart —— 24x8，4 帧）
+            slashes.forEach(function (sl) {
+                var sImg = slashFrames[sl.frame];
+                if (!sImg) return;
+                var p = toScreen(sl);
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.rotate(sl.rot);
+                var sw = sImg.width * Z, shh = sImg.height * Z;
+                ctx.drawImage(sImg, -sw / 2, -shh / 2, sw, shh);
+                ctx.restore();
+            });
+            // 灰尘兔（IL: Entity.Depth = -50 < 玩家 Depth 0 → 在 Madeline 之前画 = 下层）
+            if (dustGroup) dustGroup.draw(ctx, toScreen, Z);
+            // Madeline
+            madeline.draw(ctx, toScreen, Z);
+            ctx.restore();
+            // IL: FormationBackdrop 黑幕 → 由 .veil 层承担（盖住房间 + 商店 UI，低于 #heartGet）
+            // IL: Celeste.Glitch —— 横向切片错位（Value 0.8 → 0）
+            if (glitchT > 0.02) {
+                var gz = Math.min(1, glitchT);
+                for (var gs = 0; gs < 7; gs++) {
+                    var gy = Math.random() * canvas.height;
+                    var gh = 6 + Math.random() * 34;
+                    var gox = (Math.random() * 2 - 1) * 24 * gz;
+                    if (Math.abs(gox) < 1) continue;
+                    ctx.drawImage(canvas, 0, gy, canvas.width, gh, gox, gy, canvas.width, gh);
+                }
+            }
+            // 白闪
+            if (flashA > 0) {
+                ctx.fillStyle = 'rgba(223,233,255,' + Math.min(1, flashA).toFixed(3) + ')';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+            // Poem（GUI 240px 巨大心 + 80 粒子；文字由 DOM overlay 同步透明度）
+            drawPoem();
+            requestAnimationFrame(frame);
+        }
+    })();
 
     // ===== Oshiro AI 聊天 =====
     var chatHistory = [];
@@ -948,119 +1716,3 @@
             showOshiroDialog(fallback, '不安');
         });
     }
-
-    // ===== 煤球精灵：图层叠加 + 四处游逛 =====
-    (function() {
-        var DUST_DIR = 'celeste-gui/dustCreature/';
-        var DUST_SCALE = 4; // 统一放大倍率（像素图整数倍才清晰）
-        var sprite = document.getElementById('dustSprite');
-        var inner = sprite.querySelector('.dust-inner');
-
-        function addLayer(src) {
-            var im = new Image();
-            im.src = DUST_DIR + src;
-            im.addEventListener('load', function() {
-                im.style.width = im.naturalWidth * DUST_SCALE + 'px';
-                im.style.height = im.naturalHeight * DUST_SCALE + 'px';
-            });
-            inner.appendChild(im);
-            return im;
-        }
-
-        // 身体（3帧抖动）+ 质感层（3帧）+ 眼睛（3帧）
-        var baseImgs = ['base00.png', 'base01.png', 'base02.png'].map(addLayer);
-        var overlayImgs = ['overlay00.png', 'overlay01.png', 'overlay02.png'].map(addLayer);
-        var eyeImgs = ['eyes00.png', 'eyes01.png', 'eyes02.png'].map(addLayer);
-        var deadImg = addLayer('deadEyes.png');
-        deadImg.style.display = 'none';
-
-        // 容器尺寸跟 base 第 0 帧走
-        baseImgs[0].addEventListener('load', function() {
-            sprite.style.width = baseImgs[0].naturalWidth * DUST_SCALE + 'px';
-            sprite.style.height = baseImgs[0].naturalHeight * DUST_SCALE + 'px';
-        });
-
-        function showFrame(list, idx) {
-            list.forEach(function(im, i) { im.style.display = i === idx ? 'block' : 'none'; });
-        }
-
-        // 身体呼吸抖动
-        var dustFi = 0;
-        setInterval(function() {
-            dustFi = (dustFi + 1) % 3;
-            showFrame(baseImgs, dustFi);
-            showFrame(overlayImgs, dustFi);
-        }, 450);
-
-        // 偶尔眨眼/瞟一眼
-        setInterval(function() {
-            if (dustBusy || Math.random() >= 0.35) return;
-            var f = 1 + Math.floor(Math.random() * 2);
-            showFrame(eyeImgs, f);
-            setTimeout(function() { if (!dustBusy) showFrame(eyeImgs, 0); }, 280);
-        }, 2200);
-
-        // ===== 游逛 =====
-        var dustBusy = false;
-        function dustXY() {
-            return { x: parseFloat(sprite.style.left || '140'), y: parseFloat(sprite.style.top || '320') };
-        }
-        function dustGroundY() {
-            return Math.max(60, window.innerHeight - (sprite.offsetHeight || 64) - 10);
-        }
-        function dustPick() {
-            var w = sprite.offsetWidth || 64;
-            var maxX = Math.max(20, window.innerWidth - w - 12);
-            var minY = 80, maxY = dustGroundY();
-            if (Math.random() < 0.7) {
-                // 大多数时候贴地小跑
-                return { x: 12 + Math.random() * (maxX - 12), y: maxY - Math.random() * 30 };
-            }
-            return { x: 12 + Math.random() * (maxX - 12), y: minY + Math.random() * (maxY - minY) };
-        }
-        function dustWander() {
-            if (dustBusy) { setTimeout(dustWander, 1200); return; }
-            var cur = dustXY(), tgt = dustPick();
-            var dist = Math.sqrt(Math.pow(tgt.x - cur.x, 2) + Math.pow(tgt.y - cur.y, 2));
-            var dur = Math.max(900, Math.min(6000, dist * (9 + Math.random() * 6)));
-            sprite.classList.add('moving');
-            sprite.style.transform = tgt.x < cur.x ? 'scaleX(-1)' : '';
-            sprite.style.transition = 'left ' + dur + 'ms linear, top ' + dur + 'ms linear';
-            sprite.style.left = tgt.x + 'px';
-            sprite.style.top = tgt.y + 'px';
-            setTimeout(function() {
-                sprite.classList.remove('moving');
-                sprite.style.transform = '';
-                var rest = Math.random() < 0.25 ? 1500 + Math.random() * 2000 : 300 + Math.random() * 900;
-                setTimeout(dustWander, rest);
-            }, dur + 80);
-        }
-        setTimeout(dustWander, 1500);
-
-        // ===== 点击：压扁 + 晕倒眼 + 受惊蹦走 =====
-        sprite.addEventListener('click', function() {
-            if (dustBusy) return;
-            dustBusy = true;
-            sprite.classList.add('squish');
-            showFrame(eyeImgs, -1);
-            deadImg.style.display = 'block';
-            setTimeout(function() {
-                sprite.classList.remove('squish');
-                deadImg.style.display = 'none';
-                showFrame(eyeImgs, 0);
-                var cur = dustXY();
-                var w = sprite.offsetWidth || 64;
-                var dir = Math.random() < 0.5 ? -1 : 1;
-                var runX = Math.max(12, Math.min(window.innerWidth - w - 12, cur.x + dir * (120 + Math.random() * 160)));
-                sprite.classList.add('moving');
-                sprite.style.transform = runX < cur.x ? 'scaleX(-1)' : '';
-                sprite.style.transition = 'left 500ms ease-out';
-                sprite.style.left = runX + 'px';
-                setTimeout(function() {
-                    sprite.classList.remove('moving');
-                    sprite.style.transform = '';
-                    dustBusy = false;
-                }, 520);
-            }, 700);
-        });
-    })();

@@ -54,7 +54,10 @@
     function tryPlayBGM() {
         bgmPlayer.play().then(() => { document.removeEventListener('click', tryPlayBGM); document.removeEventListener('keydown', tryPlayBGM); }).catch(() => {});
         // 书架常态篝火：start → loop 底噪（音量压 BGM 之下）；进 dream 不断，镜之房间让位
-        if (window.CampfireAudio) { window.CampfireAudio.setVolume(0.12); window.CampfireAudio.play(); }
+        if (window.CampfireAudio) {
+            window.CampfireAudio.setVolume(0.12);
+            var cp = window.CampfireAudio.play(); if (cp && cp.catch) cp.catch(function () {});
+        }
     }
     document.addEventListener('click', tryPlayBGM);
     document.addEventListener('keydown', tryPlayBGM);
@@ -466,7 +469,9 @@ function stopPeSnow() {
         if (!c || c.classList.contains('snapshot')) return;
         // 点开往期日记：磁带三联音 —— 先 intro，接 loop 循环，点出时由 showList() 放 outro
         //（每周/每月快照明信片走各自的 variants 音效，不在此列）
-        if (window.CassetteAudio) window.CassetteAudio.play(); else pcPlay('cassette_preview_intro.wav');
+        if (window.CassetteAudio) {
+            var cp2 = window.CassetteAudio.play(); if (cp2 && cp2.catch) cp2.catch(function () {});
+        } else pcPlay('cassette_preview_intro.wav');
         showDetail(+c.dataset.i);
     });
 
@@ -1122,6 +1127,8 @@ function stopPeSnow() {
             var my = blDialogToken;
             blDialogOpen();
             blStartPortrait(emo);
+            // 驱动大立绘 emo 切换（之前对话期间大立绘完全冻结，只有右下角小头像切表情）
+            if (window.__badelineOnEmotion) window.__badelineOnEmotion(emo);
             clearTimeout(blDialogHideTimer);
             var pages = blSplitPages(text);
             for (var p = 0; p < pages.length; p++) {
@@ -1306,17 +1313,25 @@ function stopPeSnow() {
         if (!room || !mirror || !wrap || !img) return;
 
         var DIR = 'celeste-player/badeline/';
-        // gif 动作表：spin/sleep/lookingUp/pretendDead 暗红发；roll/rollGetUp 亮紫发+红眼（战斗态）
+        // gif 动作表（*_f.gif = 重编码修复 delay）
         var GIF = {
-            roam: 'spin.gif',              // 14 帧走路
-            lookUp: 'lookingUp.gif',       // 96×96 单帧（big 渲染）
-            sleep: 'sleep.gif',            // 29 帧睡觉
+            roam: 'spin_f.gif',              // 25 FPS 流畅版（原 spin.gif 200ms delay = 5FPS 卡死）
+            lookUp: 'lookingUp_f.gif',        // 裁白边重排到 32×32 画布，与其他动作同规格
+            sleep: 'sleep_f.gif',
             pretendDead: 'pretendDead.gif',
-            roll: 'roll.gif',              // 13 帧 / 650ms 冲刺翻滚
-            rollGetUp: 'rollGetUp.gif'     // 4 帧 / 610ms 起身
+            roll: 'roll_f.gif',
+            rollGetUp: 'rollGetUp_f.gif'
         };
-        // 生气类情绪 → 才有 roll 链
+        // 生气类情绪 → 才有 roll 链（战斗态立绘：亮紫发+红眼）
         var ANGRY = { angry:1, angryAlt:1, yell:1, freakA:1, freakB:1, freakC:1 };
+        // emo → 大立绘 GIF mode 映射（对话期间也能驱动，不再只是右下角小头像切表情）
+        var EMO_TO_MODE = {
+            angry: 'roll', angryAlt: 'roll', yell: 'roll',
+            freakA: 'roll', freakB: 'roll', freakC: 'roll',
+            sad: 'pretendDead', upset: 'pretendDead', sigh: 'pretendDead',
+            worried: 'lookUp', worriedAlt: 'lookUp', concerned: 'lookUp',
+            serious: 'lookUp', scoff: 'roam', normal: 'roam'
+        };
         // 常态动作时长（ms）
         var DUR = {
             lookUp: [2000, 4000],
@@ -1354,7 +1369,7 @@ function stopPeSnow() {
         function render() {
             wrap.style.transform =
                 'translate(' + st.x + 'px,' + st.y + 'px) translate(-50%,-50%)' +
-                ' scale(var(--glass-scale)) scaleX(' + st.dir + ')';
+                ' scaleX(' + st.dir + ')';
         }
         // 切模式（对齐 write 页：只换素材/目标/时长，不做 transition 位移）
         function enterMode(name) {
@@ -1492,12 +1507,23 @@ function stopPeSnow() {
                 return 'free';
             }
         };
-        // 生气情绪事件：游荡中立即 roll；对话/未出场则记账，恢复时执行
+        // 情绪事件：通用 emo → 大立绘 mode（无论对话/游荡）；ANGRY 额外记账 pendingRoll（对话结束补 rollChain）
         window.__badelineOnEmotion = function (emo) {
-            if (!ANGRY[emo]) return;
-            if (!roaming || inDialog) { pendingRoll = true; return; }
-            if (st.mode === 'roll' || st.mode === 'rollGetUp') return;
-            enterRollChain();
+            // 通用：对话期间也切大立绘！（之前只处理 ANGRY 且对话期间完全冻结大立绘）
+            var targetMode = EMO_TO_MODE[emo];
+            if (targetMode && !inDialog) {
+                // 游荡中 → 正常 enterMode
+                enterMode(targetMode);
+            } else if (targetMode && inDialog && roaming) {
+                // 对话期间也切大立绘 GIF（用 enterMode 但跳过 think 的动作树流程）
+                enterMode(targetMode);
+            }
+            // ANGRY 类 → 对话结束后补一个 rollChain（翻滚战斗态）
+            if (ANGRY[emo]) {
+                if (!roaming || inDialog) { pendingRoll = true; return; }
+                if (st.mode === 'roll' || st.mode === 'rollGetUp') return;
+                enterRollChain();
+            }
         };
         // quickTalk（单击）演出结束回调 → 恢复游荡（若积了生气情绪 → 先 roll）
         window.__badelineTalkEnded = function () {
@@ -1703,7 +1729,7 @@ function stopPeSnow() {
 
         // ===== dream 雪夜 BGM：Starjump 0–34s 循环（进 dream 起播、离 dream 停止；与全站 BGM 互斥） =====
         var DJ_SRC = 'bgm/Starjump.mp3', DJ_SEG_END = 34, DJ_VOL = 0.32;
-        var djAudio = null, djTimer = null, djOn = false;
+        var djLoop = null;
         function djDuck(on) {
             var bp = document.getElementById('bgmPlayer');
             if (!bp) return;
@@ -1711,49 +1737,26 @@ function stopPeSnow() {
             else if (!on && window.__dreamBGMDucked) { bp.play().catch(function () {}); window.__dreamBGMDucked = false; }
         }
         function djEnsure() {
-            if (djAudio) return djAudio;
-            try {
-                djAudio = new Audio(DJ_SRC);
-                djAudio.volume = DJ_VOL;
-                djAudio.preload = 'auto';
-                djAudio.addEventListener('error', function () { djAudio = null; }, { once: true });
-            } catch (e) { djAudio = null; }
-            return djAudio;
-        }
-        function djLoopWatch() {   // 0–34s 片段循环：60ms 轮询回跳
-            if (djTimer) clearInterval(djTimer);
-            djTimer = setInterval(function () {
-                if (!djOn || !djAudio || djAudio.paused) return;
-                if (djAudio.currentTime >= DJ_SEG_END || djAudio.currentTime < 0) {
-                    try { djAudio.currentTime = 0; } catch (e) {}
-                }
-            }, 60);
+            // 0–34s 片段在音频渲染线程内回绕，采样精确，没有 element loop 的管线重置空隙
+            if (!djLoop && window.GaplessAudio) {
+                djLoop = window.GaplessAudio.loop(DJ_SRC, { duration: DJ_SEG_END, volume: DJ_VOL });
+            }
+            return djLoop;
         }
         function djStart() {       // 进 dream：从 0 起播并压过全站 BGM
-            djOn = true;
-            var a = djEnsure();
-            if (!a) return;
-            var seek = function () { try { a.currentTime = 0; } catch (e) {} a.play().catch(function () {}); };
-            if (a.readyState >= 1) seek();
-            else a.addEventListener('loadedmetadata', seek, { once: true });
+            var l = djEnsure();
+            if (l) { var p = l.start(); if (p && p.catch) p.catch(function () {}); }
             djDuck(true);
-            djLoopWatch();
         }
         function djPause() {       // 进镜之房间：暂停留位（Resurrections 接管）
-            djOn = false;
-            try { if (djAudio) djAudio.pause(); } catch (e) {}
-            if (djTimer) { clearInterval(djTimer); djTimer = null; }
+            if (djLoop) djLoop.suspend();
         }
         function djResume() {      // 回雪夜：从暂停处续播
-            if (!djAudio) return;
-            djOn = true;
-            djAudio.play().catch(function () {});
-            djLoopWatch();
+            if (!djLoop) return;
+            var p = djLoop.resume(); if (p && p.catch) p.catch(function () {});
         }
         function djStop() {        // 离 dream：彻底停止并复位，同时恢复全站 BGM
-            djOn = false;
-            if (djTimer) { clearInterval(djTimer); djTimer = null; }
-            try { if (djAudio) { djAudio.pause(); djAudio.currentTime = 0; } } catch (e) {}
+            if (djLoop) djLoop.halt();
             djDuck(false);
         }
         window.__dreamBGM = { pause: djPause, resume: djResume };
@@ -1784,6 +1787,7 @@ function stopPeSnow() {
                         playSeq(FRAMES.slice(2), 130, true);  // 立即进入火焰摇曳小循环
                     });
                     djStart();                            // dream BGM：Starjump 0–34s 循环
+                    document.dispatchEvent(new CustomEvent('dream:entered'));   // 通知金羽毛入场散布
                 }, 400);
             }, SLEEP_MS);
         });
@@ -1827,6 +1831,700 @@ function stopPeSnow() {
             if (dsMadeline) { dsMadeline.classList.remove('waking'); madelineIntent = SLEEP_GIF; dsMadeline.src = SLEEP_GIF; }
             dsFire.src = FRAMES[0];
         }
+    })();
+
+    // ===== dream 金羽毛：REA 还原第六章（Reflection）FlyFeather + 星飞 StStarFly =====
+    // 待机 FlyFeather：精灵 loop(idle00-20) ↔ flash(00-20) 逐帧 0.06s；sine(0.6Hz) 上下 ±2 世界像素浮动；
+    //   light/bloom 柔光；重生瞬间 wiggler(1s / 4Hz) 弹一下（Scale = 1 + Value * 0.2）
+    // 收集 OnPlayer → CollectRoutine：Shake(0.3) → sprite.Visible=false → 0.05s 后 P_Collect×10 + SlashFx
+    // 星飞 StStarFly：Speed=dir×250；无输入 91 / 逆向 140 / 顺向 140→190（1000/s 逼近）；
+    //   moveDir 以 5.585rad/s 追输入；每 0.02s 发射 P_Flying；starFlyTimer=2s；末 0.5s 每 0.05s 警告闪
+    // 结束 → P_Boost×12；羽毛 3s 后（respawnTimer）原位重生 + P_Respawn×16
+    // 对页面里的 Madeline 不做任何交互（不驱动玩家、无变身）
+    (function () {
+        var scene = document.getElementById('dreamScene');
+        var host = document.getElementById('dsFeathers');
+        if (!scene || !host) return;
+        var left = scene.querySelector('.ds-left');
+        if (!left) return;
+
+        // ---------- 素材 ----------
+        function pad2(v) { return (v < 10 ? '0' : '') + v; }
+        var SRC_F = 'Atlases/Gameplay/objects/flyFeather/';
+        // Content/Graphics/Sprites.xml：
+        //   <flyFeather path="objects/flyFeather/" start="loop">
+        //     <Justify x="0.5" y="0.5"/>
+        //     <Anim id="loop"  path="idle"  delay="0.06" frames="0-20" goto="flash"/>
+        //     <Anim id="flash" path="flash" delay="0.06" frames="0-20" goto="loop"/>
+        // → 42 帧一轮：idle 21 帧（呼吸渐暗）→ flash 21 帧（第 2-4 帧爆亮）→ 回 idle
+        var FRAMES = [];
+        (function () {
+            for (var a = 0; a < 21; a++) FRAMES.push(SRC_F + 'idle' + pad2(a) + '.png');
+            for (var b = 0; b < 21; b++) FRAMES.push(SRC_F + 'flash' + pad2(b) + '.png');
+        })();
+        var IMG = { frames: [], outline: null, feather: null, rect: null, smoke: null, slash: [] };
+        function loadImg(src) { var im = new Image(); im.src = src; return im; }
+        FRAMES.forEach(function (s) { IMG.frames.push(loadImg(s)); });
+        IMG.outline = loadImg(SRC_F + 'outline.png');
+        IMG.feather = loadImg('Atlases/Gameplay/particles/feather.png');    // P_Collect / P_Boost 的 Source
+        IMG.rect = loadImg('Atlases/Gameplay/particles/rect.png');          // P_Flying（默认 Source）
+        IMG.smoke = loadImg('Atlases/Gameplay/particles/smoke0.png');       // P_Regen / P_Respawn（Dust 系）
+        ['00', '01', '02', '03'].forEach(function (k) { IMG.slash.push(loadImg('Atlases/Gameplay/effects/slash/' + k + '.png')); });
+
+        // ---------- 数值（均取自 Celeste.dll IL / Sprites.xml） ----------
+        var FRAME_MS = 60;             // <Anim delay="0.06"/>
+        var FRAMES_HALF = 21;          // idle / flash 各 21 帧
+        var RESPAWN_MS = 3000;         // respawnTimer = 3
+        var FLY_TIME = 2;              // starFlyTimer = 2
+        var WARN_TIME = 0.5;           // timer < 0.5 开始警告闪
+        var WARN_STEP = 0.05;
+        var CHARGE = 0.26;             // startStarFly 播完 + Speed==Zero 再等 0.1s（压缩到点击手感）
+        var TURN_RATE = 5.5850534;     // RotateTowards(..., 5.5850534 * dt)
+        var ACCEL = 1000;              // Approach(|Speed|, target, 1000 * dt)
+        var V_START = 250, V_IDLE = 91, V_TURN = 140, V_FAST = 190;
+        var SLASH_FRAME = 0.1, SLASH_LIFE = 0.4;   // SlashFx：<Anim delay="0.1" frames 0-3>
+        // 像素倍率：场景其它美术都是 3 倍（篝火 64→~200px、Madeline 32→~100px），
+        // 所以原图 32px 对应 CSS 96px；canvas 再按 devicePixelRatio 取整数倍，保证一个美术像素=整数设备像素
+        var DPR = 1, SPR_S = 3, FSIZE = 96, PXF = 3;
+        var GAP_MIN = 144, GAP_MAX = 288, GAP_FLOOR = 101;
+        var GOLD = [[255, 253, 240], [255, 235, 140], [255, 203, 52], [206, 130, 16]];
+        var RED = [[255, 244, 238], [255, 158, 130], [232, 84, 62], [150, 32, 28]];
+
+        // ---------- 粒子（ParticleTypes::Load 里 FlyFeather.P_* 的字段值，逐条来自 IL） ----------
+        // P_Collect: Source=particles/feather, Color=FlyPowerHairColor, Color2=fff20f, ColorMode/FadeMode=2,
+        //            RotationMode=1, Size=1, Life .6-.9, Speed 60-70, SpeedMultiplier .1, DirectionRange 2π,
+        //            SpinFlippedChance=1, SpinMin 30° SpinMax 80°
+        // P_Boost  : new ParticleType(P_Collect) { DirectionRange 80°, Speed 20-80, SpeedMultiplier .2 }
+        // P_Flying : 默认 Source(rect), 同色, FadeMode 2, Size 1, Life .4-.8, Speed 60-70, mult .25, dirRange 60°
+        // P_Respawn: new ParticleType(P_Regen=P_Dust) { Color ffdca4, Color2 ffe95e }, Life .8-1.6, Speed 8-12, Size 1.2±.5
+        var PT = {
+            collect: { tex: 'feather', cols: ['#f2eb6d', '#fff20f'], dir: Math.PI * 2, spd: [60, 70], mult: 0.1, life: [0.6, 0.9], size: 1, sizeRange: 0, spin: [Math.PI / 6, 1.3962634], spinChance: 1 },
+            boost: { tex: 'feather', cols: ['#f2eb6d', '#fff20f'], dir: 1.3962634, spd: [20, 80], mult: 0.2, life: [0.6, 0.9], size: 1, sizeRange: 0, spin: [Math.PI / 6, 1.3962634], spinChance: 1 },
+            flying: { tex: 'rect', cols: ['#f2eb6d', '#fff20f'], dir: 1.0471976, spd: [60, 70], mult: 0.25, life: [0.4, 0.8], size: 1, sizeRange: 0, spin: [0, 0], spinChance: 0 },
+            respawn: { tex: 'smoke', cols: ['#ffdca4', '#ffe95e'], dir: Math.PI * 2, spd: [8, 12], mult: 0.9, life: [0.8, 1.6], size: 1.2, sizeRange: 0.5, spin: [0, 0], spinChance: 0 }
+        };
+
+        // ---------- 状态 ----------
+        var active = false, raf = 0, prevT = 0, clock = 0;
+        var feathers = [], placed = [], orb = null, parts = [], slashes = [], ghosts = [];
+        var keys = {}, keysActive = false;
+        var cv = null, ctx2 = null, hint = null, shakeTimer = null;
+        var orbCache = { size: 0, px: 0, gold: null, red: null, glow: null };
+        var TINTS = {};
+        var DIR_KEYS = { arrowup: 1, arrowdown: 1, arrowleft: 1, arrowright: 1, w: 1, a: 1, s: 1, d: 1 };
+
+        // ---------- 小工具 ----------
+        function approach(a, b, d) { return a < b ? Math.min(a + d, b) : Math.max(a - d, b); }
+        function norm(x, y) { var l = Math.sqrt(x * x + y * y); return l > 0.0001 ? { x: x / l, y: y / l } : null; }
+        function dot(a, b) { return a.x * b.x + a.y * b.y; }
+        function rotateToward(from, to, step) {
+            var a0 = Math.atan2(from.y, from.x), a1 = Math.atan2(to.y, to.x), d = a1 - a0;
+            while (d > Math.PI) d -= Math.PI * 2;
+            while (d < -Math.PI) d += Math.PI * 2;
+            if (Math.abs(d) <= step) return { x: to.x, y: to.y };
+            var a = a0 + (d > 0 ? step : -step);
+            return { x: Math.cos(a), y: Math.sin(a) };
+        }
+        function hash(a, b) { var v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return v - Math.floor(v); }
+        // 场景统一像素倍率：32px 原图铺成 ~96 CSS px；canvas 再按 dpr 取整数倍备份，避免美术像素被拉伸成 1/2px
+        function updateSizes() {
+            DPR = Math.max(1, window.devicePixelRatio || 1);
+            SPR_S = Math.max(2, Math.round(96 * DPR / 32));
+            FSIZE = 32 * SPR_S / DPR;
+            PXF = FSIZE / 32;
+            GAP_MIN = Math.round(FSIZE * 1.5);
+            GAP_MAX = Math.round(FSIZE * 3);
+            GAP_FLOOR = Math.round(FSIZE * 1.05);
+        }
+        function nowMs() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
+        function orbCellPx() { return Math.max(2, Math.round(FSIZE / 16)); }
+        function orbRadius() { return orbCellPx() * 6; }
+        function featherCenter(f) {
+            return { x: f.x / 100 * left.clientWidth, y: f.y / 100 * left.clientHeight };
+        }
+
+        // ---------- 粒子 ----------
+        function emit(type, n, x, y, rangePx, baseAngle) {
+            for (var k = 0; k < n; k++) {
+                var ang = baseAngle + (Math.random() - 0.5) * type.dir;
+                var spd = (type.spd[0] + Math.random() * (type.spd[1] - type.spd[0])) * PXF;
+                var spin = 0;
+                if (type.spinChance) {
+                    spin = type.spin[0] + Math.random() * (type.spin[1] - type.spin[0]);
+                    if (Math.random() < type.spinChance) spin = -spin;   // SpinFlippedChance
+                }
+                parts.push({
+                    x: x + (Math.random() - 0.5) * 2 * rangePx,
+                    y: y + (Math.random() - 0.5) * 2 * rangePx,
+                    vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
+                    rot: Math.random() * Math.PI * 2, spin: spin,
+                    mult: type.mult, tex: type.tex, col: type.cols[Math.random() < 0.5 ? 0 : 1],
+                    life: 0, ttl: type.life[0] + Math.random() * (type.life[1] - type.life[0]),
+                    sz: Math.max(0.5, (type.size + (Math.random() - 0.5) * type.sizeRange) * PXF)
+                });
+            }
+        }
+
+        // ---------- 音效（无原版音源，WebAudio 合成；复用镜之房间的共享 AudioContext） ----------
+        var AC = null;
+        function sfx(kind) {
+            try {
+                AC = AC || window.__mirrorAC;
+                if (!AC) {
+                    var C = window.AudioContext || window.webkitAudioContext;
+                    if (!C) return;
+                    AC = window.__mirrorAC = new C();
+                }
+                if (AC.state === 'suspended') AC.resume();
+                var t0 = AC.currentTime, g = AC.createGain(), o = AC.createOscillator();
+                o.connect(g); g.connect(AC.destination);
+                g.gain.setValueAtTime(0.0001, t0);
+                if (kind === 'boost') {
+                    o.type = 'sawtooth';
+                    o.frequency.setValueAtTime(360, t0);
+                    o.frequency.exponentialRampToValueAtTime(900, t0 + 0.09);
+                    g.gain.linearRampToValueAtTime(0.05, t0 + 0.01);
+                    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
+                    o.start(t0); o.stop(t0 + 0.18);
+                } else if (kind === 'end') {
+                    o.type = 'triangle';
+                    o.frequency.setValueAtTime(720, t0);
+                    o.frequency.exponentialRampToValueAtTime(260, t0 + 0.25);
+                    g.gain.linearRampToValueAtTime(0.06, t0 + 0.015);
+                    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.3);
+                    o.start(t0); o.stop(t0 + 0.32);
+                } else {
+                    var f0 = kind === 'get' ? 760 : (kind === 'renew' ? 620 : 480);
+                    o.type = 'triangle';
+                    o.frequency.setValueAtTime(f0, t0);
+                    o.frequency.exponentialRampToValueAtTime(f0 * 1.9, t0 + 0.13);
+                    g.gain.linearRampToValueAtTime(kind === 'reappear' ? 0.05 : 0.085, t0 + 0.012);
+                    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.24);
+                    o.start(t0); o.stop(t0 + 0.26);
+                }
+            } catch (e) { /* 无声降级 */ }
+        }
+
+        // ---------- 画布 / 提示 ----------
+        function ensureCanvas() {
+            if (cv) return;
+            cv = document.createElement('canvas');
+            cv.id = 'featherFlyCanvas';
+            left.appendChild(cv);
+            resizeCanvas();
+        }
+        function resizeCanvas() {
+            if (!cv) return;
+            cv.width = Math.max(1, left.clientWidth);
+            cv.height = Math.max(1, left.clientHeight);
+            ctx2 = cv.getContext('2d');
+            ctx2.imageSmoothingEnabled = false;
+            orbCache.size = 0;
+        }
+        function showHint(on) {
+            if (!hint) {
+                hint = document.createElement('div');
+                hint.id = 'featherFlyHint';
+                hint.textContent = '方向键 / WASD 操控 · Esc 让羽毛回来';
+                scene.appendChild(hint);
+            }
+            hint.classList.toggle('show', !!on);
+        }
+        function shake() {
+            clearTimeout(shakeTimer);
+            left.classList.remove('ff-shake');
+            void left.offsetWidth;
+            left.classList.add('ff-shake');
+            shakeTimer = setTimeout(function () { left.classList.remove('ff-shake'); }, 380);
+        }
+
+        // ---------- 材质染色（particles/feather/rect/smoke0.png → ParticleType 的 Color / Color2） ----------
+        function tintFor(tex, color) {
+            var key = tex + color;
+            if (TINTS[key]) return TINTS[key];
+            var src = IMG[tex];
+            if (!src || !src.naturalWidth) return null;
+            var c = document.createElement('canvas');
+            c.width = src.naturalWidth; c.height = src.naturalHeight;
+            var g = c.getContext('2d');
+            g.drawImage(src, 0, 0);
+            g.globalCompositeOperation = 'source-in';
+            g.fillStyle = color;
+            g.fillRect(0, 0, c.width, c.height);
+            TINTS[key] = c;
+            return c;
+        }
+        function ramp(stops, t) {
+            var f = t * (stops.length - 1), i0 = Math.floor(f), i1 = Math.min(stops.length - 1, i0 + 1), m = f - i0;
+            var a = stops[i0], b = stops[i1];
+            return 'rgb(' + Math.round(a[0] + (b[0] - a[0]) * m) + ',' +
+                            Math.round(a[1] + (b[1] - a[1]) * m) + ',' +
+                            Math.round(a[2] + (b[2] - a[2]) * m) + ')';
+        }
+        function makeGlow(r) {
+            var c = document.createElement('canvas');
+            c.width = c.height = Math.max(8, Math.round(r * 2));
+            var g = c.getContext('2d');
+            var rg = g.createRadialGradient(c.width / 2, c.height / 2, 1, c.width / 2, c.height / 2, c.width / 2);
+            rg.addColorStop(0, 'rgba(255,248,214,.9)');
+            rg.addColorStop(0.22, 'rgba(255,222,120,.52)');
+            rg.addColorStop(0.55, 'rgba(242,235,109,.22)');
+            rg.addColorStop(1, 'rgba(255,190,60,0)');
+            g.fillStyle = rg;
+            g.fillRect(0, 0, c.width, c.height);
+            return c;
+        }
+        // 光球像素格（确定性 hash → 逐帧不闪；两套色板对应 starFlyColor ↔ NormalHairColor 警告闪）
+        function buildOrb() {
+            var px = orbCellPx(), n = 6, tmp = [];
+            for (var gy = -n; gy <= n; gy++) {
+                for (var gx = -n; gx <= n; gx++) {
+                    var d = Math.sqrt(gx * gx + gy * gy);
+                    if (d > n + 0.2) continue;
+                    var t = Math.min(1, d / n) + (hash(gx * 3 + 1, gy * 7 - 2) - 0.5) * 0.12;
+                    t = Math.max(0, Math.min(1, t));
+                    tmp.push({ dx: gx * px, dy: gy * px, cg: ramp(GOLD, t), cr: ramp(RED, t) });
+                }
+            }
+            orbCache.size = FSIZE;
+            orbCache.px = px;
+            orbCache.gold = tmp.map(function (c) { return { dx: c.dx, dy: c.dy, c: c.cg }; });
+            orbCache.red = tmp.map(function (c) { return { dx: c.dx, dy: c.dy, c: c.cr }; });
+            orbCache.glow = makeGlow(px * 12);
+        }
+
+        // ---------- 羽毛（FlyFeather） ----------
+        function randPos(need, ignoreMax) {
+            for (var t = 0; t < 300; t++) {
+                var x = 4 + Math.random() * 66, y = 7 + Math.random() * 28, ok = true, near = Infinity;
+                for (var k = 0; k < placed.length; k++) {
+                    var dx = (x - placed[k].x) * innerWidth / 100;
+                    var dy = (y - placed[k].y) * innerHeight / 100;
+                    var d2 = dx * dx + dy * dy;
+                    if (d2 < need * need) { ok = false; break; }
+                    if (d2 < near * near) near = Math.sqrt(d2);
+                }
+                if (ok && (ignoreMax || !placed.length || near <= GAP_MAX)) return { x: x, y: y };
+            }
+            return null;
+        }
+        function applyScale(f) {
+            f.sprS = SPR_S;
+            f.cssPx = 32 * SPR_S / DPR;
+            f.el.style.width = f.cssPx.toFixed(2) + 'px';
+            f.el.style.height = f.cssPx.toFixed(2) + 'px';
+            f.cvs.width = f.cvs.height = 32 * SPR_S;
+            f.ctx = f.cvs.getContext('2d');
+            f.ctx.imageSmoothingEnabled = false;
+            f.drawn = -1;
+        }
+        function addFeather() {
+            var need = GAP_MIN, p = null;
+            while (need > GAP_FLOOR && !(p = randPos(need))) need = Math.round(need * 0.8);
+            if (!p) p = randPos(GAP_FLOOR, true);
+            if (!p) return;
+            placed.push(p);
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'feather';
+            b.title = '金羽毛 · 点一下';
+            b.style.left = p.x.toFixed(2) + 'vw';
+            b.style.top = p.y.toFixed(2) + 'vh';
+            var cvs = document.createElement('canvas');
+            b.appendChild(cvs);
+            host.appendChild(b);
+            var f = {
+                el: b, cvs: cvs, ctx: null, sprS: SPR_S, cssPx: FSIZE,
+                x: p.x, y: p.y, phase: Math.random() * Math.PI * 2,
+                state: 'idle', respawnAt: 0, burstAt: 0, burstAng: 0, renewAt: 0,
+                wigT: -1, wigDur: 1, wigFreq: 4, drawn: -1
+            };
+            applyScale(f);
+            b.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                onFeatherClick(f);
+            });
+            feathers.push(f);
+            return f;
+        }
+        // sprite.Visible=true → 播 idle↔flash；收集后 sprite.Visible=false，只剩 outline（Sprite 组件，满不透明、不随 sine 浮动）
+        function drawFeather(f, idx) {
+            var c = f.ctx, size = 32 * f.sprS;
+            c.clearRect(0, 0, size, size);
+            var im = f.state === 'idle' ? IMG.frames[idx] : IMG.outline;
+            if (im && im.naturalWidth) c.drawImage(im, 0, 0, size, size);
+        }
+        function onFeatherClick(f) {
+            if (!active || f.state !== 'idle' || orb) return;
+            startStarFly(f);
+        }
+        function stepFeathers(dt) {
+            var idx = Math.floor(clock / FRAME_MS) % FRAMES.length;
+            for (var k = 0; k < feathers.length; k++) {
+                var f = feathers[k];
+                if (f.burstAt && clock >= f.burstAt) {
+                    f.burstAt = 0;
+                    var bc = featherCenter(f);
+                    emit(PT.collect, 10, bc.x, bc.y, 6 * PXF, 0);              // Emit(P_Collect, 10, Pos, One*6)
+                    slashes.push({ x: bc.x, y: bc.y, ang: f.burstAng, t: 0 });  // SlashFx.Burst(Pos, angle)
+                }
+                if (f.state === 'wait' && clock >= f.respawnAt) {
+                    // Respawn：outline.Visible=false / Collidable=true / sprite.Visible=true / wiggler.Start() / P_Respawn×16
+                    f.state = 'idle';
+                    f.el.classList.remove('wait');
+                    f.wigT = 0; f.wigDur = 1; f.wigFreq = 4;
+                    f.drawn = -1;
+                    var rc = featherCenter(f);
+                    emit(PT.respawn, 16, rc.x, rc.y, 2 * PXF, 0);
+                    sfx('reappear');
+                }
+                if (f.state === 'idle') {
+                    if (f.drawn !== idx) { drawFeather(f, idx); f.drawn = idx; }
+                } else if (f.drawn !== -2) {          // outline 只在状态切换时重画一次
+                    drawFeather(f, idx); f.drawn = -2;
+                }
+                // UpdateY：sprite.Y = SineWave.Value * 2（SineWave.Value = sin(counter) ∈ [-1,1] → ±2 世界像素）
+                var bob = f.state === 'idle'
+                    ? Math.round(Math.sin(clock * 0.001 * Math.PI * 2 * 0.6 + f.phase) * 2 * PXF)
+                    : 0;
+                // wiggler.MoveNext：Value = cos(sineCounter) * Counter，Counter 从 1 线性衰减到 0
+                // → Scale = One * (1 + Value * 0.2)，重生瞬间是 1.2 倍，随后带余弦抖动收回
+                var sc = 1;
+                if (f.wigT >= 0) {
+                    f.wigT += dt;
+                    if (f.wigT >= f.wigDur) f.wigT = -1;
+                    else sc = 1 + 0.2 * Math.cos(f.wigT * Math.PI * 2 * f.wigFreq) * (1 - f.wigT / f.wigDur);
+                }
+                f.el.style.transform = 'translate(-50%,-50%)' +
+                    (bob ? ' translateY(' + bob + 'px)' : '') +
+                    (sc !== 1 ? ' scale(' + sc.toFixed(3) + ')' : '');
+            }
+        }
+
+        // ---------- 星飞光球（StStarFly 逐行移植） ----------
+        function startStarFly(f) {
+            var c = featherCenter(f);
+            var dir = inputDir() || { x: 1, y: 0 };
+            orb = {
+                x: c.x, y: c.y, mx: dir.x, my: dir.y, last: dir,
+                len: 0, lerp: 0, glow: 0,
+                charge: 0, timer: FLY_TIME, emitT: 0, ghostT: 0,
+                warnT: 0, flash: false
+            };
+            f.state = 'wait';
+            f.respawnAt = nowMs() + RESPAWN_MS;    // 必须用真实时刻：clock 是上一帧时间戳，掉帧时会偏旧
+            f.el.classList.add('wait');
+            f.drawn = -1;
+            f.burstAt = nowMs() + 50;              // CollectRoutine：隐藏后再等 0.05s
+            f.burstAng = Math.atan2(dir.y, dir.x);
+            shake();                                    // level.Shake(0.3)
+            showHint(true);
+            bindActive(true);
+            ensureCanvas();
+            sfx('get');
+        }
+        function stepOrb(dt) {
+            if (!orb) return;
+            var o = orb;
+            o.glow = approach(o.glow, 1, dt * 4);       // light.Alpha = Approach(..., dt*4)
+
+            if (o.charge < CHARGE) {
+                // starFlyTransforming：Speed = Approach(Speed, Zero, 1000 * dt)
+                o.charge += dt;
+                o.len = approach(o.len, 0, ACCEL * PXF * dt);
+                if (o.charge >= CHARGE) {
+                    o.timer = FLY_TIME;
+                    o.len = V_START * PXF;              // Speed = dir * 250
+                    o.mx = o.last.x; o.my = o.last.y;
+                    emit(PT.boost, 12, o.x, o.y, 4 * PXF, Math.atan2(-o.my, -o.mx));
+                    shake();
+                    sfx('boost');
+                }
+                return;
+            }
+
+            // Input.Feather：无输入 → 沿用上一次朝向（dir = starFlyLastDir）
+            var dir = inputDir();
+            var idle = !dir;
+            if (idle) dir = o.last;
+            // moveDir = RotateTowards(moveDir, dir, 5.5850534 * dt)
+            var m = norm(o.mx, o.my);
+            m = m ? rotateToward(m, dir, TURN_RATE * dt) : dir;
+            o.mx = m.x; o.my = m.y; o.last = m;
+
+            var target;
+            if (idle) { o.lerp = 0; target = V_IDLE; }
+            else if (dot(m, dir) >= 0.45) { o.lerp = approach(o.lerp, 1, dt); target = V_TURN + (V_FAST - V_TURN) * o.lerp; }
+            else { o.lerp = 0; target = V_TURN; }
+
+            o.len = approach(o.len, target * PXF, ACCEL * PXF * dt);   // Approach(|Speed|, target, 1000 * dt)
+            o.x += o.mx * o.len * dt;
+            o.y += o.my * o.len * dt;
+
+            // 房间边界（左屏）：贴边滑行
+            var w = left.clientWidth, h = left.clientHeight, R = orbRadius();
+            if (o.x < R) { o.x = R; o.len *= 0.94; }
+            if (o.x > w - R) { o.x = w - R; o.len *= 0.94; }
+            if (o.y < R) { o.y = R; o.len *= 0.94; }
+            if (o.y > h - R) { o.y = h - R; o.len *= 0.94; }
+
+            // Scene.OnInterval(0.02) → Emit(P_Flying, 1, Center, One*2, Angle(-Speed))
+            o.emitT += dt;
+            while (o.emitT >= 0.02) {
+                o.emitT -= 0.02;
+                emit(PT.flying, 1, o.x, o.y, 2 * PXF, Math.atan2(-o.my, -o.mx));
+            }
+            // 网页端补一点运动残影（原作靠 P_Flying 粒子；这里让快速移动更连贯）
+            o.ghostT += dt;
+            if (o.ghostT >= 0.03) {
+                o.ghostT = 0;
+                if (orbCache.glow) ghosts.push({ x: o.x, y: o.y, t: 0, ttl: 0.12 });
+            }
+
+            // starFlyTimer -= DeltaTime；末 0.5s 每 0.05s 在 starFlyColor ↔ NormalHairColor 间闪
+            o.timer -= dt;
+            if (o.timer < WARN_TIME) {
+                o.warnT += dt;
+                if (o.warnT >= WARN_STEP) { o.warnT = 0; o.flash = !o.flash; }
+            }
+            if (o.timer <= 0) { endFly(false); return; }
+
+            // 飞行中碰到别的羽毛 → feather_renew：timer 回满，羽毛不消失
+            for (var k = 0; k < feathers.length; k++) {
+                var f = feathers[k];
+                if (f.state !== 'idle' || nowMs() < f.renewAt) continue;
+                var fc = featherCenter(f);
+                if (Math.hypot(fc.x - o.x, fc.y - o.y) > R + FSIZE * 0.42) continue;
+                f.renewAt = nowMs() + 500;
+                f.wigT = 0; f.wigDur = 1; f.wigFreq = 4;
+                o.timer = FLY_TIME; o.flash = false; o.warnT = 0;
+                emit(PT.boost, 4, fc.x, fc.y, 2 * PXF, Math.atan2(-o.my, -o.mx));
+                sfx('renew');
+            }
+        }
+        function endFly(silent) {
+            bindActive(false);
+            showHint(false);
+            if (!orb) return;
+            var o = orb;
+            orb = null;
+            if (silent) return;
+            // StarFlyEnd：P_Boost ×12（Angle(-Speed)）+ 光球余晖
+            emit(PT.boost, 12, o.x, o.y, 4 * PXF, Math.atan2(-o.my, -o.mx));
+            ghosts.push({ x: o.x, y: o.y, t: 0, ttl: 0.2 });
+            sfx('end');
+        }
+        function stepFx(dt) {
+            for (var i = parts.length - 1; i >= 0; i--) {
+                var p = parts[i];
+                p.life += dt;
+                if (p.life >= p.ttl) { parts.splice(i, 1); continue; }
+                p.x += p.vx * dt; p.y += p.vy * dt;
+                p.rot += p.spin * dt;                      // RotationMode=1：粒子自转（SpinMin 30°~SpinMax 80°/s）
+                var drag = Math.pow(p.mult, dt);           // SpeedMultiplier：每秒按该系数衰减
+                p.vx *= drag; p.vy *= drag;
+            }
+            for (var j = slashes.length - 1; j >= 0; j--) {
+                var sl = slashes[j];
+                sl.t += dt;
+                if (sl.t >= SLASH_LIFE) { slashes.splice(j, 1); continue; }
+                // SlashFx.Update：Position += AngleToVector(angle, 1) * 8 * dt
+                sl.x += Math.cos(sl.ang) * 8 * PXF * dt;
+                sl.y += Math.sin(sl.ang) * 8 * PXF * dt;
+            }
+            for (var g = ghosts.length - 1; g >= 0; g--) {
+                ghosts[g].t += dt;
+                if (ghosts[g].t >= ghosts[g].ttl) ghosts.splice(g, 1);
+            }
+            if (parts.length > 400) parts.splice(0, parts.length - 400);
+        }
+
+        // ---------- 渲染 ----------
+        function drawOrb(o) {
+            if (orbCache.size !== FSIZE) buildOrb();
+            var cx = Math.round(o.x), cy = Math.round(o.y), half = orbCache.px >> 1;
+            if (orbCache.glow && o.glow > 0.02) {
+                ctx2.globalAlpha = 0.6 * o.glow;           // starFlyBloom.Alpha → 0.7
+                var gs = orbCache.glow;
+                ctx2.drawImage(gs, cx - gs.width / 2, cy - gs.height / 2 - orbCache.px * 1.5);
+                ctx2.globalAlpha = 1;
+            }
+            var cells = o.flash ? orbCache.red : orbCache.gold;
+            for (var i = 0; i < cells.length; i++) {
+                ctx2.fillStyle = cells[i].c;
+                ctx2.fillRect(cx + cells[i].dx - half, cy + cells[i].dy - half, orbCache.px, orbCache.px);
+            }
+            if (o.charge < CHARGE) {                       // 变形期白闪（startStarFly 起手）
+                var q = 1 - o.charge / CHARGE;
+                ctx2.globalAlpha = q * 0.85;
+                ctx2.fillStyle = '#fffdf2';
+                ctx2.beginPath();
+                ctx2.arc(cx, cy, orbCache.px * (2 + 4 * q), 0, Math.PI * 2);
+                ctx2.fill();
+                ctx2.globalAlpha = 1;
+            }
+        }
+        function drawFrame() {
+            if (!ctx2) return;
+            ctx2.clearRect(0, 0, cv.width, cv.height);
+
+            // 1) 光球余晖 / 运动残影
+            if (orbCache.glow) {
+                for (var g = 0; g < ghosts.length; g++) {
+                    var gh = ghosts[g], ga = 1 - gh.t / gh.ttl;
+                    ctx2.globalAlpha = ga * 0.42;
+                    ctx2.drawImage(orbCache.glow, gh.x - orbCache.glow.width / 2, gh.y - orbCache.glow.height / 2);
+                }
+                ctx2.globalAlpha = 1;
+            }
+
+            // 2) 粒子（P_Collect / P_Boost 用 feather 贴图并自转，P_Flying 用 rect，P_Respawn 用 smoke0）
+            for (var k = 0; k < parts.length; k++) {
+                var p = parts[k];
+                var a = 1 - p.life / p.ttl;                // FadeMode=2：随寿命淡出
+                if (a <= 0.02) continue;
+                ctx2.globalAlpha = a;
+                var tex = tintFor(p.tex, p.col);
+                if (tex) {
+                    var dw = tex.width * p.sz, dh = tex.height * p.sz;
+                    if (p.spin) {
+                        ctx2.save();
+                        ctx2.translate(p.x, p.y);
+                        ctx2.rotate(p.rot);
+                        ctx2.drawImage(tex, -dw / 2, -dh / 2, dw, dh);
+                        ctx2.restore();
+                    } else {
+                        ctx2.drawImage(tex, p.x - dw / 2, p.y - dh / 2, dw, dh);
+                    }
+                } else {
+                    ctx2.fillStyle = p.col;
+                    ctx2.fillRect(p.x - p.sz / 2, p.y - p.sz / 2, p.sz, p.sz);
+                }
+            }
+            ctx2.globalAlpha = 1;
+
+            // 3) SlashFx（4 帧 × 0.1s；|angle-π|<=0.01 时不旋转，其余按玩家速度角度转）
+            for (var s = 0; s < slashes.length; s++) {
+                var sl = slashes[s];
+                var im = IMG.slash[Math.min(3, Math.floor(sl.t / SLASH_FRAME))];
+                if (!im || !im.naturalWidth) continue;
+                var sw = im.width * PXF, sh = im.height * PXF;
+                ctx2.save();
+                ctx2.translate(sl.x, sl.y);
+                if (Math.abs(sl.ang - Math.PI) > 0.01) ctx2.rotate(sl.ang);
+                ctx2.drawImage(im, -sw / 2, -sh / 2, sw, sh);
+                ctx2.restore();
+            }
+
+            // 4) 光球本体
+            if (orb) drawOrb(orb);
+            ctx2.globalAlpha = 1;
+        }
+
+        // ---------- 主循环 ----------
+        function startLoop() { if (!raf) { prevT = 0; raf = requestAnimationFrame(tick); } }
+        function stopLoop() { if (raf) cancelAnimationFrame(raf); raf = 0; }
+        function tick(t) {
+            if (!active) { raf = 0; return; }
+            var dt = prevT ? Math.min(0.05, Math.max(0.001, (t - prevT) / 1000)) : 0.016;
+            prevT = t;
+            clock = t;
+            stepFeathers(dt);
+            stepOrb(dt);
+            stepFx(dt);
+            drawFrame();
+            raf = requestAnimationFrame(tick);
+        }
+
+        // ---------- 键位（飞行中才拦截 Esc / 方向键默认行为） ----------
+        function onKeyDown(e) {
+            var k = (e.key || '').toLowerCase();
+            if (k === 'escape') { e.preventDefault(); e.stopPropagation(); endFly(false); return; }
+            if (e.repeat) return;
+            if (DIR_KEYS[k]) { keys[k] = true; e.preventDefault(); e.stopPropagation(); }
+        }
+        function onKeyUp(e) { var k = (e.key || '').toLowerCase(); if (DIR_KEYS[k]) keys[k] = false; }
+        function bindActive(on) {
+            if (on === keysActive) return;
+            keysActive = on;
+            if (on) {
+                document.addEventListener('keydown', onKeyDown, true);
+                document.addEventListener('keyup', onKeyUp, true);
+            } else {
+                document.removeEventListener('keydown', onKeyDown, true);
+                document.removeEventListener('keyup', onKeyUp, true);
+                keys = {};
+            }
+        }
+        function onTrack(e) { var k = (e.key || '').toLowerCase(); if (DIR_KEYS[k]) keys[k] = true; }
+        function onTrackUp(e) { var k = (e.key || '').toLowerCase(); if (DIR_KEYS[k]) keys[k] = false; }
+        function bindTrack(on) {
+            if (on) {
+                document.addEventListener('keydown', onTrack);
+                document.addEventListener('keyup', onTrackUp);
+            } else {
+                document.removeEventListener('keydown', onTrack);
+                document.removeEventListener('keyup', onTrackUp);
+            }
+        }
+        function inputDir() {
+            var x = 0, y = 0;
+            if (keys.arrowleft || keys.a) x -= 1;
+            if (keys.arrowright || keys.d) x += 1;
+            if (keys.arrowup || keys.w) y -= 1;
+            if (keys.arrowdown || keys.s) y += 1;
+            if (!x && !y) return null;
+            var l = Math.sqrt(x * x + y * y);
+            return { x: x / l, y: y / l };
+        }
+
+        // ---------- dream 进出 ----------
+        function countFeathers(done) {
+            if (typeof api !== 'function') { done(3); return; }
+            api('/feather/count', 'GET').then(function (res) {
+                var n = (res && res.success && res.data && res.data.count) || 0;
+                done(n > 0 ? Math.min(n, 6) : 3);         // 有记录 → min(n,6)；空 → 3 根
+            }).catch(function () { done(3); });
+        }
+        function enterDream() {
+            if (active) return;
+            active = true;
+            updateSizes();
+            ensureCanvas();
+            resizeCanvas();
+            bindTrack(true);
+            host.innerHTML = '';
+            feathers = []; placed = []; parts = []; slashes = []; ghosts = []; orb = null;
+            countFeathers(function (n) {
+                if (!active) return;
+                for (var k = 0; k < n; k++) addFeather();
+            });
+            startLoop();
+        }
+        function exitDream() {
+            if (!active) return;
+            endFly(true);
+            active = false;
+            stopLoop();
+            bindTrack(false);
+            host.innerHTML = '';
+            feathers = []; placed = []; parts = []; slashes = []; ghosts = []; orb = null;
+            if (ctx2 && cv) ctx2.clearRect(0, 0, cv.width, cv.height);
+        }
+
+        document.addEventListener('dream:entered', enterDream);
+        document.addEventListener('dream:exiting', exitDream);
+        window.addEventListener('resize', function () {
+            if (!active) return;
+            updateSizes();
+            resizeCanvas();
+            for (var k = 0; k < feathers.length; k++) applyScale(feathers[k]);
+        });
+        window.addEventListener('blur', function () { keys = {}; });
+        // 叫醒 Madeline 时立刻收掉飞行，避免与睡醒动画叠在一起
+        var mdEl = document.getElementById('dsMadeline');
+        if (mdEl) mdEl.addEventListener('click', function () { if (orb) endFly(false); });
     })();
 
     // ===== dream 功能：梦境日记（Madeline 解梦）+ Badeline 夜话（影子视角读梦） =====
@@ -2200,20 +2898,432 @@ function stopPeSnow() {
             });
         }
 
-        // 一次性开门（照游戏原图）：白闪+横贯中线光束 → 上下两段错位拉开露出中段开口 → 星尘横向爆散；门柱保留可见
+        // ===== 一次性开门 → 替换为 Poem 仪式（IL: Celeste.Poem —— 80 粒子 + GUI 240px 巨心 + poemside + 辉光） =====
+        // COLOR_SUBDIR: 0=blue, 1=red, 2=yellow, 3=fake（与 shop.js 一致）
+        var POEM_COLORS = { blue: '#8cc7fa', red: '#ff668a', yellow: '#fffc24', fake: '#ffffff' };
+        var COLOR_SUBDIR = { blue:'0', red:'1', yellow:'2', fake:'3' };
+        function pad2(i) { return String(i).padStart(2, '0'); }
+        function promImg(src) { return new Promise(function (r) { var im = new Image(); im.onload = function () { r(im); }; im.onerror = function () { r(null); }; im.src = src; }); }
+        function sineIn(t) { return 1 - Math.cos(t * Math.PI / 2); }
+        function cubeIn(t) { return t * t * t; }
+        function cubeOut(t) { return 1 - cubeIn(1 - t); }
+        function hexA(hex, a) { var n = parseInt(hex.slice(1), 16); return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')'; }
+        function tintCopy(img, cssColor) {
+            if (!img) return null;
+            if (img.__tint && img.__tint[cssColor]) return img.__tint[cssColor];
+            var c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+            var g = c.getContext('2d'); g.drawImage(img, 0, 0); g.globalCompositeOperation = 'source-in';
+            g.fillStyle = cssColor; g.fillRect(0, 0, c.width, c.height);
+            img.__tint = img.__tint || {}; img.__tint[cssColor] = c; return c;
+        }
+        // Poem 素材加载（与 shop.js 同源）
+        var GUI_SPIN_SEQ = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        var GUI_FRAME_DELAY = 0.08;
+        var GUI_HG = 'Atlases/Gui/collectables/heartgem';
+        var GUI_HEART_FRAMES = { blue: [], red: [], yellow: [], fake: [] };
+        Object.keys(COLOR_SUBDIR).forEach(function (c) {
+            for (var i = 0; i < 11; i++) (function (c, i) {
+                GUI_HEART_FRAMES[c].push(null);
+                promImg(GUI_HG + '/' + COLOR_SUBDIR[c] + '/spin' + pad2(i) + '.png')
+                    .then(function (im) { GUI_HEART_FRAMES[c][i] = im; });
+            })(c, i);
+        });
+        for (var fi = 0; fi < 33; fi++) (function (i) {
+            GUI_HEART_FRAMES.fake.push(null);
+            promImg(GUI_HG + '/3/FakeHeart' + String(i).padStart(4, '0') + '.png')
+                .then(function (im) { GUI_HEART_FRAMES.fake[i] = im; });
+        })(fi);
+        var snowImg = null, poemsideImg = null;
+        promImg('Atlases/Gameplay/particles/snow.png').then(function (im) { snowImg = im; });
+        promImg('Atlases/Gui/poemside.png').then(function (im) { poemsideImg = im; });
+
+        // Poem 状态（仅 shelf 版本：淡入→hold→淡出 三阶段；无 AbsorbOrb / fake break）
+        var poem = null;
+        var poemEl = document.getElementById('heartGet');
+        var poemTip = poemEl ? poemEl.querySelector('.hg-poem-tip') : null;
+        var fxc = document.getElementById('hgFx');
+        var fxctx = fxc ? fxc.getContext('2d') : null;
+        var poemSharp = null, poemGlow = null;
+        function resizePoemFx() {
+            if (!fxc) return;
+            fxc.width = window.innerWidth; fxc.height = window.innerHeight;
+            fxctx.imageSmoothingEnabled = true;
+        }
+        if (fxc) { window.addEventListener('resize', resizePoemFx); resizePoemFx(); }
+        function poemsideFor(col) { return poemsideImg ? tintCopy(poemsideImg, col) : null; }
+        function showPoem(clickable) {
+            if (!poemEl) return;
+            poemEl.style.opacity = '0';
+            poemEl.classList.add('show');
+            poemEl.classList.add('display');
+            if (poemTip) poemTip.style.visibility = clickable === false ? 'hidden' : '';
+            resizePoemFx();
+        }
+        function newPoemParticle() {
+            var a = Math.random() * Math.PI * 2;
+            return { dir: { x: Math.cos(a), y: Math.sin(a) }, p: Math.random(), dur: 0.5 + Math.random() * 0.5 };
+        }
+        function openPoem(color, title, desc) {
+            var fake = color === 'fake';
+            poem = {
+                color: color, fake: fake,
+                spinFrames: fake ? null : GUI_HEART_FRAMES[color],
+                frameI: 0, frameT: 0, delay: GUI_FRAME_DELAY,
+                tint: (color === 'yellow' && !fake) ? 0.6 : 1,
+                title: title || '', desc: desc || '',
+                textAlpha: 1, particleSpeed: 1, shake: 0,
+                particles: [], timer: 0,
+                alpha: 0, t: 0, phase: 'in',
+                autoStarted: false
+            };
+            for (var i = 0; i < 80; i++) poem.particles.push(newPoemParticle());
+            if (poemEl) { poemEl.classList.add('show'); poemEl.style.opacity = '0'; }
+        }
+        function closePoem() {
+            poem = null;
+            if (poemEl) { poemEl.classList.remove('show'); poemEl.style.opacity = '0'; }
+            if (poemTip) poemTip.style.visibility = '';
+        }
+        function updatePoem(rdt) {
+            if (!poem) { if (poemEl) poemEl.style.opacity = '0'; return; }
+            poem.timer += rdt;
+            // 巨心 spin 帧推进
+            if (!poem.fake && poem.spinFrames) {
+                poem.frameT += rdt;
+                while (poem.frameT >= poem.delay) {
+                    poem.frameT -= poem.delay;
+                    poem.frameI = (poem.frameI + 1) % GUI_SPIN_SEQ.length;
+                }
+            }
+            // 粒子推进
+            for (var i = 0; i < poem.particles.length; i++) {
+                var p = poem.particles[i];
+                p.p += rdt / p.dur * poem.particleSpeed;
+                if (p.p > 1) { var np = newPoemParticle(); np.p = 0; poem.particles[i] = np; }
+            }
+            // 淡入 → hold → 淡出
+            if (poem.phase === 'in') {
+                poem.t += rdt;
+                poem.alpha = poem.t >= 1 ? 1 : cubeOut(poem.t);
+                if (poem.t >= 1) poem.phase = 'hold';
+            } else if (poem.phase === 'out') {
+                poem.t += rdt * 2;
+                poem.alpha = poem.t >= 1 ? 0 : cubeIn(1 - poem.t);
+                if (poem.t >= 1) { closePoem(); return; }
+            }
+            if (poemEl) poemEl.style.opacity = poem.alpha.toFixed(3);
+        }
+        function poemHeartImg() {
+            if (!poem) return null;
+            if (poem.fake) return GUI_HEART_FRAMES.fake[GUI_SPIN_SEQ[poem.frameI]] || null;
+            return poem.spinFrames ? poem.spinFrames[GUI_SPIN_SEQ[poem.frameI]] : null;
+        }
+        // IL: Poem.DrawPoem —— 文本两侧 poemside 64px 装饰 + 5 次描边（4 黑 1 彩）
+        function drawPoemText(ctx, cx, cy, g, color, dx, dy) {
+            var title = poem.title || '', desc = poem.desc || '';
+            var ts = Math.max(12, Math.round(84 * g));
+            var ds = Math.max(9, Math.round(34 * g));
+            var family = "'CelesteZH','Renogare','Microsoft YaHei',sans-serif";
+            ctx.save(); ctx.translate(dx, dy); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillStyle = color;
+            var descLines = [], maxW = 1024 * g, cur = '';
+            if (desc) {
+                ctx.font = ds + 'px ' + family;
+                for (var i = 0; i < desc.length; i++) {
+                    var next = cur + desc[i];
+                    if (ctx.measureText(next).width > maxW && cur) { descLines.push(cur); cur = desc[i]; }
+                    else cur = next;
+                }
+                if (cur) descLines.push(cur);
+            }
+            ctx.font = ts + 'px ' + family;
+            var w = ctx.measureText(title).width;
+            ctx.font = ds + 'px ' + family;
+            for (var k = 0; k < descLines.length; k++) w = Math.max(w, ctx.measureText(descLines[k]).width);
+            var tLH = ts * 1.15, dLH = ds * 1.5, gap = descLines.length ? ts * 0.18 : 0;
+            var totalH = tLH + (descLines.length ? gap + dLH * descLines.length : 0);
+            var top = cy - totalH / 2;
+            ctx.font = ts + 'px ' + family;
+            ctx.fillText(title, cx, top + tLH / 2);
+            if (descLines.length) {
+                ctx.font = ds + 'px ' + family;
+                for (var k2 = 0; k2 < descLines.length; k2++) {
+                    ctx.fillText(descLines[k2], cx, top + tLH + gap + dLH * (k2 + 0.5));
+                }
+            }
+            var side = poemsideFor(color);
+            if (side) {
+                var ss = 64 * g;
+                ctx.drawImage(side, cx - (w / 2 + 64 * g) - ss / 2, cy - ss / 2, ss, ss);
+                ctx.drawImage(side, cx + (w / 2 + 64 * g) - ss / 2, cy - ss / 2, ss, ss);
+            }
+            ctx.restore();
+        }
+        function drawPoemGlow(ctx, cx, cy, g, col) {
+            var R = 520 * g;
+            var bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
+            bg.addColorStop(0, hexA(col, 0.5));
+            bg.addColorStop(0.45, hexA(col, 0.18));
+            bg.addColorStop(1, hexA(col, 0));
+            ctx.fillStyle = bg;
+            ctx.fillRect(ctx.canvas.width * -0.1, ctx.canvas.height * -0.1, ctx.canvas.width * 1.2, ctx.canvas.height * 1.2);
+        }
+        function poemLayer(el, w, h) {
+            if (!el) el = document.createElement('canvas');
+            if (el.width !== w || el.height !== h) { el.width = w; el.height = h; }
+            return el;
+        }
+        function drawPoem() {
+            if (!fxctx || !poem) return;
+            var W = fxc.width, H = fxc.height;
+            fxctx.clearRect(0, 0, W, H);
+            var g = Math.min(W / 1920, H / 1080);
+            var cx = W / 2, cy = H / 2;
+            var col = POEM_COLORS[poem.color] || POEM_COLORS.blue;
+
+            poemSharp = poemLayer(poemSharp, W, H);
+            var p = poemSharp.getContext('2d');
+            p.clearRect(0, 0, W, H); p.imageSmoothingEnabled = true;
+            var snow = tintCopy(snowImg, col);
+            if (snow) {
+                for (var i = 0; i < poem.particles.length; i++) {
+                    var pt = poem.particles[i];
+                    var e = sineIn(pt.p);
+                    var px = cx + pt.dir.x * (1 - e) * 1920 * g;
+                    var py = cy + pt.dir.y * (1 - e) * 1920 * g;
+                    var sx = 1 + e * 2;
+                    var sy = 0.25 * (0.25 + (1 - e) * 0.75);
+                    p.save(); p.translate(px, py);
+                    p.rotate(Math.atan2(-pt.dir.y, -pt.dir.x));
+                    p.globalAlpha = Math.max(0, 1 - e);
+                    p.scale(sx, sy);
+                    p.drawImage(snow, -4, -4, 8, 8);
+                    p.restore();
+                }
+                p.globalAlpha = 1;
+            }
+            var img = poemHeartImg();
+            if (img) {
+                var jx = (Math.random() * 2 - 1) * 16 * poem.shake;
+                var jy = (Math.random() * 2 - 1) * 16 * poem.shake;
+                var hs = img.width * g * (1 + poem.shake * 0.1);
+                p.globalAlpha = poem.tint;
+                p.drawImage(img, cx - hs / 2 + jx, cy - hs / 2 + jy, hs, hs);
+                p.globalAlpha = 1;
+            }
+            if (poem.textAlpha > 0) {
+                var off = 2 * g;
+                p.globalAlpha = poem.textAlpha;
+                drawPoemText(p, cx, cy, g, '#000000', -off, 0);
+                drawPoemText(p, cx, cy, g, '#000000', off, 0);
+                drawPoemText(p, cx, cy, g, '#000000', 0, -off);
+                drawPoemText(p, cx, cy, g, '#000000', 0, off);
+                drawPoemText(p, cx, cy, g, col, 0, 0);
+                p.globalAlpha = 1;
+            }
+            // smoke RT：半分辨率 + 高斯模糊 → 0.3 alpha 叠加
+            var hw = Math.max(1, Math.round(W / 2)), hh = Math.max(1, Math.round(H / 2));
+            poemGlow = poemLayer(poemGlow, hw, hh);
+            var q = poemGlow.getContext('2d');
+            q.clearRect(0, 0, hw, hh); q.imageSmoothingEnabled = true;
+            drawPoemGlow(q, hw / 2, hh / 2, g * 0.5, col);
+            q.filter = 'blur(' + Math.max(2, 6 * g) + 'px)';
+            q.drawImage(poemSharp, 0, 0, hw, hh);
+            q.filter = 'none';
+            fxctx.globalAlpha = 0.3;
+            fxctx.drawImage(poemGlow, 0, 0, W, H);
+            fxctx.globalAlpha = 1;
+            fxctx.drawImage(poemSharp, 0, 0);
+
+            // ===== CollectRoutine 前置：AbsorbOrb + 白闪 + FormationBackdrop 黑幕 =====
+            // shelf 没有 Madeline → AbsorbOrb 目标 = 画面中心（即 Poem 巨心位置）
+            // 注意：orbs 的更新已在 tickRitual(rdt) slow 阶段完成，这里只做渲染
+            if (orbs.length) {
+                var orbIm2 = orbImg;
+                if (!orbIm2) { orbIm2 = new Image(); orbIm2.src = 'Atlases/Gameplay/collectables/heartGem/orb.png'; }
+                var cx2 = W / 2, cy2 = H / 2;
+                for (var i = 0; i < orbs.length; i++) {
+                    var o = orbs[i];
+                    var wx = o.x * (W / 1920), wy = o.y * (H / 1080);
+                    fxctx.save();
+                    fxctx.translate(cx2 + wx - o.x * (W / 1920), cy2 + wy - o.y * (H / 1080));
+                    fxctx.translate(wx, wy);
+                    fxctx.rotate(o.rot);
+                    fxctx.globalAlpha = o.alpha;
+                    fxctx.scale(o.sx, o.sy);
+                    if (orbIm2.complete && orbIm2.naturalWidth > 0)
+                        fxctx.drawImage(orbIm2, -orbIm2.width / 2, -orbIm2.height / 2);
+                    else {
+                        fxctx.fillStyle = '#ffffff';
+                        fxctx.fillRect(-8, -8, 16, 16);
+                    }
+                    fxctx.restore();
+                }
+            }
+            // IL: Level.Flash → Approach(1, dt*10) 后 Approach(0, dt*3)（0.33s 内衰减）
+            if (flashA > 0) {
+                fxctx.fillStyle = 'rgba(255,255,255,' + Math.min(1, flashA).toFixed(3) + ')';
+                fxctx.fillRect(0, 0, W, H);
+            }
+            // IL: FormationBackdrop → Black * backdropFade * 0.85
+            if (backdropFade > 0.002) {
+                fxctx.fillStyle = 'rgba(0,0,0,' + (0.85 * backdropFade).toFixed(3) + ')';
+                fxctx.fillRect(0, 0, W, H);
+            }
+        }
+
+        // ===== CollectRoutine 前置仪式（IL: HeartGem.CollectRoutine 时间轴移植）=====
+        // Freeze(0.2) → TimeRate=0.5 + 10×AbsorbOrb + Flash(White) + FormationBackdrop.Display=true + 2s slow → TimeRate=1 → Poem
+        var orbs = [], flashA = 0, backdropFade = 0, backdropTarget = 0, freezeT = 0, slowElapsed = 0, ritual = null;
+        function approach(v, target, step) { return v < target ? Math.min(v + step, target) : Math.max(v - step, target); }
+        function yoyo(t) { return t < 0.5 ? t * 2 : (1 - t) * 2; }
+        function bezPoint(c, t) { var u = 1 - t; return { x: u * u * c.sx0 + 2 * u * t * c.cx + t * t * c.ex, y: u * u * c.sy0 + 2 * u * t * c.cy + t * t * c.ey }; }
+        function bezLen10(c) { var len = 0, prev = bezPoint(c, 0); for (var i = 1; i <= 10; i++) { var p = bezPoint(c, i / 10); len += Math.sqrt((p.x - prev.x) * (p.x - prev.x) + (p.y - prev.y) * (p.y - prev.y)); prev = p; } return len; }
+        function orbScale(v) { return { x: Math.min(2, 0.5 + v * 0.02), y: Math.max(0.05, 0.5 - v * 0.004) }; }
+        // shelf 世界坐标：AbsorbOrb target = (0, 0) 即 Poem 画面中心（相对 1920×1080）
+        function newOrb() {
+            var a = Math.random() * Math.PI * 2;
+            var r = 200 + Math.random() * 100;
+            return {
+                x: Math.cos(a) * r, y: Math.sin(a) * r,
+                alpha: 1,
+                consumeDelay: 0.7 + Math.random() * 0.3,
+                burstSpeed: 80 + Math.random() * 40,
+                burstDir: Math.random() * Math.PI * 2,
+                percent: 0, duration: 0, curve: null,
+                rot: 0, sx: 1, sy: 1, dead: false
+            };
+        }
+        function updateOrb(o, rdt) {
+            var tx = 0, ty = 0;                      // Poem 中心
+            if (o.consumeDelay > 0) {
+                o.x += Math.cos(o.burstDir) * o.burstSpeed * rdt;
+                o.y += Math.sin(o.burstDir) * o.burstSpeed * rdt;
+                o.burstSpeed = approach(o.burstSpeed, 0, rdt * 120);
+                o.rot = o.burstDir;
+                var s = orbScale(o.burstSpeed); o.sx = s.x; o.sy = s.y;
+                o.consumeDelay -= rdt;
+                if (o.consumeDelay <= 0) {
+                    var dx = tx - o.x, dy = ty - o.y;
+                    var len = Math.sqrt(dx * dx + dy * dy) || 1e-6;
+                    var off = len * (0.05 + Math.random() * 0.45) * (Math.random() < 0.5 ? -1 : 1);
+                    o.curve = { sx0: o.x, sy0: o.y, ex: tx, ey: ty,
+                                cx: (o.x + tx) / 2 - dy / len * off, cy: (o.y + ty) / 2 + dx / len * off };
+                    o.duration = 0.3 + Math.random() * 0.25;
+                }
+            } else {
+                o.curve.ex = tx; o.curve.ey = ty;
+                o.percent = approach(o.percent, 1, rdt / o.duration);
+                var e = cubeIn(o.percent);
+                var q = bezPoint(o.curve, e);
+                o.x = q.x; o.y = q.y;
+                var v = yoyo(e) * bezLen10(o.curve);
+                var s2 = orbScale(v); o.sx = s2.x; o.sy = s2.y;
+                o.rot = Math.atan2(q.y - o.y, q.x - o.x);
+                o.alpha = 1 - e;
+                if (o.percent >= 1) o.dead = true;
+            }
+        }
+        // orb 贴图预加载
+        var orbImg = null;
+        promImg('Atlases/Gameplay/collectables/heartGem/orb.png').then(function (im) { orbImg = im; });
+
+        // CollectRoutine 状态机
+        function startRitual() {
+            ritual = { kind: 'real', phase: 'freeze', t: 0 };
+            freezeT = 0.2;           // IL: Celeste.Freeze(0.2)
+            // 同时隐藏 #heartDoor 视觉（Poem 期间门应该淡出）
+            door.style.transition = 'opacity 0.25s ease';
+            door.style.opacity = '0';
+        }
+        function afterFreeze() {
+            ritual.phase = 'slow'; ritual.t = 0; slowElapsed = 0;
+            for (var i = 0; i < 10; i++) orbs.push(newOrb());  // IL: 10 × AbsorbOrb(Position)
+            flashA = 1;                                          // IL: level.Flash(White)
+            backdropTarget = 1;                                  // IL: FormationBackdrop.Display = true
+        }
+        function poemPhase() {
+            ritual.phase = 'poem';
+            var meta = latestHeartMeta();
+            showPoem(true);
+            openPoem(meta.color, meta.title, meta.desc);
+        }
+        function endRitual() {
+            backdropTarget = 0;
+            if (poem) { poem.phase = 'out'; poem.t = 0; }
+        }
+        function tickRitual(rdt) {
+            if (!ritual) return;
+            // Freeze —— 整个场景停 0.2s，但 flash/backdrop 仍按 rdt 走
+            if (ritual.phase === 'freeze') {
+                freezeT -= rdt;
+                if (freezeT <= 0) afterFreeze();
+                return;
+            }
+            // slow —— 2s，TimeRate 近似：orb 速度在接近 0 前持续更新
+            if (ritual.phase === 'slow') {
+                ritual.t += rdt; slowElapsed += rdt;
+                // orbs 更新（IL: AbsorbOrb 持续飞行）
+                for (var i = 0; i < orbs.length; i++) updateOrb(orbs[i], rdt);
+                orbs = orbs.filter(function (o) { return !o.dead; });
+                if (ritual.t >= 2) poemPhase();
+            }
+            // flash 衰减：IL: Flash(White) → Approach(0, dt*3)（约 0.33s 衰减到 0）
+            if (flashA > 0) flashA = approach(flashA, 0, rdt * 3);
+            // backdrop fade：IL: fade = Approach(Display ? 1 : 0, RawDeltaTime*3)
+            backdropFade = approach(backdropFade, backdropTarget, rdt * 3);
+            // Poem hold → 点一下淡出 → 淡出结束自动 panRight（hook 在 triggerSplit 里设）
+        }
+
+        // shelf 专属 rAF 驱动（Poem + CollectRoutine + 其它动画）
+        var poemLast = 0;
+        var rdtSaved = 1 / 60;
+        function poemTick(ts) {
+            var rdt = poemLast ? Math.min((ts - poemLast) / 1000, 0.05) : 1 / 60;
+            poemLast = ts;
+            rdtSaved = rdt;
+            tickRitual(rdt);
+            updatePoem(rdt);
+            drawPoem();
+            requestAnimationFrame(poemTick);
+        }
+        requestAnimationFrame(poemTick);
+
+        // 从 localStorage 拿最近那颗心的颜色和文案（heartCrystalDay / crystalHeart 兜底）
+        function latestHeartMeta() {
+            try {
+                var hc = JSON.parse(localStorage.getItem('heartCrystalDay') || 'null');
+                if (hc && POEM_COLORS[hc.color]) return { color: hc.color, title: hc.title || '一道光', desc: hc.desc || undefined };
+                var ch = JSON.parse(localStorage.getItem('crystalHeart') || 'null');
+                if (ch && POEM_COLORS[ch.color]) return { color: ch.color, title: ch.title || '一道光', desc: ch.desc || undefined };
+            } catch (e) {}
+            return { color: 'blue', title: '一道光', desc: '照进心里最柔软的角落' };
+        }
+
+        // 一次性开门 → CollectRoutine 前置仪式（Freeze → AbsorbOrb+Flash+Backdrop+2s slow → Poem 淡入）
+        // Poem hold → 点击 → 淡出 → 自动 panRight 进镜之房间
         function triggerSplit() {
-            if (splitDone || splitting) return;
+            if (splitDone || splitting || ritual) return;
             splitting = true;
             door.classList.remove('ready');
-            door.classList.add('split');
             door.title = '走进门后……';
             try { localStorage.setItem('heartDoorSplit', '1'); } catch (e) {}
-            spawnDoorFx();
-            // 白闪瞬间 → heartdoor_slam（深 boom）
-            if (window.__hdSfx) window.__hdSfx.play('heartdoor_slam');
-            // 星尘从门心横向爆散（闪光峰值时）
-            setTimeout(doorBurst, 120);
-            setTimeout(function () { splitting = false; splitDone = true; opened = true; }, 760);
+            // 隐藏门 DOM（fade out 动画），Poem 期间不显示
+            door.style.transition = 'opacity 0.4s ease';
+            door.style.opacity = '0';
+            // 启动 CollectRoutine 状态机（Freeze → slow → Poem）
+            startRitual();
+            // Poem 淡出结束 → 自动 panRight（hook poem phase='out' → !poem）
+            var hook = setInterval(function () {
+                if (!poem) {
+                    clearInterval(hook);
+                    splitDone = true; opened = true; splitting = false;
+                    // 恢复门可见（镜之房间侧仍保留 split 态）
+                    door.classList.add('split');
+                    door.style.opacity = ''; door.style.transition = '';
+                    panRight();
+                }
+            }, 40);
         }
         function maybePlaySplit(delay) { if (!splitDone && !splitting) setTimeout(triggerSplit, delay); }
 
@@ -2378,6 +3488,7 @@ function stopPeSnow() {
 
         door.addEventListener('click', function (e) {
             e.stopPropagation();          // 防止 tryPlayBGM 等全局 click 监听重新播放 bgm
+            if (ritual) return;           // CollectRoutine 进行中：忽略（门已淡出）
             if (opened) { panRight(); return; }        // 分裂终态：点击进入镜之房间
             if (splitting) return;                     // 分裂动画播放中：忽略
             if (litNow >= TOTAL) { triggerSplit(); return; }   // 满心就绪：点击可立即触发分裂
@@ -2385,6 +3496,13 @@ function stopPeSnow() {
             setTimeout(function () { door.classList.remove('shake'); }, 650);
             showToast('心门纹丝不动……（' + litNow + ' / ' + TOTAL + '）');
         });
+        // Poem hold 期间点击 → endRitual（backdrop 淡出 + Poem 淡出 → 结束后自动 panRight）
+        if (poemEl) {
+            poemEl.addEventListener('click', function () {
+                if (!poem) return;
+                if (poem.phase === 'hold') endRitual();
+            });
+        }
 
         // 点击镜之房间背景（非镜子/Badeline）回书架
         var room = document.getElementById('mirrorRoom');

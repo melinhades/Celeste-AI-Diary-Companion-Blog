@@ -4,26 +4,70 @@
    - 鼠标点击后跟随鼠标走，表示收集到了；收集状态持久化，切页面保留
    - 在任意页面集齐最后一颗 → 其他页面已收集的籽以视觉粒子方式临时归场，
      旋转汇聚 + 音效组合成一颗草莓
-   - 自包含：不依赖 api.js/auth.js，无 api 时降级（无 berry 入账） */
+   - 自包含：不依赖 api.js/auth.js，无 api 时降级（无 berry 入账）
+
+   动画机制对照 Celeste.dll（dnfile + dncil 反汇编）与 Content/Graphics/Sprites.xml：
+     · 待机      Sprites.xml <Loop id="idle" path="seed" frames="0*19,1" delay="0.1"/>
+                 StrawberrySeed::Awake → sprite.Position = (sine.Value*2, sine.ValueOverTwo*1)
+                 <Awake>b__25_0 → 播到第 19 帧（白闪帧）时触发 lightTween + seed_pulse
+     · 拾取      StrawberrySeed::orig_OnPlayer → Play("seed_touch","count"=index) + GainFollower
+                 <OnGainLeader> → wiggler.Start()（0.5s / 4Hz / 振幅 0.2 的缩放抖动）
+     · 跟随      Celeste.Leader::Update → PastPoints 每 0.02s 采一次（位移≥3 世界px），
+                 第 i 个 follower 追 PastPoints[5*(i+1)]，
+                 Position += (target - Position) * (1 - pow(0.01, dt))   —— 指数趋近，无回弹
+     · 集齐      CSGEN_StrawberrySeeds::Cutscene（见下方 combine 的逐步注释）
+   屏幕换算：籽素材 16px 显示 48px → 世界像素 ×3 = 屏幕像素 */
 (function () {
   'use strict';
 
   var BASE = 'seed/';
-  var IMG_URL = BASE + 'seed00.png';
+  var SEED_FRAMES = [BASE + 'seed00.png', BASE + 'seed01.png'];  // seed 图集的 0 / 1 帧
   var SOUND_DIR = BASE + 'sound/';
   var TOUCH_SOUNDS = [
     'seed_touch_01.wav', 'seed_touch_02.wav', 'seed_touch_03.wav',
     'seed_touch_04.wav', 'seed_touch_05.wav'
   ];
+  // 原作还有 event:/game/general/seed_pulse（每 2s 的呼吸脉冲音），项目里没有该素材，
+  // 找不到时静默跳过 —— 脉冲的视觉部分由白闪帧 + 辉光加强还原
   var COMPLETE_MAIN = SOUND_DIR + 'seed_complete_main.wav';
   var COMPLETE_BERRY = SOUND_DIR + 'seed_complete_berry.wav';
-  // 成形后的草莓：日记里的草莓（celeste-collectables 62 帧闪光动画 + 静图兜底）
-  var BERRY_PNG = 'celeste-collectables/strawberry.png';
+  // 成形后的草莓：Sprites.xml <Loop id="idle" path="normal" delay=".1" frames="0-6,..."/>
   var BERRY_FRAME_PREFIX = 'celeste-collectables/strawberry/normal';
-  var BERRY_FRAME_COUNT = 62;
-  var BERRY_FRAME_MS = 1000 / 24;   // 24fps 播放成形闪光
+  var BERRY_FRAME_COUNT = 7;          // idle 循环只用 0-6
+  var BERRY_FRAME_MS = 100;           // delay=".1"
   var REFRESH_INTERVAL = 6 * 60 * 60 * 1000;  // 6 小时
   var STORAGE_KEY = 'seedState_v2';   // v2：seed 增加 page 字段，v1 旧状态自然作废重刷
+
+  // ===== 原作常量（逐项来自 IL / Sprites.xml，改手感就调这里） =====
+  var PX = 3;                     // 世界像素 → 屏幕像素（16px 图集帧渲染成 48px，整数倍缩放才不发虚）
+  var IDLE_TICKS = 20;            // frames="0*19,1" → 19 帧常态 + 1 帧白闪
+  var IDLE_TICK_MS = 100;         // delay="0.1"
+  var IDLE_FLASH_TICK = 19;       // frame == 19 → seed_pulse
+  var SINE_HZ = 0.5;              // new SineWave(0.5f, 0f)
+  var SINE_AMP_X = 2 * PX;        // sine.Value * 2f
+  var SINE_AMP_Y = 1 * PX;        // sine.ValueOverTwo * 1f（sin(counter/2)，频率减半）
+  var WIG_DUR = 0.5;              // Wiggler.Create(0.5f, 4f, …)
+  var WIG_FREQ = 4.0;
+  var WIG_AMP = 0.2;              // sprite.Scale = One * (1 + 0.2 * wiggler.Value)
+  var FOLLOW_DELAY = 0.2;         // StrawberrySeed.Follower.FollowDelay = 0.2f
+  var PAST_MAX = 350;             // Leader.MaxPastPoints
+  var PAST_STEP = 3 * PX;         // 位移 ≥ 3 世界 px 才记一个 PastPoints（= 9 屏幕px）
+  var FOLLOW_INDEX_STEP = 5;      // 第 i 个 follower 追 PastPoints[5*(i+1)] → 相邻两颗差 45px
+  var FOLLOW_POW = 0.01;          // Position += (target-Position) * (1 - pow(0.01, dt))
+  var FOLLOW_RATE_SCALE = 3;      // 换算补偿：原版 320px 宽的游戏画面 → 上千 px 的网页（τ≈0.072s）
+  var SPIN_RADIUS = 25 * PX;      // StartSpinAnimation 里 Calc.AngleToVector(ang, 25f)
+  var SPIN_SWEEP = 32.201324;     // Lerp(0f, 32.201324f, eased) 弧度 ≈ 5.125 圈
+  var SPIN_START = Math.PI / 2;   // angleOffset 起点 π/2，每颗籽减 2π/n
+  var SPIN_MS = 2800;             // 原作 4.0s，网页节奏压缩到 2.8s
+  var COMBINE_MS = 600;           // StartCombineAnimation(..., 0.6f)
+  var COMBINE_R0 = 25 * PX;       // 半径 Lerp(25f, 0f, eased)
+  var BURST_COUNT = 6;            // 每颗籽最后喷 6 个 P_Burst
+  var ALL_WAIT_MS = 350;          // 冻结后先等 0.35s
+  var FROZEN_WAIT_MS = 100;       // 再等 0.1s 进入旋转
+  var BERRY_POP_MS = 460;         // 草莓弹出的过冲时长
+  var BERRY_HOLD_MS = 500;        // CollectedSeeds 后停留 0.5s
+  var BERRY_OUT_MS = 650;         // 淡出
+  var BERRY_H = 80;               // 草莓显示高度：16px 图集帧 ×5（整数倍，像素清晰）
 
   // ===== 页面注册表：草莓籽可散落的页面（刻意排除 berryos 与各类 demo） =====
   // name 用于 diary 线索播报；id 与文件名对应
@@ -101,18 +145,28 @@
     var css =
       '#seedLayer{position:fixed;inset:0;pointer-events:none;z-index:99998;}' +
       '.seed-item{position:absolute;pointer-events:auto;cursor:pointer;' +
-        'width:52px;height:52px;image-rendering:pixelated;image-rendering:crisp-edges;' +
+        'width:48px;height:48px;image-rendering:pixelated;image-rendering:crisp-edges;' +
         'filter:drop-shadow(0 2px 4px rgba(0,0,0,.55));' +
-        /* 待机漂浮/弹入全部由 rAF 写 transform，避免 CSS keyframe 全员同步的僵硬感 */
+        /* 待机/跟随/汇聚全部由 rAF 写 transform，避免 CSS keyframe 全员同步的僵硬感 */
         'transform:translate(-50%,-50%);will-change:transform;opacity:0;}' +
-      '.seed-item.follow,.seed-item.merge{pointer-events:none;transition:none;z-index:99998;left:0!important;top:0!important;opacity:1;}' +
-      /* 成形草莓：wrapper 负责定位/弹入缩放（transform 合成层），内层 img 负责上下漂浮 */
+      '.seed-item.follow,.seed-item.frozen{pointer-events:none;z-index:99998;' +
+        'left:0!important;top:0!important;opacity:1;}' +
+      // 跨页归场的籽淡入（原地跟随的籽本来就不透明，不受影响）
+      '.seed-item.frozen{transition:opacity .35s ease-out;}' +
+      '.seed-item.follow{transition:none;}' +
+      // 集齐时的压暗罩（对应原作 FormationBackdrop.Display + Alpha 0.5）
+      '#seedDim{position:fixed;inset:0;pointer-events:none;z-index:99997;opacity:0;' +
+        'transition:opacity .45s ease-out;' +
+        'background:radial-gradient(circle at 50% 46%,rgba(6,8,16,.28),rgba(3,4,10,.72) 78%);}' +
+      '#seedDim.on{opacity:1;}' +
+      // 成形草莓：wrapper 负责定位/缩放，内层 img 负责首帧序列
       '.seed-berry-wrap{position:fixed;left:0;top:0;pointer-events:none;z-index:99999;' +
         'opacity:0;will-change:transform,opacity;transform:translate3d(0,0,0) translate(-50%,-50%) scale(.2);}' +
-      '.seed-berry{width:120px;height:120px;image-rendering:pixelated;image-rendering:crisp-edges;' +
-        'filter:drop-shadow(0 0 14px rgba(255,220,140,.95)) drop-shadow(0 0 34px rgba(255,120,90,.55));' +
-        'animation:seedBerryBob 2.2s ease-in-out infinite;}' +
-      '@keyframes seedBerryBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}';
+      '.seed-berry{height:' + BERRY_H + 'px;width:auto;image-rendering:pixelated;image-rendering:crisp-edges;' +
+        'filter:drop-shadow(0 0 14px rgba(255,220,140,.95)) drop-shadow(0 0 34px rgba(255,120,90,.55));}' +
+      // 汇聚末段每颗籽喷出的像素尘（P_Burst）
+      '.seed-burst{position:absolute;width:6px;height:6px;border-radius:1px;pointer-events:none;' +
+        'image-rendering:pixelated;}';
     var st = document.createElement('style');
     st.id = 'seedStyle';
     st.textContent = css;
@@ -134,10 +188,20 @@
     window.addEventListener(ev, function () { window.__audioGestured = true; }, { once: true });
   });
 
+  // ===== 缓动（Monocle.Ease 反汇编结果） =====
+  function cubeIn(t) { return t * t * t; }
+  // CubeOut = Invert(CubeIn) = 1 - CubeIn(1 - t)
+  function cubeOut(t) { return 1 - Math.pow(1 - t, 3); }
+  // CubeInOut = Follow(CubeIn, CubeOut)
+  function cubeInOut(t) { return t < 0.5 ? cubeIn(t * 2) / 2 : 0.5 + cubeOut((t - 0.5) * 2) / 2; }
+  // BigBackIn(t) = t² · (4t − 3)：先回拉（最低 -0.25）再冲到 1
+  function bigBackIn(t) { return t * t * (4 * t - 3); }
+
   // ===== 渲染 =====
   var layerEl = null;
-  var itemEls = {};     // id -> {el, seed, follow, followDelay, cur}
-  var mouse = { x: -100, y: -100 };
+  var dimEl = null;
+  var itemEls = {};     // id -> entry
+  var mouse = null;     // 指针位置（未移动过时为 null）
   var combining = false;
 
   function ensureLayer() {
@@ -146,6 +210,16 @@
     layerEl.id = 'seedLayer';
     document.body.appendChild(layerEl);
     return layerEl;
+  }
+  function ensureDim() {
+    if (dimEl && document.body.contains(dimEl)) return dimEl;
+    dimEl = document.createElement('div');
+    dimEl.id = 'seedDim';
+    document.body.appendChild(dimEl);
+    return dimEl;
+  }
+  function setDim(on) {
+    ensureDim().classList.toggle('on', !!on);
   }
 
   function render() {
@@ -158,7 +232,7 @@
     pending.forEach(function (seed) {
       if (itemEls[seed.id]) return;
       var el = document.createElement('img');
-      el.src = IMG_URL;
+      el.src = SEED_FRAMES[0];
       el.className = 'seed-item';
       el.dataset.id = seed.id;
       el.style.left = seed.x + 'vw';
@@ -170,26 +244,199 @@
       });
       layer.appendChild(el);
       itemEls[seed.id] = {
-        el: el, seed: seed, follow: false, followDelay: 0, cur: null,
-        base: seedBasePx(seed),        // 待机漂浮的像素锚点
-        phase: Math.random() * Math.PI * 2,  // 每颗籽独立相位，晃动不同步
-        born: performance.now()       // 弹入起点
+        el: el,
+        seed: seed,
+        follow: false,          // 已拾取 → 转为 Follower
+        fi: -1,                 // Leader.Followers 里的下标（本页链内顺序）
+        delay: 0,               // Follower.DelayTimer
+        cur: null,              // 实体位置（屏幕 px，仅跟随/组合阶段用）
+        born: performance.now(),
+        phase: Math.random() * Math.PI * 2,  // 白闪相位随机（原作按 index 错开）
+        sw: Math.random() * Math.PI * 2,     // SineWave.Randomize() 的相位
+        frame: -1,
+        popped: false,
+        glowOn: false,
+        wigStart: 0,
+        flashAt: 0,
+        gone: false
       };
     });
   }
 
-  // vw/vh → 当前分辨率下的像素锚点（窗口 resize 时重算）
-  function seedBasePx(seed) {
-    return { x: seed.x / 100 * window.innerWidth, y: seed.y / 100 * window.innerHeight };
+  // 待机籽的锚点全部交给 CSS 的 left:xx vw / top:yy vh（天然响应式），
+  // transform 只负责正弦微偏移 —— 两处都写绝对坐标会把位置叠成一倍，籽会飞到屏外
+
+  // ===== 跨页面跟随恢复 =====
+  // 已收集的籽存在 localStorage 里，切页面后在新页面重建为 Follower 挂回鼠标后面，
+  // 否则 render() 只渲染未收集的本页籽，已收集的籽就会「消失」。
+  // 链内顺序按 state.seeds 数组顺序（生成顺序），先入链的籽更靠近光标。
+  var chain = [];
+  function restoreFollowers(s) {
+    var collected = s.seeds.filter(function (x) { return x.collected; });
+    if (!collected.length || collected.length === s.seeds.length) return; // 集齐走 combine/补账路径
+    var layer = ensureLayer();
+    collected.forEach(function (seed) {
+      if (itemEls[seed.id]) return;
+      var el = document.createElement('img');
+      el.src = SEED_FRAMES[0];
+      el.className = 'seed-item follow';
+      el.dataset.id = seed.id;
+      el.style.left = '0px';
+      el.style.top = '0px';
+      el.style.opacity = '1';
+      layer.appendChild(el);
+      chain.push(seed.id);
+      itemEls[seed.id] = {
+        el: el,
+        seed: seed,
+        follow: true,
+        fi: chain.length - 1,           // = Leader.Followers.IndexOf(this)
+        delay: 0,                       // 恢复时不再等 FollowDelay，直接跟上
+        cur: { x: window.innerWidth / 2, y: window.innerHeight / 2 },  // 从屏幕中心趋近光标
+        born: performance.now() - IDLE_TICKS * IDLE_TICK_MS,  // 跳过出场弹入
+        phase: Math.random() * Math.PI * 2,
+        sw: Math.random() * Math.PI * 2,
+        frame: -1,
+        popped: true,
+        glowOn: false,
+        wigStart: 0,
+        flashAt: 0,
+        gone: false
+      };
+    });
   }
-  window.addEventListener('resize', function () {
+
+  // ===== Leader：光标位置历史（Celeste.Leader::Update 的 PastPoints） =====
+  // 原作每 0.02s 采一次、位移不足 3 世界 px 不记；网页里改成「每走满一格就记一个点」，
+  // 于是第 i 颗籽追 PastPoints[5*(i+1)] 时，链上的间距天然恒定，不会因为甩鼠标而拉爆。
+  var path = [];          // path[0] = 最新
+  function pushPath(x, y) {
+    if (!path.length) { path.unshift({ x: x, y: y }); return; }
+    // 按固定弧长 PAST_STEP 逐段补点：这样无论指针一帧走了 5px 还是 800px，
+    // 路径上的采样间距始终均匀 —— 否则 PastPoints[5*(i+1)] 的链距会随速度忽远忽近。
+    // 上限用 PAST_MAX：一次大幅跳转（鼠标瞬间横跨全屏）也必须把路径接到光标上，
+    // 不能留一截空档 —— 否则 path 停在半路，整串籽会永远落在光标后面很远的地方。
+    var guard = 0;
+    while (guard++ < PAST_MAX) {
+      var head = path[0];
+      var dx = x - head.x, dy = y - head.y;
+      var d = Math.sqrt(dx * dx + dy * dy);
+      if (d < PAST_STEP) return;
+      var k = PAST_STEP / d;
+      path.unshift({ x: head.x + dx * k, y: head.y + dy * k });
+      while (path.length > PAST_MAX) path.pop();
+    }
+  }
+
+  function onPointer(x, y) {
+    if (!mouse) mouse = { x: x, y: y };
+    mouse.x = x;
+    mouse.y = y;
+    pushPath(x, y);
+  }
+  document.addEventListener('mousemove', function (e) { onPointer(e.clientX, e.clientY); });
+  document.addEventListener('touchmove', function (e) {
+    if (e.touches[0]) onPointer(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive: true });
+
+  // ===== 主循环：待机呼吸/白闪 + Follower 跟随 =====
+  var lastFrameAt = 0;
+  function tick(now) {
+    var dt = lastFrameAt ? Math.min(0.05, (now - lastFrameAt) / 1000) : 1 / 60;
+    lastFrameAt = now;
+    var tSec = now / 1000;
+    // 帧率无关的指数趋近系数：1 - pow(0.01, dt) 在 dt=1/60 时约 13%（τ≈0.072s）
+    var approach = 1 - Math.pow(FOLLOW_POW, dt * FOLLOW_RATE_SCALE);
+
     Object.keys(itemEls).forEach(function (id) {
       var e = itemEls[id];
-      if (e && e.seed) e.base = seedBasePx(e.seed);
-    });
-  });
+      if (!e || e.gone) return;
 
-  // ===== 收集 =====
+      // ---- Follower：DelayTimer 先走完 0.2s，再按 PastPoints 的指数趋近 ----
+      if (e.follow) {
+        if (e.delay > 0) e.delay -= dt;
+        if (e.delay <= 0 && path.length) {
+          var idx = FOLLOW_INDEX_STEP * (e.fi + 1);
+          var tgt = path[idx < path.length ? idx : path.length - 1];
+          if (tgt && e.cur) {
+            e.cur.x += (tgt.x - e.cur.x) * approach;
+            e.cur.y += (tgt.y - e.cur.y) * approach;
+          }
+        }
+      }
+
+      // ---- 待机动画：20 帧一循环，第 19 帧是白闪 ----
+      var tickIdx = Math.floor(((now - e.born) / IDLE_TICK_MS + e.phase * 10)) % IDLE_TICKS;
+      if (tickIdx < 0) tickIdx += IDLE_TICKS;
+      if (tickIdx !== e.frame) {
+        e.frame = tickIdx;
+        var f = tickIdx === IDLE_FLASH_TICK ? 1 : 0;
+        if (e.el.getAttribute('src') !== SEED_FRAMES[f]) e.el.src = SEED_FRAMES[f];
+        if (f === 1) e.flashAt = now;   // ← seed_pulse：辉光加强 + 扩散
+      }
+
+      // ---- Wiggler：拾取瞬间 1 → 1.2 的 4Hz 阻尼振荡（0.5s 收干净） ----
+      var wig = 0;
+      if (e.wigStart) {
+        var wt = (now - e.wigStart) / 1000;
+        if (wt >= WIG_DUR) {
+          e.wigStart = 0;
+        } else {
+          wig = Math.cos(Math.PI * 2 * WIG_FREQ * wt) * (1 - wt / WIG_DUR);
+        }
+      }
+
+      // ---- 合成 transform ----
+      var px = 0, py = 0;      // 待机：位置由 CSS left/top 决定，transform 只给相对偏移
+      if (e.follow) {
+        if (!e.cur) e.cur = { x: mouse ? mouse.x : window.innerWidth / 2, y: mouse ? mouse.y : window.innerHeight / 2 };
+        px = e.cur.x; py = e.cur.y;
+      } else {
+        // 出场：480ms 内淡入 + 从 0.93 轻弹到 1（仅一次，之后不再写 style，避免每帧刷 DOM）
+        if (!e.popped) {
+          var popT = (now - e.born) / 480;
+          if (popT >= 1) {
+            e.popped = true;
+            e.el.style.opacity = '1';
+          } else {
+            e.el.style.opacity = String(Math.min(1, popT * 2.2).toFixed(2));
+            wig = -0.35 * (1 - popT) * (1 - popT);
+          }
+        }
+      }
+      // sprite.Position 的独立偏移：A = sine.Value*2、B = sine.ValueOverTwo*1
+      // （ValueOverTwo = sin(Counter/2)，频率减半 → 缓慢游走的 8 字形；每颗籽相位独立由 Randomize 决定）
+      var ox = Math.sin(Math.PI * 2 * SINE_HZ * tSec + e.sw) * SINE_AMP_X;
+      var oy = Math.sin(Math.PI * SINE_HZ * tSec + e.sw * 0.5) * SINE_AMP_Y;
+      var sc = 1 + WIG_AMP * wig;
+
+      e.el.style.transform =
+        'translate3d(' + (px + ox).toFixed(1) + 'px,' + (py + oy).toFixed(1) + 'px,0) ' +
+        'translate(-50%,-50%) scale(' + sc.toFixed(3) + ')';
+
+      // 白闪那一下把外发光顶亮，随后 220ms 衰减回去（只在需要时写 filter，避免每帧刷样式）
+      var glow = 0;
+      if (e.flashAt) {
+        var gt = (now - e.flashAt) / 220;
+        glow = gt >= 1 ? 0 : (1 - gt);
+        if (gt >= 1) e.flashAt = 0;
+      }
+      if (glow > 0.01) {
+        e.el.style.filter = 'drop-shadow(0 0 ' + (10 + 22 * glow).toFixed(0) + 'px rgba(255,246,170,' +
+          (0.75 * glow).toFixed(2) + ')) brightness(' + (1 + 0.55 * glow).toFixed(2) + ')';
+        e.glowOn = true;
+      } else if (e.glowOn) {
+        e.glowOn = false;
+        e.el.style.filter = '';   // 回落到 CSS 里的基础阴影
+      }
+    });
+    requestAnimationFrame(tick);
+  }
+
+  // ===== 收集（StrawberrySeed::orig_OnPlayer + OnGainLeader） =====
+  // 本页的入链顺序 = Leader.Followers 里的顺序。原作 Fans 里还可能夹着别的页面的籽，
+  // 但网页一次只渲染本页的籽，所以下标只能按「本页这几位」重排，否则链会凭空拉开空档。
+  // chain 声明在 restoreFollowers 上方：恢复回来的籽先入链，本页新收集的排在其后
   function collect(seed) {
     if (seed.collected || combining) return;
     var state = loadState();
@@ -200,134 +447,37 @@
     target.collected = true;
     saveState(state);
 
-    // 收集计数（含本次，1..n）
+    // 收集计数（含本次，1..n）→ 音效变体；原作把 index 作为 "count" 参数交给 FMOD
     var collectedCount = state.seeds.filter(function (x) { return x.collected; }).length;
-    var soundIdx = (collectedCount - 1) % 5;  // 1→01, 2→02, … 5→05, 6→01
+    var soundIdx = (collectedCount - 1) % 5;
     playSound(SOUND_DIR + TOUCH_SOUNDS[soundIdx]);
 
-    // 该籽跟随鼠标
     var entry = itemEls[seed.id];
     if (entry) {
-      // 从当前布局位置平滑接管：先拿到真实像素坐标，再切成 left:0/top:0 + 纯 transform 驱动
+      // 从当前布局位置平滑接管：先拿真实像素坐标，再切成 left:0/top:0 + 纯 transform
       var rect = entry.el.getBoundingClientRect();
       entry.el.classList.add('follow');
       entry.el.style.left = '0px';
       entry.el.style.top = '0px';
-      entry.follow = true;
-      entry.followDelay = collectedCount - 1;  // 第几个跟随，决定尾迹偏移
+      entry.el.style.opacity = '1';
       entry.cur = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      entry.follow = true;
+      var fi = chain.indexOf(seed.id);
+      if (fi < 0) { chain.push(seed.id); fi = chain.length - 1; }
+      entry.fi = fi;                        // = Leader.Followers.IndexOf(this)
+      entry.delay = FOLLOW_DELAY;           // GainFollower → DelayTimer = FollowDelay
+      entry.wigStart = performance.now();   // OnGainLeader → wiggler.Start()
     }
+    if (!path.length) pushPath(entry ? entry.cur.x : (mouse ? mouse.x : window.innerWidth / 2),
+                              entry ? entry.cur.y : (mouse ? mouse.y : window.innerHeight / 2));
 
-    // 全部收集完 → 组合
+    // 全部收集完 → 组合（原作在最后一颗 OnPlayer 里 Add(new CSGEN_StrawberrySeeds(...))）
     if (state.seeds.every(function (x) { return x.collected; })) {
       combine();
     }
   }
 
-  // ===== 跟随：弹簧-阻尼物理（鼠标停 → 籽带速度滑行并刹车，停稳后轻微晃动） =====
-  // 第 1 颗紧跟鼠标，第 i 颗取 trail[i] 位置（按收集顺序）
-  // trail 只在鼠标移动 ≥ GAP 距离时才记录新点 → 相邻籽必然有间距，不重叠
-  // 鼠标静止时 trail 保留上次形状 → 尾巴不聚拢
-  var trail = [];
-  var TRAIL_MAX = 60;
-  var TRAIL_GAP = 60;       // 相邻 trail 点最小距离（>籽尺寸 52，保证扯开）
-
-  function pushTrail(x, y) {
-    var last = trail[0];
-    if (last) {
-      var dx = x - last.x, dy = y - last.y;
-      if (dx * dx + dy * dy < TRAIL_GAP * TRAIL_GAP) return;  // 距离不够，不记录
-    }
-    trail.unshift({ x: x, y: y });
-    if (trail.length > TRAIL_MAX) trail.pop();
-  }
-
-  // 帧率无关的阻尼系数：rate 为每秒速度衰减率，dt 为实际帧间隔（秒）
-  function dampDt(rate, dt) { return Math.exp(-rate * dt); }
-
-  var lastFrameAt = 0;
-  function followLoop(now) {
-    var dt = lastFrameAt ? Math.min(0.05, (now - lastFrameAt) / 1000) : 1 / 60;
-    lastFrameAt = now;
-    var head = trail.length ? trail[0] : mouse;
-    var tSec = now / 1000;
-    Object.keys(itemEls).forEach(function (id) {
-      var entry = itemEls[id];
-      if (!entry || entry.merging) return;
-      if (!entry.follow) {
-        // 待机漂浮：双频正弦叠加 → 轨迹不重复不机械；上下 5px + 左右 ~4px + ±4° 自转，
-        // 每颗籽随机相位各自漂；初次出现带一次 overshoot 弹入
-        if (!entry.base) return;
-        var popT = Math.min(1, (now - entry.born) / 450);
-        var pop = popT >= 1 ? 1 : easeOutBack(popT);
-        entry.el.style.opacity = String(Math.min(1, popT * 2.2));
-        var ph0 = entry.phase;
-        var ix = entry.base.x + Math.sin(tSec * 1.35 + ph0) * 3 + Math.sin(tSec * 0.62 + ph0 * 2.1) * 1.4;
-        var iy = entry.base.y + Math.sin(tSec * 1.72 + ph0 * 1.3) * 5;
-        var irot = Math.sin(tSec * 1.08 + ph0 * 0.7) * 4;
-        entry.el.style.transform =
-          'translate3d(' + ix.toFixed(1) + 'px,' + iy.toFixed(1) + 'px,0) ' +
-          'translate(-50%,-50%) rotate(' + irot.toFixed(2) + 'deg) scale(' + pop.toFixed(3) + ')';
-        return;
-      }
-      var idx = entry.followDelay || 0;
-      if (!entry.cur) entry.cur = { x: mouse.x, y: mouse.y };
-      if (!entry.vel) entry.vel = { x: 0, y: 0 };
-      var cur = entry.cur, vel = entry.vel;
-
-      var tx, ty, spring, damp;
-      if (idx === 0) {
-        // 头籽：弹簧硬、阻尼大 → 跟手但鼠标停下时有短促的刹车滑距
-        tx = mouse.x; ty = mouse.y;
-        spring = 380; damp = 22;
-      } else {
-        // 尾籽：弹簧软、阻尼小 → 弹性尾巴，刹车滑距更长更飘
-        var i = Math.min(idx, trail.length - 1);
-        var pos = (i >= 0 && trail[i]) ? trail[i] : head;
-        tx = pos.x; ty = pos.y;
-        spring = 130; damp = 12;
-      }
-
-      // 弹簧加速 + 阻尼耗散：目标静止时速度被阻尼耗尽 → 在有限距离内自然刹停
-      vel.x += (tx - cur.x) * spring * dt;
-      vel.y += (ty - cur.y) * spring * dt;
-      var dk = dampDt(damp, dt);
-      vel.x *= dk; vel.y *= dk;
-      cur.x += vel.x * dt;
-      cur.y += vel.y * dt;
-
-      // 靠近目标（60px 内）就开始待机晃动：上下 ±4px（沿用 seedBob 待机节奏）
-      // + 左右 ±3px 摇摆（待机只有上下，跟随态增添左右），越贴近目标晃得越充分，每颗籽相位随机
-      var distT = Math.sqrt((tx - cur.x) * (tx - cur.x) + (ty - cur.y) * (ty - cur.y));
-      var prox = Math.max(0, 1 - distT / 60);
-      var wx = 0, wy = 0;
-      if (prox > 0.01) {
-        if (entry.phase == null) entry.phase = Math.random() * Math.PI * 2;
-        wx = Math.sin(tSec * 1.85 + entry.phase) * 3 * prox;
-        wy = Math.sin(tSec * 2.42 + entry.phase * 1.7) * 4 * prox;
-      }
-
-      // 只改 transform（合成层），绝不碰 left/top，避免每帧重排
-      entry.el.style.transform =
-        'translate3d(' + (cur.x + wx).toFixed(1) + 'px,' + (cur.y + wy).toFixed(1) + 'px,0) translate(-50%,-50%)';
-    });
-    requestAnimationFrame(followLoop);
-  }
-
-  document.addEventListener('mousemove', function (e) {
-    mouse.x = e.clientX;
-    mouse.y = e.clientY;
-    pushTrail(mouse.x, mouse.y);
-  });
-  document.addEventListener('touchmove', function (e) {
-    if (e.touches[0]) {
-      mouse.x = e.touches[0].clientX;
-      mouse.y = e.touches[0].clientY;
-      pushTrail(mouse.x, mouse.y);
-    }
-  }, { passive: true });
-
-  // ===== 草莓帧预加载（62 帧闪光成形动画） =====
+  // ===== 草莓帧预加载 =====
   var berryFrames = [];
   (function preloadBerry() {
     for (var i = 0; i < BERRY_FRAME_COUNT; i++) {
@@ -337,200 +487,236 @@
     }
   })();
 
-  function easeInCubic(t) { return t * t * t; }
-  function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
-  function easeInOutCubic(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
-  // 弹入：略微 overshoot，像草莓"啵"地一下成形
-  function easeOutBack(t) {
-    var c1 = 1.70158, c3 = c1 + 1;
-    return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
-  }
-
   /**
-   * 组合成草莓（全程 rAF + transform，无重排）：
-   * 1) 每颗籽沿各自螺旋轨道「循环旋转 + 不断靠近」中心，同时自身自转、逐渐缩小
-   * 2) 汇聚瞬间真正的日记草莓（62 帧闪光动画）在中心弹出成形 —— 不再复用籽的图片
-   * 3) 草莓停留漂浮后放大淡出
+   * 集齐后的组合演出 —— CSGEN_StrawberrySeeds::Cutscene 逐步复刻：
+   *  ① 播 seed_complete_main，所有籽 OnAllCollected（抬深度 + 冻结），等 0.35s
+   *  ② 压暗背景（FormationBackdrop 0.5）+ 暂停环境音，等 0.1s
+   *  ③ 每颗籽 StartSpinAnimation：绕 (籽群重心→中心) 的插值点，半径 25 世界px，
+   *     扫过 32.2 rad（约 5.1 圈），位置在前半程用 CubeIn 渐进接管，等 SPIN_MS
+   *  ④ 播 seed_complete_berry，StartCombineAnimation：绕中心反转 1 圈 + 半径 25→0，
+   *     BigBackIn 缓动（先外扩再收进去），结束喷 6 颗像素尘，等 0.6s
+   *  ⑤ 移除籽 → 草莓 CollectedSeeds 现身，停留 0.5s 后淡出
    */
   function combine() {
     combining = true;
-    playSound(COMPLETE_MAIN, 0.85);
-
-    var cx = window.innerWidth / 2;
-    var cy = window.innerHeight / 2;
-
-    // 为「全套籽」生成独立螺旋参数：
-    //  - 本页已收集、正在跟随的籽：从其当前位置接管
-    //  - 其他页面收集的籽（本页无 DOM）：在屏幕外围一圈临时"归场"，淡入后参与汇聚
-    var state = loadState();
-    var layer = ensureLayer();
     var parts = [];
+    var state = loadState();
+
+    // 已跟随的籽直接接管；跨页收集的籽在屏幕外圈"归场"（原作里它们本就在场）
     state.seeds.forEach(function (seed, i) {
-      var entry = itemEls[seed.id];
-      var el, pos, spawned = false;
-      if (entry && entry.follow) {
-        entry.follow = false;
-        entry.merging = true;
-        el = entry.el;
-        el.classList.add('merge');
-        pos = entry.cur || { x: cx, y: cy };
+      var e = itemEls[seed.id];
+      if (e && e.follow) {
+        e.gone = true;              // 交给组合动画，tick 不再管这一颗
+        e.el.classList.add('frozen');
+        parts.push({ el: e.el, x: e.cur.x, y: e.cur.y });
       } else {
-        // 跨页归场：屏幕外围随机角度生成一颗视觉籽
-        el = document.createElement('img');
-        el.src = IMG_URL;
-        el.className = 'seed-item merge';
-        layer.appendChild(el);
-        var ringR = Math.min(window.innerWidth, window.innerHeight) * (0.30 + Math.random() * 0.16);
-        var ang = (i / state.seeds.length) * Math.PI * 2 + Math.random() * 0.9;
-        pos = { x: cx + Math.cos(ang) * ringR, y: cy + Math.sin(ang) * ringR * 0.9 };
+        var el = document.createElement('img');
+        el.src = SEED_FRAMES[0];
+        el.className = 'seed-item frozen';
         el.style.left = '0px';
         el.style.top = '0px';
+        ensureLayer().appendChild(el);
+        var ringR = Math.min(window.innerWidth, window.innerHeight) * (0.3 + Math.random() * 0.12);
+        var ang = (i / state.seeds.length) * Math.PI * 2 - Math.PI / 2;
+        parts.push({
+          el: el,
+          x: window.innerWidth / 2 + Math.cos(ang) * ringR,
+          y: window.innerHeight / 2 + Math.sin(ang) * ringR * 0.86
+        });
         el.style.opacity = '0';
-        spawned = true;
+        void el.offsetWidth;        // 先让 opacity:0 生效，再置 1 才能触发 .frozen 的淡入
+        el.style.opacity = '1';
       }
-      var dx = pos.x - cx, dy = pos.y - cy;
-      var base = Math.atan2(dy, dx);
-      var r0 = Math.max(60, Math.sqrt(dx * dx + dy * dy) * 0.5);   // 起始旋转半径：距中心的一半，圆明显收小
-      parts.push({
-        el: el,
-        spawned: spawned,
-        base: base,
-        r0: r0,
-        // 接管偏移：籽当前位置与螺旋起点的差值，动画前 18% 内衰减到 0，避免半径减半后瞬移
-        ox: pos.x - (cx + Math.cos(base) * r0),
-        oy: pos.y - (cy + Math.sin(base) * r0 * 0.92),
-        dir: Math.random() < 0.5 ? -1 : 1,
-        turns: 1.6 + Math.random() * 1.1,       // 螺旋 1.6~2.7 圈
-        spin: 600 + Math.random() * 360         // 自转角速度（度/秒）
-      });
+    });
+    if (!parts.length) { combining = false; return; }
+
+    playSound(COMPLETE_MAIN, 0.85);
+
+    // 跳到 OnAllCollected 收尾状态：全部籽立刻停住并抬到最前
+    parts.forEach(function (p) {
+      p.el.style.zIndex = '99998';
+      p.el.style.transform = 'translate3d(' + p.x.toFixed(1) + 'px,' + p.y.toFixed(1) + 'px,0) translate(-50%,-50%)';
     });
 
-    var MERGE_MS = 1500;      // 螺旋汇聚时长
-    var BERRY_IN = 0.70;      // 草莓在汇聚 70% 处开始成形
+    setTimeout(function () {
+      setDim(true);
+      // ② 淡入后进入旋转
+      setTimeout(function () { startSpin(parts); }, FROZEN_WAIT_MS);
+    }, ALL_WAIT_MS);
+  }
+
+  function startSpin(parts) {
+    var cx = window.innerWidth / 2;
+    var cy = window.innerHeight / 2;
+    var n = parts.length;
+    var step = Math.PI * 2 / n;
+
+    // averagePos：籽群重心；centerPos：草莓位置（网页里就是屏幕中心）
+    var ax = 0, ay = 0;
+    parts.forEach(function (p) { ax += p.x; ay += p.y; });
+    ax /= n; ay /= n;
+
+    parts.forEach(function (p, k) {
+      p.sx = p.x; p.sy = p.y;          // StartSpinAnimation 里的 start
+      p.aOff = SPIN_START - k * step;  // angleOffset：π/2 起，每颗减 2π/n
+      p.el.style.transition = 'none';  // 演出期间不再要透明度过渡
+      p.el.style.opacity = '1';
+    });
+
     var t0 = performance.now();
-    var berryShown = false;
-    var berryWrap = null, berryImg = null;
-
-    function showBerry() {
-      playSound(COMPLETE_BERRY, 0.95);
-
-      berryWrap = document.createElement('div');
-      berryWrap.className = 'seed-berry-wrap';
-      berryWrap.style.transform =
-        'translate3d(' + cx + 'px,' + cy + 'px,0) translate(-50%,-50%) scale(.15)';
-      berryImg = document.createElement('img');
-      berryImg.className = 'seed-berry';
-      berryImg.src = BERRY_PNG;   // 静图兜底，帧序列随后跟上
-      berryWrap.appendChild(berryImg);
-      document.body.appendChild(berryWrap);
-
-      // 62 帧闪光序列：rAF 时间轴驱动，播完停在最后一帧继续漂浮
-      var f0 = performance.now(), lastFrameIdx = -1;
-      function playFrames(now) {
-        if (!berryWrap || !berryWrap.parentNode) return;
-        var fi = Math.floor((now - f0) / BERRY_FRAME_MS);
-        if (fi < BERRY_FRAME_COUNT) {
-          if (fi !== lastFrameIdx) {
-            berryImg.src = berryFrames[Math.min(fi, BERRY_FRAME_COUNT - 1)].src;
-            lastFrameIdx = fi;
-          }
-          requestAnimationFrame(playFrames);
-        } else {
-          berryImg.src = berryFrames[BERRY_FRAME_COUNT - 1].src;
-        }
-      }
-      requestAnimationFrame(playFrames);
-
-      // 弹入缩放 + 淡入（wrapper 上的 transform/opacity，纯合成层）
-      requestAnimationFrame(function () {
-        var p0 = performance.now(), POP = 480;
-        function pop(now) {
-          var t = Math.min(1, (now - p0) / POP);
-          var s = 0.15 + easeOutBack(t) * 0.85;
-          berryWrap.style.transform =
-            'translate3d(' + cx + 'px,' + cy + 'px,0) translate(-50%,-50%) scale(' + s.toFixed(3) + ')';
-          berryWrap.style.opacity = String(Math.min(1, t * 2.2));
-          if (t < 1) requestAnimationFrame(pop);
-        }
-        requestAnimationFrame(pop);
-      });
-
-      // 入账 berry 余额（仅当 api.js 已加载）；置 credited 防止中断后重复补账
-      if (typeof window.addBerries === 'function') {
-        try { window.addBerries(1); } catch (e) {}
-      }
-      try {
-        var cs2 = loadState();
-        cs2.credited = true;
-        saveState(cs2);
-      } catch (e) {}
-    }
-
-    function finish() {
-      // 清除籽 DOM
+    function frame(now) {
+      var t = Math.min(1, (now - t0) / SPIN_MS);
+      // tween1：0→dur/2 的 CubeIn 决定 spinLerp，之后钉在 1
+      var spinLerp = cubeIn(Math.min(1, t * 2));
+      var angEase = cubeInOut(t);              // tween2：CubeInOut，时长 dur
       parts.forEach(function (p) {
-        if (p.el && p.el.parentNode) p.el.remove();
+        var ang = SPIN_START + p.aOff - SPIN_SWEEP * angEase;
+        var bx = ax + (cx - ax) * spinLerp;    // Lerp(averagePos, centerPos, spinLerp)
+        var by = ay + (cy - ay) * spinLerp;
+        var ox = bx + Math.cos(ang) * SPIN_RADIUS;
+        var oy = by + Math.sin(ang) * SPIN_RADIUS;
+        // Position = Lerp(start, 轨道点, spinLerp)
+        var x = p.sx + (ox - p.sx) * spinLerp;
+        var y = p.sy + (oy - p.sy) * spinLerp;
+        p.x = x; p.y = y;     // 记下终点：StartCombineAnimation 的 startAngle 就拿这里
+        p.el.style.transform = 'translate3d(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px,0) translate(-50%,-50%)';
+        // 收缩前一直保持常亮帧（原作 sprite.Play("noFlash")）
+        if (p.el.getAttribute('src') !== SEED_FRAMES[0]) p.el.src = SEED_FRAMES[0];
       });
-      Object.keys(itemEls).forEach(function (id) { delete itemEls[id]; });
-
-      // 草莓停留后放大淡出
-      if (berryWrap) {
-        var h0 = performance.now(), HOLD = 2100, OUT = 650;
-        function fade(now) {
-          var held = now - h0;
-          if (held < HOLD) { requestAnimationFrame(fade); return; }
-          var t = Math.min(1, (held - HOLD) / OUT);
-          var e = easeInOutCubic(t);
-          berryWrap.style.opacity = String(1 - t);
-          berryWrap.style.transform =
-            'translate3d(' + cx + 'px,' + cy + 'px,0) translate(-50%,-50%) scale(' + (1 + 0.9 * e).toFixed(3) + ')';
-          if (t < 1) {
-            requestAnimationFrame(fade);
-          } else if (berryWrap.parentNode) {
-            berryWrap.remove();
-          }
-        }
-        requestAnimationFrame(fade);
-      }
-
-      // 重置 state：等下一个 6 小时周期
-      saveState({ lastRefresh: Date.now(), seeds: [] });
-      combining = false;
+      if (t < 1) requestAnimationFrame(frame);
+      else startCombine(parts, cx, cy);
     }
+    requestAnimationFrame(frame);
+  }
 
-    function step(now) {
-      var t = Math.min(1, (now - t0) / MERGE_MS);
-      var approach = easeInCubic(t);          // 半径收敛：先慢后快，持续靠近不回退
-      var orbit = easeInOutCubic(t);          // 轨道角：单调递增，循环旋转
-      var offK = 1 - easeOutCubic(Math.min(1, t / 0.18));  // 接管偏移衰减：前 18% 滑入螺旋轨道
+  function startCombine(parts, cx, cy) {
+    playSound(COMPLETE_BERRY, 0.95);
+    var t0 = performance.now();
+    parts.forEach(function (p) {
+      // startAngle = Calc.Angle(centerPos, Position)，Position 就是旋转结束的位置
+      p.a0 = Math.atan2(p.y - cy, p.x - cx);
+    });
+    function frame(now) {
+      var t = Math.min(1, (now - t0) / COMBINE_MS);
+      var ang = cubeIn(t);          // Percent 走 CubeIn
+      var rad = bigBackIn(t);       // 半径走 BigBackIn：先涨到 31 再收进 0
       parts.forEach(function (p) {
-        var ang = p.base + p.dir * p.turns * Math.PI * 2 * orbit;
-        var rad = p.r0 * (1 - approach);
-        var x = cx + Math.cos(ang) * rad + p.ox * offK;
-        var y = cy + Math.sin(ang) * rad * 0.92 + p.oy * offK;   // 略扁，视觉更像聚拢
-        var spin = p.dir * p.spin * (now - t0) / 1000;
-        var sc = 1;                              // 旋转过程大小不变，只做旋转+汇聚
-        // 跨页归场的籽前 13% 淡入；全体在末段融进草莓
-        var fadeIn = p.spawned ? Math.min(1, t / 0.13) : 1;
-        var fadeOut = t > 0.86 ? Math.max(0, 1 - (t - 0.86) / 0.14) : 1;
-        var op = fadeIn * fadeOut;
-        p.el.style.opacity = String(op);
-        p.el.style.transform =
-          'translate3d(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px,0) translate(-50%,-50%) ' +
-          'rotate(' + spin.toFixed(1) + 'deg) scale(' + sc.toFixed(3) + ')';
+        var a = p.a0 - Math.PI * 2 * ang;         // Lerp(a0, a0-2π, CubeIn(t))
+        var r = COMBINE_R0 * (1 - rad);           // Lerp(25, 0, BigBackIn(t))
+        var x = cx + Math.cos(a) * r;
+        var y = cy + Math.sin(a) * r;
+        p.el.style.transform = 'translate3d(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px,0) translate(-50%,-50%)';
       });
-
-      if (!berryShown && t >= BERRY_IN) {
-        berryShown = true;
-        showBerry();
-      }
       if (t < 1) {
-        requestAnimationFrame(step);
+        requestAnimationFrame(frame);
       } else {
-        finish();
+        // OnComplete：Visible=false → 在中心（半径已收成 0）喷 6 颗 P_Burst → RemoveSelf
+        parts.forEach(function (p) { p.el.style.opacity = '0'; });
+        burst(cx, cy, BURST_COUNT * parts.length);
+        finish(parts, cx, cy);
       }
     }
-    requestAnimationFrame(step);
+    requestAnimationFrame(frame);
+  }
+
+  // 像素尘（对应 P_Burst：小方块 + 向外 4px 起步 + 快速衰减）
+  function burst(x, y, count) {
+    var layer = ensureLayer();
+    for (var i = 0; i < count; i++) {
+      var a = Math.random() * Math.PI * 2;
+      var sx = x + Math.cos(a) * 4 * PX;
+      var sy = y + Math.sin(a) * 4 * PX;
+      var d = document.createElement('div');
+      d.className = 'seed-burst';
+      d.style.left = '0';
+      d.style.top = '0';
+      d.style.background = 'rgb(255,' + (232 + ((Math.random() * 23) | 0)) + ',' + (140 + ((Math.random() * 80) | 0)) + ')';
+      d.style.boxShadow = '0 0 6px rgba(255,236,150,.9)';
+      layer.appendChild(d);
+      var dist = 26 + Math.random() * 34;
+      var dur = 320 + Math.random() * 200;
+      var t0 = performance.now();
+      (function (d, a, sx, sy, dist, dur, t0) {
+        function step(now) {
+          var t = Math.min(1, (now - t0) / dur);
+          var e = 1 - Math.pow(1 - t, 2);
+          var px = sx + Math.cos(a) * dist * e;
+          var py = sy + Math.sin(a) * dist * e + 12 * t * t;
+          d.style.transform = 'translate3d(' + px.toFixed(1) + 'px,' + py.toFixed(1) + 'px,0) translate(-50%,-50%) scale(' + (1 - t * 0.6).toFixed(2) + ')';
+          d.style.opacity = String(1 - t);
+          if (t < 1) requestAnimationFrame(step);
+          else if (d.parentNode) d.parentNode.removeChild(d);
+        }
+        requestAnimationFrame(step);
+      })(d, a, sx, sy, dist, dur, t0);
+    }
+  }
+
+  // ⑤ 草莓现身（Strawberry::CollectedSeeds → Visible = true，sprite 继续跑 idle 循环）
+  function finish(parts, cx, cy) {
+    parts.forEach(function (p) { if (p.el.parentNode) p.el.parentNode.removeChild(p.el); });
+    Object.keys(itemEls).forEach(function (id) { delete itemEls[id]; });
+    chain.length = 0;
+
+    var wrap = document.createElement('div');
+    wrap.className = 'seed-berry-wrap';
+    var img = document.createElement('img');
+    img.className = 'seed-berry';
+    img.src = berryFrames[0].src;
+    wrap.appendChild(img);
+    document.body.appendChild(wrap);
+
+    var born = performance.now();
+    var wobble = 0;
+    var lastAt = 0;
+    var frameSrc = -1;
+    var outAt = 0;                          // 进入淡出的时刻（0 = 还没开始）
+
+    // 单条时间线：弹出(POP) → 停留(HOLD) → 淡出(OUT)，跑完自然停掉 rAF
+    function run(now) {
+      var dt = lastAt ? Math.min(0.05, (now - lastAt) / 1000) : 1 / 60;
+      lastAt = now;
+      wobble += dt * 4;                       // Strawberry::Update → wobble += dt*4
+      var bob = Math.sin(wobble) * 2 * PX;    // sprite.Y = bloom.Y = light.Y = sin(wobble)*2
+
+      var tp = Math.min(1, (now - born) / BERRY_POP_MS);
+      var s = 0.2 + cubeOut(tp) * 0.8 + Math.sin(tp * Math.PI) * 0.1;   // 带回弹的弹出
+      var op = Math.min(1, tp * 2.6);
+
+      if (!outAt && now - born >= BERRY_POP_MS + BERRY_HOLD_MS) {
+        outAt = now;
+        setDim(false);
+      }
+      if (outAt) {
+        var tf = Math.min(1, (now - outAt) / BERRY_OUT_MS);
+        s = 1 + 0.85 * cubeInOut(tf);         // 放大淡出（相机回位前的收尾）
+        op = 1 - tf;
+        if (tf >= 1) {
+          if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+          saveState({ lastRefresh: Date.now(), seeds: [], credited: false });
+          combining = false;
+          return;                            // 结束循环，不再排下一帧
+        }
+      }
+
+      wrap.style.opacity = String(op.toFixed(2));
+      wrap.style.transform = 'translate3d(' + cx + 'px,' + (cy + bob).toFixed(1) + 'px,0) translate(-50%,-50%) scale(' + s.toFixed(3) + ')';
+
+      // idle 循环 7 帧 @100ms（Sprites.xml frames="0-6,..."）
+      var fi = Math.floor((now - born) / BERRY_FRAME_MS) % BERRY_FRAME_COUNT;
+      if (fi !== frameSrc) { frameSrc = fi; img.src = berryFrames[fi].src; }
+
+      requestAnimationFrame(run);
+    }
+    requestAnimationFrame(run);
+
+    // 入账 berry 余额（仅当 api.js 已加载）；置 credited 防止中断后重复补账
+    if (typeof window.addBerries === 'function') {
+      try { window.addBerries(1); } catch (e) {}
+    }
+    var cs2 = loadState();
+    cs2.credited = true;
+    saveState(cs2);
   }
 
   // ===== 新籽位置提示：diary 页由 Madeline 在聊天中自然说出「散落在哪些页面」 =====
@@ -585,7 +771,8 @@
       speakSeedHintIfNeeded(false);
     }
     render();
-    requestAnimationFrame(followLoop);
+    restoreFollowers(s);   // 已收集的籽在新页面重建为 follower（跨页面跟随）
+    requestAnimationFrame(tick);
   }
 
   if (document.readyState === 'loading') {

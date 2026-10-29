@@ -2,9 +2,15 @@
 #badelineDialogText, .bl-msg.assistant, .nt-row.bl .nt-bub { --c:#D678DB; }
 
 * { box-sizing:border-box; margin:0; padding:0; }
-@font-face { font-family:'Renogare'; src:url('../celeste-font-en/Renogare-Regular.otf') format('opentype'); font-display:swap; }
-@font-face { font-family:'CelesteZH'; src:url('../fonts/NotoSansCJKsc-Medium.otf') format('opentype'); font-display:swap; }
+/* 字体：全部本地文件，杜绝外网依赖（Google Fonts 是 render-blocking，被墙时整页字体回退） */
+@font-face { font-family:'Renogare'; src:url('../celeste-font-en/Renogare-Regular.otf') format('opentype'); font-weight:400; font-style:normal; font-display:swap; }
+@font-face { font-family:'CelesteZH'; src:url('../fonts/celeste-zh-subset.woff2') format('woff2'), url('../fonts/NotoSansCJKsc-Medium.otf') format('opentype'); font-weight:400 900; font-style:normal; font-display:swap; }
+@font-face { font-family:'Press Start 2P'; src:url('../celeste-font-en/PressStart2P-Regular.ttf') format('truetype'); font-weight:400; font-style:normal; font-display:swap; }
 body { min-height:100vh; background:url('../celeste-gui/shelf-screen.webp') center/cover no-repeat fixed; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; opacity:0; animation:pageFadeIn .8s ease forwards; }
+/* 梦境场景 + 两个弹层：显式声明字体（此前靠继承，任一中间层被覆盖就整体回退到系统字体） */
+#dreamScene, .dream-panel, #badelineDialog, #blChat {
+    font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif;
+}
 /* #world 宽 200% 必然横向溢出：禁掉横向滚动，防止点击门时浏览器把页面带着横滚（scrollLeft 残留会让镜之房间错位露出 body 背景） */
 html, body { overflow-x:hidden; overflow-x:clip; }
 @keyframes pageFadeIn { from { opacity:0; } to { opacity:1; } }
@@ -248,33 +254,31 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     to   { opacity: 0; transform: translate(-50%, -50%) scale(calc(var(--glass-scale) * .7)) translateY(var(--glass-top)) translateX(var(--glass-left)) translateY(calc(-120% + var(--anim-top))) translateX(var(--anim-left)) scale(var(--anim-scale)); }
 }
 .badeline-inner {
-    width: 96px; height: 96px;             /* 固定尺寸：img 绝对定位居中，不撑大父级（不限父容器） */
+    width: 128px; height: 128px;             /* 固定尺寸：img 绝对定位居中，不撑大父级（不限父容器） */
     position: relative;
 }
 #shelfMirror .badeline-inner { animation: badelineFloat 2.6s ease-in-out infinite; }
 @keyframes badelineFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
 .badeline-inner img {
     image-rendering: pixelated;
-    filter: drop-shadow(0 0 14px rgba(125,80,200,.75));
+    /* Badeline 本身是影子，不发光 */
 }
 /*
- * Badeline 立绘尺寸统一：5 个 gif 两类源尺寸
- *   32×32（spin/sleep/pretendDead/rollGetUp）→ 96px 容器 = 3× 整数放大
- *   96×96（lookingUp）→ 同尺寸角色在 3× 大画布中，1:1 显示时角色仅其他 gif 的一半
- *   解决：lookingUp 用 288px(96×3) 渲染，3× 整数放大 → 角色显示尺寸与 32px 源一致
- *   .badeline-inner 固定 96px + overflow:visible，img 绝对定位居中，288px 超出部分为透明像素不可见
+ * Badeline 立绘尺寸：base 128px，与 diary Madeline sitdown(100px) 同量级
+ *   全部动作素材统一 32×32 画布（lookingUp 原 96×96 但角色只占 15×13，已裁白边重排到 32×32）
+ *   → 4× 整数放大 = 128px，锐边保持；各姿势角色高度 12–18px，视觉尺寸一致
+ *   --anim-scale 补偿 --glass-scale(0.70)：0.70 × 1.43 ≈ 1 → 召唤态最终 = 自由游荡态 = 128px
  */
 #badelineImg {
     position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
-    width: 96px; height: 96px;
+    width: 128px; height: 128px;
     object-fit: contain;
-    image-rendering: pixelated;   /* 32px 源 3× 整数放大保持锐边 */
+    image-rendering: pixelated;
     cursor: pointer;
     user-select: none;
     -webkit-user-drag: none;
 }
-#badelineImg.big { width: 288px; height: 288px; }   /* lookingUp 96px 源 3× 放大 = 288px */
-#badelineImg:hover { filter: drop-shadow(0 0 18px rgba(160,110,220,.95)); transition: filter .2s ease; }
+#badelineImg.big { width: 128px; height: 128px; }   /* lookingUp 和 spin/sleep/roll 统一 128px */
 
 /* ===== Badeline 聊天面板：镜子召唤后出现 ===== */
 #blChat {
@@ -493,7 +497,7 @@ html, body { overflow-x: hidden; }
     /* Badeline 召唤/驻留/离场动画 */
     --anim-top:      22px;
     --anim-left:     0px;
-    --anim-scale:    1.50;
+    --anim-scale:    1.43;   /* 补偿 --glass-scale(0.70)：0.70×1.43≈1 → 召唤态 = 自由游荡态 = 128px */
     /* 心门 */
     --door-top:      0px;
     --door-scale:    1;
@@ -505,6 +509,28 @@ body.dream-active #heartDoor {
     transform-origin: top right;
 }
 body.dream-active #mirrorRoom { display: flex !important; }
+
+/* ===== Poem 仪式层（替换旧的心门 split 视觉） ===== */
+#heartGet {
+    position:fixed; inset:0; z-index:1950; display:none;
+    align-items:center; justify-content:center; flex-direction:column;
+    background:transparent;      /* IL: Poem 不画背景，完全透明 */
+    opacity:0; cursor:pointer; overflow:hidden;
+}
+#heartGet.show { display:flex; pointer-events:auto; }
+#heartGet #hgFx {
+    position:absolute; inset:0; width:100%; height:100%;
+    z-index:0; pointer-events:none;
+}
+#heartGet .hg-poem-tip {
+    position:absolute; bottom:8%; left:50%; transform:translateX(-50%);
+    z-index:2; color:rgba(255,255,255,.55); font-size:12px; letter-spacing:3px;
+    font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif;
+    text-shadow:0 1px 3px rgba(0,0,0,.7); opacity:0; transition:opacity .5s ease;
+}
+#heartGet.show .hg-poem-tip { opacity:1; }
+/* Poem 只有 dream 模式激活时才显示 */
+body.dream-active #heartGet.display { display:flex !important; }
 /* 镜框独立变换 —— frame.png (.m-frame)。scale 在 translateY/translateX 左：偏移随缩放联动 */
 body.dream-active #shelfMirror .m-frame {
     transform: translate(-50%, -50%) scale(var(--frame-scale)) translateY(var(--frame-top)) translateX(var(--frame-left));
@@ -617,6 +643,58 @@ body:has(.ds-world.panned) #strawberryBonfire { opacity:0; pointer-events:none; 
 #dreamNightBtn img { width:62px; height:62px; }
 #dreamNightBtn:hover { filter:drop-shadow(0 0 12px rgba(190,120,255,.9)); transform:translateY(-2px); }
 #dreamNightBtn:active { transform:translateY(1px); }
+
+/* ===== 金羽毛（REA 还原第六章 FlyFeather：idle↔flash 逐帧 + light 光晕 + 重生残影） ===== */
+#dsFeathers { position:absolute; inset:0; pointer-events:none; z-index:4; }
+/* 尺寸由 shelf.js 按场景 3× 像素倍率内联写入（32px 原图 → ~96 CSS px）；此处仅兜底 */
+#dsFeathers .feather {
+    position:absolute; width:96px; height:96px; padding:0; margin:0;
+    border:none; background:none; -webkit-appearance:none; appearance:none;
+    transform:translate(-50%,-50%); transform-origin:50% 50%;
+    cursor:pointer; pointer-events:auto; will-change:transform;
+}
+/* light = VertexLight(White, 1, 16, 48) 的四角柔光（原作很含蓄，Bloom(0.5,20) 也不抢主体）；
+   收集后 sprite.Visible=false → 一起淡出 */
+#dsFeathers .feather::before {
+    content:''; position:absolute; left:50%; top:50%; width:150%; height:150%;
+    transform:translate(-50%,-50%); z-index:0; pointer-events:none;
+    background:radial-gradient(circle, rgba(255,246,205,.28) 0%, rgba(255,212,96,.11) 40%, rgba(255,196,64,0) 68%);
+    opacity:1; transition:opacity .25s linear;      /* light.Alpha = Approach(..., dt*4) */
+}
+#dsFeathers .feather canvas {
+    position:relative; z-index:1; display:block; width:100%; height:100%;
+    image-rendering:pixelated;
+    filter:drop-shadow(0 0 4px rgba(255,214,92,.26));
+    transition:filter .2s ease;
+}
+#dsFeathers .feather:hover canvas { filter:drop-shadow(0 0 7px rgba(255,232,150,.6)) brightness(1.06); }
+#dsFeathers .feather:focus { outline:none; }
+#dsFeathers .feather.wait { cursor:default; pointer-events:none; }
+#dsFeathers .feather.wait::before { opacity:0; }
+#dsFeathers .feather.wait canvas { filter:none; }
+
+/* 星飞光球画布：挂在 .ds-left 内 → 随镜头平移、被左屏裁切（等同游戏房间边界） */
+#featherFlyCanvas { position:absolute; inset:0; z-index:12; pointer-events:none; image-rendering:pixelated; }
+#featherFlyHint {
+    position:absolute; left:50%; bottom:26px; z-index:13; transform:translateX(-50%);
+    padding:6px 16px; pointer-events:none; white-space:nowrap;
+    font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif;
+    font-size:12px; letter-spacing:2px; color:rgba(255,232,168,.92);
+    background:rgba(9,7,26,.55); border:1px solid rgba(255,208,110,.28);
+    text-shadow:0 0 10px rgba(255,196,84,.6);
+    opacity:0; transition:opacity .3s ease;
+}
+#featherFlyHint.show { opacity:1; }
+/* level.Shake(0.3)：左屏整块抖动（世界动、相机不动） */
+.ds-left.ff-shake { animation:ffShake .34s cubic-bezier(.36,.07,.19,.97); }
+@keyframes ffShake {
+    0%, 100% { transform:translate(0,0); }
+    14% { transform:translate(-5px,3px); }
+    30% { transform:translate(4px,-4px); }
+    48% { transform:translate(-4px,-2px); }
+    66% { transform:translate(3px,3px); }
+    84% { transform:translate(-2px,-1px); }
+}
 
 /* ===== dreamScene 内部双屏容器 ===== */
 

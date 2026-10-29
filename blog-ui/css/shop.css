@@ -21,26 +21,6 @@ body { min-height:100vh; background:url('../celeste-gui/resort-room-native.png')
         drop-shadow(0 0 10px rgba(200,235,255,1)) drop-shadow(0 0 24px rgba(120,190,255,.8));
 }
 h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family:'Press Start 2P',monospace; font-size:14px; color:#ffe36d; text-shadow:0 2px 0 rgba(0,0,0,.6); letter-spacing:2px; z-index:20; }
-.wrap { max-width:760px; margin:0 auto; padding:86px 20px 160px; }
-.oshiro-wrap { text-align:center; margin-bottom:16px; }
-.oshiro-wrap img { width:92px; height:92px; object-fit:cover; border-radius:8px; border:2px solid rgba(255,230,109,.5); box-shadow:0 0 16px rgba(255,230,109,.3); }
-.balance { display:flex; align-items:center; gap:10px; justify-content:center; margin-bottom:26px; }
-.balance img { width:34px; height:34px; image-rendering:pixelated; filter:drop-shadow(0 0 6px rgba(255,107,138,.6)); }
-.balance .num { font-family:'Press Start 2P',monospace; font-size:20px; color:#ff6b8a; text-shadow:0 2px 0 rgba(0,0,0,.6); }
-.balance .tip { color:rgba(255,255,255,.55); font-size:12px; }
-.items { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:16px; }
-.item { background:rgba(22,34,60,.88); border:2px solid rgba(255,230,109,.4); border-radius:8px; padding:16px; display:flex; align-items:center; gap:14px; transition:transform .15s, border-color .15s; }
-.item:hover { transform:translateY(-3px); border-color:#ffe36d; }
-.item img { width:44px; height:44px; image-rendering:pixelated; object-fit:contain; flex-shrink:0; }
-.item .info { flex:1; min-width:0; }
-.item .name { color:#fff; font-size:15px; margin-bottom:4px; }
-.item .desc { color:rgba(255,255,255,.55); font-size:12px; line-height:1.6; }
-.item .buy { padding:8px 14px; border:2px solid #ffe36d; border-radius:6px; background:rgba(22,34,60,.9); color:#ffe36d; cursor:pointer; font-size:13px; white-space:nowrap; flex-shrink:0; transition:background .2s; }
-.item .buy:hover:not(:disabled) { background:rgba(255,227,109,.25); }
-.item .buy:disabled { opacity:.45; cursor:not-allowed; }
-.item.owned { border-color:rgba(255,230,109,.75); }
-.item.owned .buy { border-color:#7dcf7d; color:#a5e8a5; }
-.oshiro-say { margin-top:26px; text-align:center; color:rgba(255,227,109,.85); font-size:13px; min-height:22px; }
 #shopMemo { position:fixed; inset:0; z-index:999; background:rgba(4,4,16,.96); display:flex; align-items:center; justify-content:center; flex-direction:column; cursor:pointer; opacity:0; pointer-events:none; transition:opacity .6s ease; }
 #shopMemo.show { opacity:1; pointer-events:auto; }
 #shopMemo img { max-width:min(92vw,560px); max-height:72vh; border-radius:6px; box-shadow:0 10px 50px rgba(0,0,0,.7); transform:scale(.94); transition:transform .8s cubic-bezier(.2,.8,.3,1); }
@@ -154,128 +134,26 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     will-change: transform, opacity;
 }
 
-/* ===== 煤球精灵（dustCreature 图层叠加） ===== */
-#dustSprite {
-    position: fixed;
-    left: 140px;
-    top: 320px;
-    z-index: 935;
-    cursor: pointer;
-    user-select: none;
-    -webkit-user-drag: none;
-    filter: drop-shadow(0 2px 3px rgba(0,0,0,.45));
-}
-#dustSprite .dust-inner {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    transform-origin: 50% 100%;
-    transition: transform .15s ease;
-    animation: dustIdle 2.4s ease-in-out infinite;
-}
-#dustSprite.moving .dust-inner { animation: dustHop .45s ease-in-out infinite; }
-#dustSprite.squish .dust-inner { animation: none; transform: scale(1.3, .55); }
-#dustSprite img {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    image-rendering: pixelated;
-    pointer-events: none;
-}
-@keyframes dustIdle { 0%,100% { transform: scale(1,1); } 50% { transform: scale(1.05,.95); } }
-@keyframes dustHop { 0%,100% { transform: translateY(0) scale(1,1); } 50% { transform: translateY(-7px) scale(.95,1.06); } }
+/* ===== 水晶之心游戏层：Madeline 漫游 + 心收集（canvas，与房间背景 cover 对齐） ===== */
+#gameStage { position:fixed; inset:0; z-index:5; pointer-events:none; image-rendering:pixelated; }
 
-/* ===== 心之水晶（默认空心 → 兑换出彩色水晶心） ===== */
-.heart-loop {
-    animation: heartBob 2.6s ease-in-out infinite;
-    filter: drop-shadow(0 0 10px var(--hg-glow, rgba(120,190,255,.78)));
-}
-@keyframes heartBob { 0%,100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-5px) rotate(2.5deg); } }
-
-/* 获取仪式全屏：暗场 + 放射光 + 心落定 + 命名牌 */
+/* ===== 水晶之心收集仪式：Poem —— IL: Poem 无背景（画出的是透明层），
+   Alpha 1s Ease.CubeOut 淡入 / 0.5s Ease.CubeIn 淡出；FormationBackdrop 黑幕另起 z-index 1900 层 ===== */
 #heartGet {
     position:fixed; inset:0; z-index:2000; display:none;
     align-items:center; justify-content:center; flex-direction:column;
-    background:radial-gradient(120% 120% at 50% 45%, #141628 0%, #0a0b18 55%, #04040c 100%);
-    opacity:0; transition:opacity .45s ease; cursor:pointer; overflow:hidden;
+    background:transparent;
+    opacity:0; cursor:pointer; overflow:hidden;
 }
-#heartGet.show { display:flex; }
-#heartGet.vis { opacity:1; }
-#heartGet .hg-rays {
-    position:absolute; left:50%; top:50%; width:170vmax; height:170vmax;
-    transform:translate(-50%,-50%);
-    background:repeating-conic-gradient(from 0deg, rgba(150,200,255,.15) 0deg 4deg, transparent 4deg 14deg);
-    -webkit-mask-image:radial-gradient(closest-side, transparent 12%, #000 30%, transparent 72%);
-    mask-image:radial-gradient(closest-side, transparent 12%, #000 30%, transparent 72%);
-    animation:hgRaySpin 26s linear infinite;
-    opacity:0; transition:opacity 1.2s ease 1.75s; pointer-events:none;
+#heartGet.show { display:flex; pointer-events:auto; }
+#heartGet #hgFx {
+    position:absolute; inset:0; width:100%; height:100%;
+    z-index:0; pointer-events:none;
 }
-#heartGet.vis .hg-rays { opacity:1; }
-@keyframes hgRaySpin { to { transform:translate(-50%,-50%) rotate(360deg); } }
-
-/* 像素假心：仪式开场先跳动，破成碎片后真心才坠落（位置由 JS 对齐 .hg-heart） */
-#hgFakeHeart {
-    position:absolute; width:60px; height:60px; image-rendering:pixelated;
-    opacity:0; z-index:3; filter:drop-shadow(0 0 10px rgba(160,220,255,.7));
-    transform:translate(-50%,-50%);
-}
-#heartGet.vis #hgFakeHeart { animation:hgFakePulse .42s ease-in-out infinite alternate; }
-#heartGet.vis #hgFakeHeart.breaking { animation:hgFakeBreak .2s ease-in forwards; }
-@keyframes hgFakePulse {
-    from { opacity:1; transform:translate(-50%,-50%) scale(.94); }
-    to   { opacity:1; transform:translate(-50%,-50%) scale(1.08); }
-}
-@keyframes hgFakeBreak {
-    0%  { opacity:1; transform:translate(-50%,-50%) scale(1); }
-    100% { opacity:0; transform:translate(-50%,-50%) scale(1.35); filter:brightness(3) drop-shadow(0 0 18px rgba(200,240,255,1)); }
-}
-#hgFakeHeart.gone { display:none; }
-/* 碎片层 */
-#hgShards { position:absolute; inset:0; overflow:visible; pointer-events:none; z-index:3; }
-#hgShards img {
-    position:absolute; image-rendering:pixelated;
-    filter:drop-shadow(0 0 4px rgba(170,225,255,.85));
-    will-change:transform,opacity;
-}
-
-#heartGet .hg-heart {
-    position:relative; width:112px; height:112px; image-rendering:pixelated; z-index:2;
-    opacity:0; transform:scale(.15);
-    filter:drop-shadow(0 0 26px var(--hg-glow, rgba(120,190,255,.8))) brightness(1.15);
-}
-/* 破心（~1.95s）后真心才坠落 */
-#heartGet.vis .hg-heart { animation:hgHeartIn .85s cubic-bezier(.2,1.15,.3,1) 1.95s forwards; }
-@keyframes hgHeartIn {
-    0%   { opacity:0; transform:scale(.15) rotate(-30deg); }
-    70%  { opacity:1; transform:scale(1.22) rotate(4deg); }
-    100% { opacity:1; transform:scale(1) rotate(0deg); }
-}
-#heartGet.vis.shake { animation:hgShake .35s linear; }
-@keyframes hgShake { 0%,100% { transform:translate(0,0); } 20% { transform:translate(-7px,4px); } 40% { transform:translate(6px,-4px); } 60% { transform:translate(-4px,-3px); } 80% { transform:translate(4px,3px); } }
-#heartGet .hg-flash { position:absolute; inset:0; background:#dfe9ff; opacity:0; pointer-events:none; }
-#heartGet.vis .hg-flash { animation:hgFlash .5s ease-out 2.45s; }
-@keyframes hgFlash { 0% { opacity:.85; } 100% { opacity:0; } }
-#heartGet .hg-title {
-    margin-top:34px; z-index:2; color:#e8f1ff;
-    font-size:clamp(22px, 4.6vw, 34px); letter-spacing:3px;
-    text-shadow:0 0 18px var(--hg-glow, rgba(120,190,255,.9)), 0 2px 0 rgba(0,0,0,.7);
-    opacity:0; transform:translateY(10px);
-    transition:opacity .8s ease 2.75s, transform .8s ease 2.75s;
-}
-#heartGet .hg-desc {
-    margin-top:12px; z-index:2; color:rgba(214,228,255,.72);
-    font-size:14px; letter-spacing:2px;
-    opacity:0; transition:opacity .8s ease 3.15s;
-}
-#heartGet.vis .hg-title { opacity:1; transform:translateY(0); }
-#heartGet.vis .hg-desc { opacity:1; }
-#heartGet .hg-tip {
+#heartGet .hg-poem-tip {
     position:absolute; bottom:30px; left:50%; transform:translateX(-50%);
     color:rgba(255,230,109,.55); font-size:12px; letter-spacing:3px;
-    opacity:0; transition:opacity .6s ease 3.5s;
 }
-#heartGet.vis .hg-tip { opacity:1; }
 
 /* ===== 悬停提示按钮：idle 指针呼吸，hover 切换图示（右=highlight 左=resort 挂牌） ===== */
 .dot-bubble {

@@ -1,158 +1,202 @@
-/* ============================================================
-   1. neon 15 帧逐帧动画（contain 完整显示，不裁切）
-   ============================================================ */
+/* ============================================================================
+   Internet Cafe · 星空背景（stylegrounds）
+   逐行复刻 Celeste.MapData::ParseBackdrop 与 Starfield / Planets / Parallax 的渲染，
+   数据取自 LostLevels.bin 的 /Map/Style 中 tag="bright" 的那一组
+   （lvl_f-door / f-00 / f-01 / f-02 与 e-* 共用同一套星空）。
+   ========================================================================== */
 (function () {
-  var canvas = document.querySelector('#neonSign canvas');
-  var ctx = canvas.getContext('2d');
-  ctx.imageSmoothingEnabled = false;
+  'use strict';
 
-  var FRAME_COUNT = 15;
-  var basePath = 'Atlases/Gameplay/objects/wavedashtutorial/';
-  var frames = [];
-  var loaded = 0;
+  function create(opt) {
+    var ctx = opt.ctx;          // 2D 上下文
+    var getTex = opt.getTex;    // (key, color, flipX, flipY) -> Canvas | Image
+    var getSize = opt.getSize;  // () -> { W, H }
 
-  for (var i = 0; i < FRAME_COUNT; i++) {
-    var img = new Image();
-    img.onload = function () { loaded++; if (loaded === FRAME_COUNT) startAnim(); };
-    img.src = basePath + 'neon_' + String(i).padStart(2, '0') + '.png';
-    frames.push(img);
-  }
+    var mod = function (x, m) { return ((x % m) + m) % m; };
+    var cubeIn = function (t) { return t * t * t; };                 // Ease.CubeIn
 
-  function resizeCanvas() {
-    canvas.width = canvas.clientWidth;
-    canvas.height = canvas.clientHeight;
-    ctx.imageSmoothingEnabled = false;
-  }
-  resizeCanvas();
-  window.addEventListener('resize', resizeCanvas);
-
-  var frameIdx = 0, lastTime = 0, rafId;
-  var FPS = 12;
-  var interval = 1000 / FPS;
-
-  function draw(t) {
-    rafId = requestAnimationFrame(draw);
-    if (t - lastTime < interval) return;
-    lastTime = t;
-
-    var img = frames[frameIdx];
-    if (img && img.complete && img.naturalWidth > 0) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      // contain：完整显示整帧（素材透明底，留白无影响）
-      var w = img.naturalWidth, h = img.naturalHeight;
-      var cw = canvas.width, ch = canvas.height;
-      var scale = Math.min(cw / w, ch / h);
-      var dw = w * scale, dh = h * scale;
-      var dx = (cw - dw) / 2, dy = (ch - dh) / 2;
-      ctx.drawImage(img, dx | 0, dy | 0, dw | 0, dh | 0);
+    // 固定种子随机：构图不随刷新/resize 跳变
+    function makeRng(seed) {
+      var s = seed;
+      return function () { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
     }
-    frameIdx = (frameIdx + 1) % FRAME_COUNT;
-  }
-  function startAnim() { rafId = requestAnimationFrame(draw); }
-})();
+    // XNA Color.Lerp(c, Transparent, t)：通道与 alpha 一起向 0 插值
+    function shadeHex(hex, f) {
+      var n = parseInt(hex.slice(1), 16);
+      var r = Math.round(((n >> 16) & 255) * (1 - f));
+      var g = Math.round(((n >> 8) & 255) * (1 - f));
+      var b = Math.round((n & 255) * (1 - f));
+      return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
+    }
 
-/* ============================================================
-   2. 漂浮粒子：全屏 + 天空加密度（小星点缓慢漂浮 + 闪烁）
-   ============================================================ */
-(function () {
-  var canvas = document.getElementById('sparkleCanvas');
-  var ctx = canvas.getContext('2d');
-  var W, H;
-  function resize() { W = canvas.width = canvas.clientWidth; H = canvas.height = canvas.clientHeight; }
-  resize();
-  window.addEventListener('resize', resize);
-
-  // 粒子全屏覆盖：5 成全屏均匀、约 3 成集中在天空（页面上半部）、2 成落穹顶建筑核心
-  // 百分比坐标
-  var FULL = { x: 0, y: 0, w: 1, h: 1 };
-  var SKY = { x: 0, y: 0, w: 1, h: 0.55 };
-  var CORE = { x: 0.33, y: 0.26, w: 0.36, h: 0.40 };
-  function pickZone() {
-    var r = Math.random();
-    return (r < 0.5) ? FULL : (r < 0.78 ? SKY : CORE);
-  }
-
-  var COLORS = ['#ffffff', '#7affe0', '#ff7ad9', '#b98cff', '#8fd4ff', '#fff3a3'];
-  var parts = [];
-
-  // ① 闪烁星点：数量翻倍，大量 1px 小星点营造密度
-  var STAR_COUNT = 140;
-  for (var i = 0; i < STAR_COUNT; i++) {
-    var z = pickZone();
-    var big = Math.random() < .12;                 // 少数大星芒
-    parts.push({
-      type: 'star',
-      bx: z.x + Math.random() * z.w,
-      by: z.y + Math.random() * z.h,
-      ampX: (Math.random() * 1.2 + .4) / 100,      // 漂浮幅度（百分比）
-      ampY: (Math.random() * 1.0 + .3) / 100,
-      spd: Math.random() * .0006 + .0003,          // 漂浮速度
-      phase: Math.random() * Math.PI * 2,
-      size: big ? 3 : (Math.random() < .45 ? 1 : 2),
-      color: COLORS[Math.random() * COLORS.length | 0],
-      tw: Math.random() * .004 + .0008,            // 闪烁速度（拉开差异避免齐闪）
-      twPhase: Math.random() * Math.PI * 2,
-      baseA: .22 + Math.random() * .28
-    });
-  }
-
-  // ② 漂浮尘埃：缓慢单向漂移 + 左右轻摆，出界回绕，让画面一直有流动感
-  var MOTE_COUNT = 28;
-  for (var m = 0; m < MOTE_COUNT; m++) {
-    parts.push({
-      type: 'mote',
-      bx: Math.random(),
-      by: Math.random(),
-      vx: (Math.random() * .000011 + .000005) * (Math.random() < .5 ? -1 : 1), // 百分比/ms
-      vy: -(Math.random() * .000008 + .000004),    // 整体缓慢上升（飘尘）
-      amp: (Math.random() * .8 + .3) / 100,        // 左右轻摆幅度
-      sway: Math.random() * .001 + .0005,
-      phase: Math.random() * Math.PI * 2,
-      size: Math.random() < .3 ? 3 : 2,
-      color: COLORS[Math.random() * COLORS.length | 0],
-      tw: Math.random() * .002 + .0008,
-      twPhase: Math.random() * Math.PI * 2
-    });
-  }
-
-  var last = 0;
-  function frame(t) {
-    var dt = Math.min(t - last, 50) || 16;         // 限幅防止切后台回跳
-    last = t;
-    ctx.clearRect(0, 0, W, H);
-    for (var i = 0; i < parts.length; i++) {
-      var p = parts[i];
-      var x, y, s;
-      if (p.type === 'mote') {
-        p.bx += p.vx * dt; p.by += p.vy * dt;
-        if (p.bx < -.02) p.bx = 1.02; else if (p.bx > 1.02) p.bx = -.02;
-        if (p.by < -.02) p.by = 1.02; else if (p.by > 1.02) p.by = -.02;
-        x = (p.bx + Math.sin(t * p.sway + p.phase) * p.amp) * W;
-        y = p.by * H;
-        ctx.globalAlpha = .22 + .22 * (0.5 + 0.5 * Math.sin(t * p.tw + p.twPhase));
-        ctx.fillStyle = p.color;
-        ctx.fillRect(x | 0, y | 0, p.size, p.size);
-      } else {
-        x = (p.bx + Math.sin(t * p.spd + p.phase) * p.ampX) * W;
-        y = (p.by + Math.cos(t * p.spd * .8 + p.phase) * p.ampY) * H;
-        var a = p.baseA + (.92 - p.baseA) * (0.5 + 0.5 * Math.sin(t * p.tw + p.twPhase));
-        ctx.globalAlpha = a;
-        ctx.fillStyle = p.color;
-        s = p.size;
-        // 小十字星芒（像素风：中心方块 + 横竖各延 1px）；1px 只画单点
-        ctx.fillRect(x | 0, y | 0, s, s);
-        if (s > 1) {
-          ctx.fillRect((x - 1) | 0, y | 0, 1, s);
-          ctx.fillRect((x + s) | 0, y | 0, 1, s);
-          ctx.fillRect(x | 0, (y - 1) | 0, s, 1);
-          ctx.fillRect(x | 0, (y + s) | 0, s, 1);
-        }
+    // Starfield.cs：15 个 Y 节点连成横向星带（StepSize 32），128 颗星沿带流动、沿法线呼吸摆动
+    function Starfield(speed, scrollX, scrollY, color, seed) {
+      this.speed = speed;
+      this.scrollX = scrollX; this.scrollY = scrollY;
+      this.color = color;
+      var rnd = makeRng(seed);
+      var nodes = [], y = rnd() * 180, i;
+      for (i = 0; i < 15; i++) {
+        nodes.push(y);
+        y += (rnd() < 0.5 ? -1 : 1) * (16 + rnd() * 24);
+      }
+      // 末 4 节点向首节点插值闭合，形成首尾相接的环
+      for (i = 0; i < 4; i++) {
+        var idx = nodes.length - 1 - i;
+        nodes[idx] += (nodes[0] - nodes[idx]) * (1 - i / 4);
+      }
+      this.nodes = nodes;
+      this.stars = [];
+      for (i = 0; i < 128; i++) {
+        var r = rnd();
+        var shade = Math.round(r * 2) / 4 * 0.5;   // 与原作一样量化成 5 档亮度贴图
+        var star = {
+          nodeIndex: Math.floor(rnd() * (nodes.length - 1)),
+          nodePercent: rnd(),
+          distance: 4 + r * 20,
+          sine: rnd() * Math.PI * 2,
+          shade: shade,
+          alpha: 1 - shade,
+          tex: Math.max(0, Math.min(3, Math.floor(cubeIn(1 - r) * 4))),
+          x: 0, y: 0
+        };
+        var p = this.targetOf(star);
+        star.x = p.x; star.y = p.y;
+        this.stars.push(star);
       }
     }
-    ctx.globalAlpha = 1;
-    requestAnimationFrame(frame);
-  }
-  requestAnimationFrame(frame);
-})();
+    Starfield.prototype.targetOf = function (s) {
+      var x1 = s.nodeIndex * 32, y1 = this.nodes[s.nodeIndex];
+      var x2 = (s.nodeIndex + 1) * 32, y2 = this.nodes[s.nodeIndex + 1];
+      var px = x1 + (x2 - x1) * s.nodePercent;
+      var py = y1 + (y2 - y1) * s.nodePercent;
+      var dx = x2 - x1, dy = y2 - y1;
+      var len = Math.sqrt(dx * dx + dy * dy) || 1;
+      var d = s.distance * Math.sin(s.sine);
+      return { x: px + (-dy / len) * d, y: py + (dx / len) * d };
+    };
+    Starfield.prototype.update = function (dt) {
+      var k = dt * 60;                            // 原作逐帧 /50，按 60fps 归一
+      for (var i = 0; i < this.stars.length; i++) {
+        var s = this.stars[i];
+        s.sine += dt * this.speed;
+        s.nodePercent += dt * 0.25 * this.speed;
+        if (s.nodePercent >= 1) {
+          s.nodePercent -= 1;
+          s.nodeIndex++;
+          if (s.nodeIndex >= this.nodes.length - 1) { s.nodeIndex = 0; s.x -= 448; }
+        }
+        var t = this.targetOf(s);
+        s.x += (t.x - s.x) / 50 * k;
+        s.y += (t.y - s.y) / 50 * k;
+      }
+    };
+    Starfield.prototype.render = function (camX, camY) {
+      var sz = getSize(), sx = sz.W / 320, sy = sz.H / 180;
+      for (var i = 0; i < this.stars.length; i++) {
+        var s = this.stars[i];
+        var img = getTex('sf' + s.tex, shadeHex(this.color, s.shade), false, false);
+        if (!img) continue;
+        var lx = -64 + mod(s.x - camX * this.scrollX, 448);
+        var ly = -16 + mod(s.y - camY * this.scrollY, 212);
+        var w = img.width * sx, h = img.height * sy;
+        ctx.globalAlpha = s.alpha;
+        ctx.drawImage(img, Math.round(lx * sx - w / 2), Math.round(ly * sy - h / 2), w, h);
+      }
+      ctx.globalAlpha = 1;
+    };
 
-/* 交互流已迁移至上方 Vue app（entered 状态驱动 class/点击，stage 缩放在方法内） */
+    // Planets.cs：Position = (NextFloat(640), NextFloat(360))，居中绘制并 wrap
+    function Planets(count, size, scroll, color, seed) {
+      this.count = count; this.size = size; this.scroll = scroll; this.color = color;
+      var texCount = size === 'big' ? 3 : 7;
+      var rnd = makeRng(seed);
+      this.planets = [];
+      for (var i = 0; i < count; i++) {
+        this.planets.push({
+          tex: 'bgs/10/' + size + String(Math.floor(rnd() * texCount)).padStart(2, '0'),
+          x: rnd() * 640, y: rnd() * 360
+        });
+      }
+    }
+    Planets.prototype.render = function (camX, camY) {
+      var sz = getSize(), sx = sz.W / 320, sy = sz.H / 180;
+      for (var i = 0; i < this.planets.length; i++) {
+        var p = this.planets[i];
+        var img = getTex(p.tex, this.color, false, false);
+        if (!img) continue;
+        var lx = -32 + mod(p.x - camX * this.scroll, 640);
+        var ly = -32 + mod(p.y - camY * this.scroll, 360);
+        var w = img.width * sx, h = img.height * sy;
+        ctx.drawImage(img, Math.round(lx * sx - w / 2), Math.round(ly * sy - h / 2), w, h);
+      }
+    };
+
+    // Parallax.cs：Position += Speed*dt，绘制于 Floor(Position - Camera*Scroll)，Loop 时平铺
+    function Parallax(tex, scroll, speed, color, alpha, loop, flip, additive) {
+      this.tex = tex; this.scroll = scroll; this.speed = speed; this.color = color;
+      this.alpha = alpha; this.loop = loop; this.flip = !!flip; this.additive = !!additive;
+      this.pos = { x: 0, y: 0 };
+    }
+    Parallax.prototype.update = function (dt) {
+      this.pos.x += this.speed.x * dt;
+      this.pos.y += this.speed.y * dt;
+    };
+    Parallax.prototype.render = function (camX, camY) {
+      var img = getTex(this.tex, this.color, this.flip, false);
+      if (!img) return;
+      var sz = getSize(), sx = sz.W / 320, sy = sz.H / 180;
+      var tw = img.width, th = img.height;
+      var px = Math.round(this.pos.x - camX * this.scroll);
+      var py = Math.round(this.pos.y - camY * this.scroll);
+      ctx.globalCompositeOperation = this.additive ? 'lighter' : 'source-over';
+      ctx.globalAlpha = this.alpha;
+      if (this.loop) {
+        var ox = mod(px, tw) - tw, oy = mod(py, th) - th;
+        for (var y = oy; y < 180; y += th) {
+          for (var x = ox; x < 320; x += tw) {
+            ctx.drawImage(img, x * sx, y * sy, tw * sx, th * sy);
+          }
+        }
+      } else {
+        ctx.drawImage(img, px * sx, py * sy, tw * sx, th * sy);
+      }
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+    };
+
+    // —— bright 组的 11 层背景 + 1 层前景（顺序/参数与地图原样一致）——
+    var layers = [
+      new Parallax('sky', 0, { x: 0, y: 0 }, null, 1, false, false, false),
+      new Planets(32, 'small', 0.1, '#3b66a8', 1101),
+      new Parallax('mist', 0.15, { x: 2, y: 0 }, '#b03b94', 1, true, false, false),
+      new Parallax('mist', 0.2, { x: 4, y: 0 }, '#4ab7be', 1, true, true, false),
+      new Starfield(2.5, 0.3, 0.3, '#71d5ff', 2201),
+      new Starfield(2.75, 0.5, 0.5, '#46fffd', 2202),
+      new Planets(24, 'small', 0.4, '#ffffff', 1102),
+      new Starfield(3.0, 0.3, 0.3, '#f8ffb0', 2203),
+      new Starfield(3.0, 0.5, 0.5, '#cefdff', 2204),
+      new Planets(4, 'big', 0.7, '#ffffff', 1103),
+      new Parallax('mist', 0.6, { x: 16, y: 8 }, '#000000', 0.5, true, false, false)
+    ];
+    // 前景：purplesunset 叠加（blendmode=additive，alpha .25），盖在关卡之上
+    var fgLayers = [
+      new Parallax('sun', 0.5, { x: 4, y: 4 }, '#ffffff', 0.25, true, false, true)
+    ];
+
+    return {
+      update: function (dt) {
+        for (var i = 0; i < layers.length; i++) if (layers[i].update) layers[i].update(dt);
+        for (var j = 0; j < fgLayers.length; j++) if (fgLayers[j].update) fgLayers[j].update(dt);
+      },
+      render: function (camX, camY) {
+        for (var i = 0; i < layers.length; i++) layers[i].render(camX, camY);
+      },
+      renderFg: function (camX, camY) {
+        for (var i = 0; i < fgLayers.length; i++) fgLayers[i].render(camX, camY);
+      }
+    };
+  }
+
+  window.CafeSky = { create: create };
+})();
