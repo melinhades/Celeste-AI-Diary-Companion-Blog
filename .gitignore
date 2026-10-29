@@ -46,7 +46,10 @@ blog-ui/bgm/
 blog-ui/celeste-areas/
 blog-ui/celeste-collectables/
 blog-ui/celeste-feather/
-blog-ui/celeste-font-en/
+blog-ui/celeste-font-en/*
+# 字体必须进仓库，否则线上 @font-face 404 → 整页字体回退系统字体
+!blog-ui/celeste-font-en/Renogare-Regular.otf
+!blog-ui/celeste-font-en/PressStart2P-Regular.ttf
 blog-ui/celeste-gui/
 blog-ui/celeste-icons/
 blog-ui/celeste-journal/
@@ -54,7 +57,9 @@ blog-ui/celeste-mountain/
 blog-ui/celeste-player/
 blog-ui/celeste-portraits/
 blog-ui/celeste-sounds/
-blog-ui/fonts/
+blog-ui/fonts/*
+# 只放行网页用的子集 woff2（16.5MB 原 otf 仍忽略，仅供 tools/build_readme_fonts.py 本地渲染 README）
+!blog-ui/fonts/celeste-zh-subset.woff2
 blog-ui/icon/
 blog-ui/namespace/
 blog-ui/save/
@@ -70,3 +75,10 @@ blog-ui/heartdoor/sounds/
 
 ### Fix Scripts ###
 fix-*.js
+
+### Python ###
+__pycache__/
+*.pyc
+
+### Trae 本地配置（写死本机路径，不入仓） ###
+.trae/mcp.json
