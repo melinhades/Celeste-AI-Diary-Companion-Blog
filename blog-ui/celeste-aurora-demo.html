@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Celeste 极光 · 复刻 demo</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  canvas { width: 100vw; height: 100vh; display: block; image-rendering: pixelated; }
+  .hint {
+    position: fixed; left: 16px; bottom: 12px; color: #8fa3c8; opacity: .6;
+    font: 12px/1.6 monospace; pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<canvas id="c" width="320" height="180"></canvas>
+<div class="hint">移动鼠标 = 相机视差 · Celeste ch.6 NorthernLights 复刻</div>
+<script>
+// ===== 复刻自 Celeste.dll 反编译的 Celeste.NorthernLights =====
+const W = 320, H = 180;
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+
+// 离屏 buffer：光带先画到这里，模糊后再合成
+const buf = document.createElement('canvas');
+buf.width = W; buf.height = H;
+const bctx = buf.getContext('2d');
+
+const COLORS = ['#2de079', '#62f4f6', '#45bc2e', '#3856f0'];
+// 原作视觉以亮绿为主：绿色系权重×2
+const WEIGHTED = ['#2de079', '#2de079', '#45bc2e', '#45bc2e', '#62f4f6', '#3856f0'];
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const mod = (x, m) => ((x % m) + m) % m;
+
+// 极光噪声纹理（原作 GFX.Misc["northernlights"]）
+const tex = new Image();
+tex.src = 'Atlases/Misc/northernlights.png';
+
+// ---- Strand：40 节点随机路径 ----
+class Strand {
+  constructor() { this.reset(Math.random()); }
+  reset(startPercent) {
+    this.percent = startPercent;
+    this.duration = rand(12, 32);
+    this.alpha = 0;
+    this.nodes = [];
+    let x = rand(-40, 60), y = rand(70, 110);
+    let texOff = Math.random();
+    const base = pick(WEIGHTED);
+    for (let i = 0; i < 40; i++) {
+      this.nodes.push({
+        x, y,
+        texOff,
+        h: rand(30, 110),
+        topA: rand(0.5, 0.9),
+        botA: rand(0.8, 1),
+        sine: Math.random() * Math.PI * 2,
+        color: lerpColor(base, pick(WEIGHTED), rand(0, 0.25))
+      });
+      texOff += rand(0.02, 0.2);
+      x += rand(4, 20);
+      y += rand(-15, 15);
+    }
+  }
+  update(dt) {
+    this.percent += dt / this.duration;
+    const target = this.percent < 1 ? 1 : 0;
+    this.alpha += Math.sign(target - this.alpha) * Math.min(Math.abs(target - this.alpha), dt);
+    if (this.alpha <= 0 && this.percent >= 1) this.reset(0);
+    for (const n of this.nodes) n.sine += dt;
+  }
+}
+
+function lerpColor(a, b, t) {
+  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+  const r = Math.round(((pa >> 16) & 255) + (((pb >> 16) & 255) - ((pa >> 16) & 255)) * t);
+  const g = Math.round(((pa >> 8) & 255) + (((pb >> 8) & 255) - ((pa >> 8) & 255)) * t);
+  const bl = Math.round((pa & 255) + ((pb & 255) - (pa & 255)) * t);
+  return `rgb(${r},${g},${bl})`;
+}
+
+const strands = [new Strand(), new Strand(), new Strand()];
+
+// ---- 粒子与星星已按需求移除 ----
+
+// 鼠标视差（模拟相机）
+let camX = 0, camY = 0, lastCamX = 0, lastCamY = 0;
+window.addEventListener('mousemove', e => {
+  camX = (e.clientX / window.innerWidth - 0.5) * 80;
+  camY = (e.clientY / window.innerHeight - 0.5) * 45;
+});
+
+let last = performance.now();
+// 按颜色缓存染色纹理（原作是 顶点色 × 白色噪声纹素 相乘，这里离线预染）
+const tintedPatterns = new Map();
+function tintedPattern(color) {
+  if (tintedPatterns.has(color)) return tintedPatterns.get(color);
+  const t = document.createElement('canvas');
+  t.width = tex.naturalWidth; t.height = tex.naturalHeight;
+  const tc = t.getContext('2d');
+  tc.drawImage(tex, 0, 0);
+  tc.globalCompositeOperation = 'source-in';
+  tc.fillStyle = color;
+  tc.fillRect(0, 0, t.width, t.height);
+  const p = bctx.createPattern(t, 'repeat');
+  tintedPatterns.set(color, p);
+  return p;
+}
+
+function frame(now) {
+  const dt = Math.min((now - last) / 1000, 0.1);
+  last = now;
+  const dCamX = camX - lastCamX, dCamY = camY - lastCamY;
+  lastCamX = camX; lastCamY = camY;
+
+  // update
+  for (const s of strands) s.update(dt);
+
+  // ===== 离屏：背景渐变 + 光带 =====
+  const g = bctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#020825');
+  g.addColorStop(1, '#170c2f');
+  bctx.globalCompositeOperation = 'source-over';
+  bctx.fillStyle = g;
+  bctx.fillRect(0, 0, W, H);
+
+  if (!(tex.complete && tex.naturalWidth)) { requestAnimationFrame(frame); return; }
+
+  // 光带：相邻节点构成四边形光帘，染色噪声条纹是主体
+  bctx.globalCompositeOperation = 'lighter';
+  for (const s of strands) {
+    for (let i = 1; i < s.nodes.length; i++) {
+      const n0 = s.nodes[i - 1], n1 = s.nodes[i];
+      const fadeIn = Math.min(1, i / 4);
+      const fadeOut = Math.min(1, (s.nodes.length - i) / 4);
+      const a0 = fadeIn * s.alpha, a1 = fadeOut * s.alpha;
+      const y0 = n0.y + Math.sin(n0.sine) * 3;
+      const y1 = n1.y + Math.sin(n1.sine) * 3;
+      const topY = Math.min(y0 - n0.h, y1 - n1.h);
+      const botY = Math.max(y0, y1);
+      const segW = (n1.x - n0.x) + 2;
+
+      bctx.save();
+      bctx.beginPath();
+      bctx.moveTo(n0.x, y0);
+      bctx.lineTo(n0.x, y0 - n0.h);
+      bctx.lineTo(n1.x, y1 - n1.h);
+      bctx.lineTo(n1.x, y1);
+      bctx.closePath();
+      bctx.clip();
+
+      // 1) 颜色基底：底部实、顶部渐隐
+      const grad = bctx.createLinearGradient(0, topY, 0, botY);
+      grad.addColorStop(0, withAlpha(n0.color, 0.15 * n0.topA * a0));
+      grad.addColorStop(1, withAlpha(n0.color, n0.botA * a0));
+      bctx.fillStyle = grad;
+      bctx.fillRect(n0.x - 1, topY, segW, botY - topY);
+
+      // 2) 染色条纹主体，画两遍提升亮度（lighter 叠加）
+      bctx.globalAlpha = Math.min(a0, a1);
+      bctx.translate(-n0.texOff * 256, 0);
+      bctx.fillStyle = tintedPattern(n0.color);
+      bctx.fillRect(n0.x + n0.texOff * 256 - 4, topY, segW + 8, botY - topY);
+      bctx.fillRect(n0.x + n0.texOff * 256 - 4, topY, segW + 8, botY - topY);
+      bctx.setTransform(1, 0, 0, 1, 0, 0);
+      bctx.globalAlpha = 1;
+
+      // 3) 垂直消隐：条纹顶部淡出（原作顶点 V 坐标 0.05→1.0）
+      bctx.globalCompositeOperation = 'destination-out';
+      const mask = bctx.createLinearGradient(0, topY, 0, botY);
+      mask.addColorStop(0, 'rgba(0,0,0,0.45)');
+      mask.addColorStop(0.5, 'rgba(0,0,0,0.1)');
+      mask.addColorStop(1, 'rgba(0,0,0,0)');
+      bctx.fillStyle = mask;
+      bctx.fillRect(n0.x - 1, topY, segW, botY - topY);
+      bctx.globalCompositeOperation = 'lighter';
+      bctx.restore();
+    }
+  }
+  bctx.globalCompositeOperation = 'source-over';
+
+  // ===== 合成：垂直模糊（多次 y 偏移低透明度叠加近似高斯）=====
+  ctx.clearRect(0, 0, W, H);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(buf, 0, 0);
+  ctx.globalAlpha = 0.25;
+  for (const dy of [-2, -1, 1, 2]) ctx.drawImage(buf, 0, dy);
+  ctx.globalAlpha = 1;
+
+  requestAnimationFrame(frame);
+}
+
+function withAlpha(color, a) {
+  if (color.startsWith('rgb(')) return color.replace('rgb(', 'rgba(').replace(')', `,${Math.min(1, a)})`);
+  return color;
+}
+
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

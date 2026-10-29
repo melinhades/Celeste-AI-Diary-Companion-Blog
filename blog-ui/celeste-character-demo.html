@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Celeste 人物引擎 · 测试展示（Climb + Dash + Boost）</title>
+<style>
+    html, body { margin: 0; height: 100%; background: #0b0a14; overflow: hidden;
+        font-family: "Microsoft YaHei", sans-serif; }
+    #stage { position: absolute; inset: 0; width: 100%; height: 100%;
+        image-rendering: pixelated; }
+    #hud { position: absolute; top: 14px; left: 16px; color: #aab; font-size: 13px;
+        line-height: 1.9; user-select: none; }
+    #hud b { color: #ffe36d; }
+    #hud i { color: #7d7a99; font-style: normal; }
+    #state { position: absolute; bottom: 14px; left: 16px; color: #8fd48f;
+        font: 12px/1.7 Consolas, monospace; user-select: none; white-space: pre; }
+    #panel { position: absolute; top: 14px; right: 16px; color: #aab; font-size: 13px;
+        background: rgba(20,18,36,.85); border: 1px solid #443c5e; border-radius: 6px;
+        padding: 10px 14px; user-select: none; }
+    #panel label { display: block; margin: 4px 0; }
+    .wall-hint { color: #738cff; }
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<div id="hud">
+    <b>人物引擎 v4 · Climb + Dash + Boost</b> <i>（逐行对齐 Player.cs / 安装版 IL · D14–D22 已修）</i><br>
+    A / D 移动 · C 跳 <i>（缓冲 0.08s · 土狼 0.1s · 可变跳高）</i><br>
+    S 蹲下 / 空中快落 · W 抬头 · F 强风 · R 复位<br>
+    <b class="wall-hint">Z 抓墙攀爬 · X 冲刺（方向键瞄准 8 向）· 蹲下+X 蹲冲</b><br>
+    <i>Dash 240 / 0.15s · End 160 · Cooldown 0.2s · DashAttack 0.3s · Stamina 110</i><br>
+    <i class="wall-hint">5 个方块左右两面都能抓 Z：中央高柱 / 左右边界高墙 / 左矮台 / 中间小柱</i><br>
+    <i>地面横冲 + C = Super 260 · 蹲着横冲 + C = Hyper 325 · 纯上冲贴墙 + C = WallBounce 170/-160</i><br>
+    <i class="wall-hint">气泡（绿=Boost→Dash / 红=RedBoost→RedDash）· RedDash 撞墙/落地 = HitSquash</i>
+</div>
+<div id="state"></div>
+<div id="panel">
+    <label>缩放 <input id="zoom" type="range" min="2" max="8" step="1" value="5"> <span id="zoomV">5×</span></label>
+    <label><input id="debug" type="checkbox"> 显示节点 / 锚点</label>
+</div>
+<script src="js/celeste-hair.js?v=8"></script>
+<script src="js/celeste-character.js?v=8"></script>
+<script>
+(function () {
+    const cv = document.getElementById('stage');
+    const ctx = cv.getContext('2d');
+    function resize() {
+        cv.width = innerWidth; cv.height = innerHeight;
+        // 给 canvas.width/height 赋值会重置 2D 上下文状态，必须在这里重设，否则放大后变糊
+        ctx.imageSmoothingEnabled = false;
+    }
+    addEventListener('resize', resize); resize();
+
+// ===== 输入 =====
+const keys = {};
+let jumpEdge = false;
+let dashEdge = false;
+addEventListener('keydown', e => {
+    const k = e.key.toLowerCase();
+    if (!keys[k]) {
+        if (k === 'c') jumpEdge = true;
+        if (k === 'x') dashEdge = true;
+    }
+    keys[k] = true;
+    if ([' ', 'arrowleft', 'arrowright', 'arrowup', 'arrowdown'].includes(k)) e.preventDefault();
+    if (k === 'r' && madeline) {
+        resetMadeline();
+    }
+});
+addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+
+window.__demo = {
+    keys,
+    jump() { jumpEdge = true; },
+    dash() { dashEdge = true; },
+    get m() { return madeline; },
+    get b() { return badeline; }
+};
+
+// ===== 场地几何（实心方块集合）=====
+// 1 单位 = 原作 1 像素，y 向下，脚底 y = 0 为地面。
+// 每个方块有左右两个竖直面，都可以被 G 抓取攀爬。
+const GROUND = 0;
+const BODY_H = 30;          // 角色身体高度（用于判断墙面是否覆盖身体）
+const BODY_HALF_W = 4;      // 与引擎 postPhysics 的 halfBody 保持一致
+
+const BLOCKS = [
+    { x1: -340, x2: -200, y1: -260, y2: 0 },   // 左边界高墙（可攀爬）
+    { x1:  200, x2:  340, y1: -260, y2: 0 },   // 右边界高墙（可攀爬）
+    { x1:   60, x2:  108, y1: -230, y2: 0 },   // 中央高柱（左右两面都能爬）
+    { x1: -150, x2: -110, y1:  -22, y2: 0 },   // 左侧矮台（一步跳上去）
+    { x1:  -22, x2:   22, y1:  -46, y2: 0 }    // 中间小柱（抓墙 / 撞墙测试）
+];
+
+// 身体（脚底 y 向上 BODY_H）是否与方块在垂直方向重叠
+function overlapsY(b, y) {
+    return y > b.y1 + 1 && y - BODY_H < b.y2;
+}
+
+// 地面高度：该 x 处从地面起最高的方块顶面
+function groundAt(x) {
+    let g = GROUND;
+    for (const b of BLOCKS) {
+        if (x >= b.x1 && x <= b.x2 && b.y1 < g) g = b.y1;
+    }
+    return g;
+}
+
+// 墙检测（宽容，6px 内算贴墙）：返回墙面 x 或 null
+function wallNearAt(x, y, dir) {
+    let best = null;
+    for (const b of BLOCKS) {
+        if (!overlapsY(b, y)) continue;
+        const fx = dir === +1 ? b.x1 : b.x2;
+        const d = (fx - x) * dir;              // > 0 表示墙在前方
+        if (d >= -1 && d <= 6) {
+            if (best === null || Math.abs(fx - x) < Math.abs(best - x)) best = fx;
+        }
+    }
+    return best;
+}
+
+// 严格墙碰撞：碰撞体边缘 edgeX 越过墙面 → 返回墙面 x，否则 null
+function wallCollidesAt(edgeX, y, dir) {
+    let best = null;
+    for (const b of BLOCKS) {
+        if (!overlapsY(b, y)) continue;
+        if (dir === +1) {
+            if (edgeX > b.x1 && edgeX <= b.x2 && (best === null || b.x1 < best)) best = b.x1;
+        } else if (dir === -1) {
+            if (edgeX < b.x2 && edgeX >= b.x1 && (best === null || b.x2 > best)) best = b.x2;
+        }
+    }
+    return best;
+}
+
+// ===== 气泡（Booster）=====
+// 帧来源：Atlases/Gameplay/objects/booster/（32×32，未裁剪）
+// 帧表逐字取自本地 Content\Graphics\Sprites.xml L806-820：
+//   booster    loop = booster 0-4    delay 0.1（Justify 0.5,0.5）
+//   boosterRed appear = boosterRed 26-34 → loop；loop = boosterRed 0-4 delay 0.1
+const BOOSTER_DIR = 'Atlases/Gameplay/objects/booster';
+const BOOSTER_LOOP_DELAY = 0.1;
+const boosters = [
+    { x: -170, y: -150, red: false, frames: [], fi: 0, ft: 0, armed: true },
+    { x:  170, y: -150, red: true,  frames: [], fi: 0, ft: 0, armed: true }
+];
+const BOOSTER_HIT_R = 16;      // 原作 Booster 的碰撞半径（32×32 Justify 0.5,0.5）
+const BOOSTER_FEET_OFFSET = 14;// 把气泡中心换算成该引擎以“脚底”为原点的目标
+
+function loadImage(src) {
+    return new Promise(res => {
+        const i = new Image();
+        i.onload = () => res(i);
+        i.onerror = () => res(null);
+        i.src = src;
+    });
+}
+function boosterFrameName(b, i) {
+    return b.red ? `boosterRed${String(i).padStart(2, '0')}` : `booster${String(i).padStart(2, '0')}`;
+}
+
+function resetMadeline() {
+    const S = CelesteCharacter.ST;
+    madeline.x = -60; madeline.y = GROUND;
+    madeline.vx = 0; madeline.vy = 0;
+    madeline.state = S.Normal;
+    madeline.maxFall = 160;
+    madeline.dashes = 1;
+    madeline.lastDashes = 1;
+    madeline.dashes = madeline.maxDashes || 1;
+    madeline.stamina = 110;
+    madeline.climbWallDir = 0;
+    madeline.climbNoMoveTimer = 0;
+    madeline.dashCooldownTimer = 0;
+    madeline.dashRefillCooldownTimer = 0;
+    madeline.dashAttackTimer = 0;
+    madeline.dashTime = 0;
+    madeline.dashSpeedSet = false;
+    madeline.freezeTimer = 0;
+    madeline.ducking = false;
+    madeline.hairFlashTimer = 0;
+    madeline.scaleX = 1; madeline.scaleY = 1;
+    madeline.dashTrail.length = 0;
+    // D14–D22 新增状态字段复位
+    madeline.dashDir = { x: 0, y: 0 };
+    madeline.lastAim = { x: 0, y: 1 };
+    madeline.boostRed = false;
+    madeline.boostTime = 0;
+    madeline.boostTarget = null;
+    madeline.currentBooster = null;
+    madeline.launched = false;
+    madeline.launchApproachX = null;
+    madeline.explodeLaunchBoostTimer = 0;
+    madeline.explodeLaunchBoostSpeed = 0;
+    madeline.hitSquashNoMoveTimer = 0;
+    madeline.wasDashB = false;
+    madeline.hopWaitX = 0;
+    madeline.wallBoostTimer = 0;
+    madeline.wallSpeedRetentionTimer = 0;
+    madeline.wallSlideTimer = 1.2;
+    madeline.wallSlideDir = 0;
+    madeline.jumpBufferTimer = 0;
+    madeline.jumpGraceTimer = 0;
+    madeline.varJumpTimer = 0;
+    madeline.forceMoveX = 0;
+    madeline.forceMoveXTimer = 0;
+    madeline.onGround = true;
+    madeline.hair.setColor('normal');
+    madeline.hair.reset(madeline.x, madeline.y, madeline.facing);
+}
+
+let Z = 5;
+const zoomEl = document.getElementById('zoom'), zoomV = document.getElementById('zoomV');
+zoomEl.addEventListener('input', () => { Z = +zoomEl.value; zoomV.textContent = Z + '×'; });
+const debugEl = document.getElementById('debug');
+const stateEl = document.getElementById('state');
+
+let madeline = null, badeline = null;
+let windT = 0, badT = 0;
+const dust = [];
+
+function toScreenFactory() {
+    const ox = cv.width / 2, oy = cv.height * 0.72;
+    return n => ({ x: ox + n.x * Z, y: oy + n.y * Z });
+}
+
+function spawnDust(x, y, count, spread) {
+    for (let i = 0; i < count; i++) {
+        const a = -Math.PI / 2 + (Math.random() - 0.5) * spread;
+        const sp = 20 + Math.random() * 40;
+        dust.push({ x, y: y - 1, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.6,
+                    life: 0.25 + Math.random() * 0.3 });
+    }
+}
+
+async function main() {
+    madeline = await CelesteCharacter.create({
+        base: 'Atlases/Gameplay/characters/player',
+        color: CelesteHair.MADELINE, x: -60, y: GROUND
+    });
+    badeline = await CelesteCharacter.create({
+        base: 'Atlases/Gameplay/characters/player_badeline',
+        color: CelesteHair.BADELINE, x: 60, y: GROUND - 14, facing: -1
+    });
+
+    // 气泡 loop 帧（各 0-4）
+    for (const b of boosters)
+        b.frames = (await Promise.all(
+            [0, 1, 2, 3, 4].map(i => loadImage(`${BOOSTER_DIR}/${boosterFrameName(b, i)}.png`))
+        )).filter(Boolean);
+
+    // Badeline 漂浮地面
+    badeline.setGround(() => GROUND - 14 + Math.sin(badT * Math.PI * 2 * 0.25) * 2);
+
+    // Madeline 地面 + 墙检测（方块集合）
+    madeline.setGround(groundAt);
+    madeline.setWallAt(wallNearAt);
+    madeline.setWallCollideFn(wallCollidesAt);
+    badeline.setWallAt(wallNearAt);
+    badeline.setWallCollideFn(wallCollidesAt);
+
+    madeline.onLand = vy => { if (vy >= 80) spawnDust(madeline.x, madeline.y, 8, 1.8); };
+
+    let last = 0, wasGround = true;
+    function frame(ts) {
+        const dt = last ? Math.min((ts - last) / 1000, 0.05) : 1 / 60;
+        last = ts;
+        badT += dt;
+
+        const input = {
+            left: keys['a'] || keys['arrowleft'],
+            right: keys['d'] || keys['arrowright'],
+            down: keys['s'] || keys['arrowdown'],
+            up: keys['w'] || keys['arrowup'],
+            jumpHeld: !!keys['c'],
+            jumpPressed: jumpEdge,
+            grabHeld: !!keys['z'],
+            grabPressed: keys['z'],
+            dashPressed: dashEdge,
+            aimX: (() => {
+                const dpad = (keys['arrowright'] ? 1 : 0) - (keys['arrowleft'] ? 1 : 0);
+                if (dpad !== 0) return dpad;
+                return (keys['d'] ? 1 : 0) - (keys['a'] ? 1 : 0);
+            })(),
+            aimY: (() => {
+                const dpad = (keys['arrowdown'] ? 1 : 0) + (keys['arrowup'] ? -1 : 0);
+                if (dpad !== 0) return dpad;
+                return (keys['s'] ? 1 : 0) + (keys['w'] ? -1 : 0);
+            })()
+        };
+        jumpEdge = false; dashEdge = false;
+
+        madeline.update(dt, input);
+        badeline.update(dt, { left: false, right: false, down: false, up: false });
+
+        // ===== 气泡：动画 + 触发（原作 Booster.OnPlayer / Player.Boost / RedBoost）=====
+        for (const b of boosters) {
+            // loop 动画（delay 0.1，帧 0-4 循环）
+            if (b.frames.length) {
+                b.ft += dt;
+                while (b.ft >= BOOSTER_LOOP_DELAY) {
+                    b.ft -= BOOSTER_LOOP_DELAY;
+                    b.fi = (b.fi + 1) % b.frames.length;
+                }
+            }
+            // 人物中心 vs 气泡中心（引擎以脚底为原点 → 中心 = y - 15）
+            const dx = madeline.x - b.x, dy = (madeline.y - 15) - b.y;
+            const touching = Math.abs(dx) < BOOSTER_HIT_R && Math.abs(dy) < BOOSTER_HIT_R;
+            if (touching && b.armed && madeline.state !== CelesteCharacter.ST.Boost) {
+                b.armed = false;
+                // 引擎 boost() 的目标以“脚底”为原点：气泡中心下移 FEET_OFFSET
+                madeline.boost({ x: b.x, y: b.y + BOOSTER_FEET_OFFSET }, b.red);
+            }
+            if (!touching) b.armed = true;
+        }
+
+        // 起跳扬尘
+        if (wasGround && !madeline.onGround && madeline.vy < 0)
+            spawnDust(madeline.x, madeline.y, 4, 0.9);
+        wasGround = madeline.onGround;
+
+        // 强风
+        if (keys['f']) {
+            windT += dt;
+            CelesteHair.applyWindX(madeline.hair, 1.5, windT);
+            CelesteHair.applyWindX(badeline.hair, 1.5, windT);
+        } else {
+            CelesteHair.resetWind(madeline.hair);
+            CelesteHair.resetWind(badeline.hair);
+        }
+
+        // 尘土更新
+        for (let i = dust.length - 1; i >= 0; i--) {
+            const d = dust[i];
+            d.x += d.vx * dt; d.y += d.vy * dt; d.vy += 260 * dt; d.life -= dt;
+            if (d.life <= 0) dust.splice(i, 1);
+        }
+
+        // ===== 渲染 =====
+        ctx.clearRect(0, 0, cv.width, cv.height);
+        const toScreen = toScreenFactory();
+
+        // 地面
+        const gy = toScreen({ x: 0, y: GROUND }).y;
+        ctx.strokeStyle = 'rgba(120,110,160,.35)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(0, gy + 1); ctx.lineTo(cv.width, gy + 1); ctx.stroke();
+
+        // 方块（可攀爬）：填充 + 顶面高亮 + 竖直墙面描边
+        for (const b of BLOCKS) {
+            const p1 = toScreen({ x: b.x1, y: b.y1 });
+            const p2 = toScreen({ x: b.x2, y: b.y2 });
+            const w = p2.x - p1.x, h = p2.y - p1.y;
+            ctx.fillStyle = 'rgba(96,82,170,.22)';
+            ctx.fillRect(p1.x, p1.y, w, h);
+            ctx.strokeStyle = 'rgba(150,130,235,.85)'; ctx.lineWidth = 2;
+            ctx.strokeRect(p1.x + 1, p1.y + 1, w - 2, h - 2);
+            // 顶面（可站立）
+            ctx.strokeStyle = 'rgba(205,195,255,.95)';
+            ctx.beginPath(); ctx.moveTo(p1.x, p1.y + 1); ctx.lineTo(p2.x, p1.y + 1); ctx.stroke();
+            // 竖直面（可攀爬）竖向高光
+            ctx.strokeStyle = 'rgba(120,140,255,.9)';
+            ctx.beginPath();
+            ctx.moveTo(p1.x + 1, p1.y + 8); ctx.lineTo(p1.x + 1, p2.y - 4);
+            ctx.moveTo(p2.x - 1, p1.y + 8); ctx.lineTo(p2.x - 1, p2.y - 4);
+            ctx.stroke();
+        }
+
+        // 尘土
+        ctx.fillStyle = '#c9c5dd';
+        for (const d of dust) {
+            const p = toScreen(d);
+            ctx.globalAlpha = Math.min(1, d.life * 4);
+            ctx.fillRect(Math.round(p.x), Math.round(p.y), Math.max(2, Z * 0.4), Math.max(2, Z * 0.4));
+        }
+        ctx.globalAlpha = 1;
+
+        // 气泡（Justify 0.5,0.5 → 以中心绘制）
+        for (const b of boosters) {
+            const img = b.frames[b.fi];
+            if (!img) continue;
+            const p = toScreen({ x: b.x, y: b.y });
+            ctx.drawImage(img,
+                Math.round(p.x - img.width * Z / 2), Math.round(p.y - img.height * Z / 2),
+                img.width * Z, img.height * Z);
+        }
+
+        badeline.draw(ctx, toScreen, Z);
+        madeline.draw(ctx, toScreen, Z);
+
+        if (debugEl.checked) {
+            const n0 = madeline.hair.nodes[0];
+            if (n0) {
+                const a = toScreen(n0);
+                ctx.strokeStyle = '#ff0'; ctx.lineWidth = 1;
+                ctx.strokeRect(a.x - 3, a.y - 3, 6, 6);
+            }
+            ctx.fillStyle = '#f44';
+            for (const n of madeline.hair.nodes) {
+                const p = toScreen(n); ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
+            }
+            const f = toScreen(madeline);
+            ctx.fillStyle = '#4af'; ctx.fillRect(f.x - 2, f.y - 2, 4, 4);
+        }
+
+        const m = madeline;
+        const stateName = (CelesteCharacter.STATE_NAMES[m.state] || String(m.state)).toUpperCase();
+        stateEl.textContent =
+            `state=${stateName.padEnd(9)} anim=${(m.anim || '-').padEnd(10)} vx=${m.vx.toFixed(1).padStart(6)} vy=${m.vy.toFixed(1).padStart(7)}\n` +
+            `ground=${m.onGround ? 1 : 0} facing=${m.facing} wallDir=${m.climbWallDir || m.wallSlideDir}\n` +
+            `stam=${m.stamina.toFixed(0).padStart(3)} dashes=${m.dashes}/${m.maxDashes} cd=${m.dashCooldownTimer.toFixed(2)} atk=${m.dashAttackTimer.toFixed(2)}\n` +
+            `dashDir=(${m.dashDir.x.toFixed(2)},${m.dashDir.y.toFixed(2)}) dt=${m.dashTime.toFixed(2)} speedSet=${m.dashSpeedSet ? 1 : 0} freeze=${m.freezeTimer.toFixed(2)}\n` +
+            `boost=${m.boostRed ? 'red' : '-'} t=${(m.boostTime || 0).toFixed(2)} squash=${(m.hitSquashNoMoveTimer || 0).toFixed(2)}\n` +
+            `scale=(${m.scaleX.toFixed(2)},${m.scaleY.toFixed(2)}) duck=${m.ducking ? 1 : 0} hair=${m.hair.colorIdx}`;
+
+        requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+}
+main();
+
+})(); </script>
+
+</body>
+</html>

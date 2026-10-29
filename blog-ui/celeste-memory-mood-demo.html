@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>铭记 · 动态氛围演示</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+      background: #080b18;
+      color: #e7e8f4;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; overflow: hidden; }
+    main { position: relative; width: 100vw; height: 100vh; min-height: 420px; }
+    canvas { display: block; width: 100%; height: 100%; }
+    .veil {
+      position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(90deg, rgba(7,9,22,.48), transparent 58%),
+        linear-gradient(0deg, rgba(6,8,18,.62), transparent 42%);
+    }
+    header {
+      position: absolute; left: clamp(24px, 6vw, 88px); top: clamp(28px, 7vh, 72px);
+      max-width: 340px; text-shadow: 0 2px 24px #060817;
+    }
+    .eyebrow { color: #a4b8ce; letter-spacing: .28em; font-size: 11px; }
+    h1 { margin: 14px 0 7px; font-size: clamp(40px, 6vw, 70px); font-weight: 300; letter-spacing: .16em; }
+    .sub { color: #b7c0d3; font-size: 13px; letter-spacing: .12em; }
+    .note {
+      position: absolute; left: clamp(24px, 6vw, 88px); bottom: 28px;
+      max-width: 390px; color: #b8c1d0; font-size: 12px; line-height: 1.8;
+      text-shadow: 0 1px 12px #080b18;
+    }
+    .controls {
+      position: absolute; right: clamp(18px, 4vw, 54px); bottom: 28px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    button {
+      border: 1px solid rgba(194,220,235,.28); border-radius: 999px;
+      background: rgba(12,18,34,.48); color: #e3e9f0;
+      padding: 9px 15px; font: inherit; font-size: 12px; cursor: pointer;
+      backdrop-filter: blur(8px);
+    }
+    button:hover { border-color: #a9d9db; background: rgba(34,58,68,.56); }
+    .signature {
+      position: absolute; top: 28px; right: clamp(20px, 4vw, 54px);
+      color: rgba(207,220,235,.58); font-size: 10px; letter-spacing: .14em;
+    }
+    @media (max-width: 620px) {
+      .note { right: 24px; bottom: 82px; }
+      .controls { left: 24px; right: auto; bottom: 24px; }
+      .signature { top: 20px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .sub::after { content: " · 动画可暂停"; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <canvas id="scene" aria-label="冷色星空与流动光带的动态氛围场景"></canvas>
+    <div class="veil"></div>
+    <header>
+      <div class="eyebrow">A QUIET PLACE TO REMEMBER</div>
+      <h1>铭记</h1>
+      <div class="sub">第九章氛围参考 · 原创程序化绘制</div>
+    </header>
+    <div class="signature">AMBIENT STUDY&nbsp; / &nbsp;01</div>
+    <div class="note">
+      缓慢流动的冷色光带、稀疏星点与层叠山影，试着留住抵达山顶后的安静。<br>
+      移动鼠标可改变远景视差。
+    </div>
+    <div class="controls">
+      <button id="pause" type="button">暂停动画</button>
+      <button id="restart" type="button">重置视角</button>
+    </div>
+  </main>
+  <script>
+    (() => {
+      const canvas = document.querySelector("#scene");
+      const ctx = canvas.getContext("2d", { alpha: false });
+      const pauseButton = document.querySelector("#pause");
+      const restartButton = document.querySelector("#restart");
+      const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+      const TAU = Math.PI * 2;
+      const colors = ["#73edc0", "#53c9ca", "#7c92f3", "#b487df"];
+      let width = 0, height = 0, scale = 1, time = 0, last = 0, paused = reducedMotion.matches;
+      let pointerX = 0, pointerY = 0, targetX = 0, targetY = 0;
+      let ribbons = [], stars = [], motes = [];
+
+      const rand = (min, max) => min + Math.random() * (max - min);
+      const mod = (n, m) => ((n % m) + m) % m;
+
+      function resize() {
+        const rect = canvas.getBoundingClientRect();
+        width = rect.width;
+        height = rect.height;
+        scale = Math.min(window.devicePixelRatio || 1, 1.6);
+        canvas.width = Math.round(width * scale);
+        canvas.height = Math.round(height * scale);
+        ctx.setTransform(scale, 0, 0, scale, 0, 0);
+        makeSky();
+      }
+
+      function makeSky() {
+        stars = Array.from({ length: Math.round(width * height / 7200) }, () => ({
+          x: rand(0, width), y: rand(0, height * .76), r: rand(.35, 1.25),
+          phase: rand(0, TAU), rate: rand(.25, 1.15), alpha: rand(.18, .72)
+        }));
+        motes = Array.from({ length: Math.round(width * height / 12500) }, () => ({
+          x: rand(0, width), y: rand(0, height), speed: rand(3, 13),
+          size: rand(.5, 1.5), tint: Math.floor(rand(0, colors.length)), sway: rand(0, TAU)
+        }));
+        ribbons = Array.from({ length: 5 }, (_, i) => ({
+          y: height * (.30 + i * .055), amplitude: height * rand(.025, .075),
+          phase: rand(0, TAU), speed: rand(.07, .18), frequency: rand(.65, 1.4),
+          thickness: height * rand(.08, .19), color: colors[i % colors.length],
+          alpha: rand(.18, .36), drift: rand(-.07, .07)
+        }));
+      }
+
+      function background() {
+        const g = ctx.createLinearGradient(0, 0, 0, height);
+        g.addColorStop(0, "#080d24");
+        g.addColorStop(.42, "#17233c");
+        g.addColorStop(.78, "#24283e");
+        g.addColorStop(1, "#101827");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, width, height);
+
+        const glow = ctx.createRadialGradient(width * .72, height * .43, 0, width * .72, height * .43, width * .62);
+        glow.addColorStop(0, "rgba(71,139,161,.18)");
+        glow.addColorStop(.48, "rgba(91,91,150,.08)");
+        glow.addColorStop(1, "rgba(8,12,30,0)");
+        ctx.fillStyle = glow;
+        ctx.fillRect(0, 0, width, height);
+      }
+
+      function drawRibbons() {
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        for (const ribbon of ribbons) {
+          const shift = time * ribbon.drift * width + pointerX * .16;
+          const gradient = ctx.createLinearGradient(0, ribbon.y - ribbon.thickness, 0, ribbon.y + ribbon.thickness * .2);
+          gradient.addColorStop(0, "rgba(140,210,220,0)");
+          gradient.addColorStop(.38, `${ribbon.color}22`);
+          gradient.addColorStop(.72, `${ribbon.color}66`);
+          gradient.addColorStop(1, `${ribbon.color}05`);
+          ctx.fillStyle = gradient;
+          ctx.globalAlpha = ribbon.alpha;
+          ctx.beginPath();
+          for (let x = -40; x <= width + 40; x += 12) {
+            const wave = Math.sin((x / width * TAU * ribbon.frequency) + ribbon.phase + time * ribbon.speed);
+            const wave2 = Math.sin((x / width * TAU * .43) - ribbon.phase * .7 + time * ribbon.speed * .55);
+            const y = ribbon.y + wave * ribbon.amplitude + wave2 * ribbon.amplitude * .35;
+            if (x === -40) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          for (let x = width + 40; x >= -40; x -= 12) {
+            const wave = Math.sin((x / width * TAU * ribbon.frequency) + ribbon.phase + time * ribbon.speed);
+            const wave2 = Math.sin((x / width * TAU * .43) - ribbon.phase * .7 + time * ribbon.speed * .55);
+            const y = ribbon.y + wave * ribbon.amplitude + wave2 * ribbon.amplitude * .35 - ribbon.thickness;
+            ctx.lineTo(x, y);
+          }
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      function drawStars(dt) {
+        ctx.save();
+        for (const star of stars) {
+          star.phase += dt * star.rate;
+          const alpha = star.alpha * (.58 + Math.sin(star.phase) * .42);
+          const x = mod(star.x - pointerX * .12, width);
+          const y = mod(star.y - pointerY * .08, height);
+          ctx.fillStyle = `rgba(194,222,239,${alpha})`;
+          ctx.fillRect(x, y, star.r, star.r);
+        }
+        ctx.restore();
+      }
+
+      function mountain(points, fill, parallax, offsetY = 0) {
+        ctx.beginPath();
+        ctx.moveTo(0, height);
+        for (const [x, y] of points) {
+          ctx.lineTo(x * width + pointerX * parallax, y * height + pointerY * parallax + offsetY);
+        }
+        ctx.lineTo(width, height);
+        ctx.closePath();
+        ctx.fillStyle = fill;
+        ctx.fill();
+      }
+
+      function drawMountains() {
+        mountain([[0,.72],[.12,.58],[.21,.67],[.34,.48],[.46,.65],[.59,.52],[.72,.68],[.86,.50],[1,.67]], "#19263a", .18);
+        mountain([[0,.81],[.12,.70],[.25,.78],[.38,.62],[.5,.77],[.64,.61],[.79,.79],[.91,.64],[1,.76]], "#111d2d", .32);
+        mountain([[0,.88],[.18,.77],[.3,.86],[.46,.73],[.62,.89],[.78,.76],[.9,.85],[1,.73]], "#0b1422", .48);
+        ctx.fillStyle = "rgba(144,184,196,.12)";
+        ctx.fillRect(0, height * .89, width, height * .003);
+      }
+
+      function drawMotes(dt) {
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        for (const mote of motes) {
+          mote.y += mote.speed * dt;
+          mote.sway += dt * .35;
+          if (mote.y > height + 4) { mote.y = -4; mote.x = rand(0, width); }
+          const x = mod(mote.x + Math.sin(mote.sway) * 12 - pointerX * .24, width);
+          ctx.fillStyle = `${colors[mote.tint]}66`;
+          ctx.fillRect(x, mote.y, mote.size, mote.size);
+        }
+        ctx.restore();
+      }
+
+      function frame(now) {
+        const dt = Math.min((now - (last || now)) / 1000, .05);
+        last = now;
+        if (!paused) time += dt;
+        pointerX += (targetX - pointerX) * Math.min(1, dt * 2);
+        pointerY += (targetY - pointerY) * Math.min(1, dt * 2);
+        background();
+        drawRibbons();
+        drawStars(paused ? 0 : dt);
+        drawMountains();
+        drawMotes(paused ? 0 : dt);
+        requestAnimationFrame(frame);
+      }
+
+      window.addEventListener("resize", resize);
+      window.addEventListener("pointermove", event => {
+        targetX = (event.clientX / width - .5) * 44;
+        targetY = (event.clientY / height - .5) * 28;
+      });
+      pauseButton.addEventListener("click", () => {
+        paused = !paused;
+        pauseButton.textContent = paused ? "继续动画" : "暂停动画";
+      });
+      restartButton.addEventListener("click", () => {
+        pointerX = pointerY = targetX = targetY = 0;
+        time = 0;
+      });
+      resize();
+      pauseButton.textContent = paused ? "继续动画" : "暂停动画";
+      requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Celeste 头发系统 · 测试展示</title>
+<style>
+    html, body { margin: 0; height: 100%; background: #0b0a14; overflow: hidden;
+        font-family: "Microsoft YaHei", sans-serif; }
+    #stage { position: absolute; inset: 0; width: 100%; height: 100%;
+        image-rendering: pixelated; }
+    #hud { position: absolute; top: 14px; left: 16px; color: #aab; font-size: 13px;
+        line-height: 1.9; user-select: none; }
+    #hud b { color: #ffe36d; }
+    #panel { position: absolute; top: 14px; right: 16px; color: #aab; font-size: 13px;
+        background: rgba(20,18,36,.85); border: 1px solid #443c5e; border-radius: 6px;
+        padding: 10px 14px; user-select: none; }
+    #panel label { display: block; margin: 4px 0; }
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<div id="hud">
+    <b>头发系统测试</b><br>
+    A / D 或 ← → 移动 &nbsp;·&nbsp; Space 跳跃<br>
+    按住 F 吹强风 &nbsp;·&nbsp; 发丝物理全部对齐原作
+</div>
+<div id="panel">
+    <label>缩放 <input id="zoom" type="range" min="2" max="8" step="1" value="5"> <span id="zoomV">5×</span></label>
+    <label><input id="debug" type="checkbox"> 显示节点 / 锚点</label>
+</div>
+<script src="js/celeste-hair.js"></script>
+<script>
+(function () {
+    const cv = document.getElementById('stage');
+    const ctx = cv.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    function resize() { cv.width = innerWidth; cv.height = innerHeight; }
+    addEventListener('resize', resize); resize();
+
+    // ===== 每帧 hair 元数据（逐字摘自游戏 Sprites.xml 的 <Frames hair="..."/>）=====
+    // 格式："x,y" 或 "x,y:bang帧号"，x 绘制时乘朝向
+    function parseHair(s) {
+        return s.split('|').map(e => {
+            const [xy, bang] = e.split(':');
+            const [x, y] = xy.split(',').map(Number);
+            return { x, y, bang: bang === undefined ? 0 : Number(bang) };
+        });
+    }
+    const ANIMS = {
+        idle:     { delay: 0.10, count: 9,
+                    hair: parseHair('0,-2|0,-2|0,-2|0,-2|0,-1|0,-1|0,-1|0,-1|0,-1') },
+        walk:     { delay: 0.06, count: 12,
+                    hair: parseHair('0,-2|0,-1|0,-1|0,-1|0,-3|0,-2|0,-1|0,-1|0,-1|0,-1|0,-3|0,-2') },
+        jumpFast: { delay: 0.10, count: 4,
+                    hair: parseHair('1,-3|1,-3|1,-2|0,-2') }
+    };
+
+    const CHARS = {
+        player:   { base: 'Atlases/Gameplay/characters/player',   color: CelesteHair.MADELINE },
+        badeline: { base: 'Atlases/Gameplay/characters/player_badeline', color: CelesteHair.BADELINE }
+    };
+
+    function loadImage(src) {
+        return new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
+    }
+    async function loadFrames(base, name, count) {
+        const out = [];
+        for (let i = 0; i < count; i++)
+            out.push(await loadImage(base + '/' + name + String(i).padStart(2, '0') + '.png'));
+        return out;
+    }
+
+    // ===== 角色状态（游戏单位：1 单位 = 原作 1 像素，y 向下）=====
+    const GROUND = 0;                    // 地面 y（世界原点=地面）
+    const madeline = { x: -60, y: GROUND, vy: 0, facing: 1, moving: false, airborne: false,
+                       anim: 'idle', animT: 0, frame: 0, frames: {}, hair: null };
+    const badeline = { x: 60, y: GROUND - 14, facing: -1, floatT: 0,
+                       anim: 'idle', animT: 0, frame: 0, frames: {}, hair: null };
+
+    const keys = {};
+    addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true;
+        if ([' ', 'arrowleft', 'arrowright'].includes(e.key.toLowerCase())) e.preventDefault(); });
+    addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+    let Z = 5;                            // 屏幕像素 / 游戏单位
+    const zoomEl = document.getElementById('zoom'), zoomV = document.getElementById('zoomV');
+    zoomEl.addEventListener('input', () => { Z = +zoomEl.value; zoomV.textContent = Z + '×'; });
+    const debugEl = document.getElementById('debug');
+
+    let windT = 0;
+
+    function animUpdate(c, dt) {
+        const a = ANIMS[c.anim];
+        c.animT += dt;
+        while (c.animT >= a.delay) { c.animT -= a.delay; c.frame = (c.frame + 1) % a.count; }
+    }
+    function curHair(c) { return ANIMS[c.anim].hair[c.frame]; }
+
+    function madelineUpdate(dt) {
+        const left = keys['a'] || keys['arrowleft'], right = keys['d'] || keys['arrowright'];
+        madeline.moving = left !== right;
+        if (madeline.moving) {
+            madeline.facing = right ? 1 : -1;
+            madeline.x += madeline.facing * 90 * dt;   // 原作跑步速度 90
+        }
+        if (keys[' '] && !madeline.airborne) { madeline.vy = -170; madeline.airborne = true; }
+        if (madeline.airborne) {
+            madeline.vy += 500 * dt;
+            madeline.y += madeline.vy * dt;
+            if (madeline.y >= GROUND) { madeline.y = GROUND; madeline.vy = 0; madeline.airborne = false; }
+        }
+        const next = madeline.airborne ? 'jumpFast' : (madeline.moving ? 'walk' : 'idle');
+        if (next !== madeline.anim) { madeline.anim = next; madeline.animT = 0; madeline.frame = 0; }
+        if (madeline.anim === 'jumpFast') madeline.frame = madeline.vy < 0 ? 1 : 2;
+        else animUpdate(madeline, dt);
+        madeline.x = Math.max(-innerWidth / Z / 2 + 20, Math.min(innerWidth / Z / 2 - 20, madeline.x));
+    }
+
+    function badelineUpdate(dt) {
+        badeline.floatT += dt;
+        badeline.y = GROUND - 14 + Math.sin(badeline.floatT * Math.PI * 2 * 0.25) * 2;  // 原作 SineWave 0.25Hz ±2
+        animUpdate(badeline, dt);
+    }
+
+    // 世界(游戏单位) → 屏幕：原点 = 屏幕底边中央偏下
+    function toScreenFactory() {
+        const ox = cv.width / 2, oy = cv.height * 0.72;
+        return n => ({ x: ox + n.x * Z, y: oy + n.y * Z });
+    }
+
+    function drawChar(c, toScreen) {
+        const img = c.frames[c.anim] && c.frames[c.anim][c.frame];
+        const s = toScreen(c);
+        // 头发画在身体下方，否则刘海会盖住脸
+        c.hair.draw(ctx, toScreen, Z, curHair(c).bang);
+        ctx.save();
+        ctx.translate(Math.round(s.x), Math.round(s.y));
+        ctx.scale(c.facing * Z, Z);                  // 原作用负 Scale.X 翻转
+        if (img) ctx.drawImage(img, -16, -32);       // 32×32 帧，脚底中心对齐
+        ctx.restore();
+        if (debugEl.checked) {
+            const a = toScreen({ x: c.x + curHair(c).x * c.facing, y: c.y - 9 + curHair(c).y });
+            ctx.strokeStyle = '#ff0'; ctx.lineWidth = 1;
+            ctx.strokeRect(a.x - 3, a.y - 3, 6, 6);
+            ctx.fillStyle = '#f44';
+            for (const n of c.hair.nodes) { const p = toScreen(n); ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3); }
+        }
+    }
+
+    async function main() {
+        // 加载头发贴图（染色）与帧图
+        for (const key of Object.keys(CHARS)) {
+            const info = CHARS[key];
+            const tex = await CelesteHair.load(info.base, info.color);
+            const c = key === 'player' ? madeline : badeline;
+            c.hair = new CelesteHair.Hair(tex, 4);
+            c.frames.idle = await loadFrames(info.base, 'idle', ANIMS.idle.count);
+            c.frames.walk = await loadFrames(info.base, 'walk', ANIMS.walk.count);
+            c.frames.jumpFast = await loadFrames(info.base, 'jumpFast', ANIMS.jumpFast.count);
+            c.hair.reset(c.x, c.y, c.facing);
+        }
+
+        let last = 0;
+        function frame(ts) {
+            const dt = last ? Math.min((ts - last) / 1000, 0.05) : 1 / 60;
+            last = ts;
+
+            madelineUpdate(dt);
+            badelineUpdate(dt);
+
+            // 强风（按住 F）：对齐原作 ForceStrongWindHair 分支
+            if (keys['f']) { windT += dt; CelesteHair.applyWindX(madeline.hair, 1.5, windT); CelesteHair.applyWindX(badeline.hair, 1.5, windT); }
+            else { CelesteHair.resetWind(madeline.hair); CelesteHair.resetWind(badeline.hair); }
+
+            // 头发模拟（原作在精灵定位之后跑）
+            for (const c of [madeline, badeline]) {
+                const h = curHair(c);
+                c.hair.update(c.x, c.y, c.facing, h.x, h.y, dt);
+            }
+
+            // ===== 渲染 =====
+            ctx.clearRect(0, 0, cv.width, cv.height);
+            const toScreen = toScreenFactory();
+            // 地面参考线
+            const gy = toScreen({ x: 0, y: GROUND }).y;
+            ctx.strokeStyle = 'rgba(120,110,160,.35)'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(0, gy + 1); ctx.lineTo(cv.width, gy + 1); ctx.stroke();
+
+            drawChar(madeline, toScreen);
+            drawChar(badeline, toScreen);
+            requestAnimationFrame(frame);
+        }
+        requestAnimationFrame(frame);
+    }
+    main();
+})();
+</script>
+</body>
+</html>

@@ -27,6 +27,7 @@
       font-weight: 300; letter-spacing: .18em; color: #eaf6ff;
     }
     .sub { font-size: 12px; letter-spacing: .2em; color: #93b4cc; }
+    .src { margin-top: 8px; font-size: 10px; line-height: 1.6; letter-spacing: .1em; color: #7e93b4; opacity: .8; max-width: min(78vw, 560px); }
     .hint {
       position: fixed; left: clamp(20px, 4vw, 64px); bottom: 22px;
       font-size: 11px; letter-spacing: .12em; color: #9cb6c9; opacity: .82;
@@ -52,17 +53,23 @@
       white-space: nowrap;
     }
     .toast.show { opacity: 1; }
+    /* 窄屏：底部一左一右会相撞，把 HUD 提到静音键下方，并给提示条留出右边界让它自然换行 */
+    @media (max-width: 720px) {
+      .hint { right: clamp(20px, 4vw, 64px); font-size: 10px; letter-spacing: .06em; line-height: 2.1; }
+      .hud { bottom: auto; top: clamp(72px, 12vh, 104px); font-size: 10px; }
+    }
   </style>
 </head>
 <body>
-  <canvas id="scene" aria-label="第九章铭记场景：浅蓝色太空中的月亮岩平台"></canvas>
+  <canvas id="scene" aria-label="第九章铭记场景：明亮星海中的浮空跳板与月球生物"></canvas>
   <div class="vignette"></div>
   <header>
     <div class="eyebrow">CHAPTER IX &middot; FAREWELL</div>
     <h1>铭记</h1>
     <div class="sub">REMEMBERED &middot; 空无之室</div>
+    <div class="src">背景 11 层 + 前景 1 层 stylegrounds &middot; 关卡 lvl_e-00z &middot; 反编译自 Celeste.dll / LostLevels.bin</div>
   </header>
-  <div class="hint"><b>&larr; &rarr;</b> 移动 &nbsp;&middot;&nbsp; <b>Space</b> 跳跃 &nbsp;&middot;&nbsp; <b>R</b> 重来 &nbsp;&middot;&nbsp; <b>M</b> 静音</div>
+  <div class="hint"><b>&larr; &rarr;</b> 移动 &nbsp;&middot;&nbsp; <b>Space</b> 跳跃 &nbsp;&middot;&nbsp; <b>X</b> 冲刺 &nbsp;&middot;&nbsp; <b>Shift</b> 抓墙 &nbsp;&middot;&nbsp; <b>R</b> 重来 &nbsp;&middot;&nbsp; <b>M</b> 静音</div>
   <div class="hud" id="hud">空无&nbsp; 0 / 1</div>
   <button class="mute" id="mute" type="button" title="静音（M）">&#9835;</button>
   <div class="toast" id="toast">拾起「空无」</div>
@@ -90,6 +97,8 @@
       cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.imageSmoothingEnabled = false;
+      // cv.width 赋值会清空画布：立即补一帧，否则窗口尺寸变化后会白屏到下一帧
+      if (m) render();
     }
     window.addEventListener('resize', resize);
 
@@ -103,58 +112,282 @@
       });
     }
     const IMG = {};
-    // 贴花/粒子原是纯白剪影，按原 alpha 填色（source-in），避免直接乘色发灰
-    function tintImg(img, color) {
+    const TEX = {};                     // (图源|颜色|翻转) → 预乘色画布
+    // XNA 的 SpriteBatch 是用 Color 相乘；这里用 multiply + destination-in 复刻：
+    // 既把 RGB 乘上目标色，又靠 destination-in 把 alpha 还原，不会像 source-in 那样变成纯色剪影
+    function tinted(key, color, flipX, flipY) {
+      const ck = key + '|' + (color || '-') + (flipX ? '|x' : '') + (flipY ? '|y' : '');
+      if (TEX[ck] !== undefined) return TEX[ck];
+      const img = IMG[key];
       if (!img) return null;
+      if (!color && !flipX && !flipY) { TEX[ck] = img; return img; }
       const c = document.createElement('canvas');
       c.width = img.width; c.height = img.height;
       const g = c.getContext('2d');
-      g.drawImage(img, 0, 0);
-      g.globalCompositeOperation = 'source-in';
-      g.fillStyle = color;
-      g.fillRect(0, 0, c.width, c.height);
+      const place = () => {
+        g.setTransform(1, 0, 0, 1, 0, 0);
+        if (flipX) { g.translate(c.width, 0); g.scale(-1, 1); }
+        if (flipY) { g.translate(0, c.height); g.scale(1, -1); }
+        g.drawImage(img, 0, 0);
+      };
+      place();
+      if (color) {
+        g.setTransform(1, 0, 0, 1, 0, 0);
+        g.globalCompositeOperation = 'multiply';
+        g.fillStyle = color;
+        g.fillRect(0, 0, c.width, c.height);
+        g.globalCompositeOperation = 'destination-in';
+        place();
+      }
+      TEX[ck] = c;
       return c;
     }
     function preload() {
       const jobs = [];
       const put = (key, path) => jobs.push(loadImage(path).then(i => { IMG[key] = i; }));
-      const putCloud = (key, path) => jobs.push(loadImage(path).then(i => { IMG[key] = tintImg(i, '#eef9ff'); }));
-      const putStar = (key, path) => jobs.push(loadImage(path).then(i => { IMG[key] = tintImg(i, '#bfe4ff'); }));
+      // stylegrounds：bgs/10/skybrighter（Game 图集）+ mist / purplesunset（Misc 图集，见 ParseBackdrop 的 atlas 分支）
       put('sky', BASE + 'bgs/10/skybrighter.png');
-      put('tiles', BASE + 'tilesets/starJump.png');
-      for (let i = 0; i < 3; i++) put('big' + i, BASE + 'bgs/10/big0' + i + '.png');
-      for (let i = 0; i < 7; i++) put('small' + i, BASE + 'bgs/10/small0' + i + '.png');
-      for (let i = 0; i < 4; i++) putStar('sf' + i, BASE + 'particles/starfield/0' + i + '.png');
-      ['a', 'b', 'c', 'd'].forEach(c => putCloud('cloud' + c, BASE + 'decals/10-farewell/clouds/cloud_' + c + '.png'));
-      for (let i = 0; i < 10; i++) put('jelly' + i, BASE + 'objects/glider/idle' + i + '.png');
-      for (let i = 0; i < 12; i++) put('puffer' + i, BASE + 'objects/puffer/idle' + String(i).padStart(2, '0') + '.png');
+      put('mist', 'Atlases/Misc/mist.png');
+      put('sun', 'Atlases/Misc/purplesunset.png');
+      for (let i = 0; i < 3; i++) put('bgs/10/big' + i, BASE + 'bgs/10/big0' + i + '.png');
+      for (let i = 0; i < 7; i++) put('bgs/10/small' + i, BASE + 'bgs/10/small0' + i + '.png');
+      for (let i = 0; i < 4; i++) put('sf' + i, BASE + 'particles/starfield/0' + i + '.png');
+      // 本段（e-00z）的真实实体：spinner → moonBlade(danger/starfish)、moonCreature → tiny、floatingDebris、木跳板
+      for (let i = 0; i < 21; i++) put('blade' + i, BASE + 'danger/starfish' + String(i).padStart(2, '0') + '.png');
+      for (let i = 0; i < 6; i++) put('creature' + i, BASE + 'scenery/moon_creatures/tiny0' + i + '.png');
+      put('debris', BASE + 'scenery/debris.png');
       for (let i = 0; i < 14; i++) put('heart' + i, BASE + 'collectables/heartGem/ghost' + String(i).padStart(2, '0') + '.png');
-      for (let i = 0; i < 4; i++) put('bird' + i, BASE + 'characters/bird/fly0' + i + '.png');
+      // floatySpaceBlock 的 tiletype 全是 'm' → ForegroundTiles.xml 的 lostlevels 自动瓦片集；
+      // jumpThru 的 texture 全是 'default' → 第九章 AreaData.Jumpthru = "wood"
+      put('lost', BASE + 'tilesets/lostlevels.png');
+      put('jt', BASE + 'objects/jumpthru/wood.png');
       return Promise.all(jobs);
     }
 
-    // ===== 场景：铭记段的三块月亮岩浮台 =====
-    const PLATS = [
-      { x0: -220, x1: 330, top: 0 },
-      { x0: 360, x1: 700, top: -14 },
-      { x0: 730, x1: 1120, top: -30 }
+    // ===== 关卡几何：lvl_e-00z（铭记段爬升房间，624×432）=====
+    // 全部数据来自 LostLevels.bin。坐标换成「相对出生点」的世界坐标：房间 (312,376) → 世界 (0,0)
+    const SPAWN = { x: 312, y: 376 };
+    const ROOM = { w: 624, h: 432 };
+    // floatySpaceBlock ×25 —— [x, y, w, h]（房间坐标，y 是顶面）
+    const BLOCK_RECTS = [
+      [232, 320, 16, 16], [360, 296, 32, 32], [384, 336, 32, 8], [368, 328, 24, 8],
+      [392, 312, 24, 24], [264, 264, 24, 24], [288, 256, 16, 24], [136, 336, 32, 24],
+      [168, 344, 16, 16], [144, 360, 32, 8], [288, 280, 8, 8], [352, 192, 32, 24],
+      [384, 200, 32, 16], [368, 216, 24, 16], [232, 144, 24, 24], [256, 152, 24, 32],
+      [240, 168, 16, 8], [184, 216, 24, 16], [192, 232, 16, 16], [400, 128, 24, 24],
+      [424, 144, 16, 16], [416, 152, 8, 8], [320, 80, 32, 24], [352, 88, 16, 32],
+      [336, 104, 16, 8]
     ];
+    const BLOCKS = BLOCK_RECTS.map(r => ({ x: r[0] - SPAWN.x, y: r[1] - SPAWN.y, w: r[2], h: r[3] }));
+    // jumpThru ×9 —— [x, y, w]
+    const JT_RECTS = [
+      [280, 376, 16], [328, 376, 16], [304, 424, 16], [280, 176, 16], [248, 272, 16],
+      [416, 208, 16], [168, 224, 16], [344, 312, 16], [296, 88, 24]
+    ];
+    const JTS = JT_RECTS.map(r => ({ x: r[0] - SPAWN.x, y: r[1] - SPAWN.y, w: r[2] }));
+    // exitBlock（80×64）：出生点就站在这道门上
+    const DOOR = { x: 272 - SPAWN.x, y: 376 - SPAWN.y, w: 80, h: 64 };
+
+    const TILE = 8;                                   // 地图与图集都是 8px 瓦片
     const VOID = 9999;
+    // 可站立面 = 方块顶面 + 跳板 + 门顶。x/ y 全用世界坐标
+    const SOLIDS = BLOCKS.map(b => ({ x0: b.x, x1: b.x + b.w, top: b.y }))
+      .concat(JTS.map(j => ({ x0: j.x, x1: j.x + j.w, top: j.y })))
+      .concat([{ x0: DOOR.x, x1: DOOR.x + DOOR.w, top: DOOR.y }]);
+    // 单向地面：只认「本帧起点脚面」以下最高的那层，所以能从下方穿过方块、再从上方落上去。
+    // 阈值必须用移动前的脚面（feetPrev）而不是当前脚面：下落一帧最多 2.7px，
+    // 用当前脚面会把刚越过的块顶判成「头顶平台」而穿模落地。
+    let feetPrev = 0;
     function groundY(x) {
-      for (let i = 0; i < PLATS.length; i++) {
-        const p = PLATS[i];
-        if (x >= p.x0 && x <= p.x1) return p.top;
+      const feet = m ? m.y : 0;
+      const ref = Math.min(feet, feetPrev);
+      let best = VOID;
+      for (let i = 0; i < SOLIDS.length; i++) {
+        const s = SOLIDS[i];
+        if (x + 4 <= s.x0 || x - 4 >= s.x1) continue;   // 玩家碰撞箱宽 8
+        if (s.top < ref - 1) continue;                  // 起点脚面以上的方块不参与
+        if (s.top < best) best = s.top;
       }
-      return VOID;
+      return best;
     }
 
-    // ===== 输入 =====
+    // ===== 墙体：浮空块 + 门体的侧面（jumpThru 是单向板，不挡横向）=====
+    // 碰撞盒照原作 Hitbox 8×11：以脚面为原点，半宽 4、身高 11
+    const WALLS = BLOCKS.concat([{ x: DOOR.x, y: DOOR.y, w: DOOR.w, h: DOOR.h }]);
+    const HALF_W = 4, BODY_H = 11, WALL_PROBE = 4;
+    // 能挡头的天花板：只有实心块 + 门体（jumpThru 是单向板，从下往上穿得过去）
+    const CEILINGS = WALLS;
+    // 身体盒探针用的实心体：额外把跳板算进去（站在跳板上时脚下也算有地板，不该播 edge）
+    const RECTS = WALLS.concat(JTS.map(j => ({ x: j.x, y: j.y, w: j.w, h: 8 })));
+    // 严格物理阻挡：返回被撞墙面的 x，null = 没撞（签名对齐 celeste-character 的 wallCollideFn）
+    function wallCollideFn(px, feetY, dir) {
+      const top = feetY - BODY_H;
+      for (let i = 0; i < WALLS.length; i++) {
+        const b = WALLS[i];
+        if (b.y >= feetY || b.y + b.h <= top) continue;          // 垂直不重叠
+        if (px + HALF_W <= b.x || px - HALF_W >= b.x + b.w) continue;
+        return dir > 0 ? b.x : b.x + b.w;
+      }
+      return null;
+    }
+    // 宽容的贴墙检测（wallAtFn：攀爬 / 墙跳 / 墙滑都用它）
+    function wallAtFn(px, feetY, dir) {
+      const x = px + dir * WALL_PROBE, top = feetY - BODY_H;
+      for (let i = 0; i < WALLS.length; i++) {
+        const b = WALLS[i];
+        if (b.y >= feetY || b.y + b.h <= top) continue;
+        if (x < b.x || x >= b.x + b.w) continue;
+        return dir > 0 ? b.x : b.x + b.w;
+      }
+      return null;
+    }
+
+    // 原作 CollideCheck<Solid>(Position + offset)：脚底在 (px, feetY) 时，8×11 身体盒是否与实心重叠。
+    // push（朝墙推）/ edge（身体前探 2、4px 后全空）/ dangling（攀爬时面前 6px 无墙）都靠它。
+    function bodySolidFn(px, feetY) {
+      const top = feetY - BODY_H;
+      for (let i = 0; i < RECTS.length; i++) {
+        const b = RECTS[i];
+        if (b.x >= px + HALF_W || b.x + b.w <= px - HALF_W) continue;
+        if (b.y >= feetY || b.y + b.h <= top) continue;
+        return true;
+      }
+      return false;
+    }
+
+    // 头顶天花板：返回与头部重叠、且最靠下的实心底边；null = 头顶没东西。
+    // 对应原作 OnCollideV 的 Speed.Y < 0 分支（撞头 + 4px/5px 向上角修正）。
+    function ceilingY(px, feetY) {
+      const head = feetY - BODY_H;
+      let best = null;
+      for (let i = 0; i < CEILINGS.length; i++) {
+        const b = CEILINGS[i];
+        if (b.x >= px + HALF_W || b.x + b.w <= px - HALF_W) continue;
+        if (b.y >= feetY) continue;                   // 顶面在脚底或以下 → 那是地板
+        const bottom = b.y + b.h;
+        if (bottom <= head + 0.01) continue;          // 底边还在头顶上方 → 没重叠
+        if (best === null || bottom > best) best = bottom;
+      }
+      return best;
+    }
+
+    // ===== 迷你 Autotiler：逐指令复刻 Celeste.Autotiler::orig_TileHandler =====
+    // 数据源 Graphics/ForegroundTiles.xml：tileset "m" copy="z" path="lostlevels"，
+    // 并覆盖了 z 的 padding / center 两组（z 的 5,12 单帧在 m 里被换成一串随机帧）。
+    // IL 判定顺序：3×3 全实心 → （四向 16px 内还有实心 ? Center : Padded），
+    //               否则按 Masked 列表顺序取第一个 3×3 mask 匹配项。
+    const AT_EDGES = [
+      ['x0x-111-x1x', 0], ['x1x-111-x0x', 1], ['x1x-011-x1x', 2], ['x1x-110-x1x', 3],
+      ['x0x-111-x0x', 4], ['x1x-010-x1x', 5], ['x0x-010-x1x', 6], ['x1x-010-x0x', 7],
+      ['x0x-011-x0x', 8], ['x0x-110-x0x', 9], ['x0x-010-x0x', 10], ['x0x-011-x1x', 11],
+      ['x0x-110-x1x', 12], ['x1x-011-x0x', 13], ['x1x-110-x0x', 14]
+    ];
+    const AT_CORNERS = {
+      '111-111-110': [4, 0], '110-111-111': [4, 1], '111-111-011': [4, 2], '011-111-111': [4, 3],
+      '110-111-110': [4, 4], '010-111-111': [4, 5], '011-111-011': [4, 6], '111-111-010': [4, 7],
+      '010-111-110': [4, 8], '010-111-011': [4, 9], '011-111-010': [4, 10], '110-111-010': [4, 11],
+      '010-111-010': [4, 12], '110-111-011': [4, 13], '011-111-110': [4, 14]
+    };
+    // m 的 padding 覆盖：5,0..5,5（孤立小块的收边贴图）
+    const AT_PADDED = [0, 1, 2, 3, 4, 5].map(r => [5, r]);
+    // m 的 center 覆盖：5,6 权重最高，其余 5,7-5,11 / 5,13-5,14 各两票，5,12 一票
+    const AT_CENTER_TILES = [[5, 6], [5, 6], [5, 6], [5, 6], [5, 6], [5, 6], [5, 6],
+      [5, 6], [5, 6], [5, 6], [5, 6], [5, 6], [5, 6], [5, 6],
+      [5, 7], [5, 8], [5, 9], [5, 10], [5, 11], [5, 13], [5, 14],
+      [5, 7], [5, 8], [5, 9], [5, 10], [5, 11], [5, 13], [5, 14], [5, 12]];
+    let blockTiles = new Set();      // 世界坐标里所有 8px 实心格
+    let blockSprites = [];           // { wx, wy, sx, sy }：预计算到图集的源坐标（静态几何，只算一次）
+    let doorTiles = new Set();       // exitBlock 占的格子（单独一套，不参与浮空块的邻域判定）
+    let doorSprites = [];
+    const solidIn = (set, tx, ty) => set.has(tx + ',' + ty);
+    function maskOf(set, tx, ty) {
+      const b = (x, y) => (solidIn(set, x, y) ? '1' : '0');
+      return b(tx - TILE, ty - TILE) + b(tx, ty - TILE) + b(tx + TILE, ty - TILE) + '-' +
+             b(tx - TILE, ty) + '1' + b(tx + TILE, ty) + '-' +
+             b(tx - TILE, ty + TILE) + b(tx, ty + TILE) + b(tx + TILE, ty + TILE);
+    }
+    // 原作 Tiles 集合里的随机取帧：用坐标哈希代替 RNG，保证构图不随刷新跳变
+    function pickTile(list, tx, ty) {
+      let h = Math.imul(tx | 0, 374761393) + Math.imul(ty | 0, 668265263);
+      h = Math.imul(h ^ (h >>> 13), 1274126177);
+      return list[((h ^ (h >>> 16)) >>> 0) % list.length];
+    }
+    function autoTile(set, tx, ty) {
+      // ① 3×3 全实心
+      let all = true;
+      for (let dy = -1; dy <= 1 && all; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (!solidIn(set, tx + dx * TILE, ty + dy * TILE)) { all = false; break; }
+        }
+      }
+      if (all) {
+        // ② 四向 2 格外还有实心 → Center；一片空 → Padded（孤立小块）
+        const far = solidIn(set, tx - 2 * TILE, ty) || solidIn(set, tx + 2 * TILE, ty) ||
+                    solidIn(set, tx, ty - 2 * TILE) || solidIn(set, tx, ty + 2 * TILE);
+        return pickTile(far ? AT_CENTER_TILES : AT_PADDED, tx, ty);
+      }
+      // ③ 边集：按 XML 顺序取第一个匹配的 mask，4 个变体随机
+      const m9 = maskOf(set, tx, ty);
+      for (let i = 0; i < AT_EDGES.length; i++) {
+        const pat = AT_EDGES[i][0];
+        let ok = true;
+        for (let c = 0; c < 11 && ok; c++) {
+          const p = pat[c];
+          if (p !== '-' && p !== 'x' && p !== m9[c]) ok = false;
+        }
+        if (ok) {
+          const row = AT_EDGES[i][1];
+          const col = Math.abs((tx / TILE) * 7 + (ty / TILE) * 13) % 4;    // 4 个变体里挑一个
+          return [col, row];
+        }
+      }
+      // ④ 角集（三面实心的内凹角），都没有就退回 center 随机帧
+      return AT_CORNERS[m9] || pickTile(AT_CENTER_TILES, tx, ty);
+    }
+    function tileSetOf(rect) {
+      const set = new Set();
+      for (let ty = rect.y; ty < rect.y + rect.h; ty += TILE)
+        for (let tx = rect.x; tx < rect.x + rect.w; tx += TILE)
+          set.add(tx + ',' + ty);
+      return set;
+    }
+    function spritesOf(rects, set) {
+      const out = [];
+      for (const b of rects) {
+        for (let ty = b.y; ty < b.y + b.h; ty += TILE) {
+          for (let tx = b.x; tx < b.x + b.w; tx += TILE) {
+            const t = autoTile(set, tx, ty);
+            out.push({ wx: tx, wy: ty, sx: t[0] * TILE, sy: t[1] * TILE });
+          }
+        }
+      }
+      return out;
+    }
+    function buildBlockSprites() {
+      blockTiles = new Set();
+      for (const b of BLOCKS)
+        for (let ty = b.y; ty < b.y + b.h; ty += TILE)
+          for (let tx = b.x; tx < b.x + b.w; tx += TILE)
+            blockTiles.add(tx + ',' + ty);
+      blockSprites = spritesOf(BLOCKS, blockTiles);
+      // exitBlock：原作 ExitBlock.Added 用 GFX.FGAutotiler 按自身矩形 + tileType 生成 TileGrid（Depth -13000），
+      // 地图里这个 exitBlock 的 tileType 就是 'm'，所以门体也是一片 lostlevels 自动瓦片
+      doorTiles = tileSetOf(DOOR);
+      doorSprites = spritesOf([DOOR], doorTiles);
+    }
+    buildBlockSprites();
+
+    // ===== 输入：字段集对齐 celeste-character 的 update(dt, input) 完整接口 =====
+    // 键位照原作默认：跳跃 Space/C · 冲刺 X/K · 抓墙 Shift/Z
     const keys = Object.create(null);
-    let jumpEdge = false;
+    let jumpEdge = false, dashEdge = false;
     window.addEventListener('keydown', e => {
       const k = e.key.toLowerCase();
+      const first = !keys[k];
       keys[k] = true;
-      if (e.code === 'Space' || k === ' ') { keys[' '] = true; jumpEdge = true; e.preventDefault(); }
+      if (first && (e.code === 'Space' || k === ' ')) { keys[' '] = true; jumpEdge = true; e.preventDefault(); }
+      if (first && k === 'c') jumpEdge = true;
+      if (first && (k === 'x' || k === 'k')) dashEdge = true;
       if (k === 'r') respawn();
       if (k === 'm') toggleMute();
       startAudio();
@@ -164,10 +397,10 @@
       keys[k] = false;
       if (e.code === 'Space') keys[' '] = false;
     });
-    window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; jumpEdge = false; });
+    window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; jumpEdge = dashEdge = false; });
 
     // ===== BGM =====
-    const bgm = new Audio('bgm/farewell.mp3');
+    const bgm = new Audio('bgm/in-stasis.mp3');
     bgm.loop = true; bgm.volume = 0.24; bgm.preload = 'auto';
     let audioStarted = false, muted = false;
     function startAudio() {
@@ -184,7 +417,7 @@
     muteBtn.addEventListener('click', e => { e.stopPropagation(); toggleMute(); });
     window.addEventListener('pointerdown', startAudio);
 
-    // ===== 背景层：逐行对齐反编译 Starfield.cs / Planets.cs（第九章 Farewell·铭记）=====
+    // ===== 背景：逐行复刻 Celeste.MapData::ParseBackdrop + Starfield/Planets/Parallax::Render =====
     // 原作在 320×180 逻辑屏上绘制背景，这里等比映射到实际画布；随机分布用固定种子，构图不随 resize 跳变
     function makeRng(seed) {
       let s = seed;
@@ -192,12 +425,22 @@
     }
     const mod = (x, m) => ((x % m) + m) % m;
     const cubeIn = t => t * t * t;   // Ease.CubeIn
+    // XNA 的 Color.Lerp(c, Transparent, t) 是通道 + alpha 一起向 0 插值，等价于 RGB 与 alpha 同乘 (1-t)
+    function shadeHex(hex, f) {
+      const n = parseInt(hex.slice(1), 16);
+      const r = Math.round(((n >> 16) & 255) * (1 - f));
+      const g = Math.round(((n >> 8) & 255) * (1 - f));
+      const b = Math.round((n & 255) * (1 - f));
+      return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
+    }
 
     // Starfield.cs：15 个 Y 节点连成横向流带（StepSize=32），128 颗星沿带流动并沿法线方向呼吸摆动
     class Starfield {
-      constructor(speed, scrollX, scrollY, seed) {
+      constructor(speed, scrollX, scrollY, color, seed) {
         this.speed = speed;
         this.scrollX = scrollX; this.scrollY = scrollY;
+        this.color = color;
+        this.count = 1;
         const rnd = makeRng(seed);
         const nodes = [];
         let y = rnd() * 180;
@@ -213,12 +456,15 @@
         this.stars = [];
         for (let i = 0; i < 128; i++) {
           const r = rnd();
+          // Color.Lerp(color, Transparent, r*0.5)：亮度与 alpha 同步衰减，量化成 5 档贴图避免每帧重新着色
+          const shade = Math.round(r * 2) / 4 * 0.5;
           const star = {
             nodeIndex: Math.floor(rnd() * (nodes.length - 1)),
             nodePercent: rnd(),
             distance: 4 + r * 20,                         // MinDist 4 ~ MaxDist 24
             sine: rnd() * Math.PI * 2,
-            alpha: 1 - r * 0.5,                           // Color.Lerp(color, Transparent, r*0.5)
+            shade: shade,
+            alpha: 1 - shade,
             tex: Math.max(0, Math.min(3, Math.floor(cubeIn(1 - r) * 4))),
             x: 0, y: 0
           };
@@ -255,7 +501,7 @@
       render(camX, camY) {
         const sx = W / 320, sy = H / 180;
         for (const s of this.stars) {
-          const img = IMG['sf' + s.tex];
+          const img = tinted('sf' + s.tex, shadeHex(this.color, s.shade));
           if (!img) continue;
           const lx = -64 + mod(s.x - camX * this.scrollX, 448);
           const ly = -16 + mod(s.y - camY * this.scrollY, 212);
@@ -267,21 +513,27 @@
       }
     }
 
-    // Planets.cs：固定散布在 640×360 逻辑区内，DrawCentered + wrap；大星远层、小星近层
+    // Planets.cs：Position = (NextFloat(640), NextFloat(360))，DrawCentered + wrap；color 由 styleground 的 color 属性相乘
     class Planets {
-      constructor(count, prefix, texCount, scroll, seed) {
+      constructor(count, size, scroll, color, seed) {
+        this.count = count;
+        this.size = size;
         this.scroll = scroll;
-        this.texKey = prefix;
+        this.color = color;
+        const texCount = size === 'big' ? 3 : 7;          // bgs/10/big00-02 · bgs/10/small00-06
         const rnd = makeRng(seed);
         this.planets = [];
         for (let i = 0; i < count; i++) {
-          this.planets.push({ tex: Math.floor(rnd() * texCount), x: rnd() * 640, y: rnd() * 360 });
+          this.planets.push({
+            tex: 'bgs/10/' + size + String(Math.floor(rnd() * texCount)).padStart(2, '0'),
+            x: rnd() * 640, y: rnd() * 360
+          });
         }
       }
       render(camX, camY) {
         const sx = W / 320, sy = H / 180;
         for (const p of this.planets) {
-          const img = IMG[this.texKey + p.tex];
+          const img = tinted(p.tex, this.color);
           if (!img) continue;
           const lx = -32 + mod(p.x - camX * this.scroll, 640);
           const ly = -32 + mod(p.y - camY * this.scroll, 360);
@@ -291,18 +543,73 @@
       }
     }
 
-    // 铭记段配置：浅青流动星带(Scroll 1) + 品红大星远层(0.2) + 青色小星近层(0.4)
-    const starfield = new Starfield(1, 1, 1, 20260);
-    const planetsBig = new Planets(8, 'big', 3, 0.2, 31001);
-    const planetsSmall = new Planets(24, 'small', 7, 0.4, 77002);
-    // 贴花里只有 cloud_a/b/c 是真正的云朵轮廓，d/e/f 是实心方块/半圆（给着色器遮罩用的），不能直接铺
-    // 每朵云叠 2~3 片并做轻微模糊，避免读成一堆灰色硬边多边
-    const CLOUDS = [
-      { x: 30, y: 0.13, drift: 4, a: 0.2, parts: [{ img: 'clouda', s: 4.2, dx: 0, dy: 0 }, { img: 'cloudb', s: 3.0, dx: 86, dy: 20 }, { img: 'cloudc', s: 2.4, dx: 150, dy: 6 }] },
-      { x: 560, y: 0.26, drift: 6, a: 0.17, parts: [{ img: 'cloudb', s: 3.6, dx: 0, dy: 0 }, { img: 'clouda', s: 2.6, dx: 96, dy: 22 }] },
-      { x: 940, y: 0.09, drift: 3, a: 0.15, parts: [{ img: 'cloudc', s: 3.0, dx: 0, dy: 0 }, { img: 'clouda', s: 2.2, dx: 64, dy: 18 }] },
-      { x: 1420, y: 0.33, drift: 5, a: 0.18, parts: [{ img: 'clouda', s: 4.0, dx: 0, dy: 0 }, { img: 'cloudb', s: 3.2, dx: 74, dy: 24 }] }
+    // Parallax.cs：Position += Speed*dt；绘制于 Floor(Position - Camera.Position * Scroll)，Loop 时按贴图尺寸平铺
+    class Parallax {
+      constructor(tex, scroll, speed, color, alpha, loop, flip, additive) {
+        this.tex = tex;
+        this.scroll = scroll;
+        this.speed = speed;
+        this.color = color;
+        this.alpha = alpha;
+        this.loop = loop;
+        this.flip = !!flip;
+        this.additive = !!additive;
+        this.pos = { x: 0, y: 0 };
+      }
+      update(dt) {
+        this.pos.x += this.speed.x * dt;                  // Backdrop::Update：Position += Speed * DeltaTime
+        this.pos.y += this.speed.y * dt;
+      }
+      render(camX, camY) {
+        const img = tinted(this.tex, this.color, this.flip);
+        if (!img) return;
+        const sx = W / 320, sy = H / 180;
+        const tw = img.width, th = img.height;             // mist 600×600 · purplesunset 500×280 · skybrighter 320×180
+        const px = Math.round(this.pos.x - camX * this.scroll);
+        const py = Math.round(this.pos.y - camY * this.scroll);
+        ctx.globalCompositeOperation = this.additive ? 'lighter' : 'source-over';
+        ctx.globalAlpha = this.alpha;
+        if (this.loop) {
+          const ox = mod(px, tw) - tw;
+          const oy = mod(py, th) - th;
+          for (let y = oy; y < 180; y += th) {
+            for (let x = ox; x < 320; x += tw) {
+              ctx.drawImage(img, x * sx, y * sy, tw * sx, th * sy);
+            }
+          }
+        } else {
+          ctx.drawImage(img, px * sx, py * sy, tw * sx, th * sy);
+        }
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = 'source-over';
+      }
+    }
+
+    // —— 铭记段（Farewell · Remembered）真实分层 ——
+    // 来源：LostLevels.bin 的 /Map/Style/Backgrounds|Foregrounds 中 tag="bright" 组
+    // （only: e-*,f-door,f-00,f-01,f-02；exclude: e-00y,e-00yb），顺序与参数照地图原样
+    const LAYERS = [
+      new Parallax('sky', 0, { x: 0, y: 0 }, null, 1, false, false, false),          // bgs/10/skybrighter，Scroll 0 → 固定天穹
+      new Planets(32, 'small', 0.1, '#3b66a8', 1101),                                 // 远层行星：32 颗，冷蓝 #3b66a8
+      new Parallax('mist', 0.15, { x: 2, y: 0 }, '#b03b94', 1, true, false, false),   // 品红星云，缓速右移
+      new Parallax('mist', 0.2, { x: 4, y: 0 }, '#4ab7be', 1, true, true, false),     // 蓝绿星云，翻转后右移
+      new Starfield(2.5, 0.3, 0.3, '#71d5ff', 2201),                                  // 四层星流：亮青
+      new Starfield(2.75, 0.5, 0.5, '#46fffd', 2202),                                 // 近青，更快
+      new Planets(24, 'small', 0.4, '#ffffff', 1102),                                 // 中层行星：24 颗，纯白
+      new Starfield(3.0, 0.3, 0.3, '#f8ffb0', 2203),                                  // 暖黄星流（原作用它压出一层暖调）
+      new Starfield(3.0, 0.5, 0.5, '#cefdff', 2204),                                  // 近层淡青
+      new Planets(4, 'big', 0.7, '#ffffff', 1103),                                    // 近处巨行星：仅 4 颗
+      new Parallax('mist', 0.6, { x: 16, y: 8 }, '#000000', 0.5, true, false, false)  // 黑色烟雾（color 0 + alpha .5），最快的一层
     ];
+    // 前景：purplesunset 叠加混合（blendmode=additive，alpha .25），画在关卡之上
+    const FG_LAYERS = [
+      new Parallax('sun', 0.5, { x: 4, y: 4 }, '#ffffff', 0.25, true, false, true)
+    ];
+    const STYLE_COLOR = '#050505';                    // /Map/Style 的 clear color
+    function updateLayers(dt) {
+      for (const l of LAYERS) if (l.update) l.update(dt);
+      for (const l of FG_LAYERS) if (l.update) l.update(dt);
+    }
 
     // ===== 角色 =====
     let m = null;
@@ -311,128 +618,182 @@
     const particles = [];
     let time = 0, flash = 0, toastTimer = 0, deathTimer = 0;
 
-    const heart = { x: 1010, y: -62, collected: false, t: 0 };
-    const jellies = [
-      { x: 96, y: -92, ph: 0.0 },
-      { x: 470, y: -70, ph: 2.1 },
-      { x: 880, y: -96, ph: 4.2 }
-    ];
-    const puffer = { x: -60, y: 0, t: 0 };
-    const bird = { x: 150, y: -100, vx: -62, t: 0 };
+    const heart = { x: 320 - SPAWN.x, y: 80 - SPAWN.y - 20, collected: false, t: 0 };
 
-    // ===== 相机 =====
+    // ===== 房间里的实体（坐标原样来自 LostLevels.bin，仅平移到相对出生点）=====
+    const toWorld = arr => arr.map(p => ({ x: p[0] - SPAWN.x, y: p[1] - SPAWN.y }));
+    // spinner ×95：原作把它们缠在房间两侧与底部，但页面上会在底部铺成一整片「星海」，
+    // 与铭记段「空无」的构图相冲 —— 数据完整保留（__scene.blades 可校），默认不绘制。
+    const DRAW_SPINNERS = false;
+    const blades = toWorld([
+      [128, 432], [176, 392], [184, 408], [160, 400], [144, 392], [376, 408], [384, 392],
+      [400, 400], [440, 400], [424, 408], [136, 408], [120, 416], [96, 408], [88, 392],
+      [112, 400], [488, 408], [464, 416], [512, 400], [456, 392], [472, 400], [80, 376],
+      [64, 384], [40, 360], [16, 400], [48, 336], [56, 352], [24, 352], [64, 416], [48, 376],
+      [56, 400], [72, 432], [504, 416], [536, 424], [528, 408], [528, 440], [488, 376],
+      [552, 416], [560, 400], [496, 360], [504, 384], [520, 376], [576, 408], [592, 416],
+      [584, 392], [208, 400], [224, 400], [232, 416], [248, 408], [256, 432], [200, 416],
+      [368, 432], [400, 416], [416, 392], [368, 416], [456, 432], [192, 432], [408, 432],
+      [224, 432], [256, 416], [248, 392], [200, 384], [40, 408], [0, 360], [16, 368],
+      [32, 328], [24, 384], [0, 392], [32, 424], [16, 432], [160, 416], [576, 376], [592, 368],
+      [584, 352], [608, 376], [624, 368], [608, 408], [624, 416], [600, 432], [600, 344],
+      [592, 328], [568, 344], [552, 384], [608, 320], [624, 328], [600, 304], [40, 312],
+      [16, 320], [0, 328], [48, 288], [32, 296], [16, 288], [24, 272], [608, 288], [592, 280],
+      [600, 264]
+    ]).map((p, i) => ({ x: p.x, y: p.y, ph: (i * 0.37) % 1.32 }));
+    // moonCreature ×9：只飘不转，6 帧 0.08s 循环（moonCreatureTiny）
+    const creatures = toWorld([
+      [312, 320], [208, 192], [368, 160], [456, 344], [184, 296], [432, 104], [248, 112],
+      [128, 96], [472, 240]
+    ]).map((p, i) => ({ x: p.x, y: p.y, ph: i * 0.7 }));
+    // floatingDebris ×19：scenery/debris.png 的 8×8 碎屑
+    const debris = toWorld([
+      [264, 312], [224, 312], [248, 344], [192, 328], [216, 248], [304, 176], [312, 192],
+      [328, 176], [312, 152], [296, 64], [312, 32], [344, 64], [352, 232], [408, 280],
+      [424, 312], [392, 368], [464, 160], [216, 48], [200, 32]
+    ]).map((p, i) => ({ x: p.x, y: p.y, f: i % 8, ph: i * 0.9 }));
+
+    // ===== 相机：跟随玩家，并夹在房间 624×432 内（同 Level.Camera 的 Clamp）=====
+    const CAM_LEAD_Y = 0.62;                  // 玩家稳在屏幕 62% 高度
+    function camBounds() {
+      const vw = W / Z, vh = H / Z;
+      return { x: Math.max(0, ROOM.w - vw), y: Math.max(0, ROOM.h - vh) };
+    }
+    function snapCam() {
+      const b = camBounds();
+      const vw = W / Z, vh = H / Z;
+      cam.x = Math.min(Math.max(m.x + SPAWN.x - vw * 0.5, 0), b.x);
+      cam.y = Math.min(Math.max(m.y + SPAWN.y - vh * CAM_LEAD_Y, 0), b.y);
+    }
     function updateCam(dt) {
-      const k = Math.min(1, dt * 4);
-      cam.x += (m.x - cam.x) * k;
-      const gy = groundY(m.x);
-      const ty = gy === VOID ? m.y : gy;
-      cam.y += (ty - cam.y) * Math.min(1, dt * 3);
-    }
-
-    // ===== 工具：月亮岩（starJump 图集是一整块 48×120 的连续噪点纹理，不是离散砖块）=====
-    // 用 CanvasPattern 平铺整张图集，平台表面才是连续的，不会出现一块块孤立的小方格
-    let tilePat = null;
-    function getTilePat() {
-      if (tilePat !== null) return tilePat;
-      const t = IMG.tiles;
-      if (!t) return null;
-      const c = document.createElement('canvas');
-      c.width = t.width; c.height = t.height;
-      c.getContext('2d').drawImage(t, 0, 0);
-      tilePat = ctx.createPattern(c, 'repeat');
-      return tilePat;
-    }
-    function drawTileBlock(sx, sy, wPx, hPx) {
-      const pat = getTilePat();
-      if (!pat) return;
-      ctx.save();
-      ctx.translate(Math.round(sx), Math.round(sy));
-      ctx.scale(Z, Z);
-      ctx.fillStyle = pat;
-      ctx.fillRect(0, 0, wPx / Z, hPx / Z);
-      ctx.restore();
+      const b = camBounds(), vw = W / Z, vh = H / Z;
+      const k = Math.min(1, dt * 5);
+      cam.x += (m.x + SPAWN.x - vw * 0.5 - cam.x) * k;
+      cam.y += (m.y + SPAWN.y - vh * CAM_LEAD_Y - cam.y) * k;
+      cam.x = Math.min(Math.max(cam.x, 0), b.x);
+      cam.y = Math.min(Math.max(cam.y, 0), b.y);
     }
 
     // ===== 渲染 =====
+    // 世界坐标（相对出生点）→ 屏幕像素；cam 存的是房间坐标，所以先补回 SPAWN
     function toScreen(n) {
-      return { x: (n.x - cam.x) * Z + W * 0.32, y: (n.y - cam.y) * Z + H * 0.66 };
+      return { x: (n.x + SPAWN.x - cam.x) * Z, y: (n.y + SPAWN.y - cam.y) * Z };
     }
 
-    // 原作天空是 Parallax 贴图：小 Scroll 视差，横向平铺；竖向直接拉伸（本作镜头竖移幅度极小）
-    function drawSky() {
-      const img = IMG.sky;
-      if (!img) { ctx.fillStyle = '#12335c'; ctx.fillRect(0, 0, W, H); return; }
-      let ox = mod(-cam.x * 0.05 * (W / 320), W);
-      if (ox > 0) ox -= W;
-      ctx.drawImage(img, Math.round(ox), 0, W, H);
-      ctx.drawImage(img, Math.round(ox + W), 0, W, H);
+    // floatySpaceBlock：每格都是 lostlevels 自动瓦片，位置来自地图的 8px 网格
+    function drawBlocks() {
+      const img = IMG.lost;
+      if (!img) return;
+      const s = TILE * Z;
+      for (const t of blockSprites) {
+        const px = (t.wx + SPAWN.x - cam.x) * Z;
+        const py = (t.wy + SPAWN.y - cam.y) * Z;
+        if (px <= -s || px >= W || py <= -s || py >= H) continue;
+        ctx.drawImage(img, t.sx, t.sy, TILE, TILE, px, py, s, s);
+      }
     }
 
-    function drawClouds() {
-      const span = W + 620;
-      ctx.save();
-      ctx.filter = 'blur(' + Math.round(Z * 1.6) + 'px)';
-      for (const c of CLOUDS) {
-        const sx = ((c.x - time * c.drift - cam.x * Z * 0.22) % span + span) % span - 310;
-        const sy = c.y * H;
-        for (const part of c.parts) {
-          const img = IMG[part.img];
-          if (!img) continue;
-          ctx.globalAlpha = c.a;
-          ctx.drawImage(img, Math.round(sx + part.dx), Math.round(sy + part.dy), 32 * part.s, 32 * part.s);
+    // jumpThru：第九章 AreaData.Jumpthru = "wood"，贴图 24×16 → 8px 三切片（左/中×N/右）
+    function drawJumpThrus() {
+      const img = IMG.jt;
+      if (!img) return;
+      const s = TILE * Z;
+      for (const j of JTS) {
+        const px = (j.x + SPAWN.x - cam.x) * Z;
+        const py = (j.y + SPAWN.y - cam.y) * Z;
+        if (px >= W || px + j.w * Z <= 0 || py >= H || py <= -s) continue;
+        const n = Math.max(1, Math.round(j.w / TILE));
+        for (let i = 0; i < n; i++) {
+          const cap = i === 0 || i === n - 1;
+          const col = i === 0 ? 0 : (i === n - 1 ? 2 : 1);
+          const row = cap ? 1 : ((i & 1) ? 1 : 0);     // 原作：两端用外侧行，中段随机上下行
+          ctx.drawImage(img, col * TILE, row * TILE, TILE, TILE, px + i * s, py, s, s);
         }
       }
-      ctx.restore();
     }
 
-    function drawPlatforms() {
-      for (const p of PLATS) {
-        const a = toScreen({ x: p.x0, y: p.top });
-        const b = toScreen({ x: p.x1, y: p.top });
-        if (b.x < -80 || a.x > W + 80) continue;
-        const wPx = Math.round(b.x - a.x);
-        const hPx = 5 * 8 * Z;          // 5 格厚 = 40 游戏单位，足够挡住下方星空
-        drawTileBlock(a.x, a.y, wPx, hPx);
+    // exitBlock（tileType='m'）：原作就是一片自动瓦片，Depth -13000 → 先于浮空块绘制
+    function drawDoor() {
+      const img = IMG.lost;
+      if (!img) return;
+      const s = TILE * Z;
+      for (const t of doorSprites) {
+        const px = (t.wx + SPAWN.x - cam.x) * Z;
+        const py = (t.wy + SPAWN.y - cam.y) * Z;
+        if (px <= -s || px >= W || py <= -s || py >= H) continue;
+        ctx.drawImage(img, t.sx, t.sy, TILE, TILE, px, py, s, s);
+      }
+    }
 
-        // 顶面薄荷高光，让浮台在夜色里有一条清晰的落脚线
-        ctx.globalAlpha = 0.55;
-        ctx.fillStyle = '#d9f7f7';
-        ctx.fillRect(Math.round(a.x), Math.round(a.y), wPx, Math.max(2, Math.round(Z * 0.6)));
-
-        // 岩体下半部渐隐进夜色，避免整块方形岩体的生硬边界
-        const grad = ctx.createLinearGradient(0, a.y + hPx * 0.35, 0, a.y + hPx);
-        grad.addColorStop(0, 'rgba(4,10,24,0)');
-        grad.addColorStop(1, 'rgba(4,10,24,.92)');
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = grad;
-        ctx.fillRect(Math.round(a.x), Math.round(a.y + hPx * 0.35), wPx, Math.ceil(hPx * 0.65));
+    // floatingDebris：8×8 碎屑缓慢漂浮
+    function drawDebris() {
+      const img = IMG.debris;
+      if (!img) return;
+      const s = TILE * Z;
+      ctx.globalAlpha = 0.75;
+      for (const d of debris) {
+        const bx = Math.sin(time * 0.35 + d.ph) * 10;
+        const by = Math.sin(time * 0.27 + d.ph * 1.3) * 6;
+        const px = (d.x + SPAWN.x + bx - cam.x) * Z;
+        const py = (d.y + SPAWN.y + by - cam.y) * Z;
+        if (px <= -s || px >= W || py <= -s || py >= H) continue;
+        ctx.drawImage(img, d.f * TILE, 0, TILE, TILE, Math.round(px), Math.round(py), s, s);
       }
       ctx.globalAlpha = 1;
     }
 
-    function drawJellies() {
-      for (const j of jellies) {
-        const img = IMG['jelly' + (Math.floor(time * 5 + j.ph) % 10)];
+    // 背景全部由 LAYERS 驱动（顺序 = 地图 Stylegrounds 顺序），这里只负责清屏与前景
+    function drawBackdrops() {
+      for (const l of LAYERS) l.render(cam.x, cam.y);
+    }
+
+    function drawForegrounds() {
+      for (const l of FG_LAYERS) l.render(cam.x, cam.y);
+    }
+
+    // moonBlade（danger/starfish）：Sprites.xml 里 21 帧连成一个循环
+    // idle0(帧0, 0.08s) → spin0(1-6, 0.06s) → idle1(7) → spin1(8-13) → idle2(14) → spin2(15-20)
+    const BLADE_CYCLE = 3 * 0.08 + 18 * 0.06;         // 1.32s
+    function bladeFrame(t) {
+      let x = mod(t, BLADE_CYCLE);
+      for (let i = 0; i < 21; i++) {
+        const d = i % 7 === 0 ? 0.08 : 0.06;
+        if (x < d) return i;
+        x -= d;
+      }
+      return 20;
+    }
+
+    function drawBlades() {
+      const s = 48 * Z;                               // moonBlade 画布 48×48，星体占中间一圈
+      for (const b of blades) {
+        const p = toScreen(b);
+        if (p.x < -s || p.x > W + s || p.y < -s || p.y > H + s) continue;
+        const img = IMG['blade' + bladeFrame(time + b.ph)];
         if (!img) continue;
-        const p = toScreen({ x: j.x, y: j.y + Math.sin(time * 0.9 + j.ph) * 5 });
-        const s = 48 * Z * 0.9;
-        // 冷光晕，深蓝夜空里先看到雾团再看到水母本体
-        const g = ctx.createRadialGradient(p.x, p.y, s * 0.1, p.x, p.y, s * 0.95);
-        g.addColorStop(0, 'rgba(150,215,255,.30)');
-        g.addColorStop(0.55, 'rgba(110,180,240,.12)');
-        g.addColorStop(1, 'rgba(80,150,220,0)');
+        const g = ctx.createRadialGradient(p.x, p.y, s * 0.05, p.x, p.y, s * 0.5);
+        g.addColorStop(0, 'rgba(255,196,150,.22)');
+        g.addColorStop(1, 'rgba(255,150,90,0)');
         ctx.fillStyle = g;
-        ctx.fillRect(p.x - s, p.y - s, s * 2, s * 2);
+        ctx.fillRect(p.x - s * 0.5, p.y - s * 0.5, s, s);
         ctx.drawImage(img, Math.round(p.x - s / 2), Math.round(p.y - s / 2), s, s);
       }
     }
 
-    function drawPuffer() {
-      const img = IMG['puffer' + String(Math.floor(puffer.t * 7) % 12).padStart(2, '0')];
+    function drawCreatures() {
+      const f = Math.floor(time / 0.08) % 6;
+      const img = IMG['creature' + f];
       if (!img) return;
-      const p = toScreen({ x: puffer.x, y: puffer.y });
-      const s = 64 * Z * 0.7;
-      ctx.drawImage(img, Math.round(p.x - s / 2), Math.round(p.y - s), s, s);
+      const s = 10 * Z * 0.9;
+      for (const c of creatures) {
+        const bob = Math.sin(time * 0.8 + c.ph) * 4;
+        const drift = Math.sin(time * 0.33 + c.ph * 0.7) * 10;
+        const p = toScreen({ x: c.x + drift, y: c.y + bob });
+        if (p.x < -s || p.x > W + s || p.y < -s || p.y > H + s) continue;
+        ctx.globalAlpha = 0.9;
+        ctx.drawImage(img, Math.round(p.x - s / 2), Math.round(p.y - s / 2), s, s);
+        ctx.globalAlpha = 1;
+      }
     }
 
     function drawHeart() {
@@ -445,20 +806,8 @@
       g.addColorStop(1, 'rgba(70,140,220,0)');
       ctx.fillStyle = g;
       ctx.fillRect(p.x - s, p.y - s, s * 2, s * 2);
-      const img = IMG['heart' + (Math.floor(time * 8) % 4)];
+      const img = IMG['heart' + (Math.floor(time * 8) % 14)];
       if (img) ctx.drawImage(img, Math.round(p.x - s / 2), Math.round(p.y - s / 2), s, s);
-    }
-
-    function drawBird() {
-      const img = IMG['bird' + (Math.floor(bird.t / 0.11) % 4)];
-      if (!img) return;
-      const p = toScreen({ x: bird.x, y: bird.y + Math.sin(bird.t * 1.4) * 6 });
-      const w = 32 * Z, h = 24 * Z;
-      ctx.save();
-      ctx.translate(Math.round(p.x), Math.round(p.y));
-      ctx.scale(bird.vx >= 0 ? 1 : -1, 1);
-      ctx.drawImage(img, -w / 2, -h / 2, w, h);
-      ctx.restore();
     }
 
     function drawDust() {
@@ -482,20 +831,22 @@
     }
 
     function render() {
-      ctx.clearRect(0, 0, W, H);
-      drawSky();
-      planetsBig.render(cam.x, cam.y);
-      planetsSmall.render(cam.x, cam.y);
-      starfield.render(cam.x, cam.y);
-      drawClouds();
-      drawPlatforms();
-      drawJellies();
-      drawPuffer();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = STYLE_COLOR;                   // /Map/Style color
+      ctx.fillRect(0, 0, W, H);
+      drawBackdrops();
+      drawDoor();
+      drawBlocks();                                  // floatySpaceBlock（lostlevels 自动瓦片）
+      drawJumpThrus();                               // jumpThru（wood）
+      drawDebris();                                  // floatingDebris
+      if (DRAW_SPINNERS) drawBlades();               // spinner ×95（默认关闭：底部的星海会破坏空无构图）
+      drawCreatures();                               // moonCreature ×9
       drawHeart();
-      drawBird();
       drawDust();
       drawParticles();
       m.draw(ctx, toScreen, Z);
+      drawForegrounds();                             // purplesunset（additive .25）盖在关卡之上
       if (flash > 0) {
         ctx.globalAlpha = Math.min(1, flash);
         ctx.fillStyle = '#eaf6ff';
@@ -532,12 +883,18 @@
 
     function respawn() {
       m.x = 0; m.y = 0; m.vx = 0; m.vy = 0;
+      feetPrev = 0;
       m.onGround = true; m.ducking = false; m.fastJump = false;
       m.scaleX = m.scaleY = 1; m.maxFall = 160; m.highestAirY = 0;
       m.varJumpTimer = 0; m.jumpGraceTimer = 0; m.jumpBufferTimer = 0;
+      m.setState(CelesteCharacter.ST.Normal);   // 冲刺/攀爬中途重来时状态也要复位
+      m.dashes = m.maxDashes; m.stamina = 110; m.freezeTimer = 0;
+      m.dashTime = 0; m.dashTrail.length = 0;
+      m.wallSlideDir = 0; m.wallSlideTimer = 1.2; m.dashAttackTimer = 0;
+      m.bodySolidFn = bodySolidFn;
       m.sprite.play('idle');
       m.hair.reset(0, 0, 1);
-      cam.x = 0; cam.y = 0;
+      snapCam();
       dust.length = 0; particles.length = 0;
       deathTimer = 0.45;
       flash = Math.max(flash, 0.35);
@@ -545,11 +902,7 @@
 
     function tick(dt) {
       time += dt;
-      starfield.update(dt);
-      puffer.t += dt;
-      bird.t += dt;
-      bird.x += bird.vx * dt;
-      if (bird.x < -200) { bird.x = 260; bird.y = -70 - Math.random() * 45; }
+      updateLayers(dt);
 
       if (deathTimer > 0) { deathTimer -= dt; return; }
 
@@ -558,19 +911,24 @@
         right: !!(keys['d'] || keys['arrowright']),
         down: !!(keys['s'] || keys['arrowdown']),
         up: !!(keys['w'] || keys['arrowup']),
-        jumpHeld: !!keys[' '],
-        jumpPressed: jumpEdge
+        jumpHeld: !!keys[' '] || !!keys['c'],
+        jumpPressed: jumpEdge,
+        grabHeld: !!(keys['shift'] || keys['z']),
+        dashPressed: dashEdge,
+        aimX: (keys['d'] || keys['arrowright'] ? 1 : 0) - (keys['a'] || keys['arrowleft'] ? 1 : 0),
+        aimY: (keys['s'] || keys['arrowdown'] ? 1 : 0) - (keys['w'] || keys['arrowup'] ? 1 : 0)
       };
-      jumpEdge = false;
+      jumpEdge = dashEdge = false;
 
+      feetPrev = m.y;
       m.update(dt, input);
       updateCam(dt);
 
       // 拾起空无之心
       if (!heart.collected && Math.abs(m.x - heart.x) < 24 && Math.abs(m.y - heart.y) < 30) collectHeart();
 
-      // 掉出浮台
-      if (m.y > 220) respawn();
+      // 掉出房间底部（世界 y 56 是地板线）
+      if (m.y > 96) respawn();
 
       // 粒子 / 尘土
       for (let i = particles.length - 1; i >= 0; i--) {
@@ -606,31 +964,157 @@
       };
       const reset = (x, y) => {
         m.x = x; m.y = y; m.vx = 0; m.vy = 0; m.onGround = true;
+        feetPrev = y;
         m.ducking = false; m.fastJump = false; m.scaleX = m.scaleY = 1;
         m.maxFall = 160; m.highestAirY = y; m.varJumpTimer = 0;
         m.jumpGraceTimer = 0; m.jumpBufferTimer = 0; m.sprite.play('idle');
+        // 角色引擎自己的状态（冲刺/爬墙）也要回位，否则连跑测试会互相污染
+        m.setState(CelesteCharacter.ST.Normal);
+        m.dashes = m.maxDashes; m.stamina = 110; m.freezeTimer = 0;
+        m.dashTime = 0; m.dashCooldownTimer = 0; m.dashRefillCooldownTimer = 0;
+        m.dashTrail.length = 0;
+        // 墙滑 / 天花板 / 身体盒探针的状态也要回位，否则连跑测试会互相污染
+        m.wallSlideDir = 0; m.wallSlideTimer = 1.2; m.dashAttackTimer = 0;
+        m.bodySolidFn = bodySolidFn;
         m.hair.reset(x, y, 1);
       };
       const step = (n, inp) => {
         for (let i = 0; i < n; i++) m.update(1 / 60, typeof inp === 'function' ? inp(i) : inp);
       };
 
-      log('地面剖面', groundY(-100) === 0 && groundY(350) === VOID && groundY(500) === -14 && groundY(900) === -30,
-        [groundY(-100), groundY(350), groundY(500), groundY(900)].join(' / '));
+      // 地面剖面：门顶（世界 y=0）可站，x=-80 上是 16×16 浮块顶面 -56，x=-112 下方全空
+      feetPrev = -140;
+      log('地面剖面 0 / -56 / 悬空', groundY(0) === 0 && groundY(-80) === -56 && groundY(-112) === VOID,
+        [groundY(0), groundY(-80), groundY(-112)].join(' / '));
 
       reset(0, 0); step(30, {});
       log('待机落稳 idle', m.onGround && m.y === 0 && m.anim === 'idle', m.anim + ' y=' + m.y);
 
-      reset(0, 0); step(90, { right: true });
-      log('跑步极速 90', Math.abs(m.vx - 90) < 0.01 && m.y === 0, 'vx=' + m.vx.toFixed(2));
+      reset(30, 0); step(30, { left: true });
+      log('跑步极速 90', Math.abs(m.vx + 90) < 0.01 && m.y === 0, 'vx=' + m.vx.toFixed(2));
 
-      reset(322, 0); m.vx = 90;
-      step(60, i => ({ right: true, jumpHeld: i < 20, jumpPressed: i === 0 }));
-      log('跨断崖落 B 台', m.onGround && Math.abs(m.y + 14) < 0.6, 'x=' + m.x.toFixed(1) + ' y=' + m.y.toFixed(1));
+      // floatySpaceBlock 的单向碰撞：从上方落下会停在块顶面（232,320 → 世界 -80,-56）
+      reset(-80, -140); m.onGround = false;
+      step(60, {});
+      log('落在浮空块顶面', m.onGround && Math.abs(m.y + 56) < 0.6, 'x=' + m.x.toFixed(1) + ' y=' + m.y.toFixed(1));
 
-      reset(1008, -58); m.onGround = false; heart.collected = false;
-      tick(1 / 60); tick(1 / 60);
+      // 人物系统接线：地面/墙体回调必须真的是本文件实现的那一套
+      log('人物引擎接线 ground/wall', m.groundYFn === groundY && m.wallCollideFn === wallCollideFn
+        && m.wallAtFn === wallAtFn && m instanceof CelesteCharacter.Character,
+        (m.constructor && m.constructor.name) + ' ' + (m.wallCollideFn === wallCollideFn));
+
+      // 墙体几何：x=-80..-64 / y=-56..-40 的 16×16 浮块（BLOCK_RECTS[0]）
+      log('墙体探测左面 -80', wallAtFn(-84, -50, 1) === -80 && wallCollideFn(-82, -50, 1) === -80
+        && wallCollideFn(-90, -50, 1) === null,
+        [wallAtFn(-84, -50, 1), wallCollideFn(-82, -50, 1), wallCollideFn(-90, -50, 1)].join(' / '));
+
+      // 冲刺：X 触发 → 冻结 3 帧 → StDash 240（原作 DashSpeed）
+      reset(0, 0);
+      step(1, { dashPressed: true, aimX: 1 });
+      step(4, { aimX: 1 });
+      log('冲刺 StDash 240', m.state === CelesteCharacter.ST.Dash && Math.abs(Math.abs(m.vx) - 240) < 0.01
+        && m.dashes === 0, 'state=' + m.state + ' vx=' + m.vx.toFixed(1) + ' dashes=' + m.dashes);
+
+      // 爬墙：贴住浮块左面按抓墙 → StClimb，向上爬体力逐帧消耗
+      // （块顶 y=-56，爬出顶部会 ClimbHop 翻上去，所以只取头 10 帧在墙上的状态）
+      reset(-84, -46); m.onGround = false;
+      step(1, { right: true, grabHeld: true });
+      const climbed = m.state === CelesteCharacter.ST.Climb;
+      const stam0 = m.stamina;
+      step(10, { right: true, grabHeld: true, up: true });
+      log('抓墙 StClimb（向上爬 + 体力→）', climbed && m.state === CelesteCharacter.ST.Climb
+        && m.stamina < stam0 && m.y < -46,
+        'climb=' + climbed + ' stamina=' + m.stamina.toFixed(1) + ' y=' + m.y.toFixed(1));
+
+      // ===== 动作系统升级（按 orig_UpdateSprite / OnCollideV 的 IL 逐条对齐）=====
+      log('人物引擎接线 ceiling/body', m.ceilingFn === ceilingY && m.bodySolidFn === bodySolidFn,
+        (m.ceilingFn === ceilingY) + ' / ' + (m.bodySolidFn === bodySolidFn));
+
+      // 天花板：块 [232,320,16,16] 的底边在世界 y=-40，从下方顶上去必须被挡住
+      // （旧版完全没有头部碰撞，会直接穿头）
+      reset(-72, -16); m.onGround = false; m.vy = -300;
+      step(3, {});
+      log('天花板撞击（贴块底 -40）', m.vy === 0 && Math.abs(m.y + 29) < 0.6,
+        'y=' + m.y.toFixed(2) + ' vy=' + m.vy.toFixed(1));
+
+      // 向上角修正：从块左缘外侧 4px 内顶上去 → 横向挪开 4px 继续上升（OnCollideV：num=4）
+      reset(-80, -16); m.onGround = false; m.vy = -300;
+      step(3, {});
+      log('天花板角修正 4px', m.x <= -83.9 && m.vy < 0, 'x=' + m.x.toFixed(1) + ' vy=' + m.vy.toFixed(1));
+
+      // 冲刺动画：原作 StDash 播 dash（旧版误播 jumpFast）
+      reset(0, 0);
+      step(1, { dashPressed: true, aimX: 1 });
+      step(4, { aimX: 1, right: true });
+      log('冲刺动画 dash', m.state === CelesteCharacter.ST.Dash && m.anim === 'dash',
+        'state=' + m.state + ' anim=' + m.anim);
+
+      // 墙滑：贴着块左面向墙推着下落 → wallslide（旧版条件写反，永远播不出来）
+      reset(-84, -46); m.onGround = false; m.vy = 20; m.facing = 1;
+      step(1, { right: true });
+      log('空中墙滑 wallslide', m.wallSlideDir === 1 && m.anim === 'wallslide',
+        'dir=' + m.wallSlideDir + ' anim=' + m.anim);
+
+      // edge：身体只剩 2px 搭在块顶上（块右缘世界 x=-64）→ 探身看下方
+      reset(-62, -56); step(3, {});
+      log('站边缘 edge', m.anim === 'edge', 'anim=' + m.anim + ' y=' + m.y.toFixed(1));
+
+      // edgeBack：同一位置面朝内侧 → 背对边沿
+      reset(-62, -56); m.facing = -1; step(3, {});
+      log('背对边缘 edgeBack', m.anim === 'edgeBack', 'anim=' + m.anim);
+
+      // push：朝墙推（房间里没有「地面 + 墙」组合，用白盒 stub 造一面墙）
+      reset(20, 0); m.bodySolidFn = () => true; step(2, { left: true });
+      log('推墙 push', m.anim === 'push', 'anim=' + m.anim);
+      m.bodySolidFn = bodySolidFn;
+
+      reset(heart.x, heart.y); heart.collected = false;
+      tick(1 / 60);
       log('拾起空无之心', heart.collected === true, 'collected=' + heart.collected);
+
+      // —— 房间几何：对照 LostLevels.bin 的 lvl_e-00z ——
+      log('实体数量 95/9/9/19', blades.length === 95 && creatures.length === 9 && debris.length === 19,
+        [blades.length, creatures.length, debris.length].join(' / '));
+      log('自动瓦片 25 块 / 167 格', BLOCKS.length === 25 && blockSprites.length === 167,
+        BLOCKS.length + ' 块 / ' + blockSprites.length + ' 格');
+      log('autotile 内部/孤立/边角', (() => {
+        const col5 = blockSprites.filter(s => s.sx === 5 * TILE);
+        const pad = col5.filter(s => s.sy <= 5 * TILE).length;      // Padded 5,0-5,5
+        const cen = col5.filter(s => s.sy > 5 * TILE).length;       // Center 5,6-5,14
+        const corner = autoTile(blockTiles, -80, -56);              // 16×16 浮块左上角 → 边集 x0x-011-x1x
+        return pad > 0 && cen > 0 && corner[1] === 11;
+      })(), (() => {
+        const col5 = blockSprites.filter(s => s.sx === 5 * TILE);
+        return 'padding ' + col5.filter(s => s.sy <= 5 * TILE).length +
+               ' 格 / center ' + col5.filter(s => s.sy > 5 * TILE).length +
+               ' 格 / 角 ' + autoTile(blockTiles, -80, -56).join();
+      })());
+      log('exitBlock 80 格（tileType=m 自动瓦片）', doorSprites.length === 80 && doorSprites.every(s => s.sy === 0 || s.sy >= 8),
+        doorSprites.length + ' 格');
+
+      // —— 场景保真度：对照 LostLevels.bin 的 bright styleground 组 ——
+      const stars = LAYERS.filter(l => l instanceof Starfield);
+      const planets = LAYERS.filter(l => l instanceof Planets);
+      const mists = LAYERS.filter(l => l instanceof Parallax);
+      log('背景 11 层 + 前景 1 层', LAYERS.length === 11 && LAYERS.length + FG_LAYERS.length === 12,
+        LAYERS.length + ' + ' + FG_LAYERS.length);
+      log('starfield ×4（scroll/speed）',
+        stars.length === 4 && stars.map(s => s.scrollX).join() === '0.3,0.5,0.3,0.5'
+        && stars.map(s => s.speed).join() === '2.5,2.75,3,3',
+        stars.map(s => s.color + '@' + s.scrollX + '/' + s.speed).join(' '));
+      log('planets 32/24/4',
+        planets.length === 3 && planets.map(p => p.count).join() === '32,24,4'
+        && planets.map(p => p.scroll).join() === '0.1,0.4,0.7',
+        planets.map(p => p.count + '@' + p.scroll + p.color).join(' '));
+      log('parallax 4+1（天穹/三层星云/落日）',
+        mists.length === 4 && FG_LAYERS.length === 1 && mists[0].tex === 'sky'
+        && mists[0].scroll === 0 && FG_LAYERS[0].additive === true,
+        mists.map(p => p.tex).join('>') + ' +' + FG_LAYERS[0].tex);
+      log('moonBlade 帧时序', bladeFrame(0) === 0 && bladeFrame(0.081) === 1 && bladeFrame(1.33) === 0,
+        [0, 0.081, 0.14, 1.33].map(t => bladeFrame(t)).join(' '));
+      log('底部星海已关闭', DRAW_SPINNERS === false, 'DRAW_SPINNERS=' + DRAW_SPINNERS);
+      log('moonCreature ×9 · moonBlade ×95', creatures.length === 9 && blades.length === 95,
+        creatures.length + ' / ' + blades.length);
 
       out.textContent = lines.join('\n') + '\n' + pass + ' pass / ' + fail + ' fail';
       window.__scene.testDone = true;
@@ -647,23 +1131,30 @@
         x: 0, y: 0
       });
       m.setGround(groundY);
+      // 墙：严格阻挡（物理 / 冲刺角修正）+ 宽容贴墙（爬墙 / 墙跳 / 墙滑）
+      m.setWallCollideFn(wallCollideFn);
+      m.setWallAt(wallAtFn);
+      m.setCeiling(ceilingY);             // 头部碰撞（原作 OnCollideV 的 Speed.Y < 0 分支）
+      m.setBodySolid(bodySolidFn);        // push / edge / edgeBack / dangling 的身体盒探针
       m.onLand = vy => { if (vy >= 80) spawnDust(m.x, m.y, 8); };
-      cam.x = 0; cam.y = 0;
+      snapCam();
 
       window.__scene = {
         get p() { return m; },
         cam: cam,
         heart: heart,
-        jellies: jellies,
-        puffer: puffer,
-        bird: bird,
+        debris: debris,
+        blades: blades,
+        creatures: creatures,
         IMG: IMG,
+        TEX: TEX,
         Z: Z,
         groundY: groundY,
-        PLATS: PLATS,
-        starfield: starfield,
-        planetsBig: planetsBig,
-        planetsSmall: planetsSmall,
+        blocks: BLOCKS,
+        jumpthrus: JTS,
+        solids: SOLIDS,
+        layers: LAYERS,
+        fg: FG_LAYERS,
         get collected() { return heart.collected; }
       };
 
@@ -676,7 +1167,13 @@
         toastEl.style.display = 'none';
         respawn();
         flash = 0;
-        setInterval(() => { time += 1 / 60; starfield.update(1 / 60); if (flash > 0) flash = Math.max(0, flash - 0.03); render(); }, 40);
+        // 无头浏览器里 rAF 可能不推进，自检页用定时器驱动同一套 updateLayers + render
+        setInterval(() => {
+          time += 1 / 60;
+          updateLayers(1 / 60);
+          if (flash > 0) flash = Math.max(0, flash - 0.03);
+          render();
+        }, 40);
       } else {
         let last = 0;
         (function frame(ts) {

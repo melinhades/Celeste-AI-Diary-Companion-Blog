@@ -1,0 +1,2946 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
+<title>Celeste 鸟的运动逻辑 · JS 复刻</title>
+<style>
+  :root { --ink:#cdd6f4; --dim:#7f849c; --accent:#89b4fa; --line:#313244; --bg:#11111b; --panel:#181825; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:14px/1.6 "Segoe UI",system-ui,sans-serif; padding:24px 16px 60px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  canvas { display:block; width:100%; max-width:960px; border:1px solid var(--line);
+           border-radius:6px; background:#1e1e2e; cursor:crosshair; }
+  .bar { display:flex; flex-wrap:wrap; gap:14px; align-items:center; max-width:960px;
+         padding:10px 12px; margin:10px 0 18px; background:var(--panel);
+         border:1px solid var(--line); border-radius:6px; }
+  label { display:flex; gap:6px; align-items:center; color:var(--dim); user-select:none; }
+  label input { accent-color:var(--accent); }
+  input[type=range] { width:110px; }
+  b.n { color:var(--accent); font-variant-numeric:tabular-nums; }
+  h2 { font-size:15px; margin:26px 0 6px; color:var(--accent); }
+  .wrap { max-width:960px; }
+  pre { background:var(--panel); border:1px solid var(--line); border-radius:6px;
+        padding:12px; overflow-x:auto; font:12px/1.55 Consolas,Menlo,monospace; color:#bac2de; }
+  code { font:12px Consolas,Menlo,monospace; }
+  .foot { max-width:960px; margin-top:22px; color:var(--dim); font-size:12.5px;
+          border-left:3px solid var(--line); padding-left:12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Celeste 鸟的运动逻辑 · JS 复刻</h1>
+  <p class="sub">按 <code>Celeste.dll</code> 的 IL 逐行还原的三条管线：<b>FlutterBird</b>（贝塞尔弹跳 + 速度积分惊飞）、<b>BirdPath</b>（协程只写 target，Update 做物理追赶）与 <b>BirdNPC</b>（会喊叫、啄地、举教程面板、被你靠近就飞走的那只）。协程用<b>帧驱动</b>生成器实现，所以 <code>yield null</code> = 下一帧、<code>yield 0.25</code> = 等 0.25 秒，与 C# 的 <code>Coroutine</code> 语义一致。鸟的贴图用的是仓库自带的<b>原版图集</b>（<code>Atlases/Gameplay/</code> 与 <code>Atlases/Gui/</code>），动画表、锚点、染色、面板同样抄自 <code>Sprites.xml</code> 与 IL。</p>
+</div>
+
+<canvas id="cv" width="960" height="540"></canvas>
+
+<div class="bar">
+  <label><input type="checkbox" id="showDebug" checked> 调试（曲线 / target / 判定框）</label>
+  <label><input type="checkbox" id="showTrail" checked> 拖尾</label>
+  <label><input type="checkbox" id="inVanilla"> inVanilla 分支（多乘 speedMult）</label>
+  <label><input type="checkbox" id="angleFix"> angleFix（朝向限幅）</label>
+  <label><input type="checkbox" id="useSprite" checked> 原版素材</label>
+  <label><input type="checkbox" id="autoFly"> AutoFly（不等玩家，叫完直接飞）</label>
+  <label><input type="checkbox" id="fling" checked> FlingBird（可抓可甩的原版大鸟）</label>
+  <label><input type="checkbox" id="lightning"> Lightning（拦在鸟面前的电网）</label>
+  <label><input type="checkbox" id="dashDemo"> 键盘模式（X 冲刺 / Z 跳，把闪电砸进电网箱）</label>
+  <label>贴图倍率 <input type="range" id="artScale" min="1" max="8" step="1" value="3"><b class="n" id="artVal">3×</b></label>
+  <label>speedMult <input type="range" id="speedMult" min="0.2" max="3" step="0.1" value="1"><b class="n" id="smVal">1.0</b></label>
+  <label><input type="checkbox" id="pause"> 暂停</label>
+  <label><button id="respawn" type="button" style="background:#313244;color:#cdd6f4;border:0;border-radius:4px;padding:4px 10px;cursor:pointer">重新投放鸟群与 NPC</button></label>
+</div>
+
+<div class="wrap">
+  <h2>怎么玩</h2>
+  <ul style="color:var(--dim)">
+    <li>鼠标就是 <code>Player</code>。把它移到<b>站立鸟的左边或右边</b>：水平差 &lt; 48px，且 <code>mouse.Y ∈ (鸟.Y-40, 鸟.Y+8)</code> → 惊飞，并且<b>连锁</b>传给 48×48 方框内的同伴。</li>
+    <li>勾选 <code>inVanilla</code> 并把 speedMult 拉到 3：目标点跑得比物理上限还快 <b>3 倍</b>，鸟明显追不上自己的路径 —— 这就是 Everest 在 IL 层修的那个 bug。</li>
+    <li>speedMult 拉低到 0.2 并<b>关掉</b> <code>angleFix</code>：target 会落到鸟身后，两个角度互相抵消，鸟开始<b>侧身 90°</b> 飞。打开 <code>angleFix</code> 就正常了。</li>
+    <li>右上角「暂停」冻结时间；C# 里 <code>yield return &lt;float&gt;</code> 按 DeltaTime 递减，所以慢动作/暂停会一起变慢。</li>
+    <li><b>BirdNPC 靠距离驱动</b>：把鼠标放到 <code>FlyAway</code> 那只的水平 120px 内 → 先喊一嗓子（croak），再靠到中心距 32px 内 → Startle 撒羽毛 + 飞出屏顶。每只鸟盯的距离都不一样，勾上「调试」就能看到各自的阈值框。</li>
+    <li><b>按住鼠标</b> = <code>Player.StateMachine.State == 1</code>（挂在墙上爬）。放到 <code>Climbing</code> 那只旁边按住，它的面板会真的<b>翻到背面</b>（<code>tutorial_note_flip_back</code>），松手爬过头再翻回来。</li>
+    <li>URL 参数可以直接分享某个判定瞬间：<code>?px=600&amp;py=436</code> 把“玩家”摆到坐标上，<code>&amp;down=1</code> 表示按住（爬墙），<code>&amp;invincible=1</code> 打开辅助模式 <code>Assists.Invincible</code>（会换掉 Dashing 那只的触发窗口）。</li>
+    <li>「贴图倍率」只放大鸟本身，<b>不放大世界</b>：物理常量（48px 接近框、14px 控制点）仍按游戏原尺寸 1px = 1px 算。FlutterBird 真的只有 <b>10×10</b> 像素（原版它就是 scenery），拉到 3× 以上才能看清翅膀。</li>
+  </ul>
+
+  <h2>素材：哪个图集属于哪只鸟</h2>
+  <pre>
+GFX.SpriteBank.Create("flutterBird")  →  path="scenery/flutterbird/"   Justify(0.5, 1)  10×10
+  idle = idle00                  delay 0.10   （单帧，待机不扇翅膀）
+  fly  = flap00, flap01          delay 0.10   ← FlyAwayRoutine IL 0065 ldstr "fly"
+  sprite.Color = Calc.Choose(colors)   colors = #89fbff #f0fc6c #f493ff #93baff   ← .cctor
+
+GFX.SpriteBank.Create("bird")         →  path="characters/bird/"       Origin(16,24)
+  flyupRoll = flyup00..15  delay 0.10  goto flyupIdle = flyup10..15   ← BirdPath 构造 IL 008c
+  sprite.JustifyOrigin(0.5f, 0.75f)    → 实际锚点 (16, 18)，运行覆盖了 XML 的 Origin
+  sprite.Color 不设置（#639bff 是 trailColor，只给拖尾用）
+
+→ BirdPath 的贴图是「从上方俯视」的，默认朝上，所以代码里那句 rotation = 方向角 + π/2 不是幺蛾子。
+→ characters/bird/ 里那 49 张 crow 帧属于 <b>BirdNPC</b>（会说话、被你抱在手里的那只），不是 FlutterBird。
+
+BirdNPC 的动画表 = Sprites.xml L261-284 的全部 19 条（idle / idleRarePeck / croak / peck / peckRare /
+  jump / fly / dash / fall / sleep / hover / hoverStressed / flyup / flyupIdle / flyupRoll /
+  throw / hurt / recover / hold）
+→ 磁盘上共 125 帧，被这 19 条引用了 120 帧。<b>剩下 8 帧游戏自己也不用</b>：
+  crow27 crow28（peck 14-26 与 jump 29-35 之间的空档）、crow36-41（jump 与 fall 42-44 之间的空档）。
+
+GFX.Gui（Atlases/Gui/）—— BirdTutorialGui 直接拿原图，不重画：
+  hyperjump/tutorial00.png  240×140   ← SuperWallJumpTutorial 的 tut1 面板图
+  hyperjump/tutorial01.png  240×140   ← 同上的 tut2（硬切，不插值）
+  tinyarrow.png              30×64    ← HyperJumpTutorial 控件数组里的 GFX.Gui["tinyarrow"]
+  controls/keyboard/*.png    80×80 / 120×80（宽键）  ← Input.GuiButton(Jump|Dash|Grab|Talk)
+  controls/directions/*.png  72×72    ← 控件数组里的 Vector2（如 1x1、0x-1、1x0）
+  particles/feather.png       5×3     ← BirdNPC.P_Feather 的 Source（clone 自 Strawberry.P_WingsBurst）
+→ 键盘字形（z.png 等）本身是<b>纯黑</b>的，必须叠在 base/base2 白色键帽上，所以离线合成成一张画布。
+  </pre>
+
+  <h2>FlutterBird：逐行对应的常量</h2>
+  <pre>
+待机 IdleRoutine                          惊飞 FlyAwayRoutine
+  delay   = 0.25 + NextFloat(1)             yield delay                       // 秒，不是帧
+  等待期每帧检查玩家接近框                     play "fly"
+    |player.X - X| &lt; 48                     scale   = (-dir*1.25, 1.25)       // 起飞拉伸
+    player.Y ∈ (Y-40, Y+8)                  弹射 to   = Pos + (dir*4, -8)      // 位移量
+    命中 → FlyAway(Sign(dx), NextFloat(.2))   进度 p += dt * 3                 // ≈0.33s
+  落点    = start + (-4 + NextFloat(8), 0)   翻身   scale.X = -scale.X
+  控制点  = 中点 + (0, -14)  → 峰值仅升 7px    初速度 v   = (dir, -4) * 8
+  进度    p += dt * 4      → 一跳 0.25s        加速度 a   = (dir*64, -128)      // px/s²
+  落地    scale = (±1.4, 0.6)                  连锁  OnInterval(0.1) 且 48×48 方框
+  Position 由<b>协程直接写</b>                    离场  Y+8 &lt; Bounds.Top → Remove
+
+回弹（Update，定速不是插值）
+  scale.X = Approach(scale.X, Sign(scale.X), 4*dt)
+  scale.Y = Approach(scale.Y, 1,             4*dt)
+  </pre>
+
+  <h2>FlingBird：抱住 &rarr; 甩出 &rarr; 逐节点 relocation &rarr; 等电网清空（第三把管线）</h2>
+  <pre>
+它和 BirdNPC 是<b>两个不同的实体</b>（BirdNPC 只负责说话/举面板，<code>Modes.WaitForLightning</code> 在 IL 里根本没有分支）。
+
+States（<code>FlingBird/States</code>）   Wait=0  Fling=1  Move=2  WaitForLightningClear=3  Leaving=4
+
+每帧 Update（顺序就是 IL 顺序：<b>base.Update() 先跑</b>，所以协程、Sprite、PlayerCollider 都在 switch 之前推进）
+  if (state != Wait) sprite.Position = Approach(sprite.Position, spriteOffset, <b>32</b>*dt)   // 贴图回中
+  Wait:  p.X - X &ge; <b>100</b>(SkipDist) 或 (SegmentsWaiting[segmentIndex] &amp;&amp; LightningRemoved) &rarr; Skip()
+         amount = ClampedMap(|p.Center - Position|, <b>16</b>, <b>64</b>, <b>12</b>, <b>0</b>)
+         sprite.Position = Approach(sprite.Position, spriteOffset + SafeNormalize(dir) * amount, <b>32</b>*dt)
+         &rArr; 玩家越近，贴图被推离本体越远，而<b>本体一动不动</b> —— 不是躲，是怕
+  Fling: if (flingAccel &gt; 0) flingSpeed = Approach(flingSpeed, flingTargetSpeed, flingAccel*dt)
+         Position += flingSpeed * dt          // ★ 整个甩出的位移只由这一句产生，协程从不写 Position
+  Move:  <b>空分支</b> —— 位移全在 MoveOnCurve 协程里直接写 Position
+  WaitForLightningClear: 房间里没有 Lightning 了（或已越过 Bounds.Right）&rarr; Leaving + LeaveRoutine()
+
+抓取判定在 <b>Player 那一侧</b>（全程序集 <code>PlayerCollider::Check</code> 的唯一调用点，IL_1110..IL_11b6）：
+  if (!Dead &amp;&amp; State != 21) { Collider previous = Collider;  Collider = <b>hurtbox</b>;   // ★★ 临时换成受击盒
+      foreach (pc in Scene.Tracker.GetComponents&lt;PlayerCollider&gt;()) { if (pc.Check(this)) {…} }
+      if (Collider == hurtbox) Collider = previous; }
+  ⇒ 用来撞鸟的是 <b>normalHurtbox = Hitbox(8, 9, -4, -11)</b>（中心 = Position + (0, -4.5)），<b>不是</b> normalHitbox(8, 11, -4, -11)；
+  ⇒ 遍历由 Player 每帧驱动，<code>PlayerCollider</code> 自己<b>没有 Update</b>；FlingBird 的两个 collider 参数都是 null
+    ⇒ 走「直接 <code>p.CollideCheck(entity)</code>」分支，命中半径是鸟的 <code>Circle(16, 0, 0)</code>。
+
+OnPlayer(Player p)（只在 Wait 生效，返回值决定能不能抱）：
+  if (state == Wait &amp;&amp; p.DoFlingBird(this)) {
+      flingSpeed = p.Speed * <b>0.4</b>; flingSpeed.Y = <b>120</b>;   flingTargetSpeed = Zero; flingAccel = <b>1000</b>;   // 先跟着玩家往下
+      p.Speed = Zero;  state = Fling;  Add(new Coroutine(DoFlingRoutine(p), <b>true</b>));   // ★ 协程挂在<b>鸟自己</b>身上
+      Audio.Play("event:/new_content/game/10_farewell/bird_throw", Center); }
+  Player 侧：<code>DoFlingBird</code> 里 <code>State = 24</code>（+ 丢下手里的东西），抱期间每帧被拎到
+      (bird.X, bird.Y + <b>8</b> + Collider.Height) = 鸟下方 <b>19</b>px，定速 <b>250</b>*dt；
+      <code>FinishFlingBird()</code> 把 <code>Speed</code> 交还成 <b>(380, -100)</b>（<code>FlingBird.FlingSpeed</code> 是 static）。
+
+DoFlingRoutine 的时间线（每一步都是 IL 里的字面量）：
+  camPt = p.Position - Camera.Position，X 夹到 <b>[145, 215]</b>、Y 夹到 <b>[85, 95]</b>
+  Add(Coroutine(level.ZoomTo(camPt, <b>1.1</b>, <b>0.2</b>), true))   // 焦点与 ZoomTarget 瞬变，只有缩放值走 SineInOut
+  Engine.TimeRate = <b>0.8</b>   →   Input.Rumble(0, 1)   →   <b>while (flingSpeed != Zero) yield null</b>
+  play("throw")；scale.X = <b>1</b>；flingSpeed = (-140, <b>140</b>)、target = Zero、accel = <b>1400</b>   // 先弹一下
+  yield 0.1   →   <b>Celeste.Freeze(0.05)</b>   →   target = FlingSpeed、accel = <b>6000</b>   →   yield 0.1
+  Input.Rumble(2, 1)   →   Engine.TimeRate = 1   →   level.Shake(<b>0.3</b>)   →   Add(Coroutine(level.ZoomBack(0.1), true))
+  p.FinishFlingBird()   →   target = Zero、accel = <b>4000</b>   →   yield 0.3   →   Add(Coroutine(MoveRoutine(), true))
+
+MoveRoutine：play("fly")、scale.X = 1、bird_relocate，节点<b>成对</b>消费（i += 2，i 是控制点、i+1 是落点）
+MoveOnCurve(from, anchor, to)：curve = SimpleCurve(from, to, anchor)   // 参数序是 (begin, end, control)
+  duration = curve.GetLengthParametric(<b>32</b>) / <b>500</b>            // 500 px/s，比 BirdPath 的 150 快得多
+  t 从 <b>0.016</b> 起、每帧 += dt/duration；Position = Floor(curve.GetPoint(t))
+  rotation = Angle(GetPoint(max(0, t-0.05)), GetPoint(min(1, t+0.05)))    // 前后各 5% 的割线当切线
+  scale = (<b>1.25</b>, <b>0.7</b>)                          // 飞行时被压扁
+  离上一节 &gt; <b>32</b>px 时 TrailManager.Add(this, <b>#639bff</b>, 1)   // 与 BirdPath 同一个色，因为同一个字段
+
+★ 时间层（全部来自 <code>Engine::Update</code> IL_009a..IL_0183）：
+  DeltaTime = RawDeltaTime × TimeRate × TimeRateB × GetTimeRateComponentMultiplier（后者无覆写者⇒恒 1），
+    而且是在<b>帧首</b>算的 ⇒ <code>TimeRate = 0.8</code> 要到<b>下一帧</b>才生效（实测：FinishFlingBird 交还 380 的那一帧，
+    NormalUpdate 仍按 0.8 结算，水平只掉 400×0.65×(1/60×0.8) = <b>3.47</b>）。
+  <code>Entities.UpdateLists()</code> 排在 freeze 判定<b>之前</b> ⇒ 定格那几帧 <code>Add</code>/<code>Remove</code> 照样提交，只是没人 Update。
+  <code>FreezeTimer &gt; 0</code> 时整帧只跑 <code>scene.FreezeFrameUpdate()</code>，而它只遍历 <code>this[TagsExt.FreezeFrameUpdate]</code>；
+    全程序集搜这个标签的引用点只有 <b>4 个</b>（Engine::Update / Scene:: / Level:: / Tags::Initialize），
+    <b>没有任何实体给它赋过值</b> ⇒ <code>Freeze(0.05)</code> 的三帧里整个场景<b>一个 Update 都不跑</b>：
+    TimeActive 不推进、震动既不重算也不衰减、flash 不回落、协程不推进。倒计时用的是 <b>RawDeltaTime</b>。
+  协程是 <code>Component</code> 且全部 <code>Entity::Add</code> 在实体自己身上 ⇒ 实体 <code>RemoveSelf()</code>，它的协程跟着消失；
+    所以有宿主的协程不在全局阶段跑，而是跟着宿主 <code>base.Update()</code> 里的 <code>Components.Update()</code> 被推进。
+★ 入场层（<code>EntityList::Add</code> / <code>UpdateLists</code> IL_0037..IL_006d）：是「<b>加一个、立即 Awake 一个</b>」，不是一批批。
+  而 <code>FlingBird::Awake</code> 的合并只在 <code>all[0] === this</code> 那只身上发生 ⇒ <b>必须让右边那只先入场</b>，
+  最左那只 Awake 时才看得见它，两段才会并成一条链。按 X 从小到大入场的话，两只鸟永远各自只有一段，
+  观感一样、但永远不会有 relocation。
+★ <code>FlingBird::Update</code> 的 switch <b>之后没有任何代码</b>（四个分支都以 ret 收尾），所以调试 HUD 只能放在 switch 之前。
+★ 玩家死亡：原版是从 <code>Session.RespawnPoint</code>（<code>ChangeRespawnTrigger::OnEnter</code> 写、<code>LevelLoader</code> 读）重新进房；
+  本页没有房间数据，“原地复活”那一帧必须立即同步到指针位置，否则还停在致死格上会被当场再杀一次。
+  </pre>
+
+  <h2>Lightning：电网是怎么把鸟按住的</h2>
+  <pre>
+构造：Collider = <b>Hitbox(VisualWidth - 2, VisualHeight - 2, 1, 1)</b>（比视觉小 2px、内缩 1px）
+      + PlayerCollider(OnPlayer, null, null)；有节点就挂 <code>MoveRoutine</code>（SineInOut 来回，永不停）；
+      toggleOffset = Calc.NextFloat()   // 每根的相位不同，所以不会整屏一起闪
+Update：<b>base.Update() 在最后</b>；Collidable 时每 onInterval(<b>0.25</b>, offset) 复查一次，不 Collidable 时提速到 <b>0.05</b>
+InView：用 <b>Camera</b>（不是 viewport）的 320×180 ± 16px；<code>Visible = Collidable = InView()</code>
+OnPlayer：非消散中且 <code>!Assists.Invincible</code> &rarr; <code>p.Die(UnitX * (Sign(p.X - X) 或 -1))</code>
+<RemoveRoutine>d__21：屏幕外的先 RemoveSelf &rarr; 停氛围音、冻结种子 &rarr; <b>t += dt*4</b> 爬到 1（Glitch/Bloom/Fade）
+      &rarr; <code>level.Shake(0.3)</code> &rarr; 倒序逐根 Shatter（8px 网格发射 P_Shatter）&rarr; <b>t += dt*8</b> 回落到 0
+      &rarr; 全部 RemoveSelf &rarr; <code>FindFirst&lt;FlingBird&gt;().LightningRemoved = true</code>   // ★ 只标<b>第一只</b>
+      ⇒ 电网没清空的段 <code>hoverStressed</code> 且面朝右；清空后 <code>Skip()</code>（= 直接进 Move，<b>不是</b>删除）。
+
+SpeedRing（<code>launched</code> 的<b>唯一</b>可见结果，每 onInterval(<b>0.15</b>) 撒一枚）：
+  寿命正好 1/3 秒（lerp += <b>3</b>*dt），沿发射法线飘 <b>10</b>px/s，颜色 Alpha 从 <b>0.6</b> 线性褪到 0；
+  原版先渲染进 <code>GameplayBuffers.SpeedRings</code> 这张 4×4 槽位（每格 64）的离屏图，再进 Bloom 链；
+  圆环半径 <b>4&rarr;14</b>，但被法线压扁：<code>r * Lerp(r, r*0.5, |dot(dir, normal)|)</code>，正对方向最扁，16 段中心对称。
+  </pre>
+
+  <h2>BirdPath：协程算 target，Update 追 target</h2>
+  <pre>
+节点成对   nodes[i] = 控制点, nodes[i+1] = 落点,  i += 2
+curve      = SimpleCurve(from, next, at)          // 顺序是 begin, end, control
+duration   = curve.GetLengthParametric(32) / maxspeed        // maxspeed = 150*speedMult
+每帧       target = curve.GetPoint(p)             // ← 协程只写 target，绝不写 Position
+           p += dt * (inVanilla ? speedMult : 1) / duration
+--------------------------------------------------------------------------
+prevSign   = Sign(X - target.X)
+speed     += SafeNormalize(target - Position) * 800 * dt      // 恒定加速度 800 px/s²
+if (|speed| > maxspeed) speed = SafeNormalize(speed, maxspeed)
+Position  += speed * dt
+if (Sign(X - target.X) != prevSign) speed.X *= 0.75           // 横向过冲阻尼
+rotation   = (angleFix ? CalcAngle()                          // 只用速度向量 + 限幅
+             : AngleLerp(Angle(speed), Angle(Position, target), 0.5)) + π/2
+拖尾       距上一节 &gt; 32px 时 TrailManager.Add(#639bff)
+  </pre>
+
+  <h2>BirdNPC：Modes &rarr; 协程（靠近就飞走）</h2>
+  <pre>
+每个 Modes 就是一个 <b>协程</b>。SetMode 会先 RemoveSelf 旧的，再 <code>Add(new Coroutine(routine, true))</code>；
+第二个参数 true = <b>RemoveOnComplete</b>（IL 里 <code>ldc.i4.1</code> 紧跟 <code>newobj Coroutine(IEnumerator, Boolean)</code>），
+跑完就把这个 Component 从实体上摘掉。<b>不是</b>「同一帧连跑好几步」：
+<code>yield null</code> 永远是下一帧，每帧只推进一步。
+
+Modes            状态机                盯玩家的方式（每帧轮询 Scene.Tracker.GetEntity&lt;Player&gt;()）
+---------------- --------------------- -------------------------------------------------------------
+FlyAway          WaitRoutine d__37     |p.X - X| &lt; <b>120</b> &rarr; Caw()；再等 hypot(p.Center, Pos) &lt; <b>32</b> &rarr; StartleAndFlyAway
+Climbing         ClimbingTutorial d__32 先等 120px 才举面板；<code>p.State==1 &amp;&amp; p.Y &gt; Y</code> &rarr; 翻面
+HyperJump        HyperJumpTutorial d__36 0.3s 后 Caw + 举面板，<b>永不收起</b>（第一章那只就是常驻的）
+DreamJump        DreamJumpTutorial d__34 <b>两档不同阈值</b>：32px（或 p.X &gt; X）只收面板，再靠近到 <b>24</b>px 才惊飞
+SuperWallJump    SuperWallJumpTutorial d__35 玩家要 <code>p.Y &le; Y &amp;&amp; p.X &ge; X+144</code> 才算“学会了”，否则循环重举
+Dashing          DashingTutorial d__33   <b>不是教程</b>：瞬移到 (X+32, Bounds.Top)，窗口 p.X &gt; Start.X-92 且
+                                         p.Y &isin; (Start.Y-20, Start.Y-10) &rarr; Scene.Add(new CS00_Ending(...))
+MoveToNodes      MoveToNodesRoutine d__40 80px 触发逐节点 FlyTo；结束后 Tag |= <b>Persistent</b>，
+                                         离场条件 Y &gt; Bounds.Top <b>- 200</b>（比普通 FlyAway 多飞 200px）
+Sleeping         &mdash;                   play("sleep")，Facing = Right
+
+喊叫 &rarr; 啄地 &rarr; 出文本（SuperWallJumpTutorial，就是你要的那段）：
+  Facing = Right; yield 0.25;
+  ShowTutorial(tut1, caw:<b>true</b>)        &rarr; 先 Caw()：play("croak")，<b>等 sprite.frame &ge; 9</b> 才 Audio.Play(squawk)
+  play("<b>idleRarePeck</b>")               &rarr; 紧接啄地。这条动画是 goto 表：<b>idle 权重 4 次 : peckRare 1 次</b>，
+                                          所以平均每 5 次才真啄一下，不是每次都啄
+  OnFrameChange：id 是 peck / peckRare 且 <b>frame == 6</b> &rarr; Audio.Play("event:/game/general/bird_peck")
+  yield 2 &rarr; 硬切 tut2（不走展开动画）&rarr; yield 2 &rarr; HideTutorial &rarr; yield 2 &rarr; first = false
+
+音效：本机<b>没有</b>鸟叫/啄地素材（全仓库音频只有 bgm/womanbird.mp3，原版走 FMOD 事件路径），
+所以不伪造音频，只把事件名打进画布右下角的 SFX 日志：
+  bird_squawk（喊叫） / bird_peck（啄地） / bird_startle（惊飞） / bird_wingflap（hover·hoverStressed·fly 的 frame==0）
+  bird_relocate（MoveToNodes 换节点与离场） / tutorial_note_flip_back·_front（Climbing 面板翻面）
+  </pre>
+
+  <h2>BirdTutorialGui：面板是怎么拉开的</h2>
+  <pre>
+Tags.HUD，构造签名 (Entity, Vector2 offset, object info, params object[] controls)。
+info 可以是 <b>string</b>（走 ActiveFont）也可以是 <b>MTexture</b>（直接拿 GFX.Gui 的原图，不重画）。
+
+Update(rawDt)：
+  Scale = <b>Approach</b>(Scale, Open ? 1 : 0, <b>RawDeltaTime</b> * 8)   // 用 RawDeltaTime，时停/慢动作不冻结面板
+Render()：
+  w = (<b>Max</b>(controlsWidth, infoWidth) + 64) <b>* Scale</b>
+  h =  infoHeight + LineHeight + 32                  // ★ 高<b>不乘</b> Scale
+  x = pos.X - w/2 ;  y = pos.Y - h - 32              // 面板挂在鸟上方 32px
+  Rect(x-6, y-6, w+12, h+12)  描边 #ffffff
+  Rect(x,     y,   w,    h )  底色 #061526           // HexToColor("061526")
+  for (i = 0..36)  ww = (73 - 2i) * Scale            // 37 行“尾巴”，ww &gt; 12 时中间挖空填底色
+  if (w &gt; 3) { info 与控件都按 scale = (Scale, 1) 画 }   // 只有横向缩放 &rarr; “文本从中间拉开”
+控件行四种类型（宽度算法取自 UpdateControlsSize 的 IL）：
+  string            measureText(文本)，<b>不加 padding</b>；渲染时双绘：+2px 主题色 #6179e2 当阴影、-2px 白
+  ButtonPrompt      guiButton(Dash|Jump|Grab|Talk) 的贴图宽 + <b>buttonPadding*2</b>（= 8*2）
+  Vector2           固定 <b>72</b> + buttonPadding*2，贴图是 controls/directions/&lt;x&gt;x&lt;y&gt;.png
+  MTexture          用 texture.Width（比如 GFX.Gui["tinyarrow"] 的 30，<b>不加 padding</b>）
+实测宽：图面板 240 + 64 = <b>304</b>；文字面板 h = 24 + 24 + 32 = 80。
+MTexture.Draw(pos, origin, color, scale) 的第二参是 <b>origin</b> 不是偏移，
+origin = (-cpX, Height/2) &rarr; top-left = pos - origin*scale，控件行以 p.Y 为垂直中心。
+  </pre>
+
+  <h2>可搬走的原语（已逐个核对 IL）</h2>
+  <pre>
+class SimpleCurve {                      // 字段顺序 (Begin, End, Control)，二次贝塞尔
+  getPoint(t){ const u = 1-t;
+    return { x: u*u*this.p0.x + 2*u*t*this.c.x + t*t*this.p1.x,
+             y: u*u*this.p0.y + 2*u*t*this.c.y + t*t*this.p1.y }; }
+  getLengthParametric(res = 32){          // ≈ 把 [0,1] 均分 res 段的折线长
+    let prev = this.getPoint(0), len = 0;
+    for (let i = 1; i &lt;= res; i++){ const p = this.getPoint(i/res);
+      len += Math.hypot(p.x-prev.x, p.y-prev.y); prev = p; }
+    return len; }
+}
+angleDiff(a, b)   // 把 b-a 折到 (-π, π]
+angleLerp(a, b, p) = a + angleDiff(a, b) * p
+angleApproach(v, t, maxMove)             // 定速转过去，用 Clamp(diff, -maxMove, maxMove)
+approach(v, t, maxMove)                  // 定速逼近，不过冲
+safeNorm(x, y, len)                       // 零向量返回零，不返回 NaN
+easeCubeOut(t) = 1 - (1-t)³               // Ease.Invert(CubeIn)
+  </pre>
+</div>
+
+<p class="foot">
+证据：<code>Celeste.dll</code> SHA-256 <code>999024e2…b78f8e24</code>，MVID <code>4a26f9de-d670-4c87-a2f4-7e66d2d85163</code>，PE32 / il-only，5,223,424 B。
+读取方式：REA 的托管 provider 只到元数据层（Ghidra 明确拒绝 managed），所以用<b>游戏自带</b>的 <code>Mono.Cecil.dll</code> 在 PowerShell 5.1 里直接反编译 IL 方法体，全程只读。
+本机安装已被 CelesteMod 合并改写，<code>BirdPath</code> 的 <code>orig_*</code> 补丁就是本页 <code>inVanilla / angleFix</code> 两个开关的来源。
+详细取证与 IL 偏移见 <code>docs/celeste-bird-motion.md</code>。BirdPath 原版跑完节点链会 <code>RemoveSelf()</code>；本页额外补了一段“回到起点”的曲线把链闭合，好让 target 始终在鸟前方、可以持续观察。
+素材：本页直接读仓库自带的 <code>Atlases/Gameplay/characters/bird/</code>、<code>Atlases/Gameplay/scenery/flutterbird/</code>、<code>Atlases/Gameplay/particles/feather.png</code> 与 <code>Atlases/Gui/</code>（hyperjump、controls/keyboard、controls/directions、tinyarrow），动画表抄自本机 <code>Content/Graphics/Sprites.xml</code>。若某帧 404（比如从子目录部署、路径不对），那只鸟会退回程序化占位图，画布左下角的 HUD 会提示缺失数量；<code>?sprite=0</code> 可以强制全用占位图。GUI 缺图只让对应面板退化（跳过该控件），<b>不会</b>把鸟打回占位图 —— <code>guiMissing</code> 与 <code>spritesFailed</code> 是两个独立计数。
+</p>
+
+<script>
+'use strict';
+/* ================= Monocle.Calc / Ease（与 IL 等价） ================= */
+const TAU = Math.PI * 2;
+const rnd = () => Math.random();                        // Calc.NextFloat 用的 MTC Random
+const nextFloat = max => rnd() * max;
+const sign = Math.sign;
+const angleDiff = (a, b) => { let d = (b - a) % TAU;
+  if (d <= -Math.PI) d += TAU; else if (d > Math.PI) d -= TAU; return d; };
+const angleLerp = (a, b, p) => a + angleDiff(a, b) * p;
+const angleApproach = (v, t, maxMove) => { const d = angleDiff(v, t);
+  return Math.abs(d) < maxMove ? t : v + Math.max(Math.min(d, maxMove), -maxMove); };
+const approach = (v, t, m) => (v < t ? Math.min(v + m, t) : Math.max(v - m, t));
+const safeNorm = (x, y, len = 1) => { const l = Math.hypot(x, y);
+  return l === 0 ? { x: 0, y: 0 } : { x: x / l * len, y: y / l * len }; };
+const easeCubeOut = t => { t -= 1; return t * t * t + 1; };         // Ease.Invert(CubeIn)
+const v2 = (x, y) => ({ x, y }), vadd = (a, b) => v2(a.x + b.x, a.y + b.y);
+const vmul = (a, k) => v2(a.x * k, a.y * k), vsub = (a, b) => vadd(a, vmul(b, -1));
+const vdiv = (a, b) => v2(a.x / b.x, a.y / b.y);         // Vector2 / Vector2 是逐分量的
+const lerpF = (a, b, t) => a + (b - a) * t;              // MathHelper.Lerp
+const clampF = (v, lo, hi) => Math.min(hi, Math.max(lo, v));   // Monocle.Calc::Clamp
+// Calc.Approach(Vector2, Vector2, float)：按「距离」限幅，不是逐分量（会走直线，方向不变）
+const approachV = (cur, target, maxDist) => {
+  const d = vsub(target, cur), len = Math.hypot(d.x, d.y);
+  return len > maxDist ? vadd(cur, vmul(d, maxDist / len)) : v2(target.x, target.y);
+};
+const angleV = (a, b) => Math.atan2(b.y - a.y, b.x - a.x);   // Calc.Angle(from, to)
+// Calc::AbsAngleDiff(a, b) = Math.Abs(AngleDiff(a, b))（calc_shake_il.txt 里就两条指令：call AngleDiff; abs）
+const absAngleDiff = (a, b) => Math.abs(angleDiff(a, b));
+// ★ System.Math::Round(double, MidpointRounding.ToEven)：JS 的 Math.round 是 half-up（0.5→1、-0.5→0），
+//   在「恰好 .5」这一点上和原版分岔。Actor::MoveH/MoveV 用的正是 ToEven（actor_mover_il.txt IL_001c-0022：
+//   conv.r8; ldc.i4.0 <ToEven>; call Math::Round; conv.i4），所以必须自己写。
+const roundToEven = x => { const f = Math.floor(x), d = x - f;
+  if (d > 0.5) return f + 1;
+  if (d < 0.5) return f;
+  return (f % 2 === 0) ? f : f + 1; };              // 恰好 .5 取偶
+// Calc::ClampedMap(v, oldMin, oldMax, newMin, newMax) = Map 之后 Clamp 到 [newMin,newMax] 那条
+const clampedMap = (v, a, b, c, d) => lerpF(c, d, clampF((v - a) / (b - a), 0, 1));
+const vmulV = (a, b) => v2(a.x * b.x, a.y * b.y);     // Vector2 * Vector2：逐分量
+/* ★ 本批次新证据（Monocle.Ease 的 .cctor 把每个缓动绑到 Ease/<>c 上的静态方法）：
+     SineIn(t)    = -cos(t·π/2) + 1        // <>c::SineIn      ldc.r8 1.57079637050629
+     SineOut(t)   =  sin(t·π/2)           // <>c::SineOut
+     SineInOut(t) = -cos(t·π)/2 + 0.5      // <>c::SineInOut   ldc.r8 3.14159265358979
+     CubeOut      = Ease.Invert(CubeIn) = 1-(t-1)³
+   SineInOut 不是 smoothstep(3t²-2t³)。Level::ZoomTo / ZoomBack / BirdNPC::FlyTo 用的都是它。 */
+const sineIn = t => -Math.cos(t * Math.PI / 2) + 1;
+const sineOut = t => Math.sin(t * Math.PI / 2);
+const sineInOut = t => -Math.cos(t * Math.PI) / 2 + 0.5;
+
+class SimpleCurve {                                     // Monocle.SimpleCurve(Begin, End, Control)
+  constructor(begin, end, control) { this.p0 = begin; this.p1 = end; this.c = control; }
+  getPoint(t) { const u = 1 - t;
+    return v2(u * u * this.p0.x + 2 * u * t * this.c.x + t * t * this.p1.x,
+              u * u * this.p0.y + 2 * u * t * this.c.y + t * t * this.p1.y); }
+  getLengthParametric(res = 32) { let prev = this.getPoint(0), len = 0;
+    for (let i = 1; i <= res; i++) { const p = this.getPoint(i / res);
+      len += Math.hypot(p.x - prev.x, p.y - prev.y); prev = p; }
+    return len; }
+}
+
+/* ================= 帧驱动协程：对应 Monocle.Coroutine ================= */
+// Coroutine 是一个 <b>Component</b>，而且全程序集 22 个 <code>new Coroutine(IEnumerator, bool)</code> 观测点
+// 无例外都是 <code>ldc.i4.1</code> + <code>call Entity::Add(Component)</code> ⇒ 协程永远挂在<b>发起它的那个实体</b>身上。
+// 所以 Entity::RemoveSelf() 时 Component 列表一起被摘走，协程不可能比宿主活得久 —— Runner 的 owner 就是这条。
+let clock = 0, DELTA = 1 / 60, RAW_DELTA = 1 / 60, paused = false;
+const runners = [];
+class Runner {
+  constructor(gen, owner = null) {
+    this.gen = gen; this.until = 0; this.alive = true; this.owner = owner; runners.push(this);
+  }
+  stop() { this.alive = false; }                        // Coroutine.Cancel()
+  step() {                                              // Coroutine.Update：waitTimer 递减
+    if (!this.alive) return;
+    if (this.owner && this.owner.removed) { this.alive = false; return; }   // 宿主没了，Component 跟着没
+    if (clock < this.until) return;
+    const it = this.gen.next();
+    if (it.done) { this.alive = false; return; }        // RemoveOnComplete = true
+    // yield <number> = 等这么多「秒」；yield null = 下一帧；yield <int> = 同样当秒数用但不结束本帧
+    this.until = clock + (typeof it.value === 'number' ? it.value : 0);
+  }
+}
+const pruneRunners = () => { for (let i = runners.length - 1; i >= 0; i--)
+  if (!runners[i].alive) runners.splice(i, 1); };
+// 有 owner 的协程不在全局阶段跑：Coroutine 是 Component，它随宿主的 base.Update() 里的
+// Components.Update() 一起被推进（FlingBird::Update 的 IL_0000 就是先 call Entity::Update）。
+const stepOwned = ent => { for (const r of runners.slice()) if (r.owner === ent) r.step(); };
+// Scene::OnInterval 的两个重载都是「跨过了几个周期的整数边界」，conv.i4 是向零截断（时间是正的，等价 floor）
+const onInterval = t => Math.floor(clock / t) !== Math.floor((clock - DELTA) / t);             // Scene.OnInterval
+const onIntervalOff = (t, o) => Math.floor((clock - o) / t) !== Math.floor((clock - o - DELTA) / t);  // 带 offset 版
+const onRawInterval = t => Math.floor(rawClock / t) !== Math.floor((rawClock - RAW_DELTA) / t);
+const onRawIntervalOff = (t, o) => Math.floor((rawClock - o) / t) !== Math.floor((rawClock - o - RAW_DELTA) / t);
+// Calc::OnInterval(float timer, float &from, float to)：读的是<b>调用方自己的累积量</b>，不是 Scene.TimeActive
+// ref = {v: float} 形似 C# 的 ref float（命中后把 from 推成当前 timer）
+const calcOnInterval = (timer, ref, to) => {
+  if (timer < ref.v + to) return false;
+  ref.v = timer; return true; };
+
+/* ================= Engine / Celeste / Level 的时间·震动·闪白代理 ================= */
+// 证据（.screenshots/.tmp/celeste-re/camera_il.txt）：
+// · Celeste::Freeze(float s)          = if (Engine.FreezeTimer < s) Engine.FreezeTimer = s;
+//   —— 取最大值而不是累加，所以连续两次 Freeze(0.05) 与 Freeze(0.1) 等价。
+// · Level::Update IL_0581..IL_06b7（震动）：shakeTimer > 0 时每 Scene.OnRawInterval(0.04) 重算一次
+//   amount = Ceil(shakeTimer * 10)，方向为零 → ShakeVector = (-amount + Random.Next(amount*2+1)) ×2；
+//   方向非零 → lastDirectionalShake 在 ±1 之间翻转正负号，ShakeVector = -dir * lastDir * amount；
+//   Settings.ScreenShake == Typed(1) 时再压成 (Sign(X), Sign(Y))，且衰减倍率 mult = 1.5；
+//   扣时间用的是 Engine.RawDeltaTime（TimeRate 不影响它）。
+// · Level::Update IL_06c2..IL_072f（闪白）：doFlash 时 Approach(flash, 1, DeltaTime*10) 直到 1 收；
+//   否则 Approach(flash, 0, DeltaTime*3) —— 亮 0.1s、灭 ≈0.33s。
+// · Level::Flash(Color, bool drawPlayer) 直接令 flash = 1（不是从 0 爬），doFlash 只负责维持住它。
+let timeRate = 1, freezeTimer = 0, rawClock = 0;
+// Engine::DeltaTime = RawDeltaTime × TimeRate × <b>TimeRateB</b> × (GetTimeRateComponentMultiplier 恒为 1)
+// Level::Update 头部：TimeRateB = (InCutscene ‖ 无 Player ‖ Wipe != null ‖ Frozen ? 10 : Assists.GameSpeed) / 10
+let inCutscene = false, levelWipe = null, levelFrozen = false, gameSpeedAssist = 10;
+const levelTimeRateB = () => (inCutscene || !player() || levelWipe || levelFrozen ? 10 : gameSpeedAssist) / 10;
+let shakeTimer = 0, shakeVector = v2(0, 0), shakeDirection = v2(0, 0), lastDirectionalShake = 0;
+let typedShake = false;                                 // Settings.Instance.ScreenShake == Typed
+let doFlash = false, flash = 0, flashColor = '#ffffff';
+const setTimeRate = r => { timeRate = r; };              // Engine.TimeRate
+const celesteFreeze = s => { if (freezeTimer < s) freezeTimer = s; };
+const levelShake = (s, dir) => { shakeTimer = Math.max(shakeTimer, s);   // Level::Shake 也是取 Max
+  if (dir) shakeDirection = dir; else shakeDirection = v2(0, 0); };
+const levelFlash = c => { doFlash = true; flash = 1; flashColor = c; };
+function updateShakeAndFlash() {                         // 抄 Level::Update 的两段 IL
+  if (shakeTimer > 0) {
+    if (onRawInterval(0.04)) {
+      const amount = Math.ceil(shakeTimer * 10);
+      const nextInt = n => Math.floor(rnd() * n);        // Calc.Random.Next(int)
+      if (shakeDirection.x === 0 && shakeDirection.y === 0) {
+        shakeVector = v2(-amount + nextInt(amount * 2 + 1), -amount + nextInt(amount * 2 + 1));
+      } else {
+        lastDirectionalShake = lastDirectionalShake === 0 ? 1 : -lastDirectionalShake;
+        shakeVector = vmul(vmul(vmul(shakeDirection, -1), lastDirectionalShake), amount);
+      }
+      if (typedShake) shakeVector = v2(sign(shakeVector.x), sign(shakeVector.y));
+    }
+    shakeTimer -= RAW_DELTA * (typedShake ? 1.5 : 1);
+  } else shakeVector = v2(0, 0);
+  if (doFlash) { flash = approach(flash, 1, DELTA * 10); if (flash >= 1) doFlash = false; }
+  else if (flash > 0) flash = approach(flash, 0, DELTA * 3);
+}
+
+// Engine::Update IL_009a..IL_0183（完整控制流）：
+//   if (DashAssistFreeze) { … PlayerDashAssist?.Update(); (scene as Level)?.UpdateTime(); }
+//   scene.Entities.UpdateLists();               // ★ 在 freeze 判定之前 ⇒ 冻结期间 Add/Remove 照样提交
+//   if (!DashAssistFreeze) {
+//     if (FreezeTimer > 0) { scene.FreezeFrameUpdate();
+//                            FreezeTimer = Math.Max(FreezeTimer - Engine.RawDeltaTime, 0f); }   // ★ 用 Raw
+//     else if (scene != null) { scene.BeforeUpdate(); scene.Update(); scene.AfterUpdate(); }
+//   }
+// Level::FreezeFrameUpdate 在非 FrozenOrPaused、非 Transitioning、RetryPlayerCorpse == null 时直接
+// 落到 base.FreezeFrameUpdate()，而 Scene::FreezeFrameUpdate 只跑 <b>this[TagsExt.FreezeFrameUpdate]</b> 这一个标签列表。
+// 全程序集搜 "FreezeFrameUpdate" 的引用点只有 Engine::Update / Scene::FreezeFrameUpdate /
+// Level::FreezeFrameUpdate / Tags::Initialize 四处，没有任何游戏实体给这个标签赋过值
+// ⇒ DoFlingRoutine 里那 Freeze(0.05) 的三帧，<b>整个场景真的一个 Update 都不跑</b>：
+//   Level::Update 不跑 ⇒ TimeActive 不推进、震动既不重算也不衰减、flash 不回落、协程不推进。
+function freezeFrameUpdate() {
+  const tagged = [];                                  // scene[TagsExt.FreezeFrameUpdate]：空列表
+  for (const e of tagged) if (e.active) e.update();
+}
+
+/* ================= Monocle 组件层：SineWave / Wiggler / Shaker + Calc 原语 ================= */
+// 证据：monocle_shake_il.txt（三个组件的全部方法逐条 IL）+ calc_rva_arrays.txt
+// （shakeVectorOffsets 的 RVA blob 实测 = int[5]{-1,-1,0,1,1}）+ calc_shake_il.txt /
+//  calc_perp_il.txt / calc_between_il.txt（Calc 原语与 DashCollisionResults 枚举）。
+// ★ SineWave.set_Counter(v)：counter = (v + 8π) mod 8π；Value=sin(c)、ValueOverTwo=sin(c/2)、TwoValue=sin(c*2)。
+//   SineWave.Update：counter += 2π · Frequency · Rate · dt（dt 走 Raw 或 Delta）。
+const EIGHT_PI = 25.132741928100586;                  // IL ldc.r8：float 25.132742（=8π）的 double 加宽
+const TWO_PI = 6.28318548;                             // float 2π
+class SineWave {
+  constructor(freq = 1, counter = 0) {                // .ctor()：Frequency=1、Rate=1；.ctor(f,c) 再 set_Counter(c)
+    this.frequency = freq; this.rate = 1; this.onUpdate = null; this.useRawDeltaTime = false;
+    this.setCounter(counter);
+  }
+  setCounter(v) {
+    this.counter = (v + EIGHT_PI) % EIGHT_PI;
+    this.value = Math.sin(this.counter);
+    this.valueOverTwo = Math.sin(this.counter / 2);
+    this.twoValue = Math.sin(this.counter * 2);
+  }
+  update() {
+    this.setCounter(this.counter + TWO_PI * this.frequency * this.rate *
+      (this.useRawDeltaTime ? RAW_DELTA : DELTA));
+    if (this.onUpdate) this.onUpdate(this.value);
+  }
+}
+// ★ Wiggler.Create(freq, sineAdd, onChange, start, removeSelfOnFinish)：increment = 1/freq、sineAdd = 2π·sineAdd；
+//   Start() 把 Counter 拉到 1，之后逐帧 Counter -= increment·dt，Value = cos(sineCounter)·Counter ——
+//   一段「按 sineAdd 频率振荡、按 1/freq 线性衰减到 0」的弹跳。
+const wigglerCache = [];
+class Wiggler {
+  constructor() { this.counter = 0; this.value = 0; this.active = false; }
+  init(freq, sineAdd, onChange, start, removeSelfOnFinish) {
+    this.sineCounter = 0; this.counter = 0; this.useRawDeltaTime = false;
+    this.increment = 1 / freq; this.sineAdd = TWO_PI * sineAdd;
+    this.onChange = onChange; this.removeSelfOnFinish = removeSelfOnFinish; this.startZero = false;
+    if (start) this.start(); else this.active = false;
+    return this;
+  }
+  start() {                                           // Wiggler::Start()
+    this.counter = 1;
+    if (this.startZero) { this.sineCounter = 1.57079637; this.value = 0; if (this.onChange) this.onChange(0); }
+    else { this.sineCounter = 0; this.value = 1; if (this.onChange) this.onChange(1); }
+    this.active = true;
+  }
+  stop() { this.active = false; }
+  update() {
+    const dt = this.useRawDeltaTime ? RAW_DELTA : DELTA;
+    this.sineCounter += this.sineAdd * dt;
+    this.counter -= this.increment * dt;
+    if (!(this.counter > 0)) { this.counter = 0; this.active = false; }   // bgt.un：Counter<=0 收尾
+    this.value = Math.cos(this.sineCounter) * this.counter;
+    if (this.onChange) this.onChange(this.value);
+  }
+  static create(freq, sineAdd, onChange, start = true, removeSelfOnFinish = false) {
+    const w = wigglerCache.length ? wigglerCache.pop() : new Wiggler();   // Wiggler::cache.Pop()
+    return w.init(freq, sineAdd, onChange, start, removeSelfOnFinish);
+  }
+}
+// ★ Shaker：两段同帧（先扣 Timer 决定是否归零，再在 OnInterval 上重新摇）—— 不是 else-if。
+//   Value = Calc.ShakeVector(Random)，每个分量独立从 shakeVectorOffsets=[-1,-1,0,1,1] 等概率取一项
+//   （Choose → offsets[Random.Next(5)]，所以 ±1 各 2/5、0 占 1/5）。
+const SHAKE_VECTOR_OFFSETS = [-1, -1, 0, 1, 1];
+const calcShakeVector = () =>
+  v2(SHAKE_VECTOR_OFFSETS[(rnd() * 5) | 0], SHAKE_VECTOR_OFFSETS[(rnd() * 5) | 0]);
+const calcPerpendicular = v => v2(-v.y, v.x);                          // Calc.Perpendicular = (-Y, X)
+const calcBetweenInterval = (a, b) => (a % (b * 2)) > b;              // BetweenInterval(a,b) = (a mod 2b) > b
+function calcRotateTowards(cur, target, maxRadians) {                  // Calc.RotateTowards
+  const d = angleDiff(cur, target);
+  return Math.abs(d) <= maxRadians ? target : cur + sign(d) * maxRadians;
+}
+class Shaker {
+  constructor(on = true, onShake = null) {
+    this.interval = 0.05; this.timer = 0; this.value = v2(0, 0);
+    this.on = on; this.onShake = onShake; this.removeOnFinish = false; this.active = true;
+  }
+  setOn(v) {
+    this.on = v;
+    if (!v) { this.timer = 0;
+      if (this.value.x !== 0 || this.value.y !== 0) {
+        this.value = v2(0, 0); if (this.onShake) this.onShake(v2(0, 0)); } }   // Value != Zero 才回调
+  }
+  shakeFor(timer, removeOnFinish) { this.on = true; this.timer = timer; this.removeOnFinish = removeOnFinish; return this; }
+  update() {
+    if (this.on && this.timer > 0) {
+      this.timer -= DELTA;                                            // Shaker 用 Engine.DeltaTime
+      if (!(this.timer > 0)) {                                        // 到期：归零并（可选）移除后 ret
+        this.on = false; this.value = v2(0, 0);
+        if (this.onShake) this.onShake(v2(0, 0));
+        if (this.removeOnFinish) this.active = false;
+        return;                                                       // ★ IL_006c：归零那一帧不再重摇
+      }
+    }
+    if (this.on && onInterval(this.interval)) {                       // 同帧第二段：Scene.OnInterval(Interval)
+      this.value = calcShakeVector();
+      if (this.onShake) this.onShake(this.value);
+    }
+  }
+}
+// Level::DirectionalShake(Vector2 dir, float s)：把方向归一后记住，lastDir 复位，shakeTimer 取 Max 抬升。
+function levelDirectionalShake(dir, s) {
+  shakeDirection = safeNorm(dir.x, dir.y, 1);
+  lastDirectionalShake = 0;
+  shakeTimer = Math.max(shakeTimer, s);
+}
+
+/* ================= 画布与场景 ================= */
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const W = cv.width, H = cv.height;
+const LEVEL_BOUNDS_TOP = 0;                             // level.Bounds.Top
+const CAMERA_TOP = 0;                                   // level.Camera.Top
+const GROUND_Y = 440, TRAIL_COLOR = '#639bff';
+const BIRD_COLORS = ['#89fbff', '#f0fc6c', '#f493ff', '#93baff'];   // FlutterBird 的 4 个固定色
+const LEVEL_BOUNDS_RIGHT = W;                         // level.Bounds.Right（本页房间就是整张画布）
+
+/* ================= 相机：Level::ZoomTo 其实发生在 Level::Render 的那一次 blit ================= */
+// 全程序集反查（zoom_refs.txt 的 HITSMETHOD 清单）：Monocle.Camera::set_Zoom 的调用者只有
+// MapEditor（mod 追加的类型），正常关卡 Monocle.Camera 的缩放恒为 1。
+// Camera::.ctor 里 origin = Vector2.Zero ⇒ screen = (world - Floor(Position)) × Camera 缩放 + Floor(origin)
+//                              = world - Camera.Position，Camera.Position 是「视口左上角的世界坐标」。
+// 所以 Level::ZoomTo 的放大 100% 来自 Level::Render IL_023E-03F7 的最后一次 blit：
+//   virtualSize = (320, 180)                    // 另有 ResetZoom、ScreenToWorld 两处独立印证
+//   halfView    = virtualSize / ZoomTarget      // Vector2 除法是逐分量
+//   offset      = ZoomTarget == 1 ? Vector2.Zero
+//               : (ZoomFocusPoint - halfView/2) / (virtualSize - halfView) * virtualSize
+//   scale       = Zoom * (320 - ScreenPadding*2) / 320
+//   padding     = (ScreenPadding, ScreenPadding * 0.5625)          // 0.5625 == 9/16
+//   Draw(GameplayBuffers.Level, position: offset + padding, origin: offset, scale: scale)
+// 把 v = offset 代回 → screen 仍等于 offset，与 scale 无关 ⇒ offset 是这次放大的不动点。
+// ★ 更反直觉的是 d__162 的第一帧：ZoomFocusPoint 与 ZoomTarget 是直接赋值（不插值），
+//   只有 Zoom 走 Lerp(from, ZoomTarget, Ease.SineInOut(p))。⇒「焦点瞬移、画面缓推」。
+//   ZoomBack(d__164) 同理：Zoom 缓回 1，但 ZoomTarget 一直留着旧值（offset 也跟着留），
+//   直到收尾才调 ResetZoom() 把 Zoom/ZoomTarget 一起置 1、焦点弹回 (160,90) —— 结尾那一下小弹跳是真的。
+const GAME_VW = 320, GAME_VH = 180;                   // 原版虚拟分辨率
+const VIEW_K = W / GAME_VW;                           // 本页画布 = 原版的 3 倍
+const vs = px => px * VIEW_K;                         // 虚拟像素 → 页面像素
+const camPos = v2(0, 0);                              // Camera.Position（演示房间不滚动，恒为 0）
+let levelZoom = 1, zoomTarget = 1;                    // Level::Zoom / Level::ZoomTarget
+let screenPadding = 0;                                // Level::ScreenPadding（Temple/Refill 那类 gimmick 才写）
+const zoomFocus = v2(vs(GAME_VW / 2), vs(GAME_VH / 2));   // ZoomFocusPoint 默认 = 视口中心 (160,90)
+const zoomReset = () => { levelZoom = 1; zoomTarget = 1;   // Level::ResetZoom
+  zoomFocus.x = vs(GAME_VW / 2); zoomFocus.y = vs(GAME_VH / 2); };
+function camBlit() {                                  // offset / scale / padding，全部用页面像素
+  const vt = v2(W, H);                                // virtualSize × VIEW_K（该式对整体等比缩放是齐次的）
+  const half = v2(vt.x / zoomTarget, vt.y / zoomTarget);
+  const off = zoomTarget === 1 ? v2(0, 0)
+    : vmulV(vdiv(vsub(zoomFocus, vmul(half, 0.5)), vsub(vt, half)), vt);
+  return { off, pad: v2(vs(screenPadding), vs(screenPadding * 0.5625)),
+           s: levelZoom * (GAME_VW - screenPadding * 2) / GAME_VW };
+}
+// Level::WorldToScreen / ScreenToWorld 的严格同序实现（缩放为 1 时两者都是恒等，不影响既有断言）
+const worldToScreen = p => { const { off, s, pad } = camBlit();
+  return vadd(vmul(vsub(vsub(p, camPos), off), s), vadd(off, pad)); };
+const screenToWorld = q => { const { off, s, pad } = camBlit();
+  return vadd(vmul(vsub(vsub(q, pad), off), 1 / s), vadd(off, camPos)); };
+function camBegin() {                                 // world·s + T，T = (-camX - off)·s + off + pad
+  // Level::BeforeRender：cameraPreShake = Camera.Position; Camera.Position += ShakeVector;
+  //                    Camera.Position = Calc.Floor(Camera.Position);
+  // Level::AfterRender 再弹回 cameraPreShake ⇒ <b>震动只发生在渲染期</b>，Update 里读到的 Camera.Position 不带震动。
+  const { off, s, pad } = camBlit();
+  const cx = Math.floor((camPos.x + vs(shakeVector.x)) / VIEW_K) * VIEW_K;   // Floor 的是<b>虚拟像素</b>
+  const cy = Math.floor((camPos.y + vs(shakeVector.y)) / VIEW_K) * VIEW_K;
+  ctx.save();
+  ctx.translate((0 - cx - off.x) * s + off.x + pad.x,
+                (0 - cy - off.y) * s + off.y + pad.y);
+  ctx.scale(s, s);
+  return { cx, cy };
+}
+const camEnd = () => ctx.restore();
+// Level::ZoomTo(point, to, duration) → <ZoomTo>d__162：焦点与 Target 瞬变，Zoom 用 SineInOut 缓动
+// IL 里这个协程是 <code>callvirt Entity::Add</code>，<b>宿主是叫它的那个实体</b>（FlingBird），不是 Level。
+function levelZoomTo(point, to, duration, owner = null) {
+  zoomFocus.x = point.x; zoomFocus.y = point.y; zoomTarget = to;
+  return new Runner((function* () {
+    const from = levelZoom; let p = 0;
+    while (p < 1) { levelZoom = lerpF(from, zoomTarget, sineInOut(clampF(p, 0, 1))); yield null;
+      p += DELTA / duration; }
+    levelZoom = zoomTarget;
+  })(), owner);
+}
+// Level::ZoomBack(duration) → <ZoomBack>d__164：Zoom 缓回 1，收尾 ResetZoom()（offset 到这一刻才弹回 0）
+function levelZoomBack(duration, owner = null) {
+  return new Runner((function* () {
+    const from = levelZoom, to = 1; let p = 0;
+    while (p < 1) { levelZoom = lerpF(from, to, sineInOut(clampF(p, 0, 1))); yield null;
+      p += DELTA / duration; }
+    zoomReset();
+  })(), owner);
+}
+const mouse = v2(-999, -999);
+const ui = {};
+for (const id of ['showDebug', 'showTrail', 'inVanilla', 'angleFix', 'useSprite', 'artScale', 'artVal',
+                  'speedMult', 'smVal', 'pause', 'respawn', 'autoFly', 'lightning', 'fling', 'dashDemo'])
+  ui[id] = document.getElementById(id);
+ui.speedMult.addEventListener('input', () => { ui.smVal.textContent = (+ui.speedMult.value).toFixed(1); });
+ui.artScale.addEventListener('input', () => { ui.artVal.textContent = ui.artScale.value + '×'; });
+ui.pause.addEventListener('change', () => { paused = ui.pause.checked; });
+ui.respawn.addEventListener('click', () => spawnBirds());
+// URL 参数可直接分享某个状态，例：?sm=3&vanilla=1&angleFix=0&invincible=1&px=700&py=430&down=1
+let mouseDown = false;               // 演示代理：按住鼠标 = Player.State == 1（Climbing）
+let invincibleAssist = false;        // SaveData.Assists.Invincible，BirdNPC.DashingTutorial 的第二组窗口
+{ const q = new URLSearchParams(location.search);
+  const bind = (param, id, def) => { if (q.has(param)) ui[id].checked = q.get(param) !== '0'; };
+  bind('vanilla', 'inVanilla'); bind('angleFix', 'angleFix');
+  bind('debug', 'showDebug'); bind('trail', 'showTrail'); bind('sprite', 'useSprite');
+  bind('autoFly', 'autoFly');
+  bind('fling', 'fling'); bind('lightning', 'lightning');
+  bind('dash', 'dashDemo');
+  if (q.has('invincible')) invincibleAssist = q.get('invincible') !== '0';
+  if (q.has('pause')) ui.pause.checked = q.get('pause') !== '0';
+  if (q.has('art')) { const a = Math.round(+q.get('art'));
+    ui.artScale.value = isFinite(a) ? Math.max(1, Math.min(8, a)) : 3; }
+  ui.artVal.textContent = ui.artScale.value + '×';
+  if (q.has('sm')) { const v = +q.get('sm');
+    ui.speedMult.value = Math.max(0.2, Math.min(3, isFinite(v) ? v : 1));
+    ui.smVal.textContent = (+ui.speedMult.value).toFixed(1); }
+  // 把“玩家”直接放到某个坐标（= Scene.Tracker.GetEntity<Player>()），便于实拍与分享某个判定瞬间
+  if (q.has('px')) mouse.x = +q.get('px');
+  if (q.has('py')) mouse.y = +q.get('py');
+  if (q.has('down')) mouseDown = q.get('down') !== '0';
+  paused = ui.pause.checked; }
+cv.addEventListener('mousedown', () => { mouseDown = true; });
+document.addEventListener('mouseup', () => { mouseDown = false; });   // 在画布外松开也算松开
+// Scene.Tracker.GetEntity<Player>() 的等价物：一个真的 PlayerEntity。
+// 旧版这里直接拿鼠标坐标拼一个匿名对象，所以 flingSpeed = p.Speed * 0.4f、Speed = Zero、
+// FinishFlingBird() 交还初值这一整条链都没有东西可接；现在速度、状态、六个判定盒都在实体自己身上。
+// ★ Player::.ctor：normalHitbox = new Hitbox(8, 11, -4, -11) ⇒ Center = Position + (0, -5.5)
+//   （早先注释里写的 (4,5.5) 是错的：宽高是 8×11，x 从 -4 起所以横向居中，y 从 -11 到 0 居中于 -5.5）
+const player = () => (thePlayer && thePlayer.active ? thePlayer : null);
+let particles = [], trails = [];
+const emitDust = (x, y, ang, n = 1) => { for (let i = 0; i < n; i++)
+  particles.push({ x, y, vx: Math.cos(ang) * (10 + rnd() * 45), vy: Math.sin(ang) * (10 + rnd() * 45),
+                   age: 0, life: 0.45 + rnd() * 0.3 }); };
+
+/* ================= Monocle.SpriteBank / Sprite / Chooser 的复刻 ================= */
+// 图集直接读仓库自带的原版素材 blog-ui/Atlases/（目录结构 = Celeste 的 atlas 路径）。
+// 动画表逐条抄自本机 Content/Graphics/Sprites.xml L261-284：
+//   <flutterBird path="scenery/flutterbird/" start="idle">  <Justify x="0.5" y="1"/>
+//     idle = idle00            delay 0.10
+//     fly  = flap00,flap01     delay 0.10          ← FlyAwayRoutine IL 0065 ldstr "fly"
+//   <bird path="characters/bird/" start="idle">   <Origin x="16" y="24"/>
+//     idle         crow00        delay 1     goto "idle,peck"                        ← 权重 1:1
+//     idleRarePeck crow00        delay 1     goto "idleRarePeck×4,peckRare"          ← 权重 4:1
+//     croak crow00-13 → idle     peck crow14-26 → idle     peckRare crow14-26 → idleRarePeck
+//     jump  crow29-35 → fly      fly Loop fly03,00,01,02   dash Loop dash00
+//     fall  Loop crow42-44       sleep Anim crow45-48      hover / hoverStressed / flyup…
+// 关键认知：<Anim goto="a,b"> 在 SpriteBank 里被编译成 Monocle.Chooser<string>，<Loop> 编译成
+// 自指（new Chooser(ownId, 1)）。所以「站着站着突然啄一下地」根本不是代码 if 出来的，
+// 是 idle 那一帧跑完后 goto 的 1:1 权重随机；idleRarePeck 用重复项把它压成 1:4。
+// 帧名一律按磁盘真名写死（crow00 但 FlyUp01、hover01 但 Hover02、hurt00 但 Hurt01），
+// Windows 不区分大小写看不出问题，上 Linux（GitHub Pages）就是 404。同 js/roundtable-bird.js。
+const pad2 = i => String(i).padStart(2, '0');
+const seq = (p, a, b) => { const r = []; for (let i = a; i <= b; i++) r.push(p + pad2(i)); return r; };
+const ATLAS_ROOT = 'Atlases/Gameplay/';
+const GUI_ROOT = 'Atlases/Gui/';
+const B = 'characters/bird/';
+const CROW = seq(B + 'crow', 0, 48);
+const FLYUP = [B + 'flyup00'].concat(seq(B + 'FlyUp', 1, 15));
+const HOVER = [B + 'hover00', B + 'hover01'].concat(seq(B + 'Hover', 2, 5));
+const HURT = [B + 'hurt00'].concat(seq(B + 'Hurt', 1, 21));
+const BANKS = {
+  flutterBird: {
+    justify: v2(0.5, 1),                       // 锚点在脚底中央
+    anims: {
+      idle: { names: ['scenery/flutterbird/idle00'], delay: 0.1, goto: null },
+      fly:  { names: ['scenery/flutterbird/flap00', 'scenery/flutterbird/flap01'], delay: 0.1, goto: null }
+    }
+  },
+  bird: {
+    justify: v2(0.5, 1),                       // Sprites.xml <Origin x="16" y="24"/> ÷ 32×24
+    anims: {
+      idle:          { names: [CROW[0]],             delay: 1,    goto: 'idle,peck' },
+      idleRarePeck:  { names: [CROW[0]],             delay: 1,
+                       goto: 'idleRarePeck,idleRarePeck,idleRarePeck,idleRarePeck,peckRare' },
+      croak:         { names: CROW.slice(0, 14),     delay: 0.08, goto: 'idle' },
+      peck:          { names: CROW.slice(14, 27),    delay: 0.08, goto: 'idle' },
+      peckRare:      { names: CROW.slice(14, 27),    delay: 0.08, goto: 'idleRarePeck' },
+      jump:          { names: CROW.slice(29, 36),    delay: 0.08, goto: 'fly' },
+      fly:           { names: [B+'fly03', B+'fly00', B+'fly01', B+'fly02'], delay: 0.1, goto: 'fly' },
+      dash:          { names: [B + 'dash00'],        delay: 0.1,  goto: 'dash' },
+      fall:          { names: CROW.slice(42, 45),    delay: 0.07, goto: 'fall' },
+      sleep:         { names: CROW.slice(45, 49),    delay: 0.15, goto: null },
+      hover:         { names: HOVER,                 delay: 0.1,  goto: 'hover' },
+      hoverStressed: { names: seq(B + 'HoverStressed', 0, 5), delay: 0.07, goto: 'hoverStressed' },
+      flyup:         { names: FLYUP,                 delay: 0.1,  goto: 'flyup' },
+      flyupIdle:     { names: FLYUP.slice(10),       delay: 0.1,  goto: 'flyupIdle' },
+      flyupRoll:     { names: FLYUP,                 delay: 0.1,  goto: 'flyupIdle' },
+      throw:         { names: seq(B + 'Throw', 0, 6), delay: 0.08, goto: 'hover' },
+      hurt:          { names: HURT,                  delay: 0.06, goto: null },
+      recover:       { names: seq(B + 'Recover', 0, 7), delay: 0.085, goto: null },
+      hold:          { names: seq(B + 'Hold', 0, 5), delay: 0.1,  goto: 'hold' }
+    }
+  },
+  // ---- Player bank（本机 Content/Graphics/Sprites.xml）----
+  // 只抄 FlingBirdIntro / CS10_CatchTheBird 真的会用到的四条：
+  //   <Loop id="jumpSlow_carry" path="jump_carry" delay="0.1" frames="0,1"/>
+  //   <Anim id="fallSlow_carry" path="jump_carry" delay="0.1" frames="2,3"/>
+  //   <Loop id="idle_carry"     path="idle_carry" delay="0.1"/>
+  //   <Anim id="runSlow_carry"  path="run_carry"  delay="0.07"/>
+  // <Origin x="16" y="32"/> ÷ 32×32 ⇒ justify = (0.5, 1)，锚点在脚底。
+  // ★ 有意偏差：Sprites.xml 还有 <Anim id="roll" path="roll" frames="0-12" delay="0.05"/>，
+  //   但仓库 Atlases/Gameplay/characters/player/ 下根本没有任何 roll*.png（已枚举确认），
+  //   写上去在 Linux（GitHub Pages）就是 404，所以落地时的 roll 退回到 fallSlow_carry。
+  player: {
+    justify: v2(0.5, 1),
+    anims: {
+      jumpSlow_carry: { names: seq('characters/player/jump_carry', 0, 1),  delay: 0.1,  goto: 'jumpSlow_carry' },
+      fallSlow_carry: { names: seq('characters/player/jump_carry', 2, 3),  delay: 0.1,  goto: null },
+      idle_carry:     { names: seq('characters/player/idle_carry', 0, 8),  delay: 0.1,  goto: 'idle_carry' },
+      runSlow_carry:  { names: seq('characters/player/run_carry', 0, 11),  delay: 0.07, goto: null }
+    }
+  },
+  // ---- breakerBox bank（LightningBreakerBox::.ctor 里 GFX.SpriteBank.Create("breakerBox")）----
+  // 表抄本机 Content/Graphics/Sprites.xml L851-859：
+  //   <breakerBox path="objects/breakerBox/" start="idle">  <Justify x="0.5" y="0.5"/>
+  //     <Loop id="idle"   path="idle"   delay="0.1"/>
+  //     <Anim id="open"   path="open"   delay="0.06" frames="1-3" goto="opened"/>
+  //     <Loop id="opened" path="opened" delay="0.06"/>
+  //     <Anim id="break"  path="break"  delay="0.06"/>
+  // 帧名按磁盘真名（首字母大写）写死；idle 只有 1 帧、open 只用 01-03（磁盘上其实有 Open00-06），
+  // break 是 00-16 共 17 帧，Break16 实测只剩 1 个不透明像素（Sprite::OnLastFrame 里已经 Visible=false）。
+  // 每帧都是 64×64 画布、不透明内容居中约 34×34 ⇒ Justify(0.5,0.5) + Sprite.Position = Size/2 = (16,16)
+  // 正好让画面中心落在 32×32 Solid 盒的中心上。
+  breakerBox: {
+    justify: v2(0.5, 0.5),
+    anims: {
+      idle:   { names: ['objects/breakerBox/Idle00'],        delay: 0.1,  goto: 'idle' },
+      open:   { names: seq('objects/breakerBox/Open', 1, 3), delay: 0.06, goto: 'opened' },
+      opened: { names: seq('objects/breakerBox/Opened', 0, 15), delay: 0.06, goto: 'opened' },
+      break:  { names: seq('objects/breakerBox/Break', 0, 16), delay: 0.06, goto: null }
+    }
+  }
+};
+/* Monocle.Chooser<string>：FromString 按 ',' 切，每项可写 "值:权重"（缺省 1），
+   Choose() 用 target = Random * TotalWeight 逐项累加找第一个 target < acc。 */
+class Chooser {
+  constructor(fromString) {
+    this.items = []; this.total = 0;
+    if (fromString == null) return;
+    for (const part of String(fromString).split(',')) {
+      const i = part.lastIndexOf(':');
+      let obj = part, w = 1;
+      if (i > 0) { const p = Number(part.slice(i + 1));
+        if (Number.isFinite(p)) { obj = part.slice(0, i); w = p; } }
+      this.items.push({ obj, weight: w }); this.total += w;
+    }
+  }
+  choose() {
+    if (this.total <= 0) return this.items.length ? this.items[0].obj : null;
+    if (this.items.length === 1) return this.items[0].obj;
+    let target = rnd() * this.total;
+    for (const it of this.items) { target -= it.weight; if (target < 0) return it.obj; }
+    return this.items[this.items.length - 1].obj;
+  }
+}
+for (const bank of Object.values(BANKS))
+  for (const a of Object.values(bank.anims)) a.chooser = a.goto ? new Chooser(a.goto) : null;
+
+const images = new Map();
+let spritesFailed = 0;
+{
+  const names = new Set();
+  for (const bank of Object.values(BANKS))
+    for (const a of Object.values(bank.anims))
+      for (const n of a.names) names.add(n);
+  for (const n of names) {
+    const img = new Image();
+    img.onerror = () => { spritesFailed++; };
+    img.src = ATLAS_ROOT + n + '.png';
+    images.set(n, img);
+  }
+}
+/* GFX.Gui（Atlases/Gui/）：BirdTutorialGui 的面板图与按键贴图，MTexture 的宽高用
+   IHDR 实测值写死（240×140 / 80×80 / 120×80 / 72×72 / 30×64），和 MTexture.Width 等价。
+   guiMissing 与 spritesFailed 分开计数：GUI 图缺了只让教程面板退化，不该把鸟也打回占位图。 */
+let guiMissing = 0;
+const guiImages = new Map();
+function guiTex(name) {
+  if (!guiImages.has(name)) {
+    const img = new Image();
+    img.onerror = () => { guiMissing++; };
+    img.src = GUI_ROOT + name + '.png';
+    guiImages.set(name, img);
+  }
+  return guiImages.get(name);
+}
+const mGui = (name, w, h) => ({ __tex: true, name, w, h });   // 一个 MTexture 句柄
+const ready = img => !!img && img.complete && img.naturalWidth > 0;
+function drawTex(img, x, y, w, h, alpha = 1, flipX = false) {
+  if (!ready(img) || w <= 0 || h <= 0) return false;
+  ctx.save(); ctx.globalAlpha *= alpha; ctx.imageSmoothingEnabled = false;
+  if (flipX) { ctx.translate(x, y); ctx.scale(-1, 1); ctx.drawImage(img, -w, 0, w, h); }
+  else ctx.drawImage(img, x, y, w, h);
+  ctx.restore();
+  return true;
+}
+// Input.GuiButton(VirtualButton, PrefixMode.None, "controls/keyboard/oemquestion")：
+// 键盘皮肤下返回的是「base/base2 白色键帽 + 字形」两张叠加（字形本身是纯黑，见 z.png），
+// 而 BirdTutorialGui 用 Color.White 画它，所以这里离线合成成一张画布缓存。
+const VB_KEYS = { Dash: 'x', Jump: 'z', Grab: 'c', Talk: 'enter' };   // 原版默认键位
+const WIDE_KEYS = new Set(['enter', 'space', 'LeftShift', 'RightShift', 'LeftControl']);
+const capCache = new Map();
+function guiButton(virtualButton) {
+  const kn = VB_KEYS[virtualButton] || 'OemQuestion';
+  const glyph = guiTex('controls/keyboard/' + kn);
+  const base = guiTex('controls/keyboard/' + (WIDE_KEYS.has(kn) ? 'base2' : 'base'));
+  if (!ready(glyph) || !ready(base)) return null;
+  const key = 'cap:' + kn;
+  let c = capCache.get(key);
+  if (!c) {
+    c = document.createElement('canvas');
+    c.width = glyph.naturalWidth; c.height = glyph.naturalHeight;
+    const g = c.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    g.drawImage(base, 0, 0); g.drawImage(glyph, 0, 0);   // 键帽在下、黑色字形在上
+    capCache.set(key, c);
+  }
+  return c;
+}
+const guiButtonSize = vb => (WIDE_KEYS.has(VB_KEYS[vb] || 'OemQuestion') ? 120 : 80);
+const guiDirection = v => guiTex(`controls/directions/${v.x | 0}x${v.y | 0}`);   // 72×72，自带描边
+// XNA 的 sprite.Color 是「纹理 × 颜色」，所以这里用 multiply 再按原 alpha 裁切，而不是整体染色
+const tintCache = new Map();
+function tinted(img, color) {
+  if (color === '#ffffff') return img;
+  const key = img.src + color;
+  let c = tintCache.get(key);
+  if (!c) {
+    c = document.createElement('canvas');
+    c.width = img.naturalWidth; c.height = img.naturalHeight;
+    const g = c.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    g.drawImage(img, 0, 0);
+    g.globalCompositeOperation = 'multiply'; g.fillStyle = color; g.fillRect(0, 0, c.width, c.height);
+    g.globalCompositeOperation = 'destination-in'; g.drawImage(img, 0, 0);
+    tintCache.set(key, c);
+  }
+  return c;
+}
+class Sprite {
+  constructor(bankId, animId, color = '#ffffff', justify = null) {
+    this.bank = BANKS[bankId];
+    this.color = color;
+    this.justify = justify || this.bank.justify;      // SetFrame 里由 Justify 算 Origin
+    this.scale = v2(1, 1);
+    this.flipX = false;                                // Monocle.Sprite.FlipX（LightningBreakerBox::.ctor 写它）
+    this.position = v2(0, 0);                          // Monocle.Sprite.Position：挂在实体上的贴图偏移
+    this.rate = 1;                                     // Sprite.Rate，负值可以倒放
+    this.useRawDeltaTime = false;
+    this.animating = true;
+    this.onFrameChange = null; this.onLastFrame = null; this.onFinish = null;
+    this.currentAnimationID = '';
+    this.timer = 0; this.frame = 0; this.frameName = null;
+    this.play(animId);
+  }
+  play(id, dontPlayIfAlreadyInUse = false, debugFrom = false) {   // Sprite::Play IL
+    if (this.currentAnimationID === id && dontPlayIfAlreadyInUse) return;
+    const anim = this.bank.anims[id];
+    if (!anim) return;
+    this.currentAnimationID = id;
+    this.anim = anim;
+    this.animating = this.anim.delay > 0;
+    if (debugFrom) { this.timer = rnd() * anim.delay; this.frame = Math.floor(rnd() * anim.names.length); }
+    else { this.timer = 0; this.frame = 0; }
+    this.setFrame();
+  }
+  setFrame() {                                       // SetFrame：末尾回调 OnFrameChange
+    this.frameName = this.anim.names[this.frame];
+    const img = images.get(this.frameName);
+    this.width = ready(img) ? img.naturalWidth : 32;
+    this.height = ready(img) ? img.naturalHeight : 24;
+    this.origin = v2(this.justify.x * this.width, this.justify.y * this.height);
+    if (this.onFrameChange) this.onFrameChange(this.currentAnimationID);
+  }
+  stop() { this.animating = false; this.currentAnimationID = ''; this.anim = null; this.timer = 0; }
+  update(dt) {                                       // Sprite::Update：if（不是 while）+ Math.Sign
+    if (!this.anim) return;
+    this.timer += (this.useRawDeltaTime ? RAW_DELTA : dt) * this.rate;
+    if (Math.abs(this.timer) < this.anim.delay) return;
+    const step = Math.sign(this.timer);
+    this.frame += step;
+    this.timer -= step * this.anim.delay;
+    if (this.frame >= this.anim.names.length || this.frame < 0) {
+      const id = this.currentAnimationID;
+      if (this.onLastFrame) this.onLastFrame(id);
+      if (this.currentAnimationID !== id) return;    // 回调里重入 Play 就到此为止
+      if (this.anim.chooser) { this.play(this.anim.chooser.choose(), false, false); return; }
+      this.stop();                                   // Animating=false; CurrentAnimationID=""; timer=0
+      if (this.onFinish) this.onFinish(id);
+      return;
+    }
+    this.setFrame();
+  }
+  draw(pos, rot, s) {
+    const img = images.get(this.frameName);
+    if (!ready(img)) return false;
+    // 只放大贴图，不放大世界：物理常量（48px 接近框、14px 控制点）仍是 1px = 1px，
+    // 否则曲线与判定框会跟数字对不上。对齐 js/roundtable-bird.js 的 3× 像素风约定。
+    const k = +ui.artScale.value || 1;
+    const w = img.naturalWidth * k, h = img.naturalHeight * k;
+    const ox = this.justify.x * w, oy = this.justify.y * h;
+    ctx.save();
+    ctx.translate(pos.x + this.position.x, pos.y + this.position.y);   // RenderPosition + Sprite.Position
+    if (rot) ctx.rotate(rot);
+    // 原版只靠 Scale.X 的符号翻面；FlipX 是另一条独立通道（SpriteEffects.FlipHorizontally）。
+    // justify 为 0.5 时 Monocle 会把 Origin.X 换成 width-Origin.X（数值不变）⇒ 等价于再乘一次 -1。
+    ctx.scale(sign(s.x) * Math.abs(s.x) * this.scale.x * (this.flipX ? -1 : 1), s.y * this.scale.y);
+    ctx.imageSmoothingEnabled = false;              // 像素图：point filtering
+    ctx.drawImage(tinted(img, this.color), -ox, -oy, w, h);
+    ctx.restore();
+    return true;
+  }
+}
+const useSprite = () => ui.useSprite.checked && !spritesFailed;
+
+/* ================= FlutterBird ================= */
+class FlutterBird {
+  constructor(x, y) {
+    this.pos = v2(x, y); this.start = v2(x, y);         // start = Position（跳跃锚点，不漂移）
+    this.scale = v2(1, 1); this.color = BIRD_COLORS[Math.floor(rnd() * 4)];
+    this.flyingAway = false; this.removed = false; this.respawnAt = 0;
+    this.vel = v2(0, 0);
+    this.sprite = new Sprite('flutterBird', 'idle', this.color);   // SpriteBank.Create("flutterBird")
+    this.routine = new Runner(this.idleRoutine());
+  }
+  *idleRoutine() {                                      // <IdleRoutine>d__9::MoveNext
+    while (true) {
+      const p = player(); const delay = 0.25 + nextFloat(1); let t = 0;
+      while (t < delay) {                               // —— 等待阶段，每帧检查接近框 ——
+        if (p && Math.abs(p.x - this.pos.x) < 48 &&
+            p.y > this.pos.y - 40 && p.y < this.pos.y + 8) {
+          this.flyAway(sign(p.x - this.pos.x), nextFloat(0.2));
+          return;
+        }
+        yield null; t += DELTA;
+      }
+      // —— 起跳：协程直接写 Position ——
+      const target = v2(this.start.x + (-4 + nextFloat(8)), this.start.y);
+      this.scale.x = sign(target.x - this.pos.x) || this.scale.x;
+      const bezier = new SimpleCurve(this.pos, target,
+          v2((this.pos.x + target.x) / 2, (this.pos.y + target.y) / 2 - 14));
+      let pp = 0;
+      while (pp < 1) {
+        this.pos = bezier.getPoint(pp);
+        yield null; pp += DELTA * 4;                    // 0.25 秒一跳
+      }
+      this.scale = v2(sign(this.scale.x) * 1.4, 0.6);    // —— 落地压扁 ——
+      this.pos = target;
+    }
+  }
+  flyAway(dir = 1, delay = 0) {                         // FlyAway(float dir, float delay)
+    if (this.flyingAway) return;                        // flyingAway 为真直接忽略
+    this.flyingAway = true;
+    this.routine.stop();
+    this.routine = new Runner(this.flyAwayRoutine(dir, delay));
+  }
+  *flyAwayRoutine(dir, delay) {                         // <FlyAwayRoutine>d__10::MoveNext
+    yield delay;                                        // 数字 = 等这么多秒
+    this.sprite.play('fly');                             // IL 0065：进入振翅循环
+    this.scale = v2(-dir * 1.25, 1.25);                 // 起飞瞬间拉伸
+    emitDust(this.pos.x, this.pos.y, -Math.PI / 2, 3);  // ParticlesFG.Emit(Dust, -, -π/2)
+    const from = v2(this.pos.x, this.pos.y);
+    const to = vadd(from, v2(dir * 4, -8));             // 蹬地弹射的位移量
+    let p = 0;
+    while (p < 1) {
+      this.pos = vadd(from, vmul(vsub(to, from), easeCubeOut(p)));
+      yield null; p += DELTA * 3;                       // ≈0.33 秒
+    }
+    this.scale = v2(-this.scale.x, this.scale.y);       // 翻身，朝向飞行方向
+    this.vel = vmul(v2(dir, -4), 8);                    // 初速度 (±8, -32) px/s
+    while (this.pos.y + 8 > LEVEL_BOUNDS_TOP) {         // 没飞出房间顶部就继续
+      this.vel = vadd(this.vel, vmul(v2(dir * 64, -128), DELTA));   // 恒定加速度积分
+      this.pos = vadd(this.pos, vmul(this.vel, DELTA));
+      if (onInterval(0.1) && this.pos.y > CAMERA_TOP + 32) {       // 连锁惊飞，节流 0.1s
+        for (const other of birds) {
+          if (other === this || other.flyingAway) continue;
+          if (Math.abs(this.pos.x - other.pos.x) < 48 &&
+              Math.abs(this.pos.y - other.pos.y) < 48)
+            other.flyAway(dir, nextFloat(0.25));
+        }
+      }
+      yield null;
+    }
+    this.removed = true; this.respawnAt = clock + 2.5;  // Scene.Remove(this)
+  }
+  update() {                                            // Update：只有尺寸回弹
+    if (this.removed) return;
+    this.sprite.update(DELTA);
+    this.scale.x = approach(this.scale.x, sign(this.scale.x) || 1, 4 * DELTA);
+    this.scale.y = approach(this.scale.y, 1, 4 * DELTA);
+  }
+  respawn() {
+    this.pos = v2(this.start.x, this.start.y); this.scale = v2(1, 1);
+    this.vel = v2(0, 0); this.flyingAway = false; this.removed = false;
+    this.sprite.play('idle');                           // Scene.Remove 后重建实体，等价于回到 start 动画
+    this.routine = new Runner(this.idleRoutine());
+  }
+  draw() {
+    if (this.removed) return;
+    if (!useSprite()) drawBird(this.pos, 0, this.scale, this.color);   // 程序化占位图（右边朝前）
+    else this.sprite.draw(this.pos, 0, this.scale);
+    if (ui.showDebug.checked && !this.flyingAway) {
+      ctx.strokeStyle = 'rgba(243,139,168,.5)'; ctx.lineWidth = 1;
+      ctx.strokeRect(this.pos.x - 48, this.pos.y - 40, 96, 48);
+      ctx.fillStyle = 'rgba(250,179,135,.9)';
+      ctx.fillRect(this.start.x - 1.5, this.start.y - 1.5, 3, 3);   // start 锚点
+    }
+  }
+}
+
+/* ================= BirdPath ================= */
+class BirdPath {
+  constructor(start, nodes) {
+    this.start = v2(start.x, start.y); this.pos = v2(start.x, start.y);
+    this.nodes = nodes.map(n => v2(n.x, n.y));
+    this.target = v2(start.x, start.y); this.speed = v2(0, 0);
+    this.lastTrail = v2(start.x, start.y); this.rotation = 0;
+    this.oldAngle = 0; this.oldAngleInit = false;
+    this.speedMult = 1; this.maxspeed = 150;
+    this.sprite = new Sprite('bird', 'flyupRoll', '#ffffff', v2(0.5, 0.75));
+    //   ↑ BirdPath 构造 IL 00a8 的 JustifyOrigin(0.5f, 0.75f) 会覆盖 Sprites.xml 的 Origin(16,24)
+    this.hud = { p: 0, duration: 0, seg: 0 };
+    this.curves = this.buildCurves();
+    this.routine = new Runner(this.walkChain());
+  }
+  buildCurves() {                                       // 节点成对：控制点 + 落点
+    const cs = []; let from = v2(this.start.x, this.start.y);
+    for (let i = 0; i <= this.nodes.length - 2; i += 2) {
+      cs.push(new SimpleCurve(from, this.nodes[i + 1], this.nodes[i]));
+      from = this.nodes[i + 1];
+    }
+    // 演示专用：末尾连回 start，让 target 始终在鸟前方。原版跑完节点链就
+    // RemoveSelf()，不会停在落点上等（那样过冲阻尼会反复触发，把速度耗光）。
+    cs.push(new SimpleCurve(from, this.start,
+      v2((from.x + this.start.x) / 2, (from.y + this.start.y) / 2 - 90)));
+    return cs;
+  }
+  *walkChain() {                                        // <Routine>d__18::MoveNext
+    while (true) {
+      for (let i = 0; i < this.curves.length; i++) {
+        const curve = this.curves[i];
+        const duration = curve.getLengthParametric(32) / this.maxspeed;   // 进段时算一次
+        let p = 0;
+        while (p < 1) {
+          this.target = curve.getPoint(p);              // ← 只写 target，绝不写 Position
+          this.hud.p = p; this.hud.duration = duration; this.hud.seg = i;
+          yield null;
+          this.recalc(+ui.speedMult.value);             // speedMult 是 EntityData，运行时可改
+          p += DELTA * (ui.inVanilla.checked ? this.speedMult : 1) / duration;
+        }
+      }
+    }
+  }
+  recalc(sm) { if (sm !== this.speedMult) { this.speedMult = sm; this.maxspeed = 150 * sm; } }
+  calcAngle() {                                         // CalcAngle：angleFix=true
+    if (!this.oldAngleInit) { this.oldAngleInit = true; this.oldAngle = Math.atan2(this.speed.y, this.speed.x); }
+    else {
+      const maxRot = Math.abs(180 * Math.PI / 180) * DELTA;   // angleFixMaxRotation（度/秒 → 弧度）
+      const goal = angleLerp(Math.atan2(this.speed.y, this.speed.x), this.oldAngle, 0.5);
+      this.oldAngle = angleApproach(this.oldAngle, goal, maxRot);
+    }
+    return this.oldAngle;
+  }
+  update() {                                            // Update：位置追目标
+    this.recalc(+ui.speedMult.value);
+    this.sprite.update(DELTA);
+    const prevSign = sign(this.pos.x - this.target.x);
+    const dir = safeNorm(this.target.x - this.pos.x, this.target.y - this.pos.y);
+    this.speed = vadd(this.speed, vmul(dir, 800 * DELTA));
+    if (Math.hypot(this.speed.x, this.speed.y) > this.maxspeed)
+      this.speed = safeNorm(this.speed.x, this.speed.y, this.maxspeed);
+    this.pos = vadd(this.pos, vmul(this.speed, DELTA));
+    if (sign(this.pos.x - this.target.x) !== prevSign)  // 横向过冲 → 阻尼
+      this.speed = v2(this.speed.x * 0.75, this.speed.y);
+    const ang = ui.angleFix.checked ? this.calcAngle()
+        : angleLerp(Math.atan2(this.speed.y, this.speed.x),
+                    Math.atan2(this.target.y - this.pos.y, this.target.x - this.pos.x), 0.5);
+    this.rotation = ang + Math.PI / 2;                  // 贴图默认朝上，故 +90°
+    if (ui.showTrail.checked &&
+        Math.hypot(this.lastTrail.x - this.pos.x, this.lastTrail.y - this.pos.y) > 32) {
+      this.lastTrail = v2(this.pos.x, this.pos.y);
+      trails.push({ x: this.pos.x, y: this.pos.y, born: clock });   // TrailManager.Add(#639bff)
+    }
+  }
+  draw() {
+    if (ui.showDebug.checked) {                          // 曲线 = trailColor.Red × 0.25（DebugRender IL）
+      ctx.strokeStyle = 'rgba(255,0,0,.25)'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+      for (const c of this.curves) {
+        ctx.beginPath(); ctx.moveTo(c.p0.x, c.p0.y);
+        for (let k = 1; k <= 24; k++) { const p = c.getPoint(k / 24); ctx.lineTo(p.x, p.y); }
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.strokeStyle = '#ffff00'; ctx.lineWidth = 1;      // start = 节点链起点（原版 Draw.Circle 用 Yellow）
+      ctx.beginPath(); ctx.arc(this.start.x, this.start.y, 4, 0, TAU); ctx.stroke();
+      for (let i = 0; i < this.nodes.length; i++) {      // 偶数=控制点，奇数=落点
+        const n = this.nodes[i]; ctx.fillStyle = i % 2 ? '#a6e3a1' : '#ffff00';
+        ctx.beginPath(); ctx.arc(n.x, n.y, i % 2 ? 2.5 : 3.5, 0, TAU); ctx.fill();
+      }
+      ctx.strokeStyle = '#f38ba8'; ctx.lineWidth = 1.5;   // 红=target，连线显示滞后量
+      ctx.beginPath(); ctx.moveTo(this.pos.x, this.pos.y); ctx.lineTo(this.target.x, this.target.y); ctx.stroke();
+      ctx.fillStyle = '#f38ba8'; ctx.fillRect(this.target.x - 3, this.target.y - 3, 6, 6);
+    }
+    // 原版 BirdPath 从不设 sprite.Scale，只转 Rotation；贴图默认朝上，故 rotation = 方向角 + 90°
+    if (!useSprite()) drawBird(this.pos, this.rotation - Math.PI / 2, v2(1, 1), TRAIL_COLOR);
+    else this.sprite.draw(this.pos, this.rotation, v2(1, 1));
+  }
+}
+
+/* ================= 本机没有鸟叫/啄地音效素材，只记事件名 ================= */
+// 全仓库音频只有 bgm/womanbird.mp3；原版走 FMOD 事件路径，扒不出来。
+// 所以这里不伪造音频，只把 Audio.Play 的事件名 + 位置输出到画布右下角的 SFX 日志。
+const sfxLog = [];
+function playSfx(name, pos) {
+  sfxLog.push({ name: name.replace('event:/game/general/', '').replace('event:/new_content/game/10_farewell/', 'farewell/'),
+                t: clock, x: pos ? Math.round(pos.x) : 0, y: pos ? Math.round(pos.y) : 0 });
+  if (sfxLog.length > 5) sfxLog.shift();
+}
+
+/* ================= BirdTutorialGui（Tags.HUD，逐行抄 Render IL）=================
+字段/常量全部来自 tutorial_gui_il.txt：
+  buttonPadding = 8；bgColor = HexToColor("061526")；lineColor = (1,1,1)；textColor = HexToColor("6179e2")
+  Update(): Scale = Approach(Scale, Open ? 1 : 0, RawDeltaTime * 8)   ← 用 RawDeltaTime，不按时停
+  Render(): w = (Max(controlsWidth, infoWidth) + 64) * Scale；h = infoHeight + LineHeight + 32
+            ↑ 只有宽乘 Scale，高不乘 —— 这就是“文本从中间拉开”观感的唯一来源
+            x = pos.X - w/2；y = pos.Y - h - 32（面板在鸟上方 32px）
+            外框 Rect(x-6, y-6, w+12, h+12) 白、内底 Rect(x, y, w, h) #061526
+            尾巴：i = 0..36，ww = (73 - 2i) * Scale，逐行 1px；ww > 12 时中间挖空填 bgColor
+            内容只在 w > 3 时画；info 与所有控件的 scale 都是 (Scale, 1)
+控件坐标语义（重要）：MTexture.Draw(position, origin, color, scale) 里第二个 Vector2 是 **origin** 不是偏移，
+top-left = position - origin * scale，origin = (-cpX, Height/2) → 控件行以 p.Y 为垂直中心。
+*/
+const GUI_BG = '#061526', GUI_LINE = '#ffffff', GUI_TEXT = '#6179e2';
+const FONT_LINE_HEIGHT = 24;        // ActiveFont.LineHeight（renogare）
+const BUTTON_PADDING = 8;
+const FONT_SPEC = '700 24px "Segoe UI",system-ui,sans-serif';
+const vlerp = (a, b, t) => v2(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
+const calcFloor = v => v2(Math.floor(v.x), Math.floor(v.y));
+const easeSineInOut = sineInOut;                      // 修：IL 原文是 -cos(πt)/2+0.5，不是 3t²-2t³
+function measureText(s) { ctx.save(); ctx.font = FONT_SPEC;
+  const w = ctx.measureText(s).width; ctx.restore(); return w; }
+function drawFontText(s, pos, justify, scale, color) { // ActiveFont.Draw(text, pos, justify, scale, color)
+  ctx.save(); ctx.font = FONT_SPEC; ctx.fillStyle = color;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  const w = ctx.measureText(s).width * scale.x, h = FONT_LINE_HEIGHT * scale.y;
+  ctx.translate(pos.x - justify.x * w, pos.y - justify.y * h);
+  ctx.scale(scale.x, scale.y);
+  ctx.fillText(s, 0, 0); ctx.restore();
+}
+const promptCtl = p => ({ __prompt: p });                       // ButtonPrompt: Dash/Jump/Grab/Talk
+const dirCtl = (x, y) => ({ __dir: v2(x, y) });                 // 控件数组里的 Vector2
+const guis = [];
+const sceneAddGui = g => { if (!guis.includes(g)) guis.push(g); };
+const sceneRemoveGui = g => { const i = guis.indexOf(g); if (i >= 0) guis.splice(i, 1); };
+
+class BirdTutorialGui {
+  constructor(entity, offset, info, controls) {                 // orig_ctor IL_0045-00d4
+    this.entity = entity;
+    this.offset = offset;
+    this.info = info;                                           // string | MTexture
+    this.controls = controls;
+    this.open = false; this.scale = 0;
+    if (typeof info === 'string') { this.infoWidth = measureText(info); this.infoHeight = FONT_LINE_HEIGHT; }
+    else { this.infoWidth = info.w; this.infoHeight = info.h; } // MTexture.Width / .Height
+    this.controlsWidth = 0;
+    this.updateControlsSize();
+  }
+  controlWidth(c) {                                             // UpdateControlsSize IL
+    if (typeof c === 'string') return measureText(c);                       // 无 padding
+    if (c.__prompt) return guiButtonSize(c.__prompt) + BUTTON_PADDING * 2;
+    if (c.__dir) return 72 + BUTTON_PADDING * 2;
+    return c.w;                                                 // MTexture（如 tinyarrow 30）
+  }
+  updateControlsSize() {
+    this.controlsWidth = this.controls.reduce((s, c) => s + this.controlWidth(c), 0);
+  }
+  update(rawDt) {                                               // Update IL
+    this.updateControlsSize();
+    this.scale = approach(this.scale, this.open ? 1 : 0, rawDt * 8);
+  }
+}
+
+function renderTutorialGui(gui) {
+  if (gui.scale <= 0) return;                                   // FrozenOrPaused / RetryPlayerCorpse 原版也在这里 return
+  const S = gui.scale;
+  // 游戏里 HUD 空间 = 世界 px × 6（320×180 → 1920×1080）。本页画布是 960×540且只放大贴图不放大世界，
+  // 所以这里用 K = artScale / 3：artScale=3 时教程图恰好按素材原始 240×140 绘制。
+  // 注意：这是表现层的 2× 放大（原版屏幕占比换算过来只有 120×70），不影响任何物理与判定。
+  const K = (+ui.artScale.value || 1) / 3;
+  const pos = v2(gui.entity.pos.x + gui.offset.x, gui.entity.pos.y + gui.offset.y);
+  ctx.save();
+  ctx.translate(pos.x, pos.y);
+  ctx.scale(K, K);
+  ctx.imageSmoothingEnabled = false;
+  const lineHeight = FONT_LINE_HEIGHT;
+  const w = (Math.max(gui.controlsWidth, gui.infoWidth) + 64) * S;
+  const h = gui.infoHeight + lineHeight + 32;
+  const x = -w / 2, y = -h - 32;
+  ctx.fillStyle = GUI_LINE; ctx.fillRect(x - 6, y - 6, w + 12, h + 12);
+  ctx.fillStyle = GUI_BG;   ctx.fillRect(x, y, w, h);
+  for (let i = 0; i <= 36; i++) {                               // 尾巴：37 行，宽 (73-2i)×Scale
+    const ww = (73 - i * 2) * S;
+    ctx.fillStyle = GUI_LINE; ctx.fillRect(-ww / 2, y + h + i, ww, 1);
+    if (ww > 12) { ctx.fillStyle = GUI_BG; ctx.fillRect(-ww / 2 + 6, y + h + i, ww - 12, 1); }
+  }
+  if (w > 3) {
+    const p = v2(0, y + 16);
+    if (typeof gui.info === 'string')
+      drawFontText(gui.info, p, v2(0.5, 0), v2(S, 1), GUI_TEXT);
+    else drawTex(guiTex(gui.info.name), p.x - gui.info.w * S / 2, p.y, gui.info.w * S, gui.info.h);
+    p.y += gui.infoHeight + lineHeight * 0.5;
+    let cp = -gui.controlsWidth / 2;
+    for (const c of gui.controls) {
+      if (typeof c === 'string') {                              // 双绘：+2px 用主题色做阴影，-2px 用白
+        const tw = measureText(c);
+        drawFontText(c, v2(p.x + 1, p.y + 2), v2(-cp / tw, 0.5), v2(S, 1), GUI_TEXT);
+        drawFontText(c, v2(p.x + 1, p.y - 2), v2(-cp / tw, 0.5), v2(S, 1), '#ffffff');
+        cp += tw + 1;
+      } else if (c.__prompt) {
+        const t = guiButton(c.__prompt), tw = guiButtonSize(c.__prompt), th = 80;
+        cp += BUTTON_PADDING;
+        if (t) ctx.drawImage(t, p.x + cp * S, p.y - th / 2, tw * S, th);
+        cp += tw + BUTTON_PADDING;
+      } else if (c.__dir) {
+        const t = guiDirection(c.__dir), tw = 72, th = 72;
+        cp += BUTTON_PADDING;
+        if (t) drawTex(t, p.x + cp * S, p.y - th / 2, tw * S, th);
+        cp += tw + BUTTON_PADDING;
+      } else {                                                  // MTexture 控件（GFX.Gui["tinyarrow"]）
+        if (guiTex(c.name)) drawTex(guiTex(c.name), p.x + cp * S, p.y - c.h / 2, c.w * S, c.h);
+        cp += c.w;
+      }
+    }
+  }
+  ctx.restore();
+}
+
+/* ================= BirdNPC.P_Feather（particle_types_il.txt IL_0d1f）=================
+  Strawberry.P_WingsBurst = { Source = GFX.Game["particles/feather"], Color = White, FadeMode = 2,
+      Acceleration = (0, 1.2), Size = .5, SizeRange = .333333, SpeedMin = 36, SpeedMax = 12,
+      SpeedMultiplier = .98, Direction = -π/2, DirectionRange = 2.79252672, RotationMode = Spin,
+      LifeMin = 1, LifeMax = .3 };
+  BirdNPC.P_Feather = new ParticleType(P_WingsBurst) { Color = HexToColor("639BFF"), LifeMin = 2 };
+*/
+const P_FEATHER = {
+  source: 'particles/feather', w: 5, h: 3, color: '#639bff', fadeMode: 2,
+  acceleration: v2(0, 1.2), size: 0.5, sizeRange: 1 / 3,
+  speedMin: 36, speedMax: 12, speedMultiplier: 0.98,
+  direction: -1.57079637, directionRange: 2.79252672, lifeMin: 2, lifeMax: 0.3
+};
+const feathers = [];
+function emitFeather(type, count, pos, area) {                  // ParticleType::Emit(type, count, pos, area)
+  for (let i = 0; i < count; i++) {
+    const speed = type.speedMin + rnd() * (type.speedMax - type.speedMin);   // Calc.Range(SpeedMin, SpeedMax)
+    // ParticleType::Create IL_00ec-010d：angle = direction − DirectionRange/2 + NextFloat()×DirectionRange
+    //（半宽！不是 ±DirectionRange 的全宽，写成全宽会让羽雾散开两倍）
+    const ang = type.direction - type.directionRange / 2 + rnd() * type.directionRange;
+    const life = type.lifeMin + rnd() * (type.lifeMax - type.lifeMin);
+    // IL_0058-009a：SizeRange != 0 时 size = Size − SizeRange/2 + NextFloat(SizeRange)，同样取半宽
+    const size = type.sizeRange !== 0 ? type.size - type.sizeRange / 2 + nextFloat(type.sizeRange) : type.size;
+    feathers.push({
+      x: pos.x + (rnd() * 2 - 1) * area.x, y: pos.y + (rnd() * 2 - 1) * area.y,
+      vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed,
+      life, startLife: life, size, startSize: size,
+      rot: rnd() * TAU, spin: 0                                 // P_WingsBurst 没设 Spin → RotationMode=Spin 但不自转
+    });
+  }
+}
+function updateFeathers(dt) {                                   // Monocle.Particle::Update
+  for (let i = feathers.length - 1; i >= 0; i--) {
+    const f = feathers[i], T = P_FEATHER;
+    const t = f.life / f.startLife;                             // 出生 = 1，死亡 = 0
+    f.life -= dt;
+    if (f.life <= 0) { feathers.splice(i, 1); continue; }
+    f.rot += f.spin * dt;
+    let alpha = 1;
+    if (T.fadeMode === 2) alpha = Math.min(1, t / 0.25);         // FadeModes 2：最后 25% 淡出
+    f.alpha = alpha;
+    f.x += f.vx * dt; f.y += f.vy * dt;
+    f.vx += T.acceleration.x * dt; f.vy += T.acceleration.y * dt;
+    const m = Math.pow(T.speedMultiplier, dt);                  // Speed *= pow(SpeedMultiplier, delta)
+    f.vx *= m; f.vy *= m;
+  }
+}
+function drawFeathers() {
+  const img = images.get('particles/feather');
+  const k = (+ui.artScale.value || 1);
+  for (const f of feathers) {
+    const w = P_FEATHER.w * f.size * k, h = P_FEATHER.h * f.size * k;
+    ctx.save(); ctx.globalAlpha = f.alpha;
+    ctx.translate(Math.floor(f.x), Math.floor(f.y)); ctx.rotate(f.rot);
+    ctx.imageSmoothingEnabled = false;
+    if (ready(img)) ctx.drawImage(tinted(img, P_FEATHER.color), -w / 2, -h / 2, w, h);
+    else { ctx.fillStyle = P_FEATHER.color; ctx.fillRect(-w / 2, -h / 2, Math.max(1, w), Math.max(1, h)); }
+    ctx.restore();
+  }
+}
+// particles/feather.png 在 Gameplay 根目录，补一张进 images 表
+images.set('particles/feather', (() => { const i = new Image();
+  i.onerror = () => { spritesFailed++; };
+  i.src = ATLAS_ROOT + 'particles/feather.png'; return i; })());
+
+/* ================= Monocle.ParticleType / Particle / ParticleSystem =================
+  证据：particletype_ctor_il.txt（.ctor 的逐字段默认值：Color = Color2 = White、
+        SpeedMultiplier = 1、Size = 2、LifeMin = LifeMax = 0、其余数值全 0，ScaleOut /
+        UseActualDeltaTime 根本没在 .ctor 里出现 ⇒ false；.ctor(ParticleType) 是整字段拷贝）、
+        particletype_create_il.txt（Create 的每条公式）、particle_update_il.txt（Update 的
+        RotationMode / FadeMode / ColorMode / ScaleOut 分支，Render 的 floor + Center + Size）、
+        particlesystem_il.txt（9 个 Emit 重载，位置一律 Calc.Range(Random, pos − range, pos + range)，
+        也就是每个分量 pos.i + (rnd×2 − 1)×range.i）。
+  实测：decode_png.js 解 IHDR + inflate IDAT 后逐像素数过 ——
+        Atlases/Gameplay/particles/rect.png = 4×2、全部 255,255,255,255；
+        Atlases/Gameplay/util/particle.png = 1×1、全部 255,255,255,255（就是 Draw.Particle）。
+        所以这两类 Source 可以等价地按「Size 缩放的纯色小方块」落地，不必逐帧进 tintCache。
+        （particles/feather.png = 5×3 但含透明像素，所以羽毛仍然必须走贴图，见上面 drawFeathers。）
+  ★ 有意偏差：原版 ParticleSystem::(.ctor(depth, maxParticles)) 是固定长 Particle[] + int nextSlot
+        的环形缓冲（Emit 用 ldelema 直接覆写 slots[nextSlot]，再 nextSlot = (nextSlot+1) % Length）。
+        本页沿用既有的「活跃数组 particles」口径（死亡即出列），是为了让运行时的
+        「Δparticles.length」断言仍然有意义，也为了让页面早期的简化尘雾 emitDust
+        （没有取证过 Dust.Burst，故不忠实化）能和新粒子混在同一个数组里。 */
+const calcAngleV = v => Math.atan2(v.y, v.x);                   // Monocle.Calc::Angle(Vector2)
+const hexToRgb = h => { const n = parseInt(String(h).replace('#', ''), 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 }; };
+const colorLerpTo = (a, b, t) => ({ r: a.r + (b.r - a.r) * t, g: a.g + (b.g - a.g) * t, b: a.b + (b.b - a.b) * t });
+const rgbCss = c => `rgb(${c.r | 0},${c.g | 0},${c.b | 0})`;
+const particleType = o => Object.assign({
+  color: { r: 255, g: 255, b: 255 }, color2: { r: 255, g: 255, b: 255 },
+  colorMode: 0, fadeMode: 0, rotationMode: 0,
+  speedMin: 0, speedMax: 0, speedMultiplier: 1,
+  acceleration: v2(0, 0), friction: 0,
+  direction: 0, directionRange: 0,
+  lifeMin: 0, lifeMax: 0,
+  size: 2, sizeRange: 0,
+  spinMin: 0, spinMax: 0, spinFlippedChance: false,
+  scaleOut: false, useActualDeltaTime: false,
+  srcW: 1, srcH: 1                    // Source 的 clip 宽高；未设 Source ⇒ Draw.Particle = util/particle(1×1)
+}, o);
+/* ParticleType::Create(ref p, Entity track, Vector2 pos, float direction, Color color) 逐行照抄 */
+function particleCreate(T, track, pos, dir, color) {
+  const angle = dir - T.directionRange / 2 + rnd() * T.directionRange;
+  const speed = T.speedMin + rnd() * (T.speedMax - T.speedMin);          // Calc.Range(SpeedMin, SpeedMax)
+  const life = T.lifeMin + rnd() * (T.lifeMax - T.lifeMin);
+  const size = T.sizeRange !== 0 ? T.size - T.sizeRange / 2 + nextFloat(T.sizeRange) : T.size;
+  const c = T.colorMode === 1 ? (rnd() < 0.5 ? color : T.color2) : color; // Calc.Choose(Random, color, Color2)
+  let rot = 0;
+  if (T.rotationMode === 1) rot = rnd() * TAU;                           // Calc.NextAngle
+  else if (T.rotationMode === 2) rot = angle;
+  let spin = T.spinMin + rnd() * (T.spinMax - T.spinMin);
+  if (T.spinFlippedChance) spin *= (rnd() < 0.5 ? 1 : -1);                // Calc.Choose(Random, 1, -1)
+  return { type: T, track: track || null, x: pos.x, y: pos.y,
+           vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+           life, startLife: life, size, startSize: size,
+           rot, spin, color: c, startColor: c, alpha: 1 };
+}
+/* ParticleSystem.Emit(type, count, position, positionRange[, direction[, color]]) */
+function emitParticles(T, count, pos, range, dir, color, track) {
+  const d = dir === undefined ? T.direction : dir;
+  const col = color === undefined ? T.color : color;
+  const r = range || v2(0, 0);
+  for (let i = 0; i < count; i++) {
+    const at = v2(pos.x + (rnd() * 2 - 1) * r.x, pos.y + (rnd() * 2 - 1) * r.y);
+    particles.push(particleCreate(T, track, at, d, col));
+  }
+}
+/* Monocle.Particle::Update(Nullable<float>)：注意它先算 t = Life/StartLife，再减 Life，
+   所以 t 用的是「本帧开始时」的寿命比例；Life <= 0 那帧直接退役，不做位置推进。 */
+function particleUpdateOne(p, dt) {
+  const T = p.type;
+  const t = p.life / p.startLife;
+  p.life -= dt;
+  if (!(p.life > 0)) { p.retired = true; return; }
+  // IL_0064：RotationMode == 2 时跟随速度方向（速度为零则整段跳过），其余一律 Rotation += Spin×dt
+  if (T.rotationMode === 2) { if (p.vx !== 0 || p.vy !== 0) p.rot = calcAngleV(v2(p.vx, p.vy)); }
+  else p.rot += p.spin * dt;
+  let a;                                                     // IL_00ac..012e 的 FadeModes
+  if (T.fadeMode === 1) a = t;
+  else if (T.fadeMode === 2) a = Math.min(1, t / 0.25);
+  else if (T.fadeMode === 3) a = t > 0.75 ? 1 - (t - 0.75) / 0.25 : (t < 0.25 ? t / 0.25 : 1);
+  else a = 1;
+  if (a === 0) p.alpha = 0;                                  // Color = Color.Transparent
+  else {
+    let c;                                                   // IL_0147..01e7 的 ColorModes
+    if (T.colorMode === 3) c = colorLerpTo(T.color2, p.startColor, t);
+    else if (T.colorMode === 2) c = calcBetweenInterval(p.life, 0.1) ? T.color2 : p.startColor;
+    else c = p.startColor;                                   // 0 Start 与 1 Random 都停在 StartColor
+    p.drawColor = c;
+    p.alpha = a < 1 ? a : 1;                                 // Color *= alpha（XNA 是 RGBA 四分量同乘）
+  }
+  p.x += p.vx * dt; p.y += p.vy * dt;
+  p.vx += T.acceleration.x * dt; p.vy += T.acceleration.y * dt;
+  const f = approachV(v2(p.vx, p.vy), v2(0, 0), T.friction * dt);      // Calc.Approach(Speed, Zero, Friction×dt)
+  p.vx = f.x; p.vy = f.y;
+  if (T.speedMultiplier !== 1) { const m = Math.pow(T.speedMultiplier, dt); p.vx *= m; p.vy *= m; }
+  if (T.scaleOut) p.size = p.startSize * easeCubeOut(t);
+}
+function updateParticles() {
+  const keep = [];
+  for (const q of particles) {
+    if (!q.type) {                                           // 简化尘雾：没有 ParticleType，走旧口径
+      q.age += DELTA; if (q.age >= q.life) continue;
+      q.x += q.vx * DELTA; q.y += q.vy * DELTA; keep.push(q); continue;
+    }
+    particleUpdateOne(q, q.type.useActualDeltaTime ? RAW_DELTA : DELTA);
+    if (!q.retired) keep.push(q);
+  }
+  particles = keep;
+}
+/* Monocle.Particle::Render：position = (floor(X), floor(Y))，再 += Track.Position（不取整），
+   然后 Draw.DrawRect(Source, position, clip, Color, Rotation, Source.Center, Size)。 */
+function particleRenderOne(p) {
+  let x = Math.floor(p.x), y = Math.floor(p.y);
+  if (p.track) { const tp = p.track.pos || p.track; x += tp.x; y += tp.y; }
+  if (p.type) {
+    if (!(p.alpha > 0)) return;
+    const w = p.type.srcW * p.size, h = p.type.srcH * p.size;
+    ctx.save(); ctx.globalAlpha = p.alpha;
+    ctx.translate(x, y); ctx.rotate(p.rot);
+    ctx.fillStyle = rgbCss(p.drawColor || p.color);
+    ctx.fillRect(-w / 2, -h / 2, Math.max(1, w), Math.max(1, h));   // 绕 Source.Center 缩放
+    ctx.restore();
+    return;
+  }
+  ctx.globalAlpha = Math.max(0, 1 - p.age / p.life);
+  ctx.fillStyle = '#cdd6f4'; ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, TAU); ctx.fill();
+}
+function drawParticles() { for (const q of particles) particleRenderOne(q); }
+/* ---- 本页要用到的 ParticleType，逐字段抄 particle_types_il.txt 的 newobj / stfld 序列 ---- */
+// Player::P_DashA（IL_035d..03e7）；P_DashB / P_DashBadB 是 .ctor(ParticleType) 整拷贝只改两色
+const RECT = { srcW: 4, srcH: 2 };                           // Source = GFX.Game["particles/rect"]
+const P_DASH_A = particleType({ color: hexToRgb('44B7FF'), color2: hexToRgb('75c9ff'),
+  colorMode: 2, fadeMode: 2, lifeMin: 1, lifeMax: 1.8, size: 1,
+  speedMin: 10, speedMax: 20, acceleration: v2(0, 8), directionRange: 1.04719758 });
+const P_DASH_B = particleType(Object.assign({}, P_DASH_A, { color: hexToRgb('AC3232'), color2: hexToRgb('e05959') }));
+const P_DASH_BAD_B = particleType(Object.assign({}, P_DASH_A, { color: hexToRgb('9B3FB5'), color2: hexToRgb('CC8EE2') }));
+// Lightning::P_Shatter（IL_3006..309b）：Source 没设 ⇒ Draw.Particle = util/particle(1×1)
+const P_SHATTER = particleType({ color: hexToRgb('B9FEFE'), color2: hexToRgb('FFF263'),
+  colorMode: 2, fadeMode: 2, size: 1, speedMin: 5, speedMax: 30, acceleration: v2(0, 20),
+  directionRange: 1.57079637, direction: -1.57079637, lifeMin: 0.8, lifeMax: 2 });
+// LightningBreakerBox::P_Smash（IL_32ce..3375）/ P_Sparks（IL_337a..3421）
+const P_SMASH = particleType(Object.assign({}, RECT, { color: hexToRgb('FFFC75'), color2: hexToRgb('6BFFFF'),
+  colorMode: 2, rotationMode: 2, fadeMode: 2, size: 0.5, sizeRange: 0.2,
+  directionRange: 0.6981317, lifeMin: 0.6, lifeMax: 1.2, speedMin: 50, speedMax: 150, speedMultiplier: 0.2 }));
+const P_SPARKS = particleType(Object.assign({}, RECT, { color: hexToRgb('FFFC75'), color2: hexToRgb('6BFFFF'),
+  colorMode: 2, rotationMode: 2, fadeMode: 2, size: 0.4, sizeRange: 0.1,
+  directionRange: 6.28318548, lifeMin: 0.1, lifeMax: 0.2, speedMin: 30, speedMax: 40, speedMultiplier: 0.8 }));
+
+/* ================= BirdNPC ================= */
+// FlapSfxCheck 在 IL 里是 static 方法，签名是 (Sprite sprite)：先拿 sprite.RenderPosition 对
+// 「视口 ± 32px」裁剪，只有完全落地的动画 hover / hoverStressed / fly 的第 0 帧才报振翅音效。
+// 坐标全部按页面口径换算：±32 虚拟像素 = vs(32)，视口大小 = (W, H)。
+function birdFlapSfxCheck(sprite, renderPos) {         // Celeste.BirdNPC::FlapSfxCheck
+  const m = vs(32);
+  if (renderPos.x < camPos.x - m || renderPos.y < camPos.y - m ||
+      renderPos.x > camPos.x + W + m || renderPos.y > camPos.y + H + m) return;
+  const id = sprite.currentAnimationID;
+  if ((id === 'hover' || id === 'hoverStressed' || id === 'fly') && sprite.frame === 0)
+    playSfx('event:/new_content/game/10_farewell/bird_wingflap', renderPos);
+}
+const FACINGS = { LEFT: -1, RIGHT: 1 };
+class BirdNPC {
+  constructor(x, y, mode, nodes = null) {
+    this.pos = v2(x, y);
+    this.startPos = v2(x, y);
+    this.facing = FACINGS.LEFT;                    // .ctor IL: Facing = (Facings)(-1)
+    this.sprite = new Sprite('bird', 'idle');      // GFX.SpriteBank.Create("bird")
+    this.sprite.scale = v2(this.facing, 1);        // Sprite.Scale.X = (float)Facing
+    this.sprite.useRawDeltaTime = true;            // .ctor IL
+    this.sprite.onFrameChange = id => this.onFrameChange(id);
+    this.nodes = nodes;
+    this.autoFly = false;
+    this.flyAwayUp = true;
+    this.disableFlapSfx = false;
+    this.removed = false; this.respawnAt = 0; this.flown = false;
+    this.persistent = false;
+    this.tutorialRoutine = null; this.gui = null;
+    this.hud = { mode, anim: 'idle', frame: 0 };
+    this.setMode(mode);
+  }
+  setMode(m) {                                     // SetMode：先 RemoveSelf 旧 Coroutine，再 new Coroutine(routine, true)
+    this.mode = m;
+    if (this.tutorialRoutine) this.tutorialRoutine.stop();
+    let gen = null;
+    switch (m) {
+      case 'Climbing':      gen = this.climbingTutorial(); break;
+      case 'Dashing':       gen = this.dashingTutorial(); break;
+      case 'DreamJump':     gen = this.dreamJumpTutorial(); break;
+      case 'SuperWallJump': gen = this.superWallJumpTutorial(); break;
+      case 'HyperJump':     gen = this.hyperJumpTutorial(); break;
+      case 'FlyAway':       gen = this.waitRoutine(); break;
+      case 'Sleeping':      this.sprite.play('sleep'); this.facing = FACINGS.RIGHT; break;
+      case 'MoveToNodes':   gen = this.moveToNodesRoutine(); break;
+      default: return;                              // Modes.None 没有分支
+    }
+    this.tutorialRoutine = new Runner(gen);
+  }
+  /* .ctor 里挂的 OnFrameChange：<.ctor>b__20_0(string id) */
+  onFrameChange(id) {
+    this.hud.anim = id; this.hud.frame = this.sprite.frame;
+    // 原版额外有相机裁剪：X > Camera.Left+64 && X < Camera.Right-64
+    if ((id === 'peck' || id === 'peckRare') && this.sprite.frame === 6)
+      playSfx('event:/game/general/bird_peck', this.pos);
+    if (!this.disableFlapSfx) this.flapSfxCheck(id);            // FlapSfxCheck（Ch7 / area 10 才跑）
+  }
+  flapSfxCheck(id) {                                  // FlapSfxCheck IL：先 RenderPosition 裁剪，再按 frame==0 响
+    birdFlapSfxCheck(this.sprite, this.pos);
+  }
+  /* ---------- Caw：croak 动画跑到第 9 帧才叫 ---------- */
+  *caw() {                                            // <Caw>d__27
+    this.sprite.play('croak', false, false);
+    do { yield null; } while (this.sprite.frame < 9);
+    playSfx('event:/game/general/bird_squawk', this.pos);
+  }
+  /* ---------- ShowTutorial / HideTutorial ---------- */
+  *showTutorial(gui, caw) {                           // <ShowTutorial>d__28
+    if (caw) yield* this.caw();
+    this.gui = gui;
+    gui.open = true; sceneAddGui(gui);
+    do { yield null; } while (gui.scale < 1);
+  }
+  *hideTutorial() {                                   // <HideTutorial>d__29
+    if (this.gui != null) {
+      this.gui.open = false;
+      do { yield null; } while (this.gui.scale > 0);
+      sceneRemoveGui(this.gui);
+      this.gui = null;
+    }
+  }
+  /* ---------- Startle：以速度插値的方式弹开 ---------- */
+  *startle(sound, duration, multiplier) {             // <Startle>d__38
+    const mult = multiplier || v2(1, 1);
+    if (sound) playSfx(sound, this.pos);
+    emitDust(this.pos.x, this.pos.y, -1.57079637, 8);           // Dust.Burst(Position, -π/2, 8, null)
+    this.sprite.play('jump', false, false);
+    let timer = 0;
+    do {
+      // tween.OnUpdate(t)：Eased < 0.5 且 Scene.OnInterval(0.05) 时撒 2 片羽毛
+      const eased = easeCubeOut(Math.min(1, timer / duration)); // Tween.Create(TweenMode=1, Ease.CubeOut, duration, true)
+      if (eased < 0.5 && onInterval(0.05))
+        emitFeather(P_FEATHER, 2, vadd(this.pos, v2(0, -6)), v2(4, 4));
+      let v = vlerp(vmul(v2(100, -100), mult), vmul(v2(20, -20), mult), eased);
+      v.x *= -this.facing;
+      this.pos = vadd(this.pos, vmul(v, DELTA));
+      yield null;
+      timer += DELTA;
+    } while (timer < duration);
+  }
+  /* ---------- FlyAway：蹬开 → 持续加速直到飞出房间顶部 ---------- */
+  *flyAway(upwardsMultiplier) {                       // <FlyAway>d__31（upwards 版本）
+    this.sprite.play('fly', false, false);
+    this.facing = -this.facing;
+    let speed = v2(this.facing * 20, -40 * upwardsMultiplier);
+    do {
+      speed = vadd(speed, vmul(v2(this.facing * 140, -120 * upwardsMultiplier), DELTA));
+      this.pos = vadd(this.pos, vmul(speed, DELTA));
+      yield null;
+    } while (this.pos.y > LEVEL_BOUNDS_TOP);
+    this.remove();                                  // RemoveSelf()
+  }
+  *startleAndFlyAway() {                              // <StartleAndFlyAway>d__30
+    this.depth = -1000000;
+    this.flown = true;                                // Session.SetFlag("bird_fly_away_" + Session.Level)
+    yield* this.startle('event:/game/general/bird_startle', 0.8, null);
+    yield* this.flyAway(1);
+  }
+  /* ---------- FlyTo：二次贝塞尔 + SineInOut，翅膀频率随进度变慢 ---------- */
+  *flyTo(target, durationMult, relocateSfx) {         // <FlyTo>d__39
+    this.sprite.play('fly', false, false);
+    if (relocateSfx) playSfx('event:/new_content/game/10_farewell/bird_relocate', this.pos);
+    const dir = Math.sign(target.x - this.pos.x);
+    if (dir !== 0) this.facing = dir;
+    const from = v2(this.pos.x, this.pos.y), to = v2(target.x, target.y);
+    // control = from + (to-from)*0.75 - Vector2.UnitY*30   →  终点前 75% 处再往上抬 30px
+    const mid = vadd(from, vmul(vsub(to, from), 0.75));
+    const curve = new SimpleCurve(from, to, v2(mid.x, mid.y - 30));
+    const duration = Math.hypot(to.x - from.x, to.y - from.y) / 100 * durationMult;
+    let p = 0;
+    while (p < 0.95) {
+      this.pos = calcFloor(curve.getPoint(easeSineInOut(p)));   // Calc.Floor：逐帧取整，像素风不偏粌
+      this.sprite.rate = 1 - p * 0.5;
+      yield null;
+      p += DELTA / duration;
+    }
+    emitDust(this.pos.x, this.pos.y, -1.57079637, 8);
+    this.pos = v2(to.x, to.y);
+    this.facing = FACINGS.LEFT;                       // Facing = (Facings)(-1)
+    this.sprite.rate = 1;
+    this.sprite.play('idle', false, false);
+  }
+  /* ---------- WaitRoutine：Modes.FlyAway，就是“靠近就飞走” ---------- */
+  *waitRoutine() {                                    // <WaitRoutine>d__37
+    while (true) {
+      if (this.autoFly) { yield* this.caw(); }                    // 不等玩家，直接叫
+      else {
+        let p;
+        do { yield null; p = player(); }
+        while (p == null || Math.abs(p.x - this.pos.x) >= 120);   // ← 水平 120px 触发喊叫
+        yield* this.caw();
+      }
+      if (this.autoFly) { yield* this.startleAndFlyAway(); }
+      else {
+        let p;
+        do { yield null; p = player(); }
+        while (p != null && Math.hypot(p.x - this.pos.x, p.y - this.pos.y) >= 32);  // ← 中心距 32px 触发惊飞
+        yield* this.startleAndFlyAway();
+      }
+    }
+  }
+  /* ---------- MoveToNodesRoutine：每飞一个节点都要先等玩家靠近到 80px ---------- */
+  *moveToNodesRoutine() {                             // <MoveToNodesRoutine>d__40
+    let index = 0;
+    while (true) {
+      let p;
+      do {
+        p = player();
+        if (p && Math.hypot(p.x - this.pos.x, p.y - this.pos.y) < 80) break;
+        yield null;
+      } while (true);
+      this.depth = -1000000;
+      yield* this.startle('event:/new_content/game/10_farewell/bird_startle', 0.2, null);
+      if (index < this.nodes.length) {
+        yield* this.flyTo(this.nodes[index], 0.6, true);
+        index++;
+        continue;
+      }
+      break;
+    }
+    // 节点跑完：播 relocate，朝右上方直线离场。注意两个原版细节：
+    //   ① 这里竖直加速度是 -60，不是 FlyAway 的 -120；
+    //   ② 离场条件是 Y > Bounds.Top - 200（比 FlyAway 多飞 200px），因为刚打了 Tag |= Tags.Persistent，
+    //      实体已经不属于这个房间了（onlyOnce 还会 Session.DoNotLoad.Add(EntityID)，演示里用不上）。
+    playSfx('event:/new_content/game/10_farewell/bird_relocate', this.pos);
+    this.persistent = true;                               // Tag |= Tags.Persistent
+    this.sprite.play('fly', false, false);
+    this.facing = FACINGS.RIGHT;
+    let speed = v2(this.facing * 20, -40);
+    do {
+      speed = vadd(speed, vmul(v2(this.facing * 140, -60), DELTA));
+      this.pos = vadd(this.pos, vmul(speed, DELTA));
+      yield null;
+    } while (this.pos.y > LEVEL_BOUNDS_TOP - 200);
+    this.remove();
+  }
+  /* ---------- SuperWallJumpTutorial：喊叫 → 啄地 → 出文本 → 换面板 → 收起 → 飞走 ---------- */
+  *superWallJumpTutorial() {                          // <SuperWallJumpTutorial>d__35
+    this.facing = FACINGS.RIGHT;                      // IL_0041: Facing = (Facings)1
+    yield 0.25;
+    let first = true;
+    const tut1 = new BirdTutorialGui(this, v2(0, -16),
+      mGui('hyperjump/tutorial00', 240, 140), ['DASH', dirCtl(0, -1)]);
+    const tut2 = new BirdTutorialGui(this, v2(0, -16),
+      mGui('hyperjump/tutorial01', 240, 140), ['JUMP']);
+    while (true) {
+      yield* this.showTutorial(tut1, first);          // ★ 首次 first=true → 先 Caw() 喊叫
+      this.sprite.play('idleRarePeck', false, false); // ★ 喊叫完紧接着切到“罕见啄地”循环（1/5 概率真啄）
+      yield 2;
+      this.gui = tut2; tut2.open = true; tut2.scale = 1; sceneAddGui(tut2);   // 第二块直接硬切，不走展开动画
+      yield null;
+      tut1.open = false; tut1.scale = 0; sceneRemoveGui(tut1);
+      yield 2;
+      yield* this.hideTutorial();                     // 这里收的是 tut2（Scale 逐帧降到 0，面板横向合拢）
+      yield 2;
+      first = false;
+      const p = player();
+      if (p && p.y <= this.pos.y && p.x >= this.pos.x + 144) break;   // 玩家已高于鸟且已过去 144px
+    }
+    yield* this.startleAndFlyAway();
+  }
+  /* ---------- HyperJumpTutorial：控件数组里直接用 GFX.Gui["tinyarrow"] ---------- */
+  *hyperJumpTutorial() {                              // <HyperJumpTutorial>d__36
+    this.facing = FACINGS.LEFT;
+    const tut = new BirdTutorialGui(this, v2(0, -16), 'JUMP',
+      [dirCtl(1, 1), '+', promptCtl('Dash'), mGui('tinyarrow', 30, 64), promptCtl('Jump')]);
+    yield 0.3;
+    yield* this.showTutorial(tut, true);
+  }
+  /* ---------- ClimbingTutorial：面板会「翻面」（tutorial_note_flip_*） ----------
+     两块面板共用同一个 info 文字 CLIMB，只是控件行不同：
+       tut1 = [ "HOLD", Grab ]                    正面：挂住墙
+       tut2 = [ Grab, "+", Vector2(0,-1) ]       背面：挂着墙的同时向上爬
+     触发规则（IL_0198 / IL_01be）：玩家不爬且还在鸟下方 → 就一直举着正面；一旦
+     玩家开始爬并且高度超过鸟（p.Y > Y）→ flip_back → 换成 tut2。
+     然后（IL_0234）等玩家离地或开始爬，算 willEnd = !(p.Y > Y+4)：
+       不结束 → flip_front → 收起 → 回到循环重新开 tut1（这次 first=false，不再叫）
+       结束   → 收起 → StartleAndFlyAway                                                */
+  *climbingTutorial() {                                 // <ClimbingTutorial>d__32
+    yield 0.25;
+    let p = player();
+    while (p == null || Math.abs(p.x - this.pos.x) >= 120) { yield null; p = player(); }
+    const tut1 = new BirdTutorialGui(this, v2(0, -16), 'CLIMB', ['HOLD', promptCtl('Grab')]);
+    const tut2 = new BirdTutorialGui(this, v2(0, -16), 'CLIMB', [promptCtl('Grab'), '+', dirCtl(0, -1)]);
+    let first = true;
+    while (true) {
+      yield* this.showTutorial(tut1, first);
+      first = false;
+      for (;;) {                                        // IL_0198
+        p = player();
+        if (p && (p.climbing || p.y <= this.pos.y)) break;
+        yield null;
+      }
+      if (p && p.y > this.pos.y) {                      // IL_01be：爬着且已高过鸟 → 翻到背面
+        playSfx('event:/ui/game/tutorial_note_flip_back', this.pos);
+        yield* this.hideTutorial();
+        yield* this.showTutorial(tut2, false);
+      }
+      for (;;) {                                        // IL_0234：等玩家离地（或开始爬）
+        p = player();
+        if (!p || !p.onGround || p.climbing) break;
+        yield null;
+      }
+      p = player();
+      const willEnd = p ? !(p.y > this.pos.y + 4) : true;   // willEnd = !(p.Y > Y + 4)
+      if (!willEnd) playSfx('event:/ui/game/tutorial_note_flip_front', this.pos);
+      yield* this.hideTutorial();
+      if (!willEnd) continue;                           // 翻回正面，再举一次 tut1
+      break;
+    }
+    yield* this.startleAndFlyAway();
+  }
+  /* ---------- Dashing：这不是教程！IL 里它块会开面板 ----------
+     <DashingTutorial>d__33 做的事：把鸟瞬移到 (X+32, level.Bounds.Top)、等 1 秒，
+     然后盯 Player：当 p.X > StartPosition.X-92 且 p.Y ∈ (StartPosY-20, StartPosY-10) 时
+     `Scene.Add(new CS00_Ending(player, this, bridge))` —— 就是第一章那座桥上的过场触发器。
+     辅助模式 Invincible 会换一组更宽的窗口（-60 / 0 / +34）。演示里没有 Bridge，
+     过场本体不复现，只把 Scene.Add 那一步记进 SFX 日志。            */
+  *dashingTutorial() {                                  // <DashingTutorial>d__33
+    this.pos = v2(this.pos.x + 32, LEVEL_BOUNDS_TOP);    // IL_0029-0050
+    yield 1;
+    let hit;
+    do {
+      yield null;
+      const p = player();
+      hit = p && p.x > this.startPos.x - 92 && p.y > this.startPos.y - 20 &&
+                      p.y < this.startPos.y - 10;
+      if (!hit && p && invincibleAssist)                 // SaveData.Assists.Invincible
+        hit = p.x > this.startPos.x - 60 && p.y > this.startPos.y &&
+              p.y < this.startPos.y + 34;
+    } while (!hit);
+    playSfx('Scene.Add(new CS00_Ending(player, this, bridge))', this.pos);
+  }
+  /* ---------- DreamJumpTutorial：两个不同的近距离阈值 ----------
+     32px（或玩家已越过鸟）→ 收面板；收完后再等 24px → 惊飞。            */
+  *dreamJumpTutorial() {                                // <DreamJumpTutorial>d__34
+    yield* this.showTutorial(new BirdTutorialGui(this, v2(0, -16), 'JUMP',
+        [dirCtl(1, 0), '+', promptCtl('Jump')]), true);
+    let p;
+    do {                                                // IL_00a0
+      yield null; p = player();
+    } while (!p || !(p.x > this.pos.x ||
+             Math.hypot(this.pos.x - p.x, this.pos.y - p.y) < 32));
+    yield* this.hideTutorial();
+    do {                                                // IL_0117
+      yield null; p = player();
+    } while (!p || Math.hypot(this.pos.x - p.x, this.pos.y - p.y) >= 24);
+    yield* this.startleAndFlyAway();
+  }
+  remove() {                                          // Scene.Remove(this) + FlownFlag
+    this.removed = true; this.respawnAt = clock + 3.5;
+    for (const g of guis.slice()) if (g.entity === this) sceneRemoveGui(g);
+    this.gui = null;
+    if (this.tutorialRoutine) this.tutorialRoutine.stop();
+  }
+  respawn() {                                         // 演示专用：原版飞走就不再回来（Session Flag 永久）
+    this.pos = v2(this.startPos.x, this.startPos.y);
+    this.removed = false; this.flown = false;
+    this.facing = FACINGS.LEFT;
+    this.persistent = false; this.depth = 0;          // MoveToNodes 会置 Persistent / Depth，重投要清掉
+    for (const g of guis.slice()) if (g.entity === this) sceneRemoveGui(g);   // 旧面板不清会在重投后永远挂着
+    this.sprite.rate = 1;
+    this.sprite.play('idle', false, false);
+    this.setMode(this.hud.mode);
+  }
+  update() {
+    if (this.removed) return;
+    this.sprite.scale.x = this.facing;                // Update IL: Sprite.Scale.X = (float)Facing
+    this.sprite.update(DELTA);
+  }
+  draw() {
+    if (this.removed) return;
+    if (!useSprite()) drawBird(this.pos, 0, v2(this.facing, 1), '#639bff');
+    else this.sprite.draw(this.pos, 0, v2(1, 1));
+    if (ui.showDebug.checked) {
+      // 每个 Modes 盯的距离都不一样，全部取自 IL，不要拿一个圆套所有鸟
+      const near = 'rgba(137,180,250,.55)', far = 'rgba(249,226,175,.35)';
+      ctx.lineWidth = 1;
+      const circle = (r, col) => { ctx.strokeStyle = col; ctx.beginPath();
+        ctx.arc(this.pos.x, this.pos.y - 10, r, 0, TAU); ctx.stroke(); };
+      const box = (x, y, w, h, col) => { ctx.strokeStyle = col; ctx.strokeRect(x, y, w, h); };
+      switch (this.mode) {
+        case 'FlyAway':      circle(32, near);                          // (p.Center - Position) < 32 → 惊飞
+                             box(this.pos.x - 120, this.pos.y - 60, 240, 100, far); break;  // |p.X-X| < 120 → Caw
+        case 'MoveToNodes':  circle(80, near); break;                   // (p.Center - Position) < 80 → 下一个节点
+        case 'DreamJump':    circle(32, near); circle(24, far); break;  // 32 收面板，24 惊飞
+        case 'Climbing':     box(this.pos.x - 120, this.pos.y - 60, 240, 100, far); break;   // 先等 120px
+        case 'SuperWallJump':box(this.pos.x + 144, 0, 1, H, far); break;// 玩家要越过 X+144 且 Y ≤ 鸟 Y 才走
+        case 'Dashing':      box(this.startPos.x - 92, this.startPos.y - 20,
+                                invincibleAssist ? 152 : 92, 10, near); break;  // CS00_Ending 的 10px 高窗口
+      }
+      ctx.fillStyle = 'rgba(205,214,244,.85)'; ctx.font = '11px Consolas,monospace';
+      ctx.fillText(`${this.hud.mode} · ${this.hud.anim}#${this.hud.frame} · ${this.facing > 0 ? '→' : '←'}`,
+                   this.pos.x - 40, this.pos.y + 14);
+    }
+  }
+}
+
+/* ================= Monocle.Collider / Collide：矩形与圆 ================= */
+// 证据（collider_il.txt）：
+// · Collide.Check(a, b) = a.Collider != null && b.Collider != null && a != b && b.Collidable
+//                         && a.Collider.Collide(b.Collider)
+// · Circle(r, x, y) → Width = Height = r*2、Position = (x-r, y-r) ⇒ new Circle(16, 0, 0) 的 Center 相对实体恒为 (0,0)
+// · RectToPoint 左/上闭、右/下开；GetSector 的位权是 左 8 / 右 4 / 上 1 / 下 2
+// · ClosestPointOnLine 没有零长度保护（a == b 时是 0/0），原样保留，不擅自“修好”
+const distSq = (a, b) => (a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y);
+const rectToPoint = (x, y, w, h, p) => p.x >= x && p.y >= y && p.x < x + w && p.y < y + h;
+const pointSectors = (x, y, w, h, p) => {
+  let s = 0;
+  if (p.x < x) s |= 8; else if (p.x >= x + w) s |= 4;
+  if (p.y < y) s |= 1; else if (p.y >= y + h) s |= 2;
+  return s; };
+const closestPointOnLine = (a, b, p) => { const d = vsub(b, a);
+  return vadd(a, vmul(d, ((p.x - a.x) * d.x + (p.y - a.y) * d.y) / (d.x * d.x + d.y * d.y))); };
+const circleToLine = (c, r, a, b) => distSq(c, closestPointOnLine(a, b, c)) < r * r;
+const rectToCircle = (x, y, w, h, c, r) => {
+  if (rectToPoint(x, y, w, h, c)) return true;
+  const s = pointSectors(x, y, w, h, c);
+  if ((s & 1) !== 0 && circleToLine(c, r, v2(x, y), v2(x + w, y))) return true;
+  if ((s & 2) !== 0 && circleToLine(c, r, v2(x, y + h), v2(x + w, y + h))) return true;
+  if ((s & 8) !== 0 && circleToLine(c, r, v2(x, y), v2(x, y + h))) return true;
+  if ((s & 4) !== 0 && circleToLine(c, r, v2(x + w, y), v2(x + w, y + h))) return true;
+  return false; };
+class ColliderShape {
+  constructor(w, h, x, y) { this.width = w; this.height = h; this.position = v2(x, y); this.ent = null; }
+  get x() { return this.ent.pos.x + this.position.x; }
+  get y() { return this.ent.pos.y + this.position.y; }
+  get left() { return this.x; }
+  get top() { return this.y; }
+  get right() { return this.x + this.width; }
+  get bottom() { return this.y + this.height; }
+  get centerX() { return this.position.x + this.width / 2; }
+  get centerY() { return this.position.y + this.height / 2; }
+  get absCenter() { return v2(this.ent.pos.x + this.centerX, this.ent.pos.y + this.centerY); }
+}
+class HitboxShape extends ColliderShape {          // Monocle.Hitbox(width, height, x, y)
+  constructor(w, h, x = 0, y = 0) { super(w, h, x, y); this.kind = 'hitbox'; }
+  collideWith(o) {                                 // Hitbox::Collide 先试自己，返回 null 才换对方
+    return o.kind === 'hitbox'
+      ? this.x < o.right && this.right > o.x && this.y < o.bottom && this.bottom > o.y
+      : rectToCircle(this.x, this.y, this.width, this.height, o.absCenter, o.radius); } }
+class CircleShape extends ColliderShape {          // Monocle.Circle(radius, x, y)
+  constructor(r, x = 0, y = 0) { super(r * 2, r * 2, x - r, y - r); this.kind = 'circle'; this.radius = r; }
+  collideWith(o) {
+    return o.kind === 'circle'
+      ? distSq(this.absCenter, o.absCenter) < (this.radius + o.radius) * (this.radius + o.radius)
+      : rectToCircle(o.x, o.y, o.width, o.height, this.absCenter, this.radius); } }
+const collideCheck = (a, b) => !!a.collider && !!b.collider && a !== b && !!b.collidable
+                              && a.collider.collideWith(b.collider);
+// PlayerCollider::Check(player)：构造里两个 collider 都是 null ⇒ 直接 p.CollideCheck(entity)；
+// 否则临时把实体的 Collider 换成指定盒再测（FlingBird / Lightning 走的都是前者）。
+// ★ 这个遍历是由 <b>Player::orig_Update 末尾</b>驱动的（IL_1110..IL_11b6），PlayerCollider 自己根本没有 Update。
+function playerColliderScan(p) {
+  if (!p || p.dead || p.state === 21) return;              // State == 21（Spider）时整段不算
+  const previous = p.collider;
+  p.collider = p.hurtbox;                                   // ★★ 临时换成 normalHurtbox
+  for (const e of playerColliderHosts) {
+    if (e.removed || !e.playerCollider) continue;
+    let hit;
+    if (!e.playerCollider.collider) hit = collideCheck(p, e);
+    else { const saved = e.collider; e.collider = e.playerCollider.collider;
+           hit = collideCheck(p, e); e.collider = saved; }
+    if (hit) { e.playerCollider.onCollide(p); if (p.dead) break; }   // IL: if (Dead) { 恢复后 return }
+  }
+  if (p.collider === p.hurtbox) p.collider = previous;      // 回调里可能又改过，所以还要再校一次
+}
+
+/* ================= Monocle.EntityList：谁持有 PlayerCollider ================= */
+// Scene.Tracker.GetComponents<PlayerCollider>() 的等价物：一个全局登记表。
+const playerColliderHosts = [];
+const addPlayerColliderHost = e => { if (!playerColliderHosts.includes(e)) playerColliderHosts.push(e); };
+
+/* ================= SpeedRing：Player.launched 的唯一可见结果 ================= */
+// 证据（speedring_il.txt 全 253 行）：SpeedRing 是 Entity，但没有 .ctor 重载面——字段由 Init 链式赋值。
+// 为什么要先画进一张离屏图？因为它要参与 BloomRenderer 的后处理链，而 Bloom 只吃整张 RT。
+const SPEED_RING_CELL = 64, SPEED_RING_SLOTS = 4;
+const speedRingBuf = document.createElement('canvas');
+speedRingBuf.width = SPEED_RING_CELL * SPEED_RING_SLOTS;
+speedRingBuf.height = SPEED_RING_CELL * SPEED_RING_SLOTS;
+const speedRingCtx = speedRingBuf.getContext('2d');
+let speedRings = [];
+class SpeedRing {
+  init(position, angle, color) {                    // Init(Vector2 position, float angle, Color color)
+    this.pos = position; this.angle = angle; this.color = color;
+    this.lerp = 0; this.index = 0; this.removed = false;
+    this.normal = safeNorm(Math.cos(angle), Math.sin(angle), 1);   // Calc.AngleToVector(angle, 1)
+    speedRings.push(this); return this; }
+  update() {
+    this.lerp += 3 * DELTA;                         // 寿命正好 1/3 秒
+    this.pos = vadd(this.pos, vmul(this.normal, 10 * DELTA));   // 沿发射法线飘 10 px/s
+    if (this.lerp >= 1) this.removed = true;
+  }
+  vectorAt(a, r) {                                  // GetVectorAtAngle：沿法线那侧被压扁到一半
+    const v = v2(Math.cos(a), Math.sin(a));
+    return vmul(v, lerpF(r, r * 0.5, Math.abs(v.x * this.normal.x + v.y * this.normal.y))); }
+  drawRing(at) {                                    // DrawRing：i = 1..8 每步 π/8，上下两条中起对称 ⇒ 16 段
+    const g = speedRingCtx, r = lerpF(4, 14, this.lerp);
+    g.strokeStyle = '#ffffff'; g.lineWidth = 1;
+    let prev = this.vectorAt(0, r);
+    for (let i = 1; i <= 8; i++) {
+      const cur = this.vectorAt(i * 0.3926991, r);
+      g.beginPath(); g.moveTo(at.x + prev.x, at.y + prev.y); g.lineTo(at.x + cur.x, at.y + cur.y); g.stroke();
+      g.beginPath(); g.moveTo(at.x - prev.x, at.y - prev.y); g.lineTo(at.x - cur.x, at.y - cur.y); g.stroke();
+      prev = cur; } }
+  static drawToBuffer() {                           // SpeedRing::DrawToBuffer(Level)，在 Level::BeforeRender 里调
+    if (!speedRings.length) return;
+    speedRingCtx.clearRect(0, 0, speedRingBuf.width, speedRingBuf.height);
+    let i = 0;
+    for (const sr of speedRings) { sr.index = i;
+      sr.drawRing(v2((i % SPEED_RING_SLOTS) * SPEED_RING_CELL + 32,
+                     Math.floor(i / SPEED_RING_SLOTS) * SPEED_RING_CELL + 32)); i++; } }
+  draw() {                                          // SpeedRing::Render：从同一张图里取自己那一格
+    const a = lerpF(0.6, 0, this.lerp);             // color * Lerp(0.6, 0, lerp)，只看 Alpha 通道
+    if (Math.floor(255 * a) <= 0) return;
+    ctx.save(); ctx.globalAlpha = a; ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(speedRingBuf,
+                  (this.index % SPEED_RING_SLOTS) * SPEED_RING_CELL,
+                  Math.floor(this.index / SPEED_RING_SLOTS) * SPEED_RING_CELL,
+                  SPEED_RING_CELL, SPEED_RING_CELL,
+                  this.pos.x - 32, this.pos.y - 32, SPEED_RING_CELL, SPEED_RING_CELL);
+    ctx.restore(); }
+}
+
+/* ================= FlingBird：第三只鸟（可抱可甩） ================= */
+// 证据：bird_il.txt L1717-3081（FlingBird 的全部方法 + 四个协程状态机的逐条 IL）。
+// 坐标口径：本页沿用页面已有的约定——世界坐标用页面像素，但 IL 里的物理常量直接当页面像素用
+// （FlutterBird / BirdNPC / BirdPath 全部如此），只有需要跟「视口 320×180」对齐的相机数学才乘 VIEW_K。
+const FLING_SPEED = v2(380, -100);        // FlingBird::.cctor：static FlingSpeed = new Vector2(380f, -100f)
+const FB_SKIP_DIST = 100;                 // SkipDist 是 const，在 IL 里以 ldc.r4 100 出现
+const FB = { Wait: 0, Fling: 1, Move: 2, WaitForLightningClear: 3, Leaving: 4 };   // FlingBird/States
+let flingBirds = [];
+class FlingBird {
+  constructor(nodes, waiting) {
+    this.spriteOffset = v2(0, 8);
+    this.trailColor = '#639bff';                          // Calc.HexToColor("639bff")
+    this.pos = v2(nodes[0].x, nodes[0].y);                // base(nodes[0])：Position = 第一个节点
+    this.depth = -1;                                      // Depth = -1 ⇒ 排在 Player(0) 前面先 Update
+    this.sprite = new Sprite('bird', 'hover', '#ffffff');  // GFX.SpriteBank.Create("bird")
+    this.sprite.scale = v2(-1, 1);                        // sprite.Scale.X = -1（面朝左，盯着走过来的玩家）
+    this.sprite.position = v2(this.spriteOffset.x, this.spriteOffset.y);
+    this.sprite.onFrameChange = () =>                   // <.ctor>b__17_0：BirdNPC.FlapSfxCheck(sprite)
+      birdFlapSfxCheck(this.sprite, this.pos);
+    this.collider = new CircleShape(16, 0, 0); this.collider.ent = this;
+    this.playerCollider = { onCollide: p => this.onPlayer(p), collider: null };   // (OnPlayer, null, null)
+    addPlayerColliderHost(this);
+    this.collidable = true; this.visible = true;
+    this.nodeSegments = [nodes]; this.segmentsWaiting = [waiting];
+    this.startNodes = nodes; this.startWaiting = waiting;
+    this.segmentIndex = 0; this.state = FB.Wait;
+    this.flingSpeed = v2(0, 0); this.flingTargetSpeed = v2(0, 0); this.flingAccel = 0;
+    this.lightningRemoved = false;
+    this.removed = false; this.mergedAway = false; this.respawnAt = 0; this.rotation = 0;
+    this.hud = { state: 'Wait', seg: 0, anim: 'hover', frame: 0 };
+    // ★ 有意偏差：原版还 Add 了一个 TransitionListener（入场转场未完成前把 sprite.Color 从白压到黑）。
+    //   本页没有转场系统，所以只留注释，不伪造一个“看起来像”的淡入。
+  }
+  /* FlingBird::Awake：同关卡的鸟按 X 升序合并成一条节点链，最左那只吃掉其它所有 */
+  awake() {
+    const others = flingBirds.filter(b => !b.removed);      // scene.Entities.FindAll<FlingBird>()
+    others.sort((a, b) => sign(a.pos.x - b.pos.x));         // <>c::<Awake>b__19_0：Math.Sign(a.X - b.X)
+    if (others[0] === this) {
+      for (let j = 1; j < others.length; j++) {
+        this.nodeSegments.push(others[j].nodeSegments[0]);
+        this.segmentsWaiting.push(others[j].segmentsWaiting[0]);
+        others[j].mergedAway = true;                        // 演示专用：被合并掉的不再参与回流判定
+        others[j].removeSelf();
+      }
+    }
+    if (this.segmentsWaiting[0]) {                          // 第一段被电网按住：紧张版悬停且面朝右
+      this.sprite.play('hoverStressed', false, false); this.sprite.scale.x = 1; }
+    const p = player();
+    if (p && !(p.x <= this.pos.x)) { this.removeSelf(); return; }   // 玩家已经在鸟右边 ⇒ 这只鸟不该再出现
+  }
+  /* FlingBird::OnPlayer —— 旧版本只记了“改状态”，其实后面一大堆赋值才是甩出的全部初值 */
+  onPlayer(p) {
+    if (this.state !== FB.Wait) return;
+    if (!p.doFlingBird(this)) return;
+    this.flingSpeed = vmul(p.speed, 0.4); this.flingSpeed.y = 120;   // 先跟着玩家往下 120
+    this.flingTargetSpeed = v2(0, 0); this.flingAccel = 1000;
+    p.speed = v2(0, 0);                                    // 玩家速度被清零
+    this.state = FB.Fling;
+    new Runner(this.doFlingRoutine(p), this);              // 协程挂在鸟自己身上
+    playSfx('event:/new_content/game/10_farewell/bird_throw', this.pos);
+  }
+  skip() { this.state = FB.Move; new Runner(this.moveRoutine(), this); }   // 不是 RemoveSelf！
+  /* ================= Update：IL 顺序 = base.Update() 先跑，然后才是 switch ================= */
+  update() {
+    if (this.removed) return;
+    // ↓↓ 这两句合起来才是 IL_0000 的 base.Update()：Components 里 Sprite 先建、Coroutine 后 Add，
+    //    所以同一帧里「动画先推进一格，协程再改状态/位置」。
+    this.sprite.update(DELTA);
+    stepOwned(this);
+    // HUD 刷新属于演示层，放在 switch 之前：IL 的 switch 之后没有任何代码（每个分支都以 ret 收尾），
+    // 若放在末尾则四个分支的 return 会把它全部跳过。
+    this.hud.state = ['Wait', 'Fling', 'Move', 'WaitLightning', 'Leaving'][this.state];
+    this.hud.seg = this.segmentIndex;
+    this.hud.anim = this.sprite.currentAnimationID;
+    this.hud.frame = this.sprite.frame;
+    if (this.state !== FB.Wait)
+      this.sprite.position = approachV(this.sprite.position, this.spriteOffset, 32 * DELTA);
+    const p = player();
+    switch (this.state) {
+      case FB.Wait: {
+        if (p && p.x - this.pos.x >= FB_SKIP_DIST) { this.skip(); return; }
+        if (this.segmentsWaiting[this.segmentIndex] && this.lightningRemoved) { this.skip(); return; }
+        if (!p) return;
+        const amount = clampedMap(Math.hypot(p.center.x - this.pos.x, p.center.y - this.pos.y), 16, 64, 12, 0);
+        const dir = safeNorm(p.center.x - this.pos.x, p.center.y - this.pos.y);
+        this.sprite.position = approachV(this.sprite.position,
+          vadd(this.spriteOffset, vmul(dir, amount)), 32 * DELTA);
+        return; }
+      case FB.Fling:
+        if (this.flingAccel > 0)
+          this.flingSpeed = approachV(this.flingSpeed, this.flingTargetSpeed, this.flingAccel * DELTA);
+        this.pos = vadd(this.pos, vmul(this.flingSpeed, DELTA));   // ★ 整个甩出的位移只由这一句产生
+        return;
+      case FB.Move:                                     // ★ IL 里就是一个空分支，位移全在协程里
+        return;
+      case FB.WaitForLightningClear:
+        if (!lightnings.some(l => !l.removed) || this.pos.x > LEVEL_BOUNDS_RIGHT) {
+          this.sprite.scale.x = 1;
+          this.state = FB.Leaving;
+          new Runner(this.leaveRoutine(), this);
+        }
+        return;
+    }
+  }
+  /* ================= <DoFlingRoutine>d__23：抱 → 定格 → 甩出去的全部时间线 ================= */
+  *doFlingRoutine(d) {                                  // d = 反编译里的 this.player
+    const camPt0 = vsub(d.pos, camPos);
+    // ★ IL 的夹取是虚拟像素（145..215 / 85..95），而本页世界坐标是页面像素 ⇒ 先除回虚拟像素再夹
+    const camPt = v2(clampF(camPt0.x / VIEW_K, 145, 215), clampF(camPt0.y / VIEW_K, 85, 95));
+    levelZoomTo(v2(camPt.x * VIEW_K, camPt.y * VIEW_K), 1.1, 0.2, this);   // 内部就是 new Runner(gen, this)
+    setTimeRate(0.8);
+    do { yield null; } while (this.flingSpeed.x !== 0 || this.flingSpeed.y !== 0);
+    this.sprite.play('throw', false, false); this.sprite.scale.x = 1;
+    this.flingSpeed = v2(-140, 140); this.flingTargetSpeed = v2(0, 0); this.flingAccel = 1400;
+    yield 0.1;
+    celesteFreeze(0.05);                                // 0.05 秒的“拍子”，整个 Scene.Update 都不跑
+    this.flingTargetSpeed = v2(FLING_SPEED.x, FLING_SPEED.y); this.flingAccel = 6000;
+    yield 0.1;
+    setTimeRate(1);
+    levelShake(0.3);
+    levelZoomBack(0.1, this);
+    d.finishFlingBird();
+    this.flingTargetSpeed = v2(0, 0); this.flingAccel = 4000;
+    yield 0.3;
+    new Runner(this.moveRoutine(), this);
+  }
+  /* ================= <MoveRoutine>d__24：逐段跑节点，段内奇数下标是控制点 ================= */
+  *moveRoutine() {
+    this.state = FB.Move;
+    this.sprite.play('fly', false, false); this.sprite.scale.x = 1;
+    playSfx('event:/new_content/game/10_farewell/bird_relocate', this.pos);   // moveSfx.Play(...)
+    const seg = this.nodeSegments[this.segmentIndex];
+    for (let i = 1; i < seg.length - 1; i += 2)
+      yield* this.moveOnCurve(this.pos, seg[i], seg[i + 1]);
+    this.segmentIndex++;
+    const atEnding = !(this.segmentIndex < this.nodeSegments.length);
+    if (!atEnding) {
+      const prev = this.nodeSegments[this.segmentIndex - 1];
+      yield* this.moveOnCurve(this.pos, prev[prev.length - 1], this.nodeSegments[this.segmentIndex][0]);
+    }
+    this.rotation = 0; this.sprite.scale = v2(1, 1);
+    if (atEnding) {
+      this.sprite.play('hoverStressed', false, false); this.sprite.scale.x = 1;
+      this.state = FB.WaitForLightningClear;
+    } else {
+      this.sprite.play(this.segmentsWaiting[this.segmentIndex] ? 'hoverStressed' : 'hover', false, false);
+      this.sprite.scale.x = -1;
+      this.state = FB.Wait;
+    }
+  }
+  /* ================= <MoveOnCurve>d__26：唯一直接写 Position 的协程 ================= */
+  *moveOnCurve(from, anchor, to) {
+    const curve = new SimpleCurve(from, to, anchor);     // 参数序是 (Begin, End, Control)
+    const duration = curve.getLengthParametric(32) / 500;
+    let was = from, t = 0.016;
+    while (t <= 1) {
+      this.pos = calcFloor(curve.getPoint(t));           // Calc.Floor：逐帧取整，像素风不飘
+      this.rotation = angleV(curve.getPoint(Math.max(0, t - 0.05)), curve.getPoint(Math.min(1, t + 0.05)));
+      this.sprite.scale = v2(1.25, 0.7);                 // 飞行时被压扁
+      if (Math.hypot(was.x - this.pos.x, was.y - this.pos.y) > 32) {
+        trails.push({ x: this.pos.x, y: this.pos.y, born: clock });  // TrailManager.Add(this, #639bff, 1)
+        was = this.pos;
+      }
+      yield null;
+      t += DELTA / duration;
+    }
+    this.pos = v2(to.x, to.y);
+  }
+  /* ================= <LeaveRoutine>d__25：飞向房间右边界外 32px ================= */
+  *leaveRoutine() {
+    this.sprite.scale.x = 1; this.sprite.play('fly', false, false);
+    const to = v2(LEVEL_BOUNDS_RIGHT + 32, this.pos.y);
+    yield* this.moveOnCurve(this.pos, vsub(vmul(vadd(this.pos, to), 0.5), v2(0, 12)), to);
+    this.removeSelf();
+  }
+  removeSelf() { this.removed = true; this.respawnAt = clock + 6; }   // 演示专用：过一会儿重新投放
+  respawn() {
+    this.pos = v2(this.startNodes[0].x, this.startNodes[0].y);
+    this.nodeSegments = [this.startNodes]; this.segmentsWaiting = [this.startWaiting];
+    this.segmentIndex = 0; this.state = FB.Wait; this.rotation = 0;
+    this.flingSpeed = v2(0, 0); this.flingTargetSpeed = v2(0, 0); this.flingAccel = 0;
+    this.lightningRemoved = false; this.removed = false;
+    this.sprite.rate = 1;
+    this.sprite.position = v2(this.spriteOffset.x, this.spriteOffset.y);
+    this.sprite.play('hover', false, false); this.sprite.scale = v2(-1, 1);
+    this.awake();
+  }
+  draw() {
+    if (this.removed) return;
+    // hold 这条动画在 Sprites.xml 里存在（Hold00-05），但全程序集没人 play("hold") ⇒ 真的是死代码；
+    // hurt / recover 属于 FlingBirdIntro 与 CS10_CatchTheBird，本批只把实体链跑通，不在这里伪接。
+    const rot = this.rotation, scl = this.sprite.scale;
+    if (!useSprite()) drawBird(this.pos, rot, scl, '#639bff');
+    else this.sprite.draw(this.pos, this.rotation, v2(1, 1));
+  }
+  drawDebug() {
+    if (this.removed) return;
+    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(243,139,168,.6)';
+    ctx.beginPath(); ctx.arc(this.pos.x, this.pos.y, 16, 0, TAU); ctx.stroke();   // Circle(16, 0, 0)
+    if (!ui.showDebug.checked) return;
+    const seg = this.nodeSegments[this.segmentIndex];
+    if (seg) for (let i = 1; i < seg.length; i += 2) {
+      ctx.strokeStyle = 'rgba(137,180,250,.45)';
+      ctx.beginPath(); ctx.moveTo(seg[i].x, seg[i].y); ctx.lineTo(seg[i + 1].x, seg[i + 1].y); ctx.stroke();
+      ctx.fillStyle = '#f9e2af'; ctx.fillRect(seg[i + 1].x - 2, seg[i + 1].y - 2, 4, 4);
+    }
+    ctx.fillStyle = 'rgba(205,214,244,.85)'; ctx.font = '11px Consolas,monospace';
+    ctx.fillText(`${this.hud.state}#${this.hud.seg} ${this.hud.anim}#${this.hud.frame}` +
+      ` v=${Math.hypot(this.flingSpeed.x, this.flingSpeed.y).toFixed(0)}`, this.pos.x - 40, this.pos.y + 30);
+  }
+}
+
+/* ================= Lightning：拦在鸟面前的电网 ================= */
+// 证据：lightning_il.txt（.ctor / Update / ToggleCheck / InView / OnPlayer / Shatter /
+// SetBreakValue / Removed / <Move>d__16 / <MoveRoutine>d__15 / <RemoveRoutine>d__21 全量 IL）。
+let lightnings = [];
+class Lightning {
+  constructor(pos, vw, vh, node = null, moveTime = 0) {
+    this.pos = v2(pos.x, pos.y); this.visualWidth = vw; this.visualHeight = vh;
+    this.collider = new HitboxShape(vw - 2, vh - 2, 1, 1); this.collider.ent = this;   // ★ 比视觉小 2px
+    this.playerCollider = { onCollide: p => this.onPlayer(p), collider: null };
+    addPlayerColliderHost(this);
+    this.collidable = true; this.visible = true; this.removed = false; this.disappearing = false;
+    this.toggleOffset = rnd();                          // Calc.NextFloat(Calc.Random) ⇒ [0,1)
+    if (node) new Runner(this.moveRoutine(v2(pos.x, pos.y), node, moveTime), this);
+  }
+  get width() { return this.collider.width; }
+  get height() { return this.collider.height; }
+  get x() { return this.pos.x; }
+  get left() { return this.collider.left; } get right() { return this.collider.right; }
+  get top() { return this.collider.top; } get bottom() { return this.collider.bottom; }
+  /* <Move>d__16：Ease.SineInOut 插值；moveTime 为 0 时循环不执行（IL 里就是除零⇒∞） */
+  *move(start, end, moveTime) {
+    let at = 0;
+    while (at < 1) {
+      this.pos = vlerp(start, end, easeSineInOut(at));
+      yield null;
+      at = clampF(at + DELTA / moveTime, 0, 1);
+    }
+  }
+  *moveRoutine(start, end, moveTime) {                  // <MoveRoutine>d__15：两个 Move 无限往复
+    while (true) { yield* this.move(start, end, moveTime); yield* this.move(end, start, moveTime); }
+  }
+  /* ★ IL 里 base.Update() 在**最后**，跟 FlingBird 恰好相反 */
+  update() {
+    if (this.collidable && onIntervalOff(0.25, this.toggleOffset)) this.toggleCheck();
+    if (!this.collidable && onIntervalOff(0.05, this.toggleOffset)) this.toggleCheck();
+    stepOwned(this);                                      // base.Update() → Components.Update() → Coroutine
+  }
+  toggleCheck() { const v = this.inView(); this.visible = v; this.collidable = v; }
+  inView() {                                            // Lightning::InView，用 Camera 而不是 viewport
+    const m = vs(16);
+    return this.pos.x + this.width > camPos.x - m && this.pos.y + this.height > camPos.y - m &&
+           this.pos.x < camPos.x + vs(320) + m && this.pos.y < camPos.y + vs(180) + m;
+  }
+  onPlayer(p) {
+    if (this.disappearing || invincibleAssist) return;   // SaveData.Instance.Assists.Invincible
+    let dir = sign(p.x - this.pos.x); if (dir === 0) dir = -1;
+    p.die(v2(dir, 0));                                   // p.Die(Vector2.UnitX * dir, false, true)
+  }
+  shatter() {                                            // Shatter：8px 网格、起点 4，ParticlesFG.Emit(P_Shatter, …)
+    for (let i = 4; i < this.collider.width; i += 8)
+      for (let j = 4; j < this.collider.height; j += 8)
+        // IL：Emit(P_Shatter, 1, Position + new Vector2(i, j), Vector2.One * 3)
+        emitParticles(P_SHATTER, 1, v2(this.pos.x + i, this.pos.y + j), vmul(v2(1, 1), 3));
+  }
+  removeSelf() { this.removed = true; }
+  draw() {
+    if (!this.visible || this.removed) return;
+    const a = lightningRenderer.fade;                   // 真正的视觉在 LightningRenderer（不是一个 Entity 自己）
+    ctx.save(); ctx.globalAlpha = 0.25 + 0.55 * a;
+    ctx.fillStyle = '#639bff';
+    ctx.fillRect(this.pos.x, this.pos.y, this.visualWidth, this.visualHeight);
+    if (lightningRenderer.updateSeeds) {                // 冻结种子后纹理不再“跳动”
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; ctx.beginPath();
+      const t = Math.floor(clock * 20) * 7;
+      for (let yy = 3; yy < this.visualHeight; yy += 6) {
+        ctx.moveTo(this.pos.x, this.pos.y + yy);
+        for (let xx = 0; xx <= this.visualWidth; xx += 6)
+          ctx.lineTo(this.pos.x + xx, this.pos.y + yy + ((t + xx * 13 + yy * 7) % 5) - 2); }
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+// LightningRenderer 在原版里是一个单独的实体（页面上只取 RemoveRoutine 真正读到的两个字段）
+const lightningRenderer = { fade: 0, updateSeeds: true };
+// Lightning::SetBreakValue(Level, float t)
+function setBreakValue(t) {
+  glitchValue = lerpF(0, 0.15, t);                      // Glitch.Value = Lerp(0, 0.15, t)
+  bloomStrength = lerpF(1, 1.5, t);                     // level.Bloom.Strength
+  lightningRenderer.fade = t * 0.6;                     // GetEntity<LightningRenderer>().Fade
+}
+// Lightning::SetPulseValue(Level, float t)：lightning_pulse_il.txt IL_0012..0044 逐条。
+// ★ 它和 SetBreakValue 是<b>两个不同的函数</b>，三组数字都不一样（0/0.075、1/1.2、t*0.2 vs 0/0.15、1/1.5、t*0.6），
+//   而且它是 static：level 是形参（ldarg.0），不是 this。
+function setPulseValue(level, t) {
+  void level;
+  glitchValue = lerpF(0, 0.075, t);                    // IL_0012..0022 Glitch.Value = Lerp(0, 0.075, t)
+  bloomStrength = lerpF(1, 1.2, t);                    // IL_0027..0037 level.Bloom.Strength = Lerp(1, 1.2, t)
+  lightningRenderer.fade = t * 0.2;                    // IL_003c..0044 GetEntity<LightningRenderer>().Fade = t * 0.2
+}
+/* <PulseRoutine>d__18：switch 只有 3 个 case（0/1/2），入口 case 0 直接跳到 while 的条件测试，
+   所以它<b>没有</b> DashCoroutine 那种「首帧空转」—— 因为 body 开头没有 yield return null。 */
+function lightningPulseRoutine(level) {
+  return (function* () {
+    let t = 0;                                          // IL_0022 <t>5__2 = 0
+    while (t < 1) {                                     // IL_006f..0075 blt
+      setPulseValue(level, t); yield null;              // IL_002f..004f
+      t += DELTA * 8;                                   // IL_0057..006a
+    }
+    t = 1;                                              // IL_007c..0082
+    while (t > 0) {                                     // IL_00c9..00cf bgt
+      setPulseValue(level, t); yield null;              // IL_0089..00a9
+      t -= DELTA * 8;                                   // IL_00b1..00c4
+    }
+    setPulseValue(level, 0);                            // IL_00d6..00e1
+  })();
+}
+let glitchValue = 0, bloomStrength = 1;
+/* <RemoveRoutine>d__21：把整屏电网拆掉，并在结束时标记“电网已清空” */
+function breakLightning(onComplete, owner = null) {
+  new Runner((function* () {
+    const level = { };
+    const blocks = lightnings.filter(l => !l.removed);   // level.Entities.FindAll<Lightning>()
+    for (const b of blocks.slice()) {                    // 屏幕外的当场 RemoveSelf，不再参与碎裂
+      b.disappearing = true;
+      if (b.right < camPos.x || b.bottom < camPos.y || b.left > camPos.x + W || b.top > camPos.y + H) {
+        blocks.splice(blocks.indexOf(b), 1); b.removeSelf(); }
+    }
+    lightningRenderer.updateSeeds = false;               // StopAmbience() + UpdateSeeds = false
+    let t = 0;
+    while (t < 1) { setBreakValue(t); yield null; t += DELTA * 4; }
+    setBreakValue(1);
+    levelShake(0.3);
+    for (let i = blocks.length - 1; i >= 0; i--) blocks[i].shatter();   // 倒序
+    t = 0;
+    while (t < 1) { setBreakValue(1 - t); yield null; t += DELTA * 8; }
+    setBreakValue(0);
+    for (const b of blocks) b.removeSelf();
+    lightnings = [];
+    const fb = flingBirds.find(b => !b.removed);         // FindFirst<FlingBird>() ⇒ 只标<b>第一只</b>
+    if (fb) fb.lightningRemoved = true;
+    if (onComplete) onComplete();                        // if (onComplete != null) onComplete()
+  })(), owner || null);
+}
+
+/* ================= Monocle 输入层：只有勾选「键盘模式」才有意义（默认关 ⇒ 零回归） ================= */
+// ★ 有意偏差（必须写清楚）：Monocle.VirtualButton 的 MethodBody 在本次取证里<b>没有任何产物</b>
+//   （virtualinput_aim_il.txt 只有 211 B 的类型头 + MInput 的 virtualButtonStates 表），
+//   所以下面这三条语义是从 <b>Celeste 侧真正调用到它们的点</b>反推的，不是从 VirtualButton 的 IL 抄的：
+//     · Check            —— 持续按住为真              （Input::get_DashPressed 的 mode==1 分支读它）
+//     · Pressed          —— 「刚按下」的一次性缓冲边沿（同上；不吃掉就会连发）
+//     · ConsumeBuffer()  —— 把缓冲吃掉，Pressed 立刻变假
+//       证据 = Player::StartDash 的 IL_002a / IL_0032 / IL_0033 / IL_003d 四处 ConsumeBuffer 调用点
+//       （player_startdash_il.txt）。缓冲在松手后仍然保留到被消费 —— 这正是原版需要 ConsumeBuffer 的原因。
+//   endFrame() 里的「松开之后才回收缓冲」是为了让同一帧内的点放（keydown+keyup 都发生在两帧之间）
+//   仍然能被本帧的 Player 看到，属于本页演示架子的必要部分。
+class VirtualButton {
+  constructor() { this.down = false; this.buffered = false; this.pendingClear = false; }
+  setDown(v) {
+    if (v) { this.down = true; this.buffered = true; this.pendingClear = false; }
+    else { this.down = false; this.pendingClear = true; }
+  }
+  get check() { return this.down; }                     // VirtualButton::Check
+  get pressed() { return this.buffered; }               // VirtualButton::Pressed
+  consumeBuffer() { this.buffered = false; }            // VirtualButton::ConsumeBuffer()
+  endFrame() { if (this.pendingClear && !this.down) this.buffered = false; }
+}
+const vInput = {                                        // MInput 静态表里 Celeste 真的读到的那几个
+  Dash: new VirtualButton(), CrouchDash: new VirtualButton(), Jump: new VirtualButton(),
+  Grab: new VirtualButton(), Talk: new VirtualButton()
+};
+const vMove = { x: 0, y: 0 };                           // Input.Aim（VirtualVector）的键盘侧
+// ★ 有意偏差：VirtualVector.Value 的 MethodBody 同样没有产物。GetAimVector 只关心两件事：
+//   Value 是否为零向量、以及 Calc.Angle(Value) 落在哪个象限 ⇒ 实现成 safeNorm(moveX, moveY) 足够等价。
+const vAim = { get value() { return safeNorm(vMove.x, vMove.y); } };
+let inputLastAim = v2(1, 0);                            // Input::LastAim（static，默认 UnitX）
+// Settings.Instance.CrouchDashMode / GrabMode 与 SaveData.Assists 的两个开关：
+// 都是 switch 的 case 值，本页保留成字段以便对照 IL，默认全部走「原版普通玩家」那一支。
+let inputCrouchDashMode = 0;                            // 1 = Hold（Input::get_DashPressed 里唯一被特判的值）
+let inputGrabMode = 0;                                  // 0 = Check、1 = Inverted、其它 = Input.grabToggle
+let inputGrabToggle = false;                            // Settings.GrabMode == 其它值时才被读
+let inputDashAssist = false;                            // SaveData.Assists.DashAssist
+let inputThreeSixtyDashing = false;                     // SaveData.Assists.ThreeSixtyDashing
+let inputDashMode = 0;                                  // SaveData.Assists.DashMode（Player::get_MaxDashes 判 != 0）
+let inputSuperDashing = false;                          // SaveData.Assists.SuperDashing
+let talkComponentPlayerOver = false;                    // TalkComponent.PlayerOver（Player::get_CanDash 第 4 个条件）
+// Input.MoveY（Monocle.VirtualIntegerAxis）：DashBegin IL_0115 真的读了它的 Value 并且和 1 比。
+// ★ 有意偏差：VirtualIntegerAxis.Value 的 MethodBody 无产物，这里按「键盘侧就是轴的整数化取值」实现。
+const vMoveY = { value: 0 };
+/* Input::get_CrouchDashPressed / get_DashPressed（input_aim_il.txt L40-90）：
+   mode==1 那一支同帧读 Dash.Pressed 与 CrouchDash.Check，其余 case（含 0 与 default）同路。 */
+const inputCrouchDashPressed = () => inputCrouchDashMode === 1
+  ? (vInput.Dash.pressed && vInput.CrouchDash.check) : vInput.CrouchDash.pressed;
+const inputDashPressed = () => inputCrouchDashMode === 1
+  ? (vInput.Dash.pressed && !vInput.CrouchDash.check) : vInput.Dash.pressed;
+const inputGrabCheck = () => inputGrabMode === 0 ? vInput.Grab.check
+  : inputGrabMode === 1 ? !vInput.Grab.check : inputGrabToggle;
+/* Input::GetAimVector(Facings facing)：input_aim_il.txt IL_0000..0156 逐条翻译。
+   ★ 三个容易拄错的点：
+   1) 方向为零 + DashAssist 那一支<b>不写</b> LastAim，直接把上一次的值返回（IL 里没有 stsfld）；
+   2) threshold 的偏移项是 `(angle < 0 ? 1 : 0) * 0.08726646f`，所以上半圆 17.5°、下半圆 22.5°；
+   3) 四个主方向都不命中时，先取 (Sign(X), Sign(Y)) 再 SafeNormalize，而不是直接 SafeNormalize(v)。 */
+const IL_PI = 3.14159274, IL_HALF_PI = 1.57079637;      // IL 里的 ldc.r4 原值（float）
+function inputGetAimVector(facing) {
+  const v = vAim.value;
+  if (v.x === 0 && v.y === 0) {                         // Vector2::op_Equality(v, Vector2.Zero)
+    if (inputDashAssist) return inputLastAim;
+    inputLastAim = vmul(UNIT_X, facing);                // LastAim = Vector2.UnitX * (float)facing
+  } else if (inputThreeSixtyDashing) {
+    inputLastAim = safeNorm(v.x, v.y);                  // Calc.SafeNormalize(v)
+  } else {
+    const angle = Math.atan2(v.y, v.x);                 // Calc.Angle(v)
+    const threshold = 0.3926991 - (angle < 0 ? 1 : 0) * 0.08726646;
+    if (absAngleDiff(angle, 0) < threshold) inputLastAim = v2(1, 0);
+    else if (absAngleDiff(angle, IL_PI) < threshold) inputLastAim = v2(-1, 0);
+    else if (absAngleDiff(angle, -IL_HALF_PI) < threshold) inputLastAim = v2(0, -1);
+    else if (absAngleDiff(angle, IL_HALF_PI) < threshold) inputLastAim = v2(0, 1);
+    else inputLastAim = safeNorm(sign(v.x), sign(v.y));
+  }
+  return inputLastAim;
+}
+// 键位不在本次取证范围（Celeste 的绑定存在 Settings 里，不是 IL），下面四个键是本页自定义的演示映射。
+const KEY_TO_BUTTON = { KeyX: 'Dash', KeyZ: 'Jump', Space: 'Jump', ShiftLeft: 'CrouchDash',
+                        KeyC: 'Grab', KeyE: 'Talk' };
+const KEY_TO_AXIS = { ArrowLeft: ['x', -1], KeyA: ['x', -1], ArrowRight: ['x', 1], KeyD: ['x', 1],
+                      ArrowUp: ['y', -1], KeyW: ['y', -1], ArrowDown: ['y', 1], KeyS: ['y', 1] };
+const axisHeld = { x: {}, y: {} };                      // 同一轴可能同时按两个键，松开其一时不能抹掉另一个
+function setKey(code, down) {                           // 也是测试架的唯一注入口（架子里 addEventListener 是空桩）
+  const b = KEY_TO_BUTTON[code];
+  if (b) vInput[b].setDown(down);
+  const a = KEY_TO_AXIS[code];
+  if (a) {
+    const held = axisHeld[a[0]];
+    if (down) held[code] = a[1]; else delete held[code];
+    let sum = 0; for (const k in held) sum += held[k];
+    vMove[a[0]] = clampF(sum, -1, 1);
+    if (a[0] === 'y') vMoveY.value = vMove.y;           // VirtualIntegerAxis.MoveY 的键盘侧
+  }
+}
+const endInputFrame = () => { for (const k in vInput) vInput[k].endFrame(); };
+if (typeof document !== 'undefined' && document.addEventListener) {
+  document.addEventListener('keydown', e => {          // 测试架里这个调用是空桩，不会报错
+    if (!ui.dashDemo.checked) return;
+    if (KEY_TO_BUTTON[e.code] || KEY_TO_AXIS[e.code]) { setKey(e.code, true); e.preventDefault && e.preventDefault(); }
+  });
+  document.addEventListener('keyup', e => { setKey(e.code, false); });
+}
+// Input::Rumble 只驱动手柄（本页没有），只保留 IL 里那两个枚举整数供注释对照。
+let lastRumble = null;
+const inputRumble = (strength, length) => { lastRumble = { strength, length }; };
+
+/* ================= Celeste.Solid / Actor 位移层（逐条 IL） ================= */
+// 证据：actor_moveexact_il.txt（MoveHExact / MoveVExact 全文 + DashCollisionResults 枚举）、
+//       actor_mover_il.txt L338-457（MoveH / MoveV / OnGround 两个重载）。
+const UNIT_X = v2(1, 0), UNIT_Y = v2(0, 1);             // Vector2::UnitX / UnitY（永远只读，不要原地改）
+const DASH_COLLISION = { Rebound: 0, NormalCollision: 1, NormalOverride: 2, Bounce: 3, Ignore: 4 };
+const solids = [];                                     // scene.Tracker.GetEntities<Solid>()
+const spikes = [];                                     // scene.Tracker.GetEntities<Spikes>()
+class SolidRect {
+  constructor(x, y, w, h) {
+    this.pos = v2(x, y);
+    // Solid::.ctor(Vector2 position, float width, float height, bool solid)
+    this.collider = new HitboxShape(w, h, 0, 0); this.collider.ent = this;
+    this.collidable = true; this.removed = false; this.visible = false;
+    this.onCollide = null; this.onDashCollide = null;   // Platform 的两个委托字段（Player 侧负责派发）
+    this.surfaceSoundIndex = -1;                        // LightningBreakerBox::.ctor 里把它没成 9
+  }
+  get x() { return this.pos.x; } get y() { return this.pos.y; }
+  get width() { return this.collider.width; } get height() { return this.collider.height; }
+  get center() { return this.collider.absCenter; }
+  get left() { return this.collider.left; } get right() { return this.collider.right; }
+  get top() { return this.collider.top; } get bottom() { return this.collider.bottom; }
+  get centerX() { return this.collider.absCenter.x; }
+  get centerY() { return this.collider.absCenter.y; }
+  get defaultCenterRight() { return v2(this.collider.right, this.centerY); }
+  get defaultCenterLeft() { return v2(this.collider.left, this.centerY); }
+  get bottomCenter() { return v2(this.centerX, this.collider.bottom); }
+  get topCenter() { return v2(this.centerX, this.top); }
+  removeSelf() { this.removed = true; }
+}
+// Entity::CollideCheck<Solid>(Vector2 position)：临时把 Position 摆过去、让 Collider 去碰、再还原。
+// 返回值的「谁先被碰到」取决于 Tracker 的登记顺序（本页 = push 顺序）；这一项 IL 里看不出来。
+function collideFirstSolid(p, at) {
+  const previous = p.pos; p.pos = at;
+  let hit = null;
+  for (const s of solids) { if (s.removed) continue; if (collideCheck(p, s)) { hit = s; break; } }
+  p.pos = previous;
+  return hit;
+}
+const collideCheckSolid = (p, at) => !!collideFirstSolid(p, at);   // Entity::CollideCheck<Solid>(Vector2)
+function collideCheckSpikes(e, at) {                             // Entity::CollideCheck<Spikes>(Vector2)
+  const previous = e.pos; e.pos = at;
+  let hit = false;
+  for (const s of spikes) { if (s.removed) continue; if (collideCheck(e, s)) { hit = true; break; } }
+  e.pos = previous; return hit;
+}
+/* Actor::MoveHExact(int moveH, Collision onCollide, Solid pusher)：actor_moveexact_il.txt。
+   ★ 两个反直觉的点：
+   1) 撞上那一像素<b>不前进</b>（return true 在 X += dir 之前），所以靠墙时位置恰好贴在墙外；
+   2) 整个方法<b>从不写 Actor::Direction 字段</b>，`Direction = UnitX * dir` 写的是 CollisionData 的字段；
+      movementCounter.X 也只在「撞上」那一支里被清 0。 */
+function moveHExact(p, moveH, onCollide = null, pusher = null) {
+  const targetPosition = vadd(p.pos, vmul(UNIT_X, moveH));        // V_0
+  const dir = sign(moveH);                                        // V_1
+  let counter = 0;                                                // V_2
+  while (moveH !== 0) {                                           // IL_00c2 尾测 brtrue IL_0026
+    const solid = collideFirstSolid(p, vadd(p.pos, vmul(UNIT_X, dir)));
+    if (solid) {
+      p.movementCounter.x = 0;
+      if (onCollide) onCollide({ direction: vmul(UNIT_X, dir), moved: vmul(UNIT_X, counter),
+                                 targetPosition, hit: solid, pusher });
+      return true;
+    }
+    counter += dir; moveH -= dir; p.pos.x += dir;
+  }
+  return false;
+}
+/* Actor::MoveVExact：与 H 同构，但在 counter += dir 前面多一段 JumpThru 检查（IL_00aa..013f）。
+   本页没有 JumpThru 实体，那一支恒不触发；保留形状而不是删掉，是为了跟 IL 一一对得上。 */
+function moveVExact(p, moveV, onCollide = null, pusher = null) {
+  const targetPosition = vadd(p.pos, vmul(UNIT_Y, moveV));
+  const dir = sign(moveV);
+  let counter = 0;
+  while (moveV !== 0) {
+    const solid = collideFirstSolid(p, vadd(p.pos, vmul(UNIT_Y, dir)));
+    if (solid) {
+      p.movementCounter.y = 0;
+      if (onCollide) onCollide({ direction: vmul(UNIT_Y, dir), moved: vmul(UNIT_Y, counter),
+                                 targetPosition, hit: solid, pusher });
+      return true;
+    }
+    if (moveV > 0 && !p.ignoreJumpThrus) {           // CollideFirstOutside<JumpThru>(Position + UnitY * dir)
+      const jt = null;                                // ★ 本页无 JumpThru
+      if (jt) {
+        p.movementCounter.y = 0;
+        if (onCollide) onCollide({ direction: vmul(UNIT_Y, dir), moved: vmul(UNIT_Y, counter),
+                                   targetPosition, hit: jt, pusher });
+        return true;
+      }
+    }
+    counter += dir; moveV -= dir; p.pos.y += dir;
+  }
+  return false;
+}
+/* Actor::MoveH(float steps, …)：actor_mover_il.txt IL_0000..0043。
+   先累进 movementCounter，再用 Math.Round(…, ToEven) 取整；不够一整像素就什么都不做（返回 false）。 */
+function actorMoveH(p, steps, onCollide = null, pusher = null) {
+  p.movementCounter.x += steps;
+  const num = roundToEven(p.movementCounter.x);      // conv.r8 → Math.Round(ToEven) → conv.i4（已整数，恒等）
+  if (num !== 0) {
+    p.movementCounter.x -= num;
+    return moveHExact(p, num, onCollide, pusher);
+  }
+  return false;
+}
+function actorMoveV(p, steps, onCollide = null, pusher = null) {
+  p.movementCounter.y += steps;
+  const num = roundToEven(p.movementCounter.y);
+  if (num !== 0) {
+    p.movementCounter.y -= num;
+    return moveVExact(p, num, onCollide, pusher);
+  }
+  return false;
+}
+/* Actor::OnGround(int i = 1)：先看 Solid，再（除非 IgnoreJumpThrus）看 JumpThru 的「在外侧」版本。 */
+function actorOnGround(p, i = 1) {
+  if (collideCheckSolid(p, vadd(p.pos, vmul(UNIT_Y, i)))) return true;      // IL_0047
+  if (p.ignoreJumpThrus) return false;
+  return false;                                                            // CollideCheckOutside<JumpThru>：本页无
+}
+// Actor::OnGround(Vector2 position, int i)：IL_0000..001c —— 临时换 Position 再还原（不是临时换 offset）
+function actorOnGroundAt(p, position, i = 1) {
+  const previous = p.pos; p.pos = position;
+  const result = actorOnGround(p, i); p.pos = previous;
+  return result;
+}
+
+/* ================= Player：鼠标本体 + 被鸟甩出去之后的真实物理 ================= */
+// 证据：player_consts_il.txt（六个 Hitbox / StateMachine(26) / Depth=0 / Tag=Persistent）、
+//       player_origupdate_il.txt（IL_1110..IL_11b6 的 PlayerCollider 扫描 + launched/SpeedRing）。
+const ST_FLING_BIRD = 24;                                // Player.StateMachine.State 的 FlingBird 位
+const P_GRAVITY = 900, P_MAX_FALL = 160, P_FAST_FALL = 240, P_FAST_THRESH = 200;
+const P_HALF_GRAV_SPEED = 40, P_AIR_MULT = 0.65, P_MAX_RUN = 90, P_MAX_RUN_SLOW_FALL = 108.000008;
+const P_RUN_REDUCE = 400, P_RUN_ACCEL = 1000, P_FALL_ACCEL = 300;
+class PlayerEntity {
+  constructor() {
+    this.pos = v2(-999, -999);
+    // Player::.ctor 里的六个盒，全部逐字照抄（宽高与偏移都是虚拟像素，本页按页面像素直接用）
+    this.normalHitbox   = new HitboxShape(8, 11, -4, -11);
+    this.duckHitbox     = new HitboxShape(8,  6, -4,  -6);
+    this.normalHurtbox  = new HitboxShape(8,  9, -4, -11);
+    this.duckHurtbox    = new HitboxShape(8,  4, -4,  -6);
+    this.starFlyHitbox  = new HitboxShape(8,  8, -4, -10);
+    this.starFlyHurtbox = new HitboxShape(6,  6, -3,  -9);
+    for (const b of [this.normalHitbox, this.duckHitbox, this.normalHurtbox,
+                     this.duckHurtbox, this.starFlyHitbox, this.starFlyHurtbox]) b.ent = this;
+    this.collider = this.normalHitbox;                   // Collider = normalHitbox（物理阻挡）
+    this.hurtbox = this.normalHurtbox;                   // IL_0232-0239: hurtbox = normalHurtbox
+    this.collidable = true; this.removed = false;
+    this.speed = v2(0, 0); this.state = 0; this.dead = false;
+    this.climbing = false; this.onGround = false;
+    this.drivenByMouse = true; this.flingBird = null;
+    this.launched = false; this.launchedTimer = 0; this.launchedFrom = { v: 0 };   // ref float previous
+    this.autoJump = false; this.varJumpTimer = 0; this.varJumpSpeed = 0;
+    this.forceMoveX = 0; this.forceMoveXTimer = 0;
+    this.wallSlideTimer = 1.2; this.stamina = 110; this.deadTimer = 0; this.groundedFor = 0;
+  }
+  get x() { return this.pos.x; }
+  get y() { return this.pos.y; }
+  get width() { return this.collider.width; }
+  get height() { return this.collider.height; }        // FlingBirdUpdate 要用的 Collider.Height = 11
+  get center() { return this.collider.absCenter; }      // Entity::Center 走当前 Collider
+  get active() { return !this.drivenByMouse || this.pos.x > -900; }
+  /* Player::DoFlingBird：Dead 或 State == 24 时拒接；否则把玩家交给鸟（并丢下手里的东西） */
+  doFlingBird(bird) {
+    if (this.dead || this.state === ST_FLING_BIRD) return false;
+    this.flingBird = bird; this.state = ST_FLING_BIRD;
+    this.drivenByMouse = false;                          // ★ 从这一刻起鼠标不再控制位置
+    return true;
+  }
+  /* Player::FinishFlingBird：把 FlingBird.FlingSpeed 当作玩家的初速度交还 */
+  finishFlingBird() {
+    this.state = 0; this.flingBird = null;
+    this.autoJump = true;                                // 顶点 |Speed.Y| < 40 时重力减半的开关
+    this.forceMoveX = 1; this.forceMoveXTimer = 0.2;
+    this.speed = v2(FLING_SPEED.x, FLING_SPEED.y);
+    this.varJumpSpeed = this.speed.y; this.varJumpTimer = 0.2;
+    this.launched = true; this.launchedTimer = 0; this.launchedFrom.v = 0;
+  }
+  die(dir) {                                            // 演示专用：没有完整的死亡动画
+    this.dead = true; this.deadTimer = 0;
+    this.speed = v2(0, 0); this.state = 0; this.flingBird = null;
+    this.climbing = false; this.onGround = false;
+    emitFeather(P_FEATHER, 12, vadd(this.pos, v2(0, -6)), v2(6, 8));
+    levelFlash('#ff6b6b');
+    void dir;                                            // dir 在原版里给死亡粒子定向，本页不重绘那套
+  }
+  update() {
+    this.stepUpdate();
+    // ★ Player::orig_Update 末尾 IL_1110..IL_11b6：这个遍历是 Player 自己每帧驱动的，
+    //   Monocle.PlayerCollider 根本没有 Update 方法（只有 .ctor / Check / DebugRender）。
+    playerColliderScan(this);
+  }
+  stepUpdate() {
+    if (this.dead) {
+      this.deadTimer += RAW_DELTA;
+      // ★ 演示专用的「原地重生」：复活那一帧不能直接 return，否则 Position 还停在致死的那格上，
+      //   同帧末尾的 PlayerCollider 扫描会当场再杀一次，玩家永远卡在「死 → 复活 → 死」的循环里。
+      //   （原版没这个问题：死亡后是从 Session.RespawnPoint 重新进房的 —— 该点由
+      //   ChangeRespawnTrigger::OnEnter 写，LevelLoader::.ctor / Level::orig_LoadLevel 读，而不是在原地直接把 Player 摆回去。）
+      if (this.deadTimer > 1.2) { this.dead = false; this.drivenByMouse = true; this.launched = false; }
+      else return;
+    }
+    if (this.drivenByMouse) {
+      const was = this.pos; const w = screenToWorld(mouse);
+      this.pos = w;
+      // ★ 有意偏差：鼠标没有质量，但为了 flingSpeed = p.Speed * 0.4f 真的能做出事，
+      //   这里把「指针本帧位移 / DeltaTime」当作 Speed，并钳到 ±400。
+      const v = vmul(vsub(w, was), 1 / Math.max(DELTA, 1e-4));
+      this.speed = v2(clampF(v.x, -400, 400), clampF(v.y, -400, 400));
+      this.climbing = mouseDown;
+      this.onGround = w.y >= GROUND_Y - 4;
+      this.state = this.climbing ? 1 : 0;
+      return;
+    }
+    if (this.state === ST_FLING_BIRD) { this.flingBirdUpdate(); return; }
+    this.normalUpdate();
+  }
+  /* FlingBirdUpdate：被鸟拎着的时候，每帧定速往鸟肚子下面靠 */
+  flingBirdUpdate() {
+    const b = this.flingBird;
+    if (!b || b.removed) { this.state = 0; return; }
+    this.pos.x = approach(this.pos.x, b.pos.x, 250 * DELTA);
+    // bird.Y + 8f + Collider.Height，Collider 此刻是 normalHitbox(高 11) ⇒ 挂在鸟下方 19px
+    this.pos.y = approach(this.pos.y, b.pos.y + 8 + this.height, 250 * DELTA);
+    this.speed = v2(0, 0);
+  }
+  /* ================= Player::NormalUpdate 的空中部分（重力 / 上限 / 变跳 / 塑性） ================= */
+  normalUpdate() {
+    let gravMult = 1;
+    if (Math.abs(this.speed.y) < P_HALF_GRAV_SPEED && this.autoJump) gravMult = 0.5;
+    // 水平：无键盘输入 ⇒ moveX = forceMoveXTimer > 0 ? forceMoveX : 0
+    const moveX = this.forceMoveXTimer > 0 ? this.forceMoveX : 0;
+    if (this.forceMoveXTimer > 0) this.forceMoveXTimer -= DELTA;
+    const mult = this.onGround ? 1 : P_AIR_MULT;
+    const maxRun = P_MAX_RUN;
+    if (Math.abs(this.speed.x) > maxRun && sign(this.speed.x) === sign(moveX))
+      this.speed.x = approach(this.speed.x, maxRun * sign(moveX || this.speed.x), P_RUN_REDUCE * mult * DELTA);
+    else this.speed.x = approach(this.speed.x, maxRun * moveX, P_RUN_ACCEL * mult * DELTA);
+    // 重力
+    let maxFall = P_MAX_FALL;
+    this.speed.y = approach(this.speed.y, maxFall, P_GRAVITY * gravMult * DELTA);
+    if (this.varJumpTimer > 0) {
+      if (this.autoJump) this.speed.y = Math.min(this.speed.y, this.varJumpSpeed);
+      else this.varJumpTimer = 0;
+    }
+    this.pos = vadd(this.pos, vmul(this.speed, DELTA));
+    // 地面：本页只有一块地板（GROUND_Y）与左右房壁
+    if (this.pos.y >= GROUND_Y) {
+      this.pos.y = GROUND_Y;
+      if (this.speed.y > 0) this.speed.y = 0;
+      if (!this.onGround) { this.autoJump = false; this.stamina = 110; this.wallSlideTimer = 1.2; }  // orig_Update 头部
+      this.onGround = true;
+    } else this.onGround = false;
+    if (this.pos.x < 8) { this.pos.x = 8; this.speed.x = 0; }
+    if (this.pos.x > LEVEL_BOUNDS_RIGHT - 8) { this.pos.x = LEVEL_BOUNDS_RIGHT - 8; this.speed.x = 0; }
+    // launched：SpeedRing 只在这一段产生，也是“甩出去了”唯一的可见反馈
+    if (this.launched) {
+      if (this.speed.x * this.speed.x + this.speed.y * this.speed.y < 19600) this.launched = false;
+      else {
+        this.launchedTimer += DELTA;
+        if (this.launchedTimer >= 0.5) this.launched = false;
+        else if (calcOnInterval(this.launchedTimer, this.launchedFrom, 0.15))
+          new SpeedRing().init(this.center, Math.atan2(this.speed.y, this.speed.x), '#ffffff');
+      }
+    }
+    // 演示：落地 0.6s 后把控制权还给鼠标（否则玩家永远回不到“鼠标即 Player”的演示模型）
+    if (this.onGround) { this.groundedFor += DELTA; if (this.groundedFor > 0.6) { this.drivenByMouse = true;
+      this.state = 0; this.groundedFor = 0; } } else this.groundedFor = 0;
+  }
+  drawDebug() {
+    if (!this.active) return;
+    ctx.lineWidth = 1.5; ctx.strokeStyle = '#f9e2af';
+    ctx.strokeRect(this.normalHitbox.x, this.normalHitbox.y, 8, 11);    // Collider（物理阻挡）
+    ctx.strokeStyle = 'rgba(243,139,168,.8)';
+    ctx.strokeRect(this.normalHurtbox.x, this.normalHurtbox.y, 8, 9);   // 报中 PlayerCollider 用的就是它
+  }
+}
+let thePlayer = null;
+
+/* ================= 鸟的占位画法：仅在素材加载失败或关掉「原版素材」时使用 ================= */
+function drawBird(pos, rot, s, color) {                // rot 已经是「右边朝前」的美术旋转
+  ctx.save(); ctx.translate(pos.x, pos.y); ctx.rotate(rot);
+  ctx.scale((sign(s.x) || 1) * Math.abs(s.x), s.y);
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.ellipse(0, 0, 7, 5, 0, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(5.5, -3, 3.6, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#f9e2af';
+  ctx.beginPath(); ctx.moveTo(8.6, -3.6); ctx.lineTo(12, -2.6); ctx.lineTo(8.6, -1.6); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.32)';
+  ctx.beginPath(); ctx.ellipse(-1, 0.5, 4.5, 2.6, 0.35, 0, TAU); ctx.fill();
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.moveTo(-6, -1); ctx.lineTo(-12, -4); ctx.lineTo(-11, 2); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#11111b'; ctx.beginPath(); ctx.arc(6.6, -3.8, 1, 0, TAU); ctx.fill();
+  ctx.restore();
+}
+
+/* ================= 场景装配 ================= */
+let birds = [];
+function spawnFlock() {
+  birds = [];
+  for (let i = 0; i < 6; i++) birds.push(new FlutterBird(110 + i * (70 + nextFloat(40)), GROUND_Y));
+}
+// 七只 BirdNPC，每只跑一个原版 Modes 的协程（Modes.None 无分支，Sleeping/WaitForLightning 未演示）
+const NPC_PLAN = [
+  { x: 205, y: GROUND_Y, mode: 'SuperWallJump' },                 // 喊叫 → 啄地 → 出文本 → 换面板 → 收起 → 飞走
+  { x: 690, y: GROUND_Y, mode: 'FlyAway' },                       // 120px 喊叫、32px 惊飞（WaitRoutine）
+  { x: 445, y: 300, mode: 'MoveToNodes',                          // 80px 触发逐节点 FlyTo
+    nodes: [{ x: 645, y: 250 }, { x: 250, y: 232 }] },
+  { x: 760, y: 170, mode: 'HyperJump' },                          // 面板里真用按键贴图 + GFX.Gui["tinyarrow"]
+  { x: 560, y: GROUND_Y, mode: 'Climbing' },                      // 按住鼠标当“挂墙爬”，面板会翻面
+  { x: 800, y: GROUND_Y, mode: 'DreamJump' },                     // 32px 收面板、24px 惊飞
+  { x: 60,  y: GROUND_Y, mode: 'Dashing' }                        // 瞬移到房顶，等玩家触发第一章过场
+];
+let npcs = [];
+function spawnBirds() {
+  spawnFlock();
+  for (const g of guis.slice()) sceneRemoveGui(g);
+  feathers.length = 0;
+  npcs = NPC_PLAN.map(n => new BirdNPC(n.x, n.y, n.mode, n.nodes));
+  thePlayer = new PlayerEntity();
+  spawnFlingBirds();
+  spawnLightnings();
+}
+
+/* ================= FlingBird / Lightning 的装配 ================= */
+// 一段 = 奇数个锚点：[起点, 控制点, 终点, …]，跟 <MoveRoutine>d__24 的
+// for (i = 1; i < seg.Length - 1; i += 2) MoveOnCurve(Position, seg[i], seg[i + 1]) 对齐。
+// ★ FlingBird::Awake 的合并有个很容易踩的前提：合并只发生在 all[0] === this 的那只身上，
+//   而 Monocle 的 EntityList::UpdateLists 是「加一个、立刻 Awake 一个」（IL_0037 → IL_006d 逐个跑），
+//   所以必须让**右边那只先入场**，左边那只 Awake 时才看得见它，两段才会并成一条链。
+//   按 X 从小到大入场的话，两只鸟永远各自只有一段，看起来一样、但永远不会有 relocation。
+const FLING_PLAN = [
+  { x: 300, y: 150, waiting: true,                        // ★ 先入场（右边）
+    nodes: [v2(300, 150), v2(348, 99), v2(396, 141)] },
+  { x: 144, y: 150, waiting: false,
+    nodes: [v2(144, 150), v2(190, 96), v2(240, 150)] }
+];
+// 电网拦在第一段终点（240）与第二段起点（300）之间；宽/高用页面像素（vs() 把原版的虚拟尺寸换算过来）
+const FENCE = { x: 252, y: 66, w: vs(6), h: vs(58) };
+function pruneColliderHosts() {                          // Scene.Tracker 里的 PlayerCollider 不会留着死实体
+  for (let i = playerColliderHosts.length - 1; i >= 0; i--)
+    if (playerColliderHosts[i].removed) playerColliderHosts.splice(i, 1);
+}
+function spawnFlingBirds() {
+  for (const b of flingBirds) b.removed = true;
+  flingBirds = [];
+  pruneColliderHosts();
+  if (!ui.fling.checked) return;
+  const made = FLING_PLAN.map(n => {
+    const b = new FlingBird(n.nodes, n.waiting && ui.lightning.checked);
+    flingBirds.push(b); return b; });
+  for (const b of made) if (!b.removed) b.awake();        // Entity::Added(scene) → Awake(scene)
+}
+function spawnLightnings() {
+  for (const l of lightnings) l.removeSelf();
+  lightnings = [];
+  pruneColliderHosts();
+  lightningRenderer.fade = 0; lightningRenderer.updateSeeds = true;
+  if (!ui.lightning.checked) return;
+  lightnings.push(new Lightning(v2(FENCE.x, FENCE.y), FENCE.w, FENCE.h));
+}
+ui.fling.addEventListener('change', () => spawnFlingBirds());
+ui.lightning.addEventListener('change', () => {
+  // 勾选 = 关卡里本来就布着电网（重验一次 FlingBird.SegmentsWaiting）；
+  // 取消 = 过场里把电网拆了，走的正是 Lightning.<RemoveRoutine>d__21。
+  if (ui.lightning.checked) { spawnLightnings(); spawnFlingBirds(); }
+  else breakLightning();
+});
+const path = new BirdPath(v2(250, 300), [
+  { x: 300, y: 250 }, { x: 400, y: 200 }, { x: 500, y: 150 }, { x: 620, y: 170 },
+  { x: 720, y: 260 }, { x: 800, y: 320 }, { x: 700, y: 380 }, { x: 560, y: 360 },
+  { x: 400, y: 340 }, { x: 300, y: 320 },
+]);
+
+cv.addEventListener('mousemove', e => { const r = cv.getBoundingClientRect();
+  mouse.x = (e.clientX - r.left) * (W / r.width); mouse.y = (e.clientY - r.top) * (H / r.height); });
+cv.addEventListener('mouseleave', () => { mouse.x = mouse.y = -999; });
+cv.addEventListener('click', () => { for (const b of birds) if (!b.removed)
+  b.flyAway(sign(mouse.x - b.pos.x) || 1, nextFloat(0.2)); });
+
+/* ================= 主循环 ================= */
+let prev = performance.now();
+function frame(now) {
+  // Engine::Update IL_0000-000f：RawDeltaTime = (float)GameTime.ElapsedGameTime.TotalSeconds，实测值、不夹。
+  // 0.05 的上限只是演示保护（切后台再回来会一帧几十秒），不是 IL 里的东西。
+  RAW_DELTA = Math.min(0.05, Math.max(0, (now - prev) / 1000)); prev = now;
+  // IL_0038-004e：DeltaTime = RawDeltaTime × TimeRate × TimeRateB × GetTimeRateComponentMultiplier(scene)
+  // 最后那个是 Monocle 的虚方法，游戏里没有覆写者 ⇒ 恒为 1。
+  const timeRateB = levelTimeRateB();
+  DELTA = RAW_DELTA * timeRate * timeRateB;
+  ctx.imageSmoothingEnabled = false;
+  // EntityList::UpdateLists 在 Engine::Update 里排在 freeze 判定之前（IL_0108），
+  // 所以「定格」那几帧 Add / Remove 照样提交，只是没人 Update。
+  pruneRunners();
+  if (!paused) {
+    if (freezeTimer > 0) {                                // IL_0127..IL_0158：整帧只跑 FreezeFrameUpdate
+      freezeFrameUpdate();
+      freezeTimer = Math.max(freezeTimer - RAW_DELTA, 0);
+    } else {
+      rawClock += RAW_DELTA;                              // Scene::OnRawInterval 读的时间
+      clock += DELTA;                                     // Scene.TimeActive
+      // 全局协程阶段只推进「没有宿主」的 Runner；有 owner 的由宿主在自己的 update() 里 stepOwned()。
+      for (const r of runners) if (!r.owner) r.step();
+      // Monocle.EntityList::Update 按 Depth 升序：FlingBird.Depth = -1 排在 Player(Depth=0) 之前
+      for (const b of flingBirds) b.update();
+      thePlayer.update();                                 // 末尾自己驱动 playerColliderScan
+      for (const b of birds) { b.update();
+        if (b.removed && clock > b.respawnAt) b.respawn(); }
+      for (const b of npcs) {                             // BirdNPC：AutoFly 是 EntityData，运行时可改
+        b.autoFly = ui.autoFly.checked && b.hud.mode === 'FlyAway';
+        b.update();
+        if (b.removed && clock > b.respawnAt) b.respawn(); }
+      for (const l of lightnings) l.update();
+      for (const s of speedRings) s.update();
+      speedRings = speedRings.filter(s => !s.removed);
+      for (const g of guis) g.update(RAW_DELTA);          // BirdTutorialGui.Update 用 RawDeltaTime
+      updateFeathers(DELTA);
+      path.update();
+      updateParticles();                                // Monocle.Particle::Update（含简化尘雾的旧口径）
+      trails = trails.filter(t => clock - t.born < 1.2);
+      // 演示专用：整条 FlingBird 链跑完（或被 Skip）之后隔 6 秒重新投放一次
+      if (flingBirds.some(b => b.removed && !b.mergedAway && clock > b.respawnAt)) spawnFlingBirds();
+      updateShakeAndFlash();                              // ★ 属于 Level::Update，冻结时整段不跑
+    }
+  }
+  // —— 背景：原版是 ViewportTexture 垫在黑屏上、不进 GameplayBuffers ⇒ 不参与相机的平移与放大 ——
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#1e1e2e'); g.addColorStop(1, '#2a2a40');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  SpeedRing.drawToBuffer();                               // SpeedRing::DrawToBuffer 在 Level::BeforeRender 里
+  camBegin();                                             // Camera.Position += ShakeVector; Calc.Floor(...)
+  ctx.fillStyle = 'rgba(49,50,68,.7)';
+  ctx.beginPath(); ctx.moveTo(0, H); ctx.lineTo(0, 360); ctx.lineTo(180, 300);
+  ctx.lineTo(360, 380); ctx.lineTo(620, 290); ctx.lineTo(900, 400); ctx.lineTo(W, 350);
+  ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#313244'; ctx.fillRect(60, GROUND_Y, 700, 10);
+  // —— 拖尾 / 粒子 ——
+  for (const t of trails) { const a = Math.max(0, 1 - (clock - t.born) / 1.2);
+    ctx.globalAlpha = 0.45 * a; ctx.fillStyle = TRAIL_COLOR;
+    ctx.beginPath(); ctx.arc(t.x, t.y, 3 * a, 0, TAU); ctx.fill(); }
+  drawParticles();                                      // 原版是 ParticleSystem 的 Renderer，逐粒 floor + 旋转
+  ctx.globalAlpha = 1;
+  // —— 实体 ——
+  path.draw();
+  for (const b of birds) b.draw();
+  for (const b of npcs) b.draw();
+  for (const b of flingBirds) b.draw();
+  for (const l of lightnings) l.draw();
+  for (const s of speedRings) s.draw();
+  drawFeathers();
+  thePlayer.drawDebug();                                  // 黄框 = normalHitbox(8×11)，粉框 = normalHurtbox(8×9)
+  for (const b of flingBirds) b.drawDebug();               // Circle(16, 0, 0) 与节点链
+  camEnd();
+  // Level::Flash(Color, drawPlayer) 直接令 flash = 1，亮 0.1s / 灭 ≈0.33s；它在 blit 之后
+  if (flash > 0) { ctx.globalAlpha = Math.min(1, flash); ctx.fillStyle = flashColor;
+    ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+  // Lightning::SetBreakValue 写的是 Glitch.Value 与 Bloom.Strength，本页用一层冷色叠加近似
+  if (glitchValue > 0) { ctx.globalAlpha = glitchValue; ctx.fillStyle = '#639bff';
+    ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+  for (const g of guis) renderTutorialGui(g);            // Tags.HUD：不进相机，永远画在最上层
+  // —— HUD ——
+  ctx.fillStyle = '#bac2de'; ctx.font = '12px Consolas,monospace';
+  ctx.fillText(`seg[${path.hud.seg}]=${path.hud.duration.toFixed(2)}s  p=${path.hud.p.toFixed(2)}  ` +
+    `|v|=${Math.hypot(path.speed.x, path.speed.y).toFixed(0)}/${path.maxspeed.toFixed(0)}  ` +
+    `${ui.inVanilla.checked ? 'inVanilla' : 'fixed'}${ui.angleFix.checked ? ' +angleFix' : ''}  ` +
+    `birds=${birds.filter(b => !b.removed).length}/${birds.filter(b => b.flyingAway).length} away` +
+    (spritesFailed ? `  鸟素材缺失×${spritesFailed}→用占位图` : '') +
+    (guiMissing ? `  GUI素材缺失×${guiMissing}` : ''), 10, H - 10);
+  ctx.fillText(npcs.map(b => `${b.hud.mode}:${b.removed ? 'gone' : b.hud.anim + '#' + b.hud.frame}`).join('  '),
+               10, H - 26);
+  ctx.fillText(`fling: ${flingBirds.map(b => `${b.hud.state}#${b.hud.seg}${b.removed ? '(gone)' : ''}`).join('|') || 'off'}` +
+    `  lightning×${lightnings.filter(l => !l.removed).length}  rings×${speedRings.length}` +
+    `  TimeRate=${timeRate.toFixed(2)} B=${timeRateB.toFixed(1)} freeze=${freezeTimer.toFixed(2)}` +
+    `  player=${thePlayer.dead ? 'DEAD' : thePlayer.state === ST_FLING_BIRD ? 'FLUNG' : thePlayer.state}` +
+    ` v=(${thePlayer.speed.x.toFixed(0)},${thePlayer.speed.y.toFixed(0)})`, 10, H - 42);
+  // —— SFX 日志（本机没有鸟叫音效素材，只记原版事件名）——
+  ctx.textAlign = 'right'; ctx.fillStyle = '#89b4fa';
+  for (let i = 0; i < sfxLog.length; i++) {
+    const s = sfxLog[sfxLog.length - 1 - i];
+    ctx.fillText(`${(clock - s.t).toFixed(1)}s  Audio.Play("${s.name}") @${s.x},${s.y}`,
+                 W - 10, H - 10 - i * 14);
+  }
+  ctx.textAlign = 'left';
+  requestAnimationFrame(frame);
+}
+spawnBirds();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
