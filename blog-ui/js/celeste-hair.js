@@ -14,8 +14,11 @@
     const MADELINE = '#AC3232';   // NormalHairColor 红
     const BADELINE = '#9B3FB5';   // BadelineOldsite.HairColor 紫
     const USED_HAIR = '#44B7FF';  // UsedHairColor（dashes=0 时蓝）
-    const FLY_POWER_HAIR = '#F2EB6D'; // FlyPowerHairColor（dash 起始闪黄）
-    const HAIR_COLORS = { normal: 0, used: 1, fly: 2 };
+    const FLASH_HAIR = '#FFFFFF'; // FlashHairColor（lastDashes != Dashes 时闪白 0.12s）
+    const TWO_DASHES_HAIR = '#FF6DEF'; // TwoDashesHairColor（2 格冲刺时粉）
+    const FLY_POWER_HAIR = '#F2EB6D'; // FlyPowerHairColor（羽毛 / star-fly 专用，与冲刺无关）
+    // 顺序必须与 load() 里 baseColors 一致
+    const HAIR_COLORS = { normal: 0, used: 1, flash: 2, two: 3, fly: 4 };
 
     function loadImage(src) {
         return new Promise(res => {
@@ -41,7 +44,7 @@
         return c;
     }
 
-    // 加载 hair00 + bangs00~02，并预生成 3 套发色版（normal/used/fly）+ 黑色描边版
+    // 加载 hair00 + bangs00~02，并预生成 5 套发色版 + 黑色描边版
     async function load(base, color) {
         const [hair, b0, b1, b2] = await Promise.all([
             loadImage(base + '/hair00.png'),
@@ -50,8 +53,8 @@
             loadImage(base + '/bangs02.png')
         ]);
         const bangs = [b0, b1, b2].filter(Boolean);
-        // 根据 base color 派生 used / fly（Badeline 也有独立的 used 色）
-        const baseColors = [color || MADELINE, USED_HAIR, FLY_POWER_HAIR];
+        // 顺序：normal / used / flash / two / fly（必须与 HAIR_COLORS 一致）
+        const baseColors = [color || MADELINE, USED_HAIR, FLASH_HAIR, TWO_DASHES_HAIR, FLY_POWER_HAIR];
         function tintSet(c) {
             return {
                 hair: tint(hair, c),
@@ -60,14 +63,14 @@
                 bangsOutline: bangs.map(b => tint(b, '#000000'))
             };
         }
-        return baseColors.map(tintSet);  // [normalSet, usedSet, flySet]
+        return baseColors.map(tintSet);
     }
 
     class Hair {
         constructor(tex, count) {
-            // tex 可以是单套对象（向后兼容）或三套数组 [normal, used, fly]
-            this.allTex = Array.isArray(tex) ? tex : [tex, tex, tex];
-            this.colorMode = 0;                    // 0=normal, 1=used, 2=fly
+            // tex 可以是单套对象（向后兼容）或多套数组（见 HAIR_COLORS）
+            this.allTex = Array.isArray(tex) ? tex : [tex, tex, tex, tex, tex];
+            this.colorIdx = 0;                      // 0=normal 1=used 2=flash 3=two 4=fly
             this.tex = this.allTex[0];
             this.count = count || 4;          // 原作默认 4 节
             this.nodes = [];                  // 第 0 节=刘海锚点，其余=发团
@@ -82,11 +85,14 @@
             this.rigid = false;                    // 原作 SimulateMotion=false（金羽毛飞行）：只剩钳制
         }
 
-        // 原作 PlayerHair.LoadedHairColor 切换
+        // 原作 PlayerHair.LoadedHairColor 切换（mode: 'normal'|'used'|'flash'|'two'|'fly'|数字）
         setColor(mode) {
-            if (mode === this.colorMode) return;
-            this.colorMode = mode;
-            this.tex = this.allTex[mode] || this.allTex[0];
+            const idx = typeof mode === 'number'
+                ? mode
+                : (HAIR_COLORS[mode] === undefined ? 0 : HAIR_COLORS[mode]);
+            if (idx === this.colorIdx) return;
+            this.colorIdx = idx;
+            this.tex = this.allTex[idx] || this.allTex[0];
         }
 
         // 原作 Start()：全节点塞到身后下方 200px，获得"甩回来"的入场
@@ -191,5 +197,5 @@
         hair.stepYSine = 0;
     }
 
-    window.CelesteHair = { Hair, load, applyWindX, resetWind, MADELINE, BADELINE, USED_HAIR, FLY_POWER_HAIR, HAIR_COLORS };
+    window.CelesteHair = { Hair, load, applyWindX, resetWind, MADELINE, BADELINE, USED_HAIR, FLASH_HAIR, TWO_DASHES_HAIR, FLY_POWER_HAIR, HAIR_COLORS };
 })();
