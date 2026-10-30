@@ -20,11 +20,11 @@
 ## <img src="assets/readme/icons/celeste/quick-links.png" height="28"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t001-dark.webp"><img src="assets/readme/t001.webp" width="111" alt="Quick Links"></picture>
 
 <table>
-<tr><th align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t002-dark.webp"><img src="assets/readme/t002.webp" width="114" alt="🚀 Live Demo"></picture></th><th align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t003-dark.webp"><img src="assets/readme/t003.webp" width="132" alt="🎥 Demo Video"></picture></th><th align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t004-dark.webp"><img src="assets/readme/t004.webp" width="67" alt="📚 Docs"></picture></th></tr>
+<tr><th align="center"><img src="assets/readme/icons/celeste/quick-start.png" height="23"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t002-cropped-dark.webp"><img src="assets/readme/t002-cropped.webp" width="95" alt="Live Demo"></picture></th><th align="center"><img src="assets/readme/icons/celeste/video.png" height="26"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t003-cropped-dark.webp"><img src="assets/readme/t003-cropped.webp" width="110" alt="Demo Video"></picture></th><th align="center"><img src="assets/readme/icons/celeste/journal.png" height="22"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t004-cropped-dark.webp"><img src="assets/readme/t004-cropped.webp" width="46" alt="Docs"></picture></th></tr>
 <tr><td align="center"><a href="https://instapix.icu"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t005-dark.webp"><img src="assets/readme/t005.webp" width="97" alt="instapix.icu"></picture></a></td><td align="center"><a href="https://www.bilibili.com/video/BV13QYT64EDX/"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t006-dark.webp"><img src="assets/readme/t006.webp" width="51" alt="Bilibili"></picture></a></td><td align="center"><a href="CONTRIBUTING.md"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t007-dark.webp"><img src="assets/readme/t007.webp" width="107" alt="Contributing"></picture></a> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t008-dark.webp"><img src="assets/readme/t008.webp" width="3" alt="·"></picture> <a href="TROUBLESHOOTING.md"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t009-dark.webp"><img src="assets/readme/t009.webp" width="139" alt="Troubleshooting"></picture></a></td></tr>
 </table>
 
-> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t010-dark.webp"><img src="assets/readme/t010.webp" width="830" alt="🌤️ Deployment Stack: Frontend → Cloudflare Pages · Backend → Render (Docker) · Database → TiDB Cloud (Starter Free)"></picture>
+> <img src="assets/readme/icons/celeste/roadmap.png" height="22"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t010-cropped-dark.webp"><img src="assets/readme/t010-cropped.webp" width="830" alt="Deployment Stack: Frontend → Cloudflare Pages · Backend → Render (Docker) · Database → TiDB Cloud (Starter Free)"></picture>
 
 ---
 
@@ -34,21 +34,21 @@
 
 - <img src="assets/readme/icons/vision.png" height="27"> <a href="#the-vision"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t012-dark.webp"><img src="assets/readme/t012.webp" width="88" alt="The Vision"></picture></a>
 - <img src="assets/readme/icons/core-features.png" height="27"> <a href="#core-features"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t013-dark.webp"><img src="assets/readme/t013.webp" width="123" alt="Core Features"></picture></a>
-- <a href="#screenshots-gallery"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t014-dark.webp"><img src="assets/readme/t014.webp" width="197" alt="🖼️ Screenshots Gallery"></picture></a>
-- <a href="#golden-feather-system"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t015-dark.webp"><img src="assets/readme/t015.webp" width="227" alt="🪶 Golden Feather System"></picture></a>
-- <a href="#dream-mirror-badeline"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t016-dark.webp"><img src="assets/readme/t016.webp" width="231" alt="🪞 Dream Mirror &amp; Badeline"></picture></a>
-- <a href="#system-architecture"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t017-dark.webp"><img src="assets/readme/t017.webp" width="201" alt="🏗️ System Architecture"></picture></a>
-- <a href="#project-structure"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t018-dark.webp"><img src="assets/readme/t018.webp" width="171" alt="📁 Project Structure"></picture></a>
-- <a href="#quick-start"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t019-dark.webp"><img src="assets/readme/t019.webp" width="120" alt="🚀 Quick Start"></picture></a>
-- <a href="#configuration-deep-dive"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t020-dark.webp"><img src="assets/readme/t020.webp" width="238" alt="⚙️ Configuration Deep-Dive"></picture></a>
-- <a href="#core-features-explained"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t021-dark.webp"><img src="assets/readme/t021.webp" width="237" alt="🎯 Core Features Explained"></picture></a>
-- <a href="#technical-deep-dive"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t022-dark.webp"><img src="assets/readme/t022.webp" width="204" alt="📚 Technical Deep-Dive"></picture></a>
-- <a href="#testing-quality"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t023-dark.webp"><img src="assets/readme/t023.webp" width="170" alt="🧪 Testing &amp; Quality"></picture></a>
-- <a href="#deployment-guide"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t024-dark.webp"><img src="assets/readme/t024.webp" width="182" alt="📦 Deployment Guide"></picture></a>
-- <a href="#contribution-guide"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t025-dark.webp"><img src="assets/readme/t025.webp" width="190" alt="🤝 Contribution Guide"></picture></a>
-- <a href="#faq-troubleshooting"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t026-dark.webp"><img src="assets/readme/t026.webp" width="214" alt="❓ FAQ &amp; Troubleshooting"></picture></a>
-- <a href="#roadmap"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t027-dark.webp"><img src="assets/readme/t027.webp" width="107" alt="📈 Roadmap"></picture></a>
-- <a href="#license-acknowledgments"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t028-dark.webp"><img src="assets/readme/t028.webp" width="266" alt="📄 License &amp; Acknowledgments"></picture></a>
+- <img src="assets/readme/icons/celeste/screenshots.png" height="22"> <a href="#screenshots-gallery"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t014-cropped-dark.webp"><img src="assets/readme/t014-cropped.webp" width="178" alt="Screenshots Gallery"></picture></a>
+- <img src="assets/readme/icons/celeste/breathing.png" height="20"> <a href="#golden-feather-system"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t015-cropped-dark.webp"><img src="assets/readme/t015-cropped.webp" width="207" alt="Golden Feather System"></picture></a>
+- <img src="assets/readme/icons/celeste/mirror-room.png" height="24"> <a href="#dream-mirror-badeline"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t016-cropped-dark.webp"><img src="assets/readme/t016-cropped.webp" width="216" alt="Dream Mirror &amp; Badeline"></picture></a>
+- <img src="assets/readme/icons/celeste/architecture.png" height="26"> <a href="#system-architecture"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t017-cropped-dark.webp"><img src="assets/readme/t017-cropped.webp" width="181" alt="System Architecture"></picture></a>
+- <img src="assets/readme/icons/celeste/structure.png" height="25"> <a href="#project-structure"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t018-cropped-dark.webp"><img src="assets/readme/t018-cropped.webp" width="150" alt="Project Structure"></picture></a>
+- <img src="assets/readme/icons/celeste/quick-start.png" height="25"> <a href="#quick-start"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t019-cropped-dark.webp"><img src="assets/readme/t019-cropped.webp" width="100" alt="Quick Start"></picture></a>
+- <img src="assets/readme/icons/celeste/config.png" height="24"> <a href="#configuration-deep-dive"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t020-cropped-dark.webp"><img src="assets/readme/t020-cropped.webp" width="218" alt="Configuration Deep-Dive"></picture></a>
+- <img src="assets/readme/icons/celeste/features.png" height="25"> <a href="#core-features-explained"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t021-cropped-dark.webp"><img src="assets/readme/t021-cropped.webp" width="217" alt="Core Features Explained"></picture></a>
+- <img src="assets/readme/icons/celeste/journal.png" height="25"> <a href="#technical-deep-dive"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t022-cropped-dark.webp"><img src="assets/readme/t022-cropped.webp" width="184" alt="Technical Deep-Dive"></picture></a>
+- <img src="assets/readme/icons/celeste/testing.png" height="23"> <a href="#testing-quality"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t023-cropped-dark.webp"><img src="assets/readme/t023-cropped.webp" width="150" alt="Testing &amp; Quality"></picture></a>
+- <img src="assets/readme/icons/celeste/berryos.png" height="25"> <a href="#deployment-guide"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t024-cropped-dark.webp"><img src="assets/readme/t024-cropped.webp" width="165" alt="Deployment Guide"></picture></a>
+- <img src="assets/readme/icons/celeste/chatroom.png" height="25"> <a href="#contribution-guide"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t025-cropped-dark.webp"><img src="assets/readme/t025-cropped.webp" width="167" alt="Contribution Guide"></picture></a>
+- <img src="assets/readme/icons/celeste/faq.png" height="26"> <a href="#faq-troubleshooting"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t026-cropped-dark.webp"><img src="assets/readme/t026-cropped.webp" width="201" alt="FAQ &amp; Troubleshooting"></picture></a>
+- <img src="assets/readme/icons/celeste/roadmap.png" height="23"> <a href="#roadmap"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t027-cropped-dark.webp"><img src="assets/readme/t027-cropped.webp" width="87" alt="Roadmap"></picture></a>
+- <img src="assets/readme/icons/celeste/license.png" height="24"> <a href="#license-acknowledgments"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t028-cropped-dark.webp"><img src="assets/readme/t028-cropped.webp" width="250" alt="License &amp; Acknowledgments"></picture></a>
 
 ---
 
@@ -64,7 +64,7 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t033-dark.webp"><img src="assets/readme/t033.webp" width="851" alt="This dual-platform flow creates meaning: intimate personal reflections in the diary can evolve into thoughtful blog entries when you choose to share your insights with the world."></picture>
 
-> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t034-dark.webp"><img src="assets/readme/t034.webp" width="849" alt="⚠️ Note: This project runs on free-tier services (Render + TiDB Cloud + Upstash). Due to resource limits and cold-start sleep, the live experience may be slower than the demo video. Your patience is appreciated — every summit takes time. 🏔️"></picture>
+> <img src="assets/readme/icons/celeste/production-note.png" height="24"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t034-cropped-dark.webp"><img src="assets/readme/t034-cropped.webp" width="849" alt="Note: This project runs on free-tier services (Render + TiDB Cloud + Upstash). Due to resource limits and cold-start sleep, the live experience may be slower than the demo video. Your patience is appreciated — every summit takes time."></picture>
 
 ---
 
@@ -219,7 +219,7 @@
 <tr><td align="center"><img src="assets/readme/icons/celeste/breathing.png" height="20"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t122-cropped-dark.webp"><img src="assets/readme/t122-cropped.webp" width="124" alt="Anxiety Relief"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t123-dark.webp"><img src="assets/readme/t123.webp" width="442" alt="Follow the physics-based falling feather to breathe deeply and cool down when anxiety hits."></picture></td></tr>
 </table>
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t124-dark.webp"><img src="assets/readme/t124.webp" width="651" alt="🎯 Workflow: Awareness (Write) ➔ Relief (Breathe) ➔ Reward (Get Feather) ➔ Restart"></picture>
+<img src="assets/readme/icons/celeste/features.png" height="25"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t124-cropped-dark.webp"><img src="assets/readme/t124-cropped.webp" width="632" alt="Workflow: Awareness (Write) ➔ Relief (Breathe) ➔ Reward (Get Feather) ➔ Restart"></picture>
 
 > <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t125-dark.webp"><img src="assets/readme/t125.webp" width="524" alt="Let every reflection be heard, and every anxiety find an exit."></picture>
 
@@ -268,7 +268,7 @@
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t159-dark.webp"><img src="assets/readme/t159.webp" width="823" alt="Playback rate &amp; volume shift per emotion; the typewriter triggers one blip every 3 characters — identical pacing to Madeline"></picture>
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t160-dark.webp"><img src="assets/readme/t160.webp" width="815" alt="`sad_solo`: a single standalone clip on its own channel, triggered only when the AI detects the special deep-sorrow emotion (sad); it never enters the loop"></picture>
 
-> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t161-dark.webp"><img src="assets/readme/t161.webp" width="631" alt="🎙️ Audio unlocks after your first click/keypress (browser autoplay policy)."></picture>
+> <img src="assets/readme/icons/celeste/voice-sfx.png" height="27"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t161-cropped-dark.webp"><img src="assets/readme/t161-cropped.webp" width="616" alt="Audio unlocks after your first click/keypress (browser autoplay policy)."></picture>
 
 ---
 
