@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
+<title>Celeste 第二章 · 镜子房间（DreamMirror / Badeline / DreamBlock）复刻</title>
+<style>
+  :root { --ink:#cdd6f4; --dim:#7f849c; --accent:#b4a7f5; --line:#313244; --bg:#11111b; --panel:#181825; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:14px/1.6 "Segoe UI",system-ui,sans-serif; padding:24px 16px 60px; }
+  .wrap { max-width:960px; margin:0 auto; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  h2 { font-size:15px; margin:26px 0 6px; color:var(--accent); }
+  code { font:12px Consolas,Menlo,monospace; background:#1e1e2e; padding:1px 5px; border-radius:3px; }
+  pre { background:var(--panel); border:1px solid var(--line); border-radius:6px;
+        padding:12px; overflow-x:auto; font:12px/1.55 Consolas,Menlo,monospace; color:#bac2de; }
+  .stage { position:relative; max-width:960px; }
+  canvas { display:block; width:100%; aspect-ratio:16/9; border:1px solid var(--line);
+           border-radius:6px; background:#0d0d16; cursor:pointer; touch-action:manipulation; }
+  .hint { position:absolute; left:50%; bottom:16px; transform:translateX(-50%);
+          background:rgba(17,17,27,.72); border:1px solid var(--line); color:var(--ink);
+          padding:6px 16px; border-radius:999px; font-size:13px; pointer-events:none;
+          transition:opacity .5s; letter-spacing:.02em; }
+  .hint.off { opacity:0; }
+  .bar { display:flex; flex-wrap:wrap; gap:14px; align-items:center; max-width:960px;
+         padding:10px 12px; margin:10px 0 18px; background:var(--panel);
+         border:1px solid var(--line); border-radius:6px; }
+  label { display:flex; gap:6px; align-items:center; color:var(--dim); user-select:none; }
+  label input { accent-color:var(--accent); }
+  button { background:#313244; color:var(--ink); border:0; border-radius:4px;
+           padding:5px 12px; cursor:pointer; font:13px inherit; }
+  button:hover { background:#45475a; }
+  .foot { margin-top:22px; color:var(--dim); font-size:12.5px;
+          border-left:3px solid var(--line); padding-left:12px; }
+  table { border-collapse:collapse; width:100%; font-size:12.5px; }
+  th,td { border-bottom:1px solid var(--line); padding:6px 8px; text-align:left; vertical-align:top; }
+  th { color:var(--accent); font-weight:600; }
+  td.n { color:#f9e2af; font-family:Consolas,Menlo,monospace; white-space:nowrap; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Celeste 第二章 (Old Site) · 镜子房间</h1>
+  <p class="sub">
+    房间与实体取自 <code>Content/Maps/2-OldSite.bin</code> 的 <b>lvl_d3</b>（320&times;456，bounds 1600,368）；
+    绘制、时序、数值全部按 <code>Celeste.dll</code> 的 IL 反编译逐条还原
+    （<code>DreamMirror</code> / <code>&lt;BreakRoutine&gt;d__26</code> / <code>CS02_Mirror.&lt;Cutscene&gt;d__7</code> /
+    <code>DreamBlock&lt;Activate&gt;d__34</code> / <code>BadelineDummy</code> / <code>Autotiler</code>）；
+    贴图全部来自仓库内已解包的 <code>Atlases/</code>（尺寸、帧表、Origin 取自 <code>Sprites.xml</code>）。
+  </p>
+</div>
+
+<div class="stage">
+  <canvas id="cv"></canvas>
+  <div class="hint" id="hint">点击画面 · 打碎镜子</div>
+</div>
+
+<div class="bar">
+  <button id="replay" type="button">重播（R）</button>
+  <label><input type="checkbox" id="sfx" checked> 声音</label>
+  <label><input type="checkbox" id="debug"> 判定框（梦块 / 镜框 / 视野）</label>
+  <span style="color:var(--dim);font-size:12.5px">无 Madeline：点击即触发破碎 → Badeline 出场 → 上方梦块由暗淡转为激活</span>
+</div>
+
+<div class="wrap">
+  <h2>这一页在复刻什么</h2>
+  <table>
+    <tr><th style="width:120px">环节</th><th>原作行为（IL 逐字）</th></tr>
+    <tr>
+      <td>点击 → 过场</td>
+      <td><code>CS02_Mirror.&lt;Cutscene&gt;d__7</code>：wait 1.0 → 0.4 → <code>DummyRunTo</code> → wait 0.5 →
+        <code>ZoomTo(mirror.Position - camera.Position - UnitY*24, 2f, 1f)</code> → wait 0.5 → <code>mirror.BreakRoutine(direction)</code>。
+        本页没有玩家，所以镜头固定对准 <code>(160,240)</code>（即 <code>mirror.Position - (0,24)</code>）并在 1 秒内把 zoom 推到 2。</td>
+    </tr>
+    <tr>
+      <td>倒影走向中心</td>
+      <td>倒影用的就是 <code>PlayerSprite(2)</code>（= <code>characters/badeline/</code> 帧，<b>不是</b> player 帧）：
+        <code>Play("runFast")</code>，<code>while (|reflection.X - breakingGlass.Width/2| &gt; 3) reflection.X += direction*32*dt</code>，
+        到中心后 <code>Play("idle")</code> + 等 0.65s。</td>
+    </tr>
+    <tr>
+      <td>镜面闪光</td>
+      <td>放 <code>sequence_mirror</code>，0.15s 后放 <code>dreamblock_sting_pt2</code> 并 <code>updateShine = false</code>，
+        然后 <code>Approach(shineOffset, 33, dt*120)</code> / <code>Approach(shineAlpha, 1, dt*4)</code>，
+        直到 <code>shineOffset == 33 &amp;&amp; shineAlpha &gt;= 1</code>。这就是碎前那一下“整面镜子亮起来”。</td>
+    </tr>
+    <tr>
+      <td>破碎</td>
+      <td><code>smashed = true</code> → <code>breakingGlass.Play("break")</code>（glassbreak00-08，delay 0.08，goto broken=外框缺口），
+        等 0.6s → <code>Level.Shake(0.3)</code> → 在 54&times;29 范围内每 8px 采样，
+        <code>if (Chance(0.5)) Emit(P_Shatter, 2, Position + (x+4, y+4), (8,8), Angle((-W/2,-H),(x,y)))</code>。</td>
+    </tr>
+    <tr>
+      <td>Badeline 出场</td>
+      <td><code>new BadelineDummy(reflection.Position + Position - breakingGlass.Origin)</code>（本页正好落在镜心 <code>(160,264)</code>），
+        <code>Floatness = 0</code>（所以不上下浮动），把 <code>reflectionHair.Nodes</code> 整条抄给 Badeline 的头发，
+        <code>Scene.Add</code> → <code>Sprite.Play("idle")</code>（构造函数里先播的是 <code>fallSlow</code>）→ 把倒影的 <code>Scale</code> 一并带过来 → 等 1.2s；
+        随后 <code>speed = -direction*32</code>、<code>Scale.X = -direction</code>、<code>Play("runFast")</code> 并以 <code>-direction*128*dt</code> 加速冲到距镜面 60px；
+        再 <code>Play("jumpFast")</code>，继续加速冲到 128px，同时每帧 <code>Y -= |speed|*dt*0.8</code> 匀速升空，最后 <code>RemoveSelf()</code>。<br>
+        <b>说明</b>：<code>&lt;BreakRoutine&gt;d__26</code> 本身<b>没有</b>调用 <code>Appear()</code>，她是直接站在那里的；
+        这里按需求补上了 <code>BadelineDummy.Appear()</code> 的那一下（<code>DisplacementRenderer.AddBurst(Center, .5, 24, 96, .4)</code>
+        + <code>Emit(P_Vanish, 12, Center, One*6)</code>，画成扩散光环 + 12 枚紫色星屑），出处仍是反编译代码。
+        另：倒影停在 <code>|x - 27| ≤ 3</code> 就出循环，所以她会在偏离镜心约 2.7px 的位置出现 —— 这是原作的判定，不是误差。</td>
+    </tr>
+    <tr>
+      <td>镜面渲染</td>
+      <td><code>DreamMirror.Render</code>：<code>smashed ? breakingGlass.Render() : Draw(mirror.Target, Position - breakingGlass.Origin, White * 0.7f)</code>，
+        最后<b>两个分支都会</b> <code>frame.Render()</code>。
+        <code>BeforeRender</code> 只在未碎时把内容画进 54&times;29 的 target：<code>glassbg</code> → 倒影 → <code>glassfg</code> 画两遍
+        （<code>y = shineOffset</code> 与 <code>shineOffset - 73</code>，tint = <code>White * shineAlpha</code>）。<br>
+        <code>Sprites.xml</code> 里这套精灵叫 <code>glass</code>：<code>idle = glassbg[0]</code>、<code>break = glassbreak00-08 (delay .08) goto broken</code>、
+        <code>broken = glassbreak09</code>。所以碎裂后画的是<b>预烘焙的裂纹贴图</b>（04 是全白闪帧，07 只剩几块碎渣，09 是稳定破面），
+        镜面那层实时倒影不再更新；<code>frame</code> 64&times;39 <code>&lt;Justify .5,1&gt;</code> 继续挂在 <code>Position.Y = 264</code> 的地面线上。</td>
+    </tr>
+    <tr>
+      <td>梦块变亮</td>
+      <td><b>未激活</b>：底色 <code>#1f2e2d</code> / 线条 <code>#6a8480</code>，粒子是 <code>LightGray * (0.5 + Layer/2*0.5)</code>（逐层 96/144/192 灰），
+        <code>animTimer</code> 与 <code>wobbleEase</code> 都不推进 → 边框波线静止、粒子帧冻结。
+        <b>激活</b><code>&lt;Activate&gt;d__34</code>：wait 1.0 → 抖动 1s 且 <code>whiteFill = Ease.CubeIn(p)</code> 铺白 → 停 0.5s →
+        <code>ActivateNoRoutine()</code>（<code>playerHasDreamDash = true</code> 并重掷彩色粒子）→ <code>whiteHeight</code> 从 1 降到 0，
+        每 0.1s 沿白线每 4px 撒 <code>P_WingsBurst</code> 并 <code>Shake(0.3)</code> → 最后 <code>whiteFill</code> 以 3/s 退白。</td>
+    </tr>
+    <tr>
+      <td>镜头收尾</td>
+      <td>相机 <code>from → from + (0,-80)</code>，<code>ease += dt*1.2</code> 配 <code>Ease.CubeInOut</code>；
+        同时挂上 <code>ZoomBack</code>（wait 1.2 → <code>level.ZoomBack(3)</code>），与梦块激活<b>并行</b>。
+        原作里相机之后会回去跟玩家；本页没有玩家，所以最后用 1.2s 把镜头挪到 <code>(160,196)</code> 同时收进镜子和梦块。</td>
+    </tr>
+  </table>
+
+  <h2>Autotiler：瓦片怎么接</h2>
+  <pre>
+生成参数（<code>Autotiler.GenerateMap</code>）：
+  Behaviour.EdgesExtend      = true      → 越界取 Clamp（房间外的格子当作边界格）
+  Behaviour.EdgesIgnoreOutOfLevel = false
+  Behaviour.PaddingIgnoreOutOfLevel   = arg2
+IsEmpty(t) = (t == 48 || t == 0)          → 字符 '0' 的码位就是 48
+GetTile()  →  越界且 !EdgesExtend 返回 48，否则 Clamp 到边界
+
+3&times;3 mask（行优先 9 位）匹配规则：'x' 通配 / '1' 需实心 / '0' 需空 / '3' 需同 id
+命中 → Masked 那组；3&times;3 全实心 → CheckCross（两格外还有实心取 Center，否则 Padded）
+
+本房间用到的两套（字符本身就是 tileset id）：
+  solids '6' = <b>stone</b>        <code>ForegroundTiles.xml</code> copy="z" → Padding 5,0-5,11 / Center 5,12
+  bg     '2' = <b>bgBrick</b>      <code>BackgroundTiles.xml</code> copy="z" → Padding/Center 同为 4,5-4,14 + 5,0-5,14
+  bg     '3' = <b>bgBrickRuined</b>
+  </pre>
+
+  <h2>素材清单（Atlases/Gameplay）</h2>
+  <pre>
+objects/mirror/frame.png        64&times;39   <code>&lt;Justify x=".5" y="1"/&gt;</code> → 底边贴 Position.Y
+objects/mirror/glassbg.png      54&times;29   镜面底板
+objects/mirror/glassfg.png      54&times;73   高光条（比玻璃高，故双份滚动）
+objects/mirror/glassbreak00-09  54&times;29   break 帧 0-8 / broken 帧 9
+characters/badeline/idle00-08   32&times;32   delay .10
+characters/badeline/runFast00-11 32&times;32  delay .05
+characters/badeline/jumpFast00-01 32&times;32 delay .10（BreakRoutine 只播这两帧）
+characters/player/hair00.png    10&times;10   Badeline 头发：<code>HairColor = #9B3FB5</code>，Border = Black
+objects/dreamblock/particles    21&times;7    3 个 7&times;7 子图，索引顺序 [14,7,0,7]
+bgs/02/stars/a0-3 b0-3 c0-3     15&times;15   Style.Backgrounds = stars
+scenery/debris.png              64&times;8    FloatingDebris 的 8&times;8 子图
+scenery/fgdebris/rock_a0-2 b0-1 48&times;48   ForegroundDebris 逐层叠画
+particles/shatter.png           8&times;5     P_Shatter
+particles/starfield/00.png      5&times;5     P_Vanish（原作是白色星屑，这里按发色染紫）
+Misc/mist.png                   600&times;600 前景视差雾 &times;2（#8156e1 / #e15698）
+Misc/vignette.png               320&times;180 前景暗角 &alpha;0.6
+  </pre>
+
+  <h2>Style / 房间数据</h2>
+  <pre>
+Backgrounds : { stars }
+Foregrounds : { parallax mist: scroll .5/.5,  speed 16/8, color 8156e1, alpha .8, loopx/y }
+              { parallax mist: scroll .25/.25, speed 4/4,  color e15698, alpha .8, flipx/y }
+              { parallax vignette: scroll 0/0, alpha .6 }
+
+lvl_d3 关键实体：
+  dreamBlock      (120,128) 80&times;64     ← 场景上方，未激活 → 激活
+  dreammirror     (160,264)              ← 底边站在 S33 地面行（y=264）
+  foregroundDebris(32,144)               ← depth -999900，压在画面最前
+  floatingDebris  &times;13                  ← scenery/debris 小碎片，&plusmn;2px 浮沉 + 自转
+  strawberry / fakeWall / towerviewer    ← 本页不参与演出（无玩家、无收集）
+  </pre>
+
+  <p class="foot">
+    与原生的一处差别：原作的倒影会在 <code>BeforeRender</code> 里实时镜像玩家（<code>X - player.X</code>、<code>player.Y - Y</code>），
+    玩家还会在 <code>DummyRunTo</code> 里自己走到镜前。这一页没有 Madeline，所以倒影固定为 Badeline 自己的 idle 循环，
+    并在 <code>BreakRoutine</code> 里按同样的 <code>32px/s</code> 走到玻璃中心 —— 这也是原作里“镜中的她先靠近、再碎、再冲出来”的那段。<br>
+    另两处小改动：① 开场机位取 <code>(160,216)</code>，让「上方暗淡梦块 + 镜子」同框（原作相机跟玩家，大致在 240 附近；
+    过场 <code>ZoomTo</code> 的目标仍是原作硬值 <code>(160,240)</code>）；② 结尾没有玩家可跟，用 1.2s 把镜头挪到 <code>(160,196)</code> 收尾。
+  </p>
+</div>
+
+<script src="js/celeste-hair.js"></script>
+<script src="js/celeste-mirror-map.js"></script>
+<script src="js/celeste-mirror.js"></script>
+</body>
+</html>
