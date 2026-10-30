@@ -760,18 +760,32 @@
         var snowImg = null;
         loadImg('Atlases/Gameplay/particles/snow.png').then(function (im) { snowImg = im; });
 
-        // ===== 灰尘兔（Celeste.DustGraphic）· 场景层节奏 =====
-        // 取证：全库唯一生成点 Celeste.CS07_Credits.<DustyRoutine>d__30 —— 3 只、水平间隔 24、
-        //       Depth -50、左移 26px/s、纵向下沉到 start.Y+16（16px/s）、
-        //       每只 Y = offset.Y + sin(timer*4 + i*0.8)*4。
-        //       原作每只另挂 decals/3-resort/brokenbox_*，按需求不画箱子（与本体重绘无关）。
-        // 场景差异（非原作数值）：原作只跑一趟并在 bounds.Left+120 停住；商店是常驻房间，
-        //       故三只全部越过左墙后从右侧重新入场，形成固定路线循环。
+        // ===== 灰尘兔（Celeste.DustGraphic）· 第三章轨道运动 =====
+        // 取证（§22.6）：DustGraphic 全库 4 个宿主 —— credits 的 DustyRoutine + 第三章三种 spinner：
+        //   DustStaticSpinner  不位移；
+        //   DustTrackSpinner   沿 Start→End 往返（Percent 由 dt/MoveTimes 推进，SineInOut 缓动，端点停顿）；
+        //   DustRotateSpinner  绕 center 匀速圆周（1.8s/圈，眼睛朝切线）。
+        // 商店页按“排列组合”随机拼装：每次刷新抽取 3~8 只 + 每只一条闭环轨道
+        // （row 直线行 / orbit 圆周 / track 往返 / static 原地），参数（半径、周期、方向、相位、速度档）全部重掷。
         var DUST = window.CelesteDustBunny;
-        var dustGroup = null;
-        // 起点放在右墙之外（右墙 = 320）：三只都在屏幕外，3.8s 等待结束后几乎立刻从右侧走进画面。
-        // 下沉 16 后中心 y = -8 → 16×16 贴图贴地。
-        var DUST_START_X = 336, DUST_START_Y = -24;
+        var dustScene = null;
+        // 探针：把世界坐标（原生像素，脚底 y=0）映射回房间轮廓，保证轨道不出墙。
+        // 四角各内缩 7px = 16×16 贴图的半尺寸，因此判定位本身已含贴图不越界。
+        // 轮廓直接在归一化坐标（ROOM_POLY_N）上判：nToXY 是同一个仿射变换，两域等价，
+        // 且不依赖 roomGeo 快照 → 窗口缩放后判定依然成立。
+        function makeDustProbe() {
+            var npoly = ROOM_POLY_N.map(function (p) { return { x: p[0], y: p[1] }; });
+            var hw = 7 / ROOM_W, hh = 7 / 200;                 // 贴图半宽 / 半高
+            function inside(x, y) {
+                if (x < WALL_L || x > WALL_R || y > 2 || y < CEIL_Y) return false;
+                var nx = x / ROOM_W, ny = (FLOOR_NATIVE_Y + y) / 200;
+                return pointInPoly(nx - hw, ny - hh, npoly) &&
+                       pointInPoly(nx + hw, ny - hh, npoly) &&
+                       pointInPoly(nx - hw, ny + hh, npoly) &&
+                       pointInPoly(nx + hw, ny + hh, npoly);
+            }
+            return { minX: WALL_L, maxX: WALL_R, floorY: 0, ceilY: CEIL_Y, inside: inside };
+        }
         if (DUST) DUST.load();
 
 
@@ -1545,13 +1559,8 @@
 
             // —— 灰尘兔（引擎 dt：Freeze / TimeRate 同样作用于它们，IL: DustGraphic 走 Engine.DeltaTime）——
             if (DUST && DUST.ready()) {
-                if (dustGroup) {
-                    dustGroup.step(edt);
-                    // 三只（offset.x + i*24，i=0..2）全部越过左墙才换组
-                    if (dustGroup.offset.x + 2 * DUST.SPACING <= WALL_L) dustGroup = null;
-                } else {
-                    dustGroup = DUST.createGroup(DUST_START_X, DUST_START_Y);
-                }
+                if (!dustScene) dustScene = DUST.createEnsemble(makeDustProbe());
+                dustScene.step(edt);
             }
 
             // —— 粒子/特效推进 ——
@@ -1653,7 +1662,7 @@
                 ctx.restore();
             });
             // 灰尘兔（IL: Entity.Depth = -50 < 玩家 Depth 0 → 在 Madeline 之前画 = 下层）
-            if (dustGroup) dustGroup.draw(ctx, toScreen, Z);
+            if (dustScene) dustScene.draw(ctx, toScreen, Z);
             // Madeline
             madeline.draw(ctx, toScreen, Z);
             ctx.restore();

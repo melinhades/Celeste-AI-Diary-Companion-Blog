@@ -9,7 +9,10 @@
 -- 背景：AI 编排链路的关键决策留痕，input/output 均截断到 500 字符。
 --
 -- 执行方式：在 MySQL 客户端直接跑本文件（可重复执行）
+-- 注意：显式 USE blog，避免 TiDB Cloud SQL Editor 默认连在 test 库时把表建错地方
 -- =============================================================================
+
+USE blog;
 
 CREATE TABLE IF NOT EXISTS `ms_reminder` (
   `id`          VARCHAR(32)  NOT NULL COMMENT '雪花 ID',

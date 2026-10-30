@@ -1767,10 +1767,10 @@ Sprite.Scale.Y = Calc.Approach(Sprite.Scale.Y, 1f, 1.75f * dt);
 | 命题 | 二进制事实 |
 |---|---|
 | 存在名为 `DustBunny` 的实体类型 | ❌ 全库 TypeDef 无 `DustBunny` / `Dust` 开头的危险物；「灰尘兔」对应 `Celeste.DustGraphic` |
-| 出自第三章（Celestial Resort） | ❌ 全库唯一 `newobj Celeste.DustGraphic` 在 `Celeste.CS07_Credits+<DustyRoutine>d__30`（制作人员表场景）。第三章地图实体只有 `spinner` / `trackSpinner` / `rotateSpinner`，无任何 dust 实体 |
+| 出自第三章（Celestial Resort） | ⚠ 部分正确：第三章的 `Spinner` 变体 `Celeste.DustStaticSpinner` / `DustTrackSpinner` / `DustRotateSpinner` **各自 `newobj` 一只 `DustGraphic`**（第二轮 REA 补正，见 §22.6），但它们只是把兔子挂在 spinner 上做位移，不是独立的地图实体类型；credits 的 `Celeste.CS07_Credits+<DustyRoutine>d__30` 是第 4 个宿主 |
 | 第三章相关 | ⚠ 仅配色表 `DustStyles` 的 Area 3（resort）是「默认回退样式」，含红眼 `danger/dustcreature/eyes`；素材确实属 resort 目录 |
 
-因此本轮移植的是 **`DustGraphic` 类本身**（4 节点绒毛 + center + 眼 + 眨眼 + 自旋），外层运动曲线取 credits 里 `DustyRoutine` 的原文数值（3 只一组、向左跑、各背一只破箱）。
+因此本轮移植的是 **`DustGraphic` 类本身**（4 节点绒毛 + center + 眼 + 眨眼 + 自旋）。初版外层运动曲线取 credits 里 `DustyRoutine` 的原文数值（3 只一组、向左跑、各背一只破箱）；**第二轮 REA（§22.6）补上第三章三种 spinner 的轨道**，商店页改为「数量 + 轨道家族 + 参数」三层随机组合。
 
 ### 22.1 `Celeste.DustGraphic` 成员 IL 证据
 
@@ -1859,8 +1859,82 @@ Sprite.Scale.Y = Calc.Approach(Sprite.Scale.Y, 1f, 1.75f * dt);
 | D1 | 未移植 | `DustEdge` / `DustEdges`（dust 边缘渲染钩子与整屏 dust 噪声）：商店页没有 level 级 dust 边缘系统，`DustEdge` 仅是把兔子 `Render` 转交给 `DustEdges` 的钩子 |
 | D2 | 未接线 | `OnHitPlayer`（`shakeTimer = 0.6` + `deadEyes`）：全库无调用者，自创「触碰受伤」会偏离原作，故不接 |
 | D3 | 不可复现 | `randomSeed` + `System.Random` 序列：贴图 / 眼贴图选择用 `Math.random`，随机分布一致、具体序列不可复现 |
-| D4 | 有意近似 | 场景节奏：原作一次性跑到 `Bounds.Left + 120` 即停；商店页改为固定路线循环（三只全部越过左墙即整组重来），非 `DustyRoutine` 数值 |
+| D4 | 已由 §22.6 取代 | 场景节奏：初版是「三只跑出左墙 → 整组重来」的固定路线；第二轮 REA 改为四条闭环基元随机组合 |
 | D5 | 未使用 | `bristle.png` 未被 `DustGraphic` IL 引用 |
 | D6 | 未接 | 音效：`DustGraphic` 无音源引用，`Atlases` 也无对应音频，故无声音 |
 | D7 | 已按用户要求移除 | 箱子（`brokenbox_a/b/c`）：`DustyRoutine` 里它是每只兔子额外挂的独立 decal（`JustifyOrigin(0.5, 1)`、`Position (0, -4)`），与 `DustGraphic` 本体无关；商店页不绘制，兔子只按固定路线移动 |
+
+---
+
+### 22.6 第二轮 REA：`DustGraphic` 的四个宿主与「随机轨道排列组合」
+
+**用户命题**：「shop 里的 dustbunny 是重复动画、实现形式偏低级，希望像游戏里那样做**重复轨道运动**，且每次刷新页面的**数量与运动轨迹随机排列组合**」。
+
+取证方式：`Celeste.dll`（5.22 MB）→ `dnfile` 扫 TypeDef / MemberRef / FieldRva，`dncil` 逐条 dump IL（TypeDef 全表筛 `Dust` 前缀）。
+
+#### A. 补正：全库 `newobj Celeste.DustGraphic` 共 4 处（不是 1 处）
+
+| # | 宿主 | 构造实参 |
+|---|---|---|
+| 1 | `CS07_Credits+<DustyRoutine>d__30::MoveNext` | credits 演出（3 只 + 破箱） |
+| 2 | `Celeste.DustStaticSpinner::.ctor` | `new DustGraphic(this, bool, true, true)` |
+| 3 | `Celeste.DustTrackSpinner::.ctor` | `new DustGraphic(this, true, false, false)` |
+| 4 | `Celeste.DustRotateSpinner::.ctor` | `new DustGraphic(this, true, false, false)` |
+
+三种 `Dust*Spinner` 都是 `Celeste.Spinner` 的子类（第三章 Celestial Resort 的旋转/轨道机关），只把 `DustGraphic` 当作贴在身上的装饰粒子，所以**第三章地图实体表里没有独立 dust 实体**——但它们的位移曲线就是原作真实存在的「灰尘兔运动轨迹」，这正是本轮要移植的东西。
+
+#### B. 轨道数值（IL 原文 + `FieldRva` 实测）
+
+| 项 | IL 事实 |
+|---|---|
+| `TrackSpinner.Update` | `Percent = Calc.Approach(Percent, Up ? 1 : 0, DeltaTime / MoveTimes[Speed])`；到位 → `Up = !Up`、`PauseTimer = PauseTimes[Speed]`、`OnTrackEnd()`；`PauseTimer > 0` 时只递减不移动 |
+| `TrackSpinner.UpdatePosition` | `Position = Vector2.Lerp(Start, End, Ease.SineInOut(Percent))` |
+| `TrackSpinner..cctor` | `MoveTimes = {0.9, 0.4, 0.3}`（Float32 字节 `6666663f cdcccc3e 9a99993e`）、`PauseTimes = {0.3, 0.2, 0.6}`（`9a99993e cdcc4c3e 9a99193f`）→ 三档速度：一程 0.9 / 0.4 / 0.3 s，端点停 0.3 / 0.2 / 0.6 s |
+| `DustTrackSpinner::.ctor` | `EyeTargetDirection = EyeDirection = SafeNormalize(End - Start)`（眼睛盯着去程方向） |
+| `RotateSpinner.Update` | `rotationPercent += (Clockwise ? -1 : 1) * DeltaTime / 1.8f` → **1.8 s 一圈**，顺/逆时针只差符号 |
+| `RotateSpinner.GetPosition` | `Angle = Lerp(-π/2, 3π/2, Percent)`（起于正上方）；`Position = Center + AngleToVector(Angle) * length`，`length` 由 ctor 用 `|Position - Center|` 记下 |
+| `DustRotateSpinner::.ctor` | 眼睛方向 = `AngleToVector(Angle + π/2 * (Clockwise ? -1 : 1))` → 始终朝**切线**（即前进方向） |
+| `DustStaticSpinner.Update` | 本体不位移，只 `OnInterval(0.05)` 发粒子 |
+| `DustGraphic.Update` | `EyeDirection = Calc.Approach(EyeDirection, EyeTargetDirection, 12 * DeltaTime)` → 本轮补上眼睛缓动 |
+
+#### C. 四条闭环基元（[celeste-dust-bunny.js](file:///c:/Users/28464/IdeaProjects/blog/blog-ui/js/celeste-dust-bunny.js) 第三章段）
+
+| 基元 | 对应原作 | 曲线 | 商店页闭环处理 |
+|---|---|---|---|
+| `trackTraj` | `DustTrackSpinner` | `Lerp(Start, End, SineInOut(Percent))` + 端点停顿 | 往返本身就是闭环，无需改造 |
+| `orbitTraj` | `DustRotateSpinner` | `Center + AngleToVector(-π/2 + p*2π) * r`，眼睛取切线；`mult` 可把周期拉成 1.8 / 2.7 / 3.6 s | 圆周本身闭环 |
+| `rowTraj` | `Credits.DustyRoutine` | 26 px/s 直线 + `sin(t*4 + i*0.8) * 4`，间距 24 | 原作是**一次性**演出（跑出边界即止）；商店页改成「列车绕环」：环长 `L = 可见弧 + 一格隐藏弧(24)`，每只 `u = mod(u0 + i*24 + dir*26*t, L)`，隐藏弧内 `alpha = 0` → 右墙走出一只的同时左墙走进一只，既无空窗也不穿墙瞬移 |
+| `staticTraj` | `DustStaticSpinner` | 不位移（每帧回写基准值，供 bob 叠层不累加） | 原地 |
+| `addBob` | credits 的纵向摆动 | `y += sin(t*4 + phase) * 4` | 可叠到任意基元上（orbit 45% / track 35% / static 50% 概率） |
+
+#### D. 排列组合（三层随机）
+
+1. **数量**：`3 + floor(rand*6)` → 每次刷新 3~8 只；
+2. **家族组合**：75% 概率出 1~2 行 `row`（每行 3~5 只，行内 24 px 间隔共享相位 `i*0.8`），剩余按 `orbit` 45% / `track` 40% / `static` 15% 抽 `solo`；
+3. **参数**：`orbit` 半径 8~26、周期 1.8/2.7/3.6、顺/逆时针、初相位；`track` 两点距离 40~150、任意角度、三档速度、初始去向与进度；`row` 车道高度、方向、整行相位 `u0`；`static` 落点与 bob 相位。
+
+**房间约束**：`makeDustProbe()` 把世界坐标（原生像素，脚底 y=0）映射回归一化房间轮廓 `ROOM_POLY_N`，用贴图四角（±7 px）做 `pointInPoly` 判定；轮廓直接在归一化域上判（`nToXY` 是同一个仿射变换，两域等价），因此不依赖 `roomGeo` 快照，窗口缩放后依然成立。规划期再套 `padded(probe, BOB_AMP)` 为 bob 的 ±4 预留余量，`planOrbit` 用 `circleInside`、`planTrack` 用 `segmentInside` 保证整条轨迹不出墙。
+
+#### E. 断言（`target/test_dust_ensemble.js`，Node vm 沙箱）
+
+| 组 | 断言 | 结果 |
+|---|---|---|
+| 1 常量 | `MOVE_TIMES` / `PAUSE_TIMES` / `ORBIT_PERIOD 1.8` / `EYE_APPROACH 12` / credits 常量未回归 | 6/6 |
+| 2 track | `Percent = dt/MoveTimes`、`SineInOut` 取点、到位掉头、`PauseTimer` 三档、停顿期不动（含「停满那一帧仍不动」，IL 本帧 `return`）、眼睛翻向 | 12/12 |
+| 3 orbit | 起于正上方、1.8 s 回原点、半径恒定、顺/逆时针各 1/4 圈、眼睛 = 切线 = 速度方向、`mult=2` 半速 | 9/9 |
+| 4 row | 环长 `可见弧+24`、同排 24 间距（正/反向）、`sin(t*4 + i*0.8)*4`、26 px/s、下沉 16 px/s、一个周期回到原 x | 8/8 |
+| 5 static | 不位移、`addBob` 摆幅 ±4 且不累加漂移 | 2/2 |
+| 6 组合体 | 3~8 只、`plan.total` 与展开后只数一致、20 s 内可见个体恒在房内且从不清屏、至少一条轨道家族 | 4/4 |
+| 7 随机性 | 200 次刷新 × 2 s：全不出房、数量覆盖 ≥5 种、轨迹组合 ≥4 种、同数量下亦有不同组合 | 4/4 |
+| 8 眼睛 | `12*dt` 缓动 + 收敛到目标方向 | 2/2 |
+| 9 兼容 | 旧 `createGroup` 仍可用（3.8 s 等待期不动） | 2/2 |
+
+**合计 `49/49 passed`**；另跑 400 组 × 60 s 压测：出房 0 次、全黑帧 0 帧、可见数 1~8（`≤1 只` 仅出现在「整组都是 row」的极端组合，最长连续 2 帧）。
+
+#### F. 本轮新缺口
+
+| 编号 | 状态 | 说明 |
+|---|---|---|
+| D8 | 不可复现 | `Dust{Static,Track,Rotate}Spinner` 的 `P_Move` 拖尾粒子：`P_Move` 是静态字段，本机全库字段令牌扫描 **0 命中写入点**（`FieldDef` + `stsfld` 全扫），只能凭场景语义近似——商店页用 1.5 px 橙色小方点、`TTL 0.36 s`、`track/orbit 0.02 s`、`static 0.05 s` 的发射间隔，颜色取 `DustStyles[3].EdgeColors[0] = #f25a10` |
+| D9 | 有意近似 | spinner 的 `OnTrackEnd` / `OnSpin` 回调（原作里触发机关音效与地图事件）在商店页无对应系统，未接线 |
 

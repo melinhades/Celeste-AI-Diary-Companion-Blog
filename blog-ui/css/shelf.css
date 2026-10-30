@@ -653,13 +653,16 @@ body:has(.ds-world.panned) #strawberryBonfire { opacity:0; pointer-events:none; 
     transform:translate(-50%,-50%); transform-origin:50% 50%;
     cursor:pointer; pointer-events:auto; will-change:transform;
 }
-/* light = VertexLight(White, 1, 16, 48) 的四角柔光（原作很含蓄，Bloom(0.5,20) 也不抢主体）；
-   收集后 sprite.Visible=false → 一起淡出 */
+/* light = VertexLight(White, 1, 16, 48) + bloom = BloomPoint(0.5, 20)：
+   半径 20 的亮核 + 拖到 48 世界像素（=144px，即 300% 盒子的 closest-side）的柔尾；
+   ★ 偏差：原作 light 不随 sine 浮动、只有 bloom 跟，这里两层都跟着走（差 2 世界像素，肉眼无差） */
 #dsFeathers .feather::before {
-    content:''; position:absolute; left:50%; top:50%; width:150%; height:150%;
+    content:''; position:absolute; left:50%; top:50%; width:300%; height:300%;
     transform:translate(-50%,-50%); z-index:0; pointer-events:none;
-    background:radial-gradient(circle, rgba(255,246,205,.28) 0%, rgba(255,212,96,.11) 40%, rgba(255,196,64,0) 68%);
-    opacity:1; transition:opacity .25s linear;      /* light.Alpha = Approach(..., dt*4) */
+    background:radial-gradient(circle closest-side at 50% 50%,
+        rgba(255,252,238,.30) 0%, rgba(255,238,170,.16) 22%,
+        rgba(255,214,110,.06) 55%, rgba(255,196,68,0) 100%);
+    opacity:1; transition:opacity .25s linear;      /* light.Alpha = Approach(..., dt*4) ⇒ 0.25s 线性 */
 }
 #dsFeathers .feather canvas {
     position:relative; z-index:1; display:block; width:100%; height:100%;
@@ -694,6 +697,18 @@ body:has(.ds-world.panned) #strawberryBonfire { opacity:0; pointer-events:none; 
     48% { transform:translate(-4px,-2px); }
     66% { transform:translate(3px,3px); }
     84% { transform:translate(-2px,-1px); }
+}
+/* level.DirectionalShake(starFlyLastDir, 0.3)：沿发射方向的抖动（方向由 JS 写 --ffdx/--ffdy） */
+.ds-left.ff-shake-dir {
+    --ffdx:1; --ffdy:0;
+    animation:ffShakeDir .34s cubic-bezier(.36,.07,.19,.97);
+}
+@keyframes ffShakeDir {
+    0%, 100% { transform:translate(0,0); }
+    15% { transform:translate(calc(var(--ffdx) * 6px), calc(var(--ffdy) * 6px)); }
+    34% { transform:translate(calc(var(--ffdx) * -4px), calc(var(--ffdy) * -4px)); }
+    55% { transform:translate(calc(var(--ffdx) * 2px), calc(var(--ffdy) * 2px)); }
+    76% { transform:translate(calc(var(--ffdx) * -1px), calc(var(--ffdy) * -1px)); }
 }
 
 /* ===== dreamScene 内部双屏容器 ===== */

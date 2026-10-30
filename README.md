@@ -17,7 +17,7 @@
 
 <a name="quick-links"></a>
 
-## 🌐 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t001-dark.webp"><img src="assets/readme/t001.webp" width="111" alt="Quick Links"></picture>
+## <img src="blog-ui/Atlases/Gui/areas/intro.png" height="28"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t001-dark.webp"><img src="assets/readme/t001.webp" width="111" alt="Quick Links"></picture>
 
 <table>
 <tr><th align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t002-dark.webp"><img src="assets/readme/t002.webp" width="114" alt="🚀 Live Demo"></picture></th><th align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t003-dark.webp"><img src="assets/readme/t003.webp" width="132" alt="🎥 Demo Video"></picture></th><th align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t004-dark.webp"><img src="assets/readme/t004.webp" width="67" alt="📚 Docs"></picture></th></tr>
@@ -96,7 +96,7 @@
 
 ## <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t084-dark.webp"><img src="assets/readme/t084.webp" width="234" alt="Screenshots Gallery"></picture>
 
-### 🔐 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t085-dark.webp"><img src="assets/readme/t085.webp" width="409" alt="Login — 'This is Madeline. Let's climb together.'"></picture>
+### <img src="blog-ui/Atlases/Gui/areas/lock.png" height="30"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t085-dark.webp"><img src="assets/readme/t085.webp" width="409" alt="Login — 'This is Madeline. Let's climb together.'"></picture>
 
 <p align="center">
   <img src="docs/screenshots/login.png" alt="Login Page" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -120,7 +120,7 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t090-dark.webp"><img src="assets/readme/t090.webp" width="857" alt="The heart of the app — a postcard-style diary reader where Madeline presents your past entries as mailed letters (stamps &amp; postmarks included), with real-time companionship in a Celeste dialogue box."></picture>
 
-### 🌟 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t091-dark.webp"><img src="assets/readme/t091.webp" width="492" alt="My Space — Your personal summit — every step counted."></picture>
+### <img src="blog-ui/Atlases/FileSelect/heartgem0.png" height="22"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t091-dark.webp"><img src="assets/readme/t091.webp" width="492" alt="My Space — Your personal summit — every step counted."></picture>
 
 <p align="center">
   <img src="docs/screenshots/namespace.png" alt="My Space" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -128,7 +128,7 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t092-dark.webp"><img src="assets/readme/t092.webp" width="810" alt="A character-themed profile dashboard against Celeste's rocky backdrop — ticket-card with collected stickers, and a stats panel tracking strawberry 🍓, cassette 📼, and chili 🌶️ balances."></picture>
 
-### ✍️ <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t093-dark.webp"><img src="assets/readme/t093.webp" width="582" alt="Write — From private thoughts to public stories — one Publish away."></picture>
+### <img src="blog-ui/Atlases/Gui/menu/journal.png" height="24"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t093-dark.webp"><img src="assets/readme/t093.webp" width="582" alt="Write — From private thoughts to public stories — one Publish away."></picture>
 
 <p align="center">
   <img src="docs/screenshots/write.png" alt="Write Article" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -136,7 +136,7 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t094-dark.webp"><img src="assets/readme/t094.webp" width="843" alt="A full Markdown editor under a dreamy purple twilight sky — toolbar supports rich formatting plus Madeline refs, 润色/Polish (AI refinement), and 生成文章/Generate."></picture>
 
-### 🏪 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t095-dark.webp"><img src="assets/readme/t095.webp" width="558" alt="Shop — Oshiro's Strawberry Inn — the tsundere innkeeper awaits."></picture>
+### <img src="blog-ui/Atlases/Gui/areas/resort.png" height="25"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t095-dark.webp"><img src="assets/readme/t095.webp" width="558" alt="Shop — Oshiro's Strawberry Inn — the tsundere innkeeper awaits."></picture>
 
 <p align="center">
   <img src="docs/screenshots/shop.png" alt="Oshiro Shop" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -144,7 +144,7 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t096-dark.webp"><img src="assets/readme/t096.webp" width="845" alt="Oshiro's cozy inn — pixel-perfect Celeste interior with purple curtains, campfire chimneys curling smoke, and the sharp-tongued innkeeper herself. Spend your 🍓 strawberries on decorations, chat with Oshiro, and explore the resort."></picture>
 
-### 💻 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t097-dark.webp"><img src="assets/readme/t097.webp" width="790" alt="BerryOS — A retro desktop inside the mountain — files, clock, and a strawberry Start button."></picture>
+### <img src="blog-ui/Atlases/WaveDashing/desktop/mymountain_icon.png" height="24"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t097-dark.webp"><img src="assets/readme/t097.webp" width="790" alt="BerryOS — A retro desktop inside the mountain — files, clock, and a strawberry Start button."></picture>
 
 <p align="center">
   <img src="docs/screenshots/berryos.png" alt="BerryOS Desktop" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -152,7 +152,7 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t098-dark.webp"><img src="assets/readme/t098.webp" width="856" alt="A fully simulated retro operating system. Double-click 我的大山 to return to the blog, open the auto-generated monthly 总结.ppt, or empty the 回收站 — complete with a taskbar, live clock, custom bird cursor, and a strawberry BerryOS Start menu."></picture>
 
-### 📊 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t099-dark.webp"><img src="assets/readme/t099.webp" width="758" alt="Monthly PPT Player — Cube, dissolve, and spin transitions — your month, slideshow-style."></picture>
+### <img src="blog-ui/Atlases/WaveDashing/desktop/wavedashing_icon.png" height="24"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t099-dark.webp"><img src="assets/readme/t099.webp" width="758" alt="Monthly PPT Player — Cube, dissolve, and spin transitions — your month, slideshow-style."></picture>
 
 <p align="center">
   <img src="docs/screenshots/berryos-ppt.png" alt="Monthly PPT" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -160,7 +160,7 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t100-dark.webp"><img src="assets/readme/t100.webp" width="875" alt="Double-click the monthly PPT icon on BerryOS: a splash expands from the icon, BGM kicks in, and the slideshow plays with cube / dissolve / spin 3D transitions, pixel typewriter text, and per-slide sound effects. Click or use arrow keys to page through; Esc exits. The slide data is fully decoupled from the renderer — future AI-generated monthly JSON simply replaces the data."></picture>
 
-### 🌃 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t101-dark.webp"><img src="assets/readme/t101.webp" width="486" alt="Internet Cafe — Neon signs flicker; step inside the dome."></picture>
+### <img src="blog-ui/Atlases/Gui/areas/city.png" height="26"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t101-dark.webp"><img src="assets/readme/t101.webp" width="486" alt="Internet Cafe — Neon signs flicker; step inside the dome."></picture>
 
 <p align="center">
   <img src="docs/screenshots/internet-cafe.png" alt="Internet Cafe" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -168,7 +168,7 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t102-dark.webp"><img src="assets/readme/t102.webp" width="868" alt="A starry Celeste street scene: Madeline waits by the parked car while a 15-frame neon-sign animation flickers above the dome entrance, surrounded by drifting sparkle particles that cover the full screen. Click the building — the exterior surface fades away to reveal the interior layered beneath, the environment dims smoothly, and the camera pushes in."></picture>
 
-### ☎️ <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t103-dark.webp"><img src="assets/readme/t103.webp" width="632" alt="Madeline Sings at the Payphone — Pick up the receiver; listen to her sing."></picture>
+### <img src="blog-ui/Atlases/Gameplay/scenery/payphone.png" height="25"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t103-dark.webp"><img src="assets/readme/t103.webp" width="632" alt="Madeline Sings at the Payphone — Pick up the receiver; listen to her sing."></picture>
 
 <p align="center">
   <img src="docs/screenshots/payphone.png" alt="Madeline Singing Payphone" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -176,7 +176,7 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t104-dark.webp"><img src="assets/readme/t104.webp" width="809" alt="A quiet snow-night scene under glowing pixel stars. Click the payphone: the receiver lifts, and Madeline sings a song that plays exactly once and rests on its final frame."></picture>
 
-### 💬 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t105-dark.webp"><img src="assets/readme/t105.webp" width="544" alt="Realtime Chatroom — The mountain talks back — live, together."></picture>
+### <img src="blog-ui/Atlases/Gui/menu/xb1profile.png" height="23"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t105-dark.webp"><img src="assets/readme/t105.webp" width="544" alt="Realtime Chatroom — The mountain talks back — live, together."></picture>
 
 <p align="center">
   <img src="docs/screenshots/realtime-chat.png" alt="Realtime Chatroom" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -184,7 +184,7 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t106-dark.webp"><img src="assets/readme/t106.webp" width="878" alt="A Server-Sent-Events (SSE) live chatroom — left rail switches between 山间聊天 (group chat) and notify (like/comment feed). Self/other message bubbles, a live online-presence badge, a typing indicator, and a pixel-sticker emoji panel. Messages are broadcast to all connected clients in real time; the notification column surfaces likes and comments on your writing as they happen."></picture>
 
-### 🐦 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t107-dark.webp"><img src="assets/readme/t107.webp" width="638" alt="AI Roundtable — Five Celeste souls at the table, debating until consensus."></picture>
+### <img src="blog-ui/Atlases/WaveDashing/Bird%20Clip%20Art.png" height="28"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t107-dark.webp"><img src="assets/readme/t107.webp" width="638" alt="AI Roundtable — Five Celeste souls at the table, debating until consensus."></picture>
 
 <p align="center">
   <img src="docs/screenshots/roundtable.png" alt="AI Roundtable" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -225,7 +225,7 @@
 
 ---
 
-### 🌙 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t126-dark.webp"><img src="assets/readme/t126.webp" width="730" alt="Dream Scene — Behind the bookshelf — snow night, aurora, and a sleeping Madeline."></picture>
+### <img src="blog-ui/Atlases/Gui/areas/reflection.png" height="24"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t126-dark.webp"><img src="assets/readme/t126.webp" width="730" alt="Dream Scene — Behind the bookshelf — snow night, aurora, and a sleeping Madeline."></picture>
 
 <p align="center">
   <img src="docs/screenshots/dream.png" alt="Dream Snow Night" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -233,7 +233,7 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t127-dark.webp"><img src="assets/readme/t127.webp" width="846" alt="Enter the dream world by clicking the campfire behind the bookshelf. Madeline sleeps by the flickering flames while the aurora dances above — golden feather transformation balls float in the sky for reflective journaling. A cinematic camera pan carries you into the mirror room."></picture>
 
-### 🪞 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t128-dark.webp"><img src="assets/readme/t128.webp" width="591" alt="Mirror Room — Purple space, shattered glass, and the shadow within."></picture>
+### <img src="blog-ui/Atlases/Gameplay/scenery/templemirror.png" height="22"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t128-dark.webp"><img src="assets/readme/t128.webp" width="591" alt="Mirror Room — Purple space, shattered glass, and the shadow within."></picture>
 
 <p align="center">
   <img src="docs/screenshots/mirror.png" alt="Mirror Room" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -259,7 +259,7 @@
 <tr><td align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t150-dark.webp"><img src="assets/readme/t150.webp" width="22" alt="💎"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t151-dark.webp"><img src="assets/readme/t151.webp" width="163" alt="Crystal Heart Door"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t152-dark.webp"><img src="assets/readme/t152.webp" width="387" alt="White flash → door splits → star-dust burst → crystal-heart ceremony"></picture></td></tr>
 </table>
 
-### 🔊 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t153-dark.webp"><img src="assets/readme/t153.webp" width="256" alt="Emotion-driven Voice System"></picture>
+### <img src="blog-ui/Atlases/Gui/collectables/cassette.png" height="32"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t153-dark.webp"><img src="assets/readme/t153.webp" width="256" alt="Emotion-driven Voice System"></picture>
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t154-dark.webp"><img src="assets/readme/t154.webp" width="161" alt="A dedicated utility"></picture> <a href="blog-ui/js/badeline-voice.js"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t155-dark.webp"><img src="assets/readme/t155.webp" width="157" alt="`badeline-voice.js`"></picture></a> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t156-dark.webp"><img src="assets/readme/t156.webp" width="997" alt="(window.BadelineVoice) plays real voice samples, keeping the same style/pacing as Madeline's voice in the diary page:"></picture>
 
@@ -274,7 +274,7 @@
 
 <a name="disclaimer"></a>
 
-## 🛡️ <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t162-dark.webp"><img src="assets/readme/t162.webp" width="104" alt="Disclaimer"></picture>
+## <img src="blog-ui/Atlases/Gui/areas/cliffside.png" height="29"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t162-dark.webp"><img src="assets/readme/t162.webp" width="104" alt="Disclaimer"></picture>
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t163-dark.webp"><img src="assets/readme/t163.webp" width="843" alt="This project is an unofficial, non-commercial fan project for learning and exchange only. Celeste-related art, characters, music, and fonts belong to Extremely OK Games (Maddy Makes Games). If the copyright holder requests removal, relevant content will be removed immediately."></picture>
 
@@ -282,7 +282,7 @@
 
 <a name="system-architecture"></a>
 
-## 🏗️ <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t164-dark.webp"><img src="assets/readme/t164.webp" width="200" alt="System Architecture"></picture>
+## <img src="blog-ui/Atlases/Gui/areas/core.png" height="28"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t164-dark.webp"><img src="assets/readme/t164.webp" width="200" alt="System Architecture"></picture>
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -330,7 +330,7 @@
 
 <a name="project-structure"></a>
 
-## 📁 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t214-dark.webp"><img src="assets/readme/t214.webp" width="164" alt="Project Structure"></picture>
+## <img src="blog-ui/Atlases/Gui/areas/temple.png" height="27"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t214-dark.webp"><img src="assets/readme/t214.webp" width="164" alt="Project Structure"></picture>
 
 ```
 blog/
@@ -428,7 +428,7 @@ blog/
 
 <a name="quick-start"></a>
 
-## 🚀 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t215-dark.webp"><img src="assets/readme/t215.webp" width="109" alt="Quick Start"></picture>
+## <img src="blog-ui/Atlases/Gui/menu/play.png" height="27"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t215-dark.webp"><img src="assets/readme/t215.webp" width="109" alt="Quick Start"></picture>
 
 ### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t216-dark.webp"><img src="assets/readme/t216.webp" width="114" alt="Prerequisites"></picture>
 
@@ -610,7 +610,7 @@ logging:
 
 <a name="core-features-explained"></a>
 
-## 🎯 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t258-dark.webp"><img src="assets/readme/t258.webp" width="243" alt="Core Features Explained"></picture>
+## <img src="blog-ui/Atlases/Gui/collectables/strawberry.png" height="27"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t258-dark.webp"><img src="assets/readme/t258.webp" width="243" alt="Core Features Explained"></picture>
 
 ### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t259-dark.webp"><img src="assets/readme/t259.webp" width="246" alt="1. AI Companionship System"></picture>
 
@@ -743,7 +743,7 @@ logging:
 
 <a name="technical-deep-dive"></a>
 
-## 📚 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t361-dark.webp"><img src="assets/readme/t361.webp" width="203" alt="Technical Deep-Dive"></picture>
+## <img src="blog-ui/Atlases/Gui/menu/journal.png" height="27"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t361-dark.webp"><img src="assets/readme/t361.webp" width="203" alt="Technical Deep-Dive"></picture>
 
 ### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t362-dark.webp"><img src="assets/readme/t362.webp" width="201" alt="Backend Service Layer"></picture>
 
@@ -792,7 +792,7 @@ blog-ui/
 
 <a name="testing-quality"></a>
 
-## 🧪 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t390-dark.webp"><img src="assets/readme/t390.webp" width="168" alt="Testing &amp; Quality"></picture>
+## <img src="blog-ui/Atlases/Gui/checkpoint.png" height="25"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t390-dark.webp"><img src="assets/readme/t390.webp" width="168" alt="Testing &amp; Quality"></picture>
 
 ### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t391-dark.webp"><img src="assets/readme/t391.webp" width="117" alt="Current State"></picture>
 
@@ -1063,7 +1063,7 @@ git push origin feature/your-feature-name
 
 <a name="roadmap"></a>
 
-## 📈 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t486-dark.webp"><img src="assets/readme/t486.webp" width="95" alt="Roadmap"></picture>
+## <img src="blog-ui/Atlases/Gui/areas/Summit.png" height="25"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t486-dark.webp"><img src="assets/readme/t486.webp" width="95" alt="Roadmap"></picture>
 
 ### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t487-dark.webp"><img src="assets/readme/t487.webp" width="176" alt="Recently Completed"></picture>
 
@@ -1100,7 +1100,7 @@ git push origin feature/your-feature-name
 
 <a name="contributors"></a>
 
-## 👥 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t510-dark.webp"><img src="assets/readme/t510.webp" width="122" alt="Contributors"></picture>
+## <img src="blog-ui/Atlases/Mountain/marker/runBackpack00000.png" height="23"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t510-dark.webp"><img src="assets/readme/t510.webp" width="122" alt="Contributors"></picture>
 
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t511-dark.webp"><img src="assets/readme/t511.webp" width="216" alt="Initial development team"></picture>
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t512-dark.webp"><img src="assets/readme/t512.webp" width="429" alt="AI handover document maintainers (2026-08-30)"></picture>
@@ -1110,7 +1110,7 @@ git push origin feature/your-feature-name
 
 <a name="related-documents"></a>
 
-## 📄 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t515-dark.webp"><img src="assets/readme/t515.webp" width="193" alt="Related Documents"></picture>
+## <img src="blog-ui/Atlases/Gui/menu/journal.png" height="27"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t515-dark.webp"><img src="assets/readme/t515.webp" width="193" alt="Related Documents"></picture>
 
 <table>
 <tr><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t516-dark.webp"><img src="assets/readme/t516.webp" width="89" alt="Document"></picture></th><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t517-dark.webp"><img src="assets/readme/t517.webp" width="70" alt="Purpose"></picture></th></tr>
@@ -1124,7 +1124,7 @@ git push origin feature/your-feature-name
 
 <a name="production-readiness-note"></a>
 
-## ⚠️ <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t526-dark.webp"><img src="assets/readme/t526.webp" width="266" alt="Production Readiness Note"></picture>
+## <img src="blog-ui/Atlases/Gui/x.png" height="32"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t526-dark.webp"><img src="assets/readme/t526.webp" width="266" alt="Production Readiness Note"></picture>
 
 > <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t527-dark.webp"><img src="assets/readme/t527.webp" width="763" alt="This is an educational/demonstration project. Before production deployment, complete:"></picture>
 > - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t528-dark.webp"><img src="assets/readme/t528.webp" width="501" alt="Security assessment (penetration test, dependency scan)"></picture>
@@ -1137,11 +1137,11 @@ git push origin feature/your-feature-name
 
 <a name="license-acknowledgments"></a>
 
-## 📄 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t533-dark.webp"><img src="assets/readme/t533.webp" width="280" alt="License &amp; Acknowledgments"></picture>
+## <img src="blog-ui/Atlases/Gui/menu/credits.png" height="26"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t533-dark.webp"><img src="assets/readme/t533.webp" width="280" alt="License &amp; Acknowledgments"></picture>
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t534-dark.webp"><img src="assets/readme/t534.webp" width="155" alt="MIT License — see"></picture> <a href="LICENSE"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t535-dark.webp"><img src="assets/readme/t535.webp" width="74" alt="LICENSE"></picture></a> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t536-dark.webp"><img src="assets/readme/t536.webp" width="91" alt="for details."></picture>
 
-### 🙏 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t537-dark.webp"><img src="assets/readme/t537.webp" width="160" alt="Acknowledgments"></picture>
+### <img src="blog-ui/Atlases/Gui/collectables/goldberry.png" height="22"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t537-dark.webp"><img src="assets/readme/t537.webp" width="160" alt="Acknowledgments"></picture>
 
 - <a href="https://celestegame.com/"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t538-dark.webp"><img src="assets/readme/t538.webp" width="65" alt="Celeste"></picture></a> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t539-dark.webp"><img src="assets/readme/t539.webp" width="748" alt="— Inspiring art, characters, and music by Extremely OK Games (Maddy Makes Games)"></picture>
 - <a href="https://siliconflow.cn/"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t540-dark.webp"><img src="assets/readme/t540.webp" width="96" alt="SiliconFlow"></picture></a> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t541-dark.webp"><img src="assets/readme/t541.webp" width="303" alt="— Qwen2.5 &amp; bge-m3 model access"></picture>

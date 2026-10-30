@@ -33,7 +33,7 @@
 <body>
 <div class="wrap">
   <h1>Celeste 鸟的运动逻辑 · JS 复刻</h1>
-  <p class="sub">按 <code>Celeste.dll</code> 的 IL 逐行还原的三条管线：<b>FlutterBird</b>（贝塞尔弹跳 + 速度积分惊飞）、<b>BirdPath</b>（协程只写 target，Update 做物理追赶）与 <b>BirdNPC</b>（会喊叫、啄地、举教程面板、被你靠近就飞走的那只）。协程用<b>帧驱动</b>生成器实现，所以 <code>yield null</code> = 下一帧、<code>yield 0.25</code> = 等 0.25 秒，与 C# 的 <code>Coroutine</code> 语义一致。鸟的贴图用的是仓库自带的<b>原版图集</b>（<code>Atlases/Gameplay/</code> 与 <code>Atlases/Gui/</code>），动画表、锚点、染色、面板同样抄自 <code>Sprites.xml</code> 与 IL。</p>
+  <p class="sub">按 <code>Celeste.dll</code> 的 IL 逐行还原的三条管线：<b>FlutterBird</b>（贝塞尔弹跳 + 速度积分惊飞）、<b>BirdPath</b>（协程只写 target，Update 做物理追赶）与 <b>BirdNPC</b>（会喊叫、啄地、举教程面板、被你靠近就飞走的那只）；外加拦住它的 <b>Lightning</b> 电网与给它供电的 <b>LightningBreakerBox</b> 电闸（冲刺两下砸开）。协程用<b>帧驱动</b>生成器实现，所以 <code>yield null</code> = 下一帧、<code>yield 0.25</code> = 等 0.25 秒，与 C# 的 <code>Coroutine</code> 语义一致。鸟的贴图用的是仓库自带的<b>原版图集</b>（<code>Atlases/Gameplay/</code> 与 <code>Atlases/Gui/</code>），动画表、锚点、染色、面板同样抄自 <code>Sprites.xml</code> 与 IL。</p>
 </div>
 
 <canvas id="cv" width="960" height="540"></canvas>
@@ -47,6 +47,7 @@
   <label><input type="checkbox" id="autoFly"> AutoFly（不等玩家，叫完直接飞）</label>
   <label><input type="checkbox" id="fling" checked> FlingBird（可抓可甩的原版大鸟）</label>
   <label><input type="checkbox" id="lightning"> Lightning（拦在鸟面前的电网）</label>
+  <label><input type="checkbox" id="sfx" checked> 音效（celeste-sounds/Birds）</label>
   <label><input type="checkbox" id="dashDemo"> 键盘模式（X 冲刺 / Z 跳，把闪电砸进电网箱）</label>
   <label>贴图倍率 <input type="range" id="artScale" min="1" max="8" step="1" value="3"><b class="n" id="artVal">3×</b></label>
   <label>speedMult <input type="range" id="speedMult" min="0.2" max="3" step="0.1" value="1"><b class="n" id="smVal">1.0</b></label>
@@ -64,6 +65,8 @@
     <li><b>BirdNPC 靠距离驱动</b>：把鼠标放到 <code>FlyAway</code> 那只的水平 120px 内 → 先喊一嗓子（croak），再靠到中心距 32px 内 → Startle 撒羽毛 + 飞出屏顶。每只鸟盯的距离都不一样，勾上「调试」就能看到各自的阈值框。</li>
     <li><b>按住鼠标</b> = <code>Player.StateMachine.State == 1</code>（挂在墙上爬）。放到 <code>Climbing</code> 那只旁边按住，它的面板会真的<b>翻到背面</b>（<code>tutorial_note_flip_back</code>），松手爬过头再翻回来。</li>
     <li>URL 参数可以直接分享某个判定瞬间：<code>?px=600&amp;py=436</code> 把“玩家”摆到坐标上，<code>&amp;down=1</code> 表示按住（爬墙），<code>&amp;invincible=1</code> 打开辅助模式 <code>Assists.Invincible</code>（会换掉 Dashing 那只的触发窗口）。</li>
+    <li><b>声音</b>是本体：待机鸟从出生就挂着一个 <code>SoundSource</code> 循环啾啾（<code>birdbaby_tweet_loop</code>），每跳一下先一声 <code>birdbaby_hop</code>，被你靠近就 <code>Stop(true)</code> 换 <code>birdbaby_flyaway</code>。素材在 <code>celeste-sounds/Birds/</code>，事件名全部来自 IL；浏览器不允许无手势自动播放，所以<b>点一下页面</b>才会听到。音量按离玩家的距离衰减，<code>?sfx=0</code> 可关。</li>
+    <li><b>电闸（LightningBreakerBox）</b>：同时勾上「<code>Lightning</code>」与「键盘模式」，用 <code>X</code> 朝电闸<b>冲刺两下</b>就能砸开：第一下压扁贴图 + 抖 + 冻结 0.1s + 开始冒火星，0.2s 后「开箱」；第二下爆掉、冻结 0.2s、<b>冲刺次数被重置</b>，整屏电网跟着 Shatter（这就是电网消失的入口）。</li>
     <li>「贴图倍率」只放大鸟本身，<b>不放大世界</b>：物理常量（48px 接近框、14px 控制点）仍按游戏原尺寸 1px = 1px 算。FlutterBird 真的只有 <b>10×10</b> 像素（原版它就是 scenery），拉到 3× 以上才能看清翅膀。</li>
   </ul>
 
@@ -95,6 +98,12 @@ GFX.Gui（Atlases/Gui/）—— BirdTutorialGui 直接拿原图，不重画：
   controls/keyboard/*.png    80×80 / 120×80（宽键）  ← Input.GuiButton(Jump|Dash|Grab|Talk)
   controls/directions/*.png  72×72    ← 控件数组里的 Vector2（如 1x1、0x-1、1x0）
   particles/feather.png       5×3     ← BirdNPC.P_Feather 的 Source（clone 自 Strawberry.P_WingsBurst）
+
+GFX.SpriteBank.Create("breakerBox")   →  path="objects/breakerBox/"   Justify(0.5,0.5)  64×64 画布（不透明内容约 34×34）
+  idle   = Idle00                 delay 0.10   （单帧）
+  open   = Open01..03  delay 0.06 goto opened    ← 磁盘上其实有 Open00-06，Sprites.xml 只取 1-3
+  opened = Opened00..15  delay 0.06
+  break  = Break00..16   delay 0.06 goto null   ← Break16 只剩 1 个不透明像素，靠 OnLastFrame 收成 Visible=false
 → 键盘字形（z.png 等）本身是<b>纯黑</b>的，必须叠在 base/base2 白色键帽上，所以离线合成成一张画布。
   </pre>
 
@@ -207,6 +216,82 @@ SpeedRing（<code>launched</code> 的<b>唯一</b>可见结果，每 onInterval(
   圆环半径 <b>4&rarr;14</b>，但被法线压扁：<code>r * Lerp(r, r*0.5, |dot(dir, normal)|)</code>，正对方向最扁，16 段中心对称。
   </pre>
 
+  <h2>LightningBreakerBox：两下冲刺砸开电闸，电网整屏碎掉</h2>
+  <pre>
+电网的<b>电源</b>。原版是 Farewell 里那个 32×32 的 <code>breakerBox</code>：Solid、<b>health = 2</b>，
+冲刺（dash）撞两下就炸，炸的时候调用 <code>Lightning::RemoveRoutine</code> 把整屏电网一起拆掉 ——
+所以它同时也是「电网是怎么消失的」的入口。
+
+构造（<code>.ctor(Vector2 position, bool flipX)</code>，IL_0000..0122）
+  base(position, <b>32f</b>, <b>32f</b>, true)            SurfaceSoundIndex = <b>9</b>（走金属音）
+  start = Position                                // 快照，Update 每帧从这里重算，只读
+  sprite = SpriteBank.Create("breakerBox")；Sprite.Position = Size/2 = <b>(16,16)</b>；FlipX = 实参
+  SineWave(<b>0.5</b>, 0) + Wiggler.Create(<b>1</b>, <b>0.5</b>, null, false, false)（StartZero=false）+ Shaker(false, null)
+  OnDashCollide = Dashed                          // Platform 的委托，由 Player::OnCollideH/V 派发
+另一个重载 <code>.ctor(EntityData, Vector2)</code> 只读四个属性：flipX / flag / music / music_progress / music_session。
+
+Awake：Position ∓ UnitY / UnitX 各探一次 <code>Spikes</code>（spikesUp/Down/Left/Right）
+Added：flag && Session.GetFlag("disable_lightning") &rarr; RemoveSelf（本页 flag 恒 false）
+
+Dashed(Player p, Vector2 dir)：返回值只有两种
+  ① 该方向贴着尖刺 &rarr; <b>NormalOverride</b>（让玩家被尖刺正常扎死，而不是砸箱子）
+  ② 其余一律 &rarr; <b>Rebound</b>（IL_01c9 的 ldc.i4.0 是唯一出口）
+  DirectionalShake(dir, <b>0.3</b>)
+  sprite.Scale = (<b>1 + |dir.Y|*0.4 - |dir.X|*0.4</b>, <b>1 + |dir.X|*0.4 - |dir.Y|*0.4</b>)
+      &rArr; 正面撞压成 (0.6, 1.4)、侧面撞拉成 (1.4, 0.6)，随后被 Update 末尾的 Approach 弹回 1
+  health -= 1
+  if (health &gt; 0)   // 第一下
+      firstHitSfx = <b>new SoundSource("…/fusebox_hit_1")</b> + Add；Celeste.Freeze(<b>0.1</b>)
+      ShakeCounter = <b>0.2</b>；Shaker.On = true；bounceDir = dir；Wiggler.Start()；SmashParticles = true
+      Pulse()；Input.Rumble(<b>1</b>, 1)
+  else              // 第二下：爆
+      firstHitSfx.Stop(<b>true</b>)；Audio.Play("…/fusebox_hit_2", Position)；Celeste.Freeze(<b>0.2</b>)
+      p.RefillDash()（★ 砸开电闸顺手把冲刺还给玩家）；Break()；Input.Rumble(<b>2</b>, 2)
+      SmashParticles(Perpendicular(dir)) 与 -(…)：两簇
+
+Pulse()：不是「自己闪」，而是 <code>Add(new Coroutine(Lightning::PulseRoutine(Level), true))</code>
+  &rarr; SetPulseValue 把 <b>Glitch.Value &rarr; 0.075</b>、<b>Bloom.Strength &rarr; 1.2</b> 再回落（和 Break 的 0.15 / 1.5 是两套数字）
+
+Break()（IL_0000..0174，顺序就是 IL 顺序）
+  RumbleTrigger.ManuallyTrigger(Center.X, <b>1.2</b>)；Tag = Persistent
+  ShakeCounter = 0；Shaker.On = false；sprite.Play("break")；<b>Collidable = false</b>；DestroyStaticMovers()
+  flag &rarr; Session.SetFlag("disable_lightning", true)
+  music / music_progress / music_session 三支（改 AudioState.Music 的事件与进度）
+  pulseRoutine.Active = false
+  Add(new Coroutine(<b>Lightning::RemoveRoutine(Level, RemoveSelf)</b>, true))   &rArr; 整屏电网一起 Shatter
+      &rArr; 拆完 <code>FindFirst&lt;FlingBird&gt;().LightningRemoved = true</code>，那只鸟才肯 Skip
+
+Update()（IL_0000..022f，<b>base.Update() 在第一行</b>）
+  makeSparks && onInterval(<b>0.03</b>) &rarr; Emit(P_Sparks, <b>1</b>, Center, One*<b>12</b>)
+  ShakeCounter &gt; 0：减 DeltaTime；&le;0 那一帧 &rarr; Shaker.On=false、sprite.Scale = One*<b>1.2</b>、play("open")
+  Collidable 时：sink = Approach(sink, Rider?1:0, <b>2</b>*dt)；SineWave.Rate = Lerp(1, 0.5, sink)
+      at = start 的<b>副本</b>；at.Y += sink*<b>6</b> + sine.Value * Lerp(<b>4</b>, 2, sink)
+      at += (bounce.Value * bounceDir) * <b>12</b>          // Wiggler 的弹动，方向就是被撞的方向
+      MoveToX/MoveToY(at)；SmashParticles 标志一置位就发两簇
+  末尾：Scale 两分量各自 Approach(…, 1, <b>4</b>*dt)；LiftSpeed = Zero
+  ★ at.Y 改的是 <b>start 的局部副本</b>（IL_0105..010b 先 ldloc 拷贝），所以 start 不被污染、不会累积漂移。
+Render()：sprite.Position 临时 += Shaker.Value，画完再还原（所以抖动只动贴图、不动判定框）。
+
+SmashParticles(dir)：四向各一套锚点/抖动范围/角度，<b>count 统一 +2</b>
+  dir = +X   angle 0        at = CenterRight - UnitX*12   range = UnitY*(H-6)*0.5   count = (32/8)*4 + 2 = <b>18</b>
+  dir = -X   angle π        at = CenterLeft  + UnitX*12   range = UnitY*(H-6)*0.5                18
+  dir = +Y   angle π/2      at = BottomCenter- UnitY*12   range = UnitX*(W-6)*0.5                18
+  其余(向上) angle -π/2     at = TopCenter   + UnitY*12   range = UnitX*(W-6)*0.5                18
+P_Smash：色 #FFFC75/#6BFFFF、RotationMode 2（跟着速度转）、Size 0.5±0.2、Life 0.6~1.2、Speed 50~150、Multiplier 0.2
+P_Sparks：同色、Size 0.4±0.1、Life <b>0.1~0.2</b>、Speed 30~40、Multiplier 0.8 &rArr; 因为寿命极短，稳态同屏只有 3~6 粒
+
+★ 有意偏差（每一条都写清楚为什么）
+  · 原版 32×32，本页按 vs(32) = <b>96</b> 落地；但 count / 12 / (H-6)*0.5 全是<b>虚拟像素</b>，
+    所以那一段用常量 32 算（拿 96 算会变成 50 粒）。
+  · <b>new SoundSource(event)</b> 这个重载的 ctor 体在取证语料里零命中（68 个文件搜不到 TYPE SoundSource），
+    但第二击对<b>同一个源</b>直接 Stop(true)、两击之间没有任何 Play &rArr; 唯一自洽的解释是「构造即播放」。
+    本页照这个解释实现，并标为<b>推断</b>；因为它不是 <code>Audio.Play</code>，所以右下角 SFX 日志里只有 hit_2。
+  · 音乐三支（SetMusic / SetMusicParam / CurrentMusicEventInstance）整段跳过 —— 本页没有 AudioState.Music 这层状态机。
+  · RumbleTrigger / Input.Rumble 只做页内提示（手边没有手柄，不伪造震动数值）。
+  · Awake 的四向 Spikes 探测照写，但本页没有尖刺实体 &rArr; 四个字段恒 false、NormalOverride 那四支不可达。
+  · Session 用一个本地表 <code>sessionFlags</code> 替身，只有 disable_lightning 一个键。
+  </pre>
+
   <h2>BirdPath：协程算 target，Update 追 target</h2>
   <pre>
 节点成对   nodes[i] = 控制点, nodes[i+1] = 落点,  i += 2
@@ -253,10 +338,46 @@ Sleeping         &mdash;                   play("sleep")，Facing = Right
   OnFrameChange：id 是 peck / peckRare 且 <b>frame == 6</b> &rarr; Audio.Play("event:/game/general/bird_peck")
   yield 2 &rarr; 硬切 tut2（不走展开动画）&rarr; yield 2 &rarr; HideTutorial &rarr; yield 2 &rarr; first = false
 
-音效：本机<b>没有</b>鸟叫/啄地素材（全仓库音频只有 bgm/womanbird.mp3，原版走 FMOD 事件路径），
-所以不伪造音频，只把事件名打进画布右下角的 SFX 日志：
+音效：事件名照 IL 原样，声音由 <code>celeste-sounds/Birds/</code> 真放（详见下一节）：
   bird_squawk（喊叫） / bird_peck（啄地） / bird_startle（惊飞） / bird_wingflap（hover·hoverStressed·fly 的 frame==0）
   bird_relocate（MoveToNodes 换节点与离场） / tutorial_note_flip_back·_front（Climbing 面板翻面）
+  </pre>
+
+  <h2>音效：事件名 &rarr; celeste-sounds/Birds 的具体变体</h2>
+  <pre>
+素材不再只有 bgm：<code>blog-ui/celeste-sounds/Birds/</code> 里 <b>72 个 wav</b> 就是 FMOD 事件拆出来的变体，
+文件名 = 变体名。页面用一张事件表（<code>BIRD_SFX</code>）把它们接回去，音量只由「到玩家的距离」决定。
+
+事件（原字符串逐字来自 Celeste.exe 的 ldstr）              宿主方法                              播放方式
+--------------------------------------------------------  ------------------------------------  ----------------
+event:/game/general/birdbaby_tweet_loop                   FlutterBird::.ctor IL_00a4..00ba      SoundSource 循环
+event:/game/general/birdbaby_flyaway                      FlutterBird::FlyAway IL_001c..0032    SoundSource
+event:/game/general/birdbaby_hop                          &lt;IdleRoutine&gt;d__9 IL_012b..0136       Audio.Play
+event:/game/general/bird_peck                             BirdNPC::&lt;.ctor&gt;b__20_0（frame 6）     Audio.Play
+event:/game/general/bird_squawk                           BirdNPC::&lt;Caw&gt;d__27（frame 9）         Audio.Play
+event:/game/general/bird_startle                          &lt;StartleAndFlyAway&gt;d__30            Audio.Play
+event:/new_content/game/10_farewell/bird_startle          &lt;MoveToNodesRoutine&gt;d__40            Audio.Play
+event:/new_content/game/10_farewell/bird_wingflap         BirdNPC::FlapSfxCheck               Audio.Play
+event:/new_content/game/10_farewell/bird_relocate         &lt;FlyTo&gt;d__39 / &lt;MoveRoutine&gt;d__24    Audio.Play
+event:/new_content/game/10_farewell/bird_throw            FlingBird::OnPlayer                  Audio.Play
+event:/game/general/bird_in / bird_land_dirt               CS00_Ending::&lt;Cutscene&gt;d__7         已备料未用
+
+三个 FlutterBird 音的时序（待机鸟的“生命感”全在这三行）：
+  .ctor          tweetingSfx = new SoundSource() &rarr; Add &rarr; Play(tweet_loop)  // 出生就在啾，与协程无关
+  IdleRoutine    每跳一次（等完 delay = 0.25 + NextFloat(1)）先 Audio.Play(hop) 再算 target
+  FlyAway        先 tweetingSfx.Stop(<b>true</b>)（Stop 在 flyingAway = true <b>之前</b>！）再 flyawaySfx.Play(flyaway)
+                   然后把旧 Coroutine 从实体上摘掉、换成 FlyAwayRoutine
+
+SoundSource.Play(path, parameter, value) 的第三参是<b>事件参数值</b>不是音量（IL 恒 ldnull + ldc.r4 0f），
+所以页面里 play(name, parameter, value) 也不拿它当音量；Stop(allowFadeOut=true) 走 120ms 线性淡出。
+
+★ 有意偏差（全在表现层，60 项静态断言与运行时断言都不受影响）：
+  · bank 里的变体权重没有产物 &rarr; 同名变体等概率随机；
+  · 3D 衰减参数（min/max distance、curve）没有产物 &rarr; 离玩家 520px 线性到 0.12，循环源每帧刷新；
+  · 循环源再乘 0.5 —— 6 只待机鸟同时按 1.0 啾会糊成一片；
+  · 事件内的 pitch / ducking 轨道没有产物 &rarr; 一律 1.0 倍速；
+  · 浏览器禁止无手势自动播放 &rarr; 首次 pointerdown / keydown 把被拦下的源重新 play；
+  · BirdPath 的 bird_flyuproll 只有 new SoundSource(event) + Add，<b>没有 Play 调用证据</b> &rarr; 本页不接。
   </pre>
 
   <h2>BirdTutorialGui：面板是怎么拉开的</h2>
@@ -310,7 +431,7 @@ easeCubeOut(t) = 1 - (1-t)³               // Ease.Invert(CubeIn)
 读取方式：REA 的托管 provider 只到元数据层（Ghidra 明确拒绝 managed），所以用<b>游戏自带</b>的 <code>Mono.Cecil.dll</code> 在 PowerShell 5.1 里直接反编译 IL 方法体，全程只读。
 本机安装已被 CelesteMod 合并改写，<code>BirdPath</code> 的 <code>orig_*</code> 补丁就是本页 <code>inVanilla / angleFix</code> 两个开关的来源。
 详细取证与 IL 偏移见 <code>docs/celeste-bird-motion.md</code>。BirdPath 原版跑完节点链会 <code>RemoveSelf()</code>；本页额外补了一段“回到起点”的曲线把链闭合，好让 target 始终在鸟前方、可以持续观察。
-素材：本页直接读仓库自带的 <code>Atlases/Gameplay/characters/bird/</code>、<code>Atlases/Gameplay/scenery/flutterbird/</code>、<code>Atlases/Gameplay/particles/feather.png</code> 与 <code>Atlases/Gui/</code>（hyperjump、controls/keyboard、controls/directions、tinyarrow），动画表抄自本机 <code>Content/Graphics/Sprites.xml</code>。若某帧 404（比如从子目录部署、路径不对），那只鸟会退回程序化占位图，画布左下角的 HUD 会提示缺失数量；<code>?sprite=0</code> 可以强制全用占位图。GUI 缺图只让对应面板退化（跳过该控件），<b>不会</b>把鸟打回占位图 —— <code>guiMissing</code> 与 <code>spritesFailed</code> 是两个独立计数。
+素材：本页直接读仓库自带的 <code>Atlases/Gameplay/characters/bird/</code>、<code>Atlases/Gameplay/scenery/flutterbird/</code>、<code>Atlases/Gameplay/particles/feather.png</code>、<code>Atlases/Gameplay/objects/breakerBox/</code> 与 <code>Atlases/Gui/</code>（hyperjump、controls/keyboard、controls/directions、tinyarrow），动画表抄自本机 <code>Content/Graphics/Sprites.xml</code>；音效读 <code>celeste-sounds/Birds/</code>（72 个变体，事件名全部来自 IL 的 <code>ldstr</code>，<code>?sfx=0</code> 可关）。若某帧 404（比如从子目录部署、路径不对），那只鸟会退回程序化占位图，画布左下角的 HUD 会提示缺失数量；<code>?sprite=0</code> 可以强制全用占位图。GUI 缺图只让对应面板退化（跳过该控件），<b>不会</b>把鸟打回占位图 —— <code>guiMissing</code> 与 <code>spritesFailed</code> 是两个独立计数。
 </p>
 
 <script>
@@ -381,15 +502,24 @@ let clock = 0, DELTA = 1 / 60, RAW_DELTA = 1 / 60, paused = false;
 const runners = [];
 class Runner {
   constructor(gen, owner = null) {
-    this.gen = gen; this.until = 0; this.alive = true; this.owner = owner; runners.push(this);
+    this.gen = gen; this.until = 0; this.alive = true; this.active = true; this.owner = owner; runners.push(this);
   }
   stop() { this.alive = false; }                        // Coroutine.Cancel()
-  step() {                                              // Coroutine.Update：waitTimer 递减
+  // Monocle.StateMachine::set_State 的 IL_015d..0174：
+  //   this.currentCoroutine.Replace(this.coroutines[value]());
+  // ⇒ 协程组件从不被换掉，只把里面的 IEnumerator 换掉，并重新从头开始跑（Active 也重新拉回 true）。
+  //   Replace 同时把 Finished 清回 false、waitTimer 归零，所以 set_State 之后同帧的
+  //   StateMachine::Update 会立刻跑一次这个协程 —— 起冲那一帧的即时段就是这么执行的。
+  replace(gen) { this.gen = gen; this.until = clock; this.alive = true; this.active = true; this.finished = false; }
+  // Coroutine::Cancel()：Active=false、Finished=true、栈清空（连宿一起，不再有「跑完」回调）
+  cancel() { this.alive = false; this.active = false; this.finished = true; }
+  step() {                                             // Coroutine.Update：waitTimer 递减
+    if (!this.active) return;                          // Component.Active 为假时 Update 整个跳过
     if (!this.alive) return;
     if (this.owner && this.owner.removed) { this.alive = false; return; }   // 宿主没了，Component 跟着没
     if (clock < this.until) return;
     const it = this.gen.next();
-    if (it.done) { this.alive = false; return; }        // RemoveOnComplete = true
+    if (it.done) { this.alive = false; this.active = false; this.finished = true; return; }   // Coroutine::orig_Update 的弹空栈收尾
     // yield <number> = 等这么多「秒」；yield null = 下一帧；yield <int> = 同样当秒数用但不结束本帧
     this.until = clock + (typeof it.value === 'number' ? it.value : 0);
   }
@@ -409,6 +539,85 @@ const onRawIntervalOff = (t, o) => Math.floor((rawClock - o) / t) !== Math.floor
 const calcOnInterval = (timer, ref, to) => {
   if (timer < ref.v + to) return false;
   ref.v = timer; return true; };
+/* ================= Monocle.StateMachine：Player 的 26 槽状态表 ================= */
+// 证据：player_dashentry_il.txt L2-215（SetCallbacks / set_State / Update 三条方法的完整 IL）。
+// ★ 两个只读 IL 极易写错的地方：
+//   1) SetCallbacks 的<b>形参顺序</b>是 (i, update, coroutine, begin, end)，但方法体里
+//      stelem.ref 的先后是 updates → begins → ends → coroutines；按栈顺序照抄会把
+//      coroutine 写进 begins。必须按 ldarg 的<b>编号</b>对号（IL_0024 用的是 ldarg.3 = coroutine）。
+//   2) currentCoroutine 从<b>不是 null</b>：set_State 无条件对它调 Replace 或 Cancel，
+//      Update 里也直接 ldfld 出来读 Component::Active，全程没有 brfalse 守卫。
+// ★ Monocle.Coroutine 的 Replace / Cancel（player_dashentry 的调用点 + coroutine_il.txt）：
+//   Replace(e) → Active=true、Finished=false、waitTimer=0；Cancel() → Active=false、Finished=true、waitTimer=0。
+// ★ 有意偏差：StateMachine::Update() 的<b>调用点</b>在本次取证语料里不存在 ——
+//   Player::orig_Update 全文（player_origupdate_il.txt，IL_0000..IL_12cf）只有 IL_0bf4 的
+//   <code>call Actor::Update()</code>，Player::Update 本体（player_gravity_il.txt L1023-1058）也只有
+//   Everest 的 Before/AfterUpdate 包装；全语料反查 <code>callvirt Monocle.StateMachine::Update</code> 零命中。
+//   本页把它放在「计时器扣完 → Facing/lastAim → wallSpeedRetention」之后、
+//   MoveH/MoveV（IL_0d7b / IL_0dbf）之前，依据是<b>数据流方向</b>：NormalUpdate 写 Speed，
+//   而 IL_0d75-0d7a 读的正是这个 Speed。顺序是反推的，不是抄来的，特此标注。
+class StateMachine {
+  constructor(numStates, owner = null) {
+    this.updates = new Array(numStates).fill(null);
+    this.coroutines = new Array(numStates).fill(null);
+    this.begins = new Array(numStates).fill(null);
+    this.ends = new Array(numStates).fill(null);
+    this.state = 0; this.previousState = -1;
+    this.locked = false; this.log = false; this.changedStates = false;
+    // Coroutine 是个 Component，挂在 Player 身上 ⇒ owner = Player，全局协程阶段就不该再推它一次
+    this.currentCoroutine = new Runner(function* () {}, owner);
+    this.currentCoroutine.cancel();                    // .ctor() 之后 Active = false
+  }
+  // IL_0000-0026：四个数组各写一格，写的顺序 ≠ 形参顺序，见上面的 ★
+  setCallbacks(i, update, coroutine, begin, end) {
+    this.updates[i] = update; this.begins[i] = begin; this.ends[i] = end; this.coroutines[i] = coroutine;
+  }
+  get prevState() { return this.previousState; }       // get_PreviousState
+  // set_State(System.Int32 value)：IL_0000..IL_0185
+  setState(value) {
+    if (this.locked) return;                           // IL_0006 brtrue IL_0185
+    if (this.state === value) return;                  // IL_0012 beq  IL_0185
+    if (this.log) calcLog(`Enter State ${value} (leaving ${this.state})`);
+    this.changedStates = true;
+    this.previousState = this.state;
+    this.state = value;
+    if (this.previousState !== -1 && this.ends[this.previousState]) {
+      if (this.log) calcLog(`Calling End ${this.previousState}`);
+      this.ends[this.previousState]();
+    }
+    if (this.begins[this.state]) {
+      if (this.log) calcLog(`Calling Begin ${this.state}`);
+      this.begins[this.state]();
+    }
+    if (this.coroutines[this.state]) {
+      if (this.log) calcLog(`Starting Coroutine ${this.state}`);
+      this.currentCoroutine.replace(this.coroutines[this.state]());
+    } else this.currentCoroutine.cancel();             // IL_017a..0180
+  }
+  // Update()：IL_0000..IL_0086
+  update() {
+    this.changedStates = false;
+    if (this.updates[this.state]) this.setState(this.updates[this.state]());
+    if (this.currentCoroutine.active) {
+      this.currentCoroutine.step();                    // Component::Update()
+      if (!this.changedStates && this.log && this.currentCoroutine.finished)
+        calcLog(`Finished Coroutine ${this.state}`);
+    }
+  }
+  /* ★ Monocle.StateMachine::ForceState(int) 的 MethodBody 在本次语料里<b>没有产物</b>
+     （全 68 个文件里只有 Player::DashUpdate 的 <code>callvirt ForceState</code> 这一个调用点）。
+     从调用点能确定的只有：它存在的意义就是<b>绕过 set_State 的「同值直接 return」</b> ——
+     DashUpdate 里写的是 StateMachine.ForceState(2) 而当前 State 本来就等于 2，
+     若走 set_State 会当场 ret，协程不会被重启。所以本页只做「重挂当前状态的协程」这一件事，
+     不猜它是否也重跑 Begin/End。 */
+  forceState(value) {
+    this.previousState = this.state;
+    this.state = value;
+    if (this.coroutines[value]) this.currentCoroutine.replace(this.coroutines[value]());
+    else this.currentCoroutine.cancel();
+  }
+}
+const calcLog = () => {};                              // ★ Monocle.Calc::Log 只往控制台写，无视觉产物
 
 /* ================= Engine / Celeste / Level 的时间·震动·闪白代理 ================= */
 // 证据（.screenshots/.tmp/celeste-re/camera_il.txt）：
@@ -571,12 +780,17 @@ class Shaker {
     }
   }
 }
-// Level::DirectionalShake(Vector2 dir, float s)：把方向归一后记住，lastDir 复位，shakeTimer 取 Max 抬升。
+// Level::DirectionalShake(Vector2 dir, float s)：player_dashentry_il.txt 逐字 ——
+//   if (Settings.Instance.ScreenShake == 0) return;     ← ★ 这条守卫原先漏了，它让「关震动」时整段真的什么都不做
+//   shakeDirection = Calc.SafeNormalize(dir); lastDirectionalShake = 0; shakeTimer = Math.Max(shakeTimer, s);
 function levelDirectionalShake(dir, s) {
+  if (typedShakeOff) return;                            // Settings.Instance.ScreenShake == Off
   shakeDirection = safeNorm(dir.x, dir.y, 1);
   lastDirectionalShake = 0;
   shakeTimer = Math.max(shakeTimer, s);
 }
+// Settings.Instance.ScreenShake 的枚举整数：Off=0 / Distortion=1 / Typed=2（本页 typedShake 记的就是 2）
+let typedShakeOff = false;
 
 /* ================= 画布与场景 ================= */
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
@@ -664,7 +878,7 @@ function levelZoomBack(duration, owner = null) {
 const mouse = v2(-999, -999);
 const ui = {};
 for (const id of ['showDebug', 'showTrail', 'inVanilla', 'angleFix', 'useSprite', 'artScale', 'artVal',
-                  'speedMult', 'smVal', 'pause', 'respawn', 'autoFly', 'lightning', 'fling', 'dashDemo'])
+                  'speedMult', 'smVal', 'pause', 'respawn', 'autoFly', 'lightning', 'fling', 'dashDemo', 'sfx'])
   ui[id] = document.getElementById(id);
 ui.speedMult.addEventListener('input', () => { ui.smVal.textContent = (+ui.speedMult.value).toFixed(1); });
 ui.artScale.addEventListener('input', () => { ui.artVal.textContent = ui.artScale.value + '×'; });
@@ -678,6 +892,7 @@ let invincibleAssist = false;        // SaveData.Assists.Invincible，BirdNPC.Da
   bind('vanilla', 'inVanilla'); bind('angleFix', 'angleFix');
   bind('debug', 'showDebug'); bind('trail', 'showTrail'); bind('sprite', 'useSprite');
   bind('autoFly', 'autoFly');
+  bind('sfx', 'sfx');
   bind('fling', 'fling'); bind('lightning', 'lightning');
   bind('dash', 'dashDemo');
   if (q.has('invincible')) invincibleAssist = q.get('invincible') !== '0';
@@ -996,6 +1211,12 @@ class FlutterBird {
     this.vel = v2(0, 0);
     this.sprite = new Sprite('flutterBird', 'idle', this.color);   // SpriteBank.Create("flutterBird")
     this.routine = new Runner(this.idleRoutine());
+    /* FlutterBird::.ctor IL_007c..00ba：new SoundSource()×2 都 Add 到实体上，然后
+       tweetingSfx.Play("event:/game/general/birdbaby_tweet_loop", null, 0f) —— 它<b>从出生就一直在啾</b>，
+       不是靠协程反复放（旧版这里什么都没接，所以待机鸟是哑的）。 */
+    this.flyawaySfx = new SoundSource(this);
+    this.tweetingSfx = new SoundSource(this);
+    this.tweetingSfx.play('event:/game/general/birdbaby_tweet_loop', null, 0);
   }
   *idleRoutine() {                                      // <IdleRoutine>d__9::MoveNext
     while (true) {
@@ -1009,6 +1230,8 @@ class FlutterBird {
         yield null; t += DELTA;
       }
       // —— 起跳：协程直接写 Position ——
+      // <IdleRoutine>d__9 IL_012b..0136：等待循环一退出、先算 target 之前，就先响一声 hop
+      playSfx('event:/game/general/birdbaby_hop', this.pos);
       const target = v2(this.start.x + (-4 + nextFloat(8)), this.start.y);
       this.scale.x = sign(target.x - this.pos.x) || this.scale.x;
       const bezier = new SimpleCurve(this.pos, target,
@@ -1023,8 +1246,10 @@ class FlutterBird {
     }
   }
   flyAway(dir = 1, delay = 0) {                         // FlyAway(float dir, float delay)
-    if (this.flyingAway) return;                        // flyingAway 为真直接忽略
-    this.flyingAway = true;
+    if (this.flyingAway) return;                        // flyingAway 为真直接忽略（IL_0000 brtrue IL_005c）
+    this.tweetingSfx.stop(true);                        // IL_0008..0014：先掐掉待机循环，顺序不能换
+    this.flyingAway = true;                             // IL_0015..0017
+    this.flyawaySfx.play('event:/game/general/birdbaby_flyaway', null, 0);   // IL_001c..0032
     this.routine.stop();
     this.routine = new Runner(this.flyAwayRoutine(dir, delay));
   }
@@ -1067,8 +1292,15 @@ class FlutterBird {
     this.pos = v2(this.start.x, this.start.y); this.scale = v2(1, 1);
     this.vel = v2(0, 0); this.flyingAway = false; this.removed = false;
     this.sprite.play('idle');                           // Scene.Remove 后重建实体，等价于回到 start 动画
+    /* 原版 RemoveSelf 之后是 Scene.Add 重新建实体 ⇒ 两个 SoundSource 也重新 .ctor 一次，
+       所以那声待机啾啾要重新起播。这里复用同一个 SoundSource（play 内部先 Stop 再起），
+       听感与「重建实体」一致，但不会每重生一轮就多挂一个循环源。 */
+    this.tweetingSfx.play('event:/game/general/birdbaby_tweet_loop', null, 0);
     this.routine = new Runner(this.idleRoutine());
   }
+  /* 演示专用：整群重投时旧鸟的 SoundSource 要一起停，否则待机啾啾会永远叠下去
+     （原版 Entity 被 Remove 时挂在它身上的 Component 也一起消失）。 */
+  disposeAudio() { this.tweetingSfx.stop(false); this.flyawaySfx.stop(false); }
   draw() {
     if (this.removed) return;
     if (!useSprite()) drawBird(this.pos, 0, this.scale, this.color);   // 程序化占位图（右边朝前）
@@ -1181,14 +1413,150 @@ class BirdPath {
   }
 }
 
-/* ================= 本机没有鸟叫/啄地音效素材，只记事件名 ================= */
-// 全仓库音频只有 bgm/womanbird.mp3；原版走 FMOD 事件路径，扒不出来。
-// 所以这里不伪造音频，只把 Audio.Play 的事件名 + 位置输出到画布右下角的 SFX 日志。
+/* ================= 音效层：把 IL 里的 FMOD 事件真的放出来 =================
+   素材 = blog-ui/celeste-sounds/Birds/（FMOD 事件被拆成一个个变体，文件名就是变体名）。
+   事件名与调用点全部来自 bird_il.txt，没有一条是猜的：
+     · FlutterBird::.ctor IL_007c..00ba —— new SoundSource()×2（flyawaySfx / tweetingSfx）都 Add 到实体上，
+       最后 tweetingSfx.Play("event:/game/general/birdbaby_tweet_loop", null, 0f)   ← 待机时一直在啾
+     · FlutterBird::FlyAway IL_0008..0032 —— 先 tweetingSfx.Stop(true) 掐掉循环，再 flyawaySfx.Play(birdbaby_flyaway)
+     · <IdleRoutine>d__9 IL_012b..0136 —— 等待循环一结束、算 <target> 之前，Audio.Play(birdbaby_hop, Position)
+     · BirdNPC：bird_peck（OnFrameChange 第 6 帧）/ bird_squawk（Caw 第 9 帧）/ bird_startle（StartleAndFlyAway）
+                / bird_wingflap（FlapSfxCheck）/ bird_relocate（FlyTo 与 MoveToNodesRoutine 收尾）
+     · FlingBird::OnPlayer —— Audio.Play(".../bird_throw", Center)
+   注意 SoundSource.Play 的第三个参数是<b>事件参数值</b>、不是音量（IL 里恒 ldnull + ldc.r4 0），
+   所以下面 play(name, parameter, value) 也不拿它当音量（音量只由距离算）。
+   ★ 有意偏差（全在表现层，一条断言都不影响）：
+     · 变体权重写在 FMOD bank 里、程序集没有 ⇒ 同名变体等概率随机取一个；
+     · 3D 衰减参数也在 bank 里 ⇒ 用「离玩家 520px 线性衰减到 0.12」近似，循环源每帧按距离刷新音量；
+     · 事件内置的 pitch / ducking 没有产物 ⇒ 一律 1.0 倍速；
+     · 浏览器不允许无手势自动播放 ⇒ 首次 pointerdown / keydown 时把被拦下的源重新 play 一次。 */
+const BIRD_SFX_BASE = 'celeste-sounds/Birds/';
+const BIRD_SFX = {
+  'event:/game/general/birdbaby_tweet_loop': ['baby_idletweet_01', 'baby_idletweet_02', 'baby_idletweet_03'],
+  'event:/game/general/birdbaby_flyaway':    ['baby_flyaway_01', 'baby_flyaway_02', 'baby_flyaway_03',
+                                              'baby_flyaway_04', 'baby_flyaway_05'],
+  'event:/game/general/birdbaby_hop':        ['baby_hop_01', 'baby_hop_02', 'baby_hop_03',
+                                              'baby_hop_04', 'baby_hop_05', 'baby_hop_06'],
+  'event:/game/general/bird_peck':           ['peck_a_01', 'peck_a_02', 'peck_a_03', 'peck_a_04',
+                                              'peck_b_01', 'peck_b_02', 'peck_b_03', 'peck_b_04'],
+  'event:/game/general/bird_squawk':         ['squawk', 'squawk_st'],
+  'event:/game/general/bird_startle':        ['startle_01', 'startle_02', 'startle_st'],
+  // 10_farewell 里只打包了 stray(st) 与 relocate/wingflap 这几个变体，别拿 general 的去凑
+  'event:/new_content/game/10_farewell/bird_startle':  ['startle_st'],
+  'event:/new_content/game/10_farewell/bird_wingflap': ['wingflap_01', 'wingflap_02', 'wingflap_03',
+                                                        'wingflap_04', 'wingflap_05', 'wingflap_06'],
+  'event:/new_content/game/10_farewell/bird_relocate': ['relocate_2d_01', 'relocate_2d_02', 'relocate_2d_03',
+                                                        'relocate_2d_04', 'relocate_2d_05',
+                                                        'relocate_3d_01', 'relocate_3d_02', 'relocate_3d_03',
+                                                        'relocate_3d_04', 'relocate_3d_05'],
+  'event:/new_content/game/10_farewell/bird_throw':    ['grabandthrow_2d_01', 'grabandthrow_2d_02',
+                                                        'grabandthrow_2d_03', 'grabandthrow_2d_04',
+                                                        'grabandthrow_2d_05', 'grabandthrow_2d_06',
+                                                        'grabandthrow_3d_01', 'grabandthrow_3d_02',
+                                                        'grabandthrow_3d_03'],
+  'event:/new_content/game/10_farewell/bird_flyuproll': ['flyuproll_01', 'flyuproll_02', 'flyuproll_03'],
+  'event:/game/general/bird_in':             ['in', 'in_st_A001', 'in_st_A002'],
+  'event:/game/general/bird_land_dirt':      ['land_dirt']
+};
+/* 带 loop 标记的那条事件：IL 里由 SoundSource 持有、FlyAway 时 Stop(true) */
+const BIRD_SFX_LOOP = { 'event:/game/general/birdbaby_tweet_loop': true };
 const sfxLog = [];
+const audioPools = new Map();                 // 变体路径 → <audio> 池（同时响的多声互不打断）
+const AUDIO_POOL_MAX = 3;
+const pendingAudio = new Set();               // 被浏览器拦下的自动播放，等第一次手势重试
+const liveLoops = [];                         // 循环源：每帧按到玩家的距离刷新音量
+/* ★ 有意偏差：循环事件的电平在 FMOD bank 里，程序集只有事件名；6 只待机鸟同时啾会糊成一片，
+   所以循环源统一压到 0.5，一次性音效不动。 */
+const SOUND_LOOP_GAIN = 0.5;
+const audioReady = () => !!(ui.sfx && ui.sfx.checked) && typeof Audio === 'function';
+/* ★ 近似 3D 衰减：真参数（min/max distance、curve）在 FMOD bank 里，程序集没有。 */
+function audioGain(pos) {
+  const p = player();
+  if (!pos || !p) return 1;
+  return clampF(1 - Math.hypot(p.pos.x - pos.x, p.pos.y - pos.y) / 520, 0.12, 1);
+}
+function audioPath(name) {                    // 事件名 → 本帧随机取一个变体的相对路径
+  const list = BIRD_SFX[name];
+  if (!list || !list.length) return null;
+  return BIRD_SFX_BASE + list[Math.floor(rnd() * list.length)] + '.wav';
+}
+function audioTryPlay(el) {                   // NotAllowedError = 还没有用户手势，挂起等解锁
+  const r = el.play();
+  if (r && typeof r.catch === 'function') r.catch(() => pendingAudio.add(el));
+  else pendingAudio.delete(el);
+}
+function audioUnlock() {
+  for (const el of Array.from(pendingAudio)) { pendingAudio.delete(el); audioTryPlay(el); }
+}
+function audioOneShot(path, gain) {
+  let pool = audioPools.get(path);
+  if (!pool) { pool = []; audioPools.set(path, pool); }
+  let el = pool.find(a => a.paused || a.ended);
+  if (!el) {
+    if (pool.length < AUDIO_POOL_MAX) { el = new Audio(path); pool.push(el); }
+    else { pool.round = ((pool.round | 0) + 1) % pool.length; el = pool[pool.round]; }
+  }
+  try { el.currentTime = 0; } catch (e) { void e; }   // 还没 metadata 时赋值会抛，忽略即可
+  el.loop = false; el.volume = gain;
+  audioTryPlay(el);
+  return el;
+}
+function stopAudio(el, allowFadeOut) {        // SoundSource.Stop(bool allowFadeOut)
+  if (!allowFadeOut || typeof requestAnimationFrame !== 'function') { el.pause(); return; }
+  const v0 = el.volume, t0 = performance.now();
+  const tick = () => {
+    const k = Math.min(1, (performance.now() - t0) / 120);
+    el.volume = v0 * (1 - k);
+    if (k < 1) requestAnimationFrame(tick);
+    else { el.pause(); el.volume = v0; }
+  };
+  requestAnimationFrame(tick);
+}
+/* Monocle.SoundSource 的替身：只实现 IL 真正用到的 Play / Stop 两个方法，
+   语义也一致 —— 挂在实体上、可以被 Stop(true) 掐掉、循环性由事件本身决定。 */
+class SoundSource {
+  constructor(ent) { this.entity = ent || null; this.name = null; this.el = null; this.playing = false; }
+  play(name, parameter, value) {              // IL: Play(String path, String parameter, Single value) → SoundSource
+    void parameter; void value;               // ★ 第三参是事件参数值，不是音量
+    this.stop(true);
+    this.name = name; this.playing = false; this.el = null;
+    if (!audioReady()) return this;
+    const path = audioPath(name);
+    if (!path) return this;
+    const gain = audioGain(this.entity && this.entity.pos);
+    if (BIRD_SFX_LOOP[name]) {
+      const el = new Audio(path); el.loop = true; el.volume = gain * SOUND_LOOP_GAIN;
+      audioTryPlay(el);
+      this.el = el; liveLoops.push(this);
+    } else {
+      this.el = audioOneShot(path, gain);
+    }
+    this.playing = true;
+    return this;
+  }
+  stop(allowFadeOut) {                        // IL: Stop(Boolean allowFadeOut) → Boolean
+    const was = this.playing;
+    if (this.el) { stopAudio(this.el, allowFadeOut); this.el = null; }
+    this.playing = false;
+    const i = liveLoops.indexOf(this);
+    if (i >= 0) liveLoops.splice(i, 1);
+    return was;
+  }
+}
+function updateAudio() {                      // 循环源跟着实体走：每帧按到玩家的距离刷新音量
+  for (const s of liveLoops) if (s.el) s.el.volume = audioGain(s.entity && s.entity.pos) * SOUND_LOOP_GAIN;
+}
+document.addEventListener('pointerdown', audioUnlock);
+document.addEventListener('keydown', audioUnlock);
+/* playSfx = Audio.Play(event, position)：画布右下角的 SFX 日志逐字不变，另外真的放一次声。
+   没素材的事件（例如 Dashing 那只结尾的 “Scene.Add(new CS00_Ending(...))” 占位串）静默跳过。 */
 function playSfx(name, pos) {
   sfxLog.push({ name: name.replace('event:/game/general/', '').replace('event:/new_content/game/10_farewell/', 'farewell/'),
                 t: clock, x: pos ? Math.round(pos.x) : 0, y: pos ? Math.round(pos.y) : 0 });
   if (sfxLog.length > 5) sfxLog.shift();
+  if (!audioReady()) return;
+  const path = audioPath(name);
+  if (path) audioOneShot(path, audioGain(pos));
 }
 
 /* ================= BirdTutorialGui（Tags.HUD，逐行抄 Render IL）=================
@@ -2323,7 +2691,9 @@ function lightningPulseRoutine(level) {
 let glitchValue = 0, bloomStrength = 1;
 /* <RemoveRoutine>d__21：把整屏电网拆掉，并在结束时标记“电网已清空” */
 function breakLightning(onComplete, owner = null) {
-  new Runner((function* () {
+  // 返回 Runner 而不是丢掉：LightningBreakerBox::Break 里是 `Add(new Coroutine(RemoveRoutine, true))`，
+  // 协程是 Component，必须挂回宿主才会随宿主的 Components.Update 一起被推进。
+  return new Runner((function* () {
     const level = { };
     const blocks = lightnings.filter(l => !l.removed);   // level.Entities.FindAll<Lightning>()
     for (const b of blocks.slice()) {                    // 屏幕外的当场 RemoveSelf，不再参与碎裂
@@ -2468,8 +2838,35 @@ class SolidRect {
     this.collider = new HitboxShape(w, h, 0, 0); this.collider.ent = this;
     this.collidable = true; this.removed = false; this.visible = false;
     this.onCollide = null; this.onDashCollide = null;   // Platform 的两个委托字段（Player 侧负责派发）
-    this.surfaceSoundIndex = -1;                        // LightningBreakerBox::.ctor 里把它没成 9
+    this.surfaceSoundIndex = -1;                        // LightningBreakerBox::.ctor 里把它设成 9
+    // —— Platform / Mover 侧被 LightningBreakerBox::Update 直接读写的那几个量 ——
+    this.liftSpeed = v2(0, 0);                          // Platform::LiftSpeed（Update 末尾被置 Zero）
+    this.safe = true;                                   // Solid::get_Safe，orig_Update 的 OnSafeGround 读它
+    this.components = [];                               // Monocle.Entity::components（Add 的登记处）
+    this.rider = null;                                  // ★ Mover::Rider：见 hasPlayerRider()
   }
+  // Monocle.Entity::Add(Component)：追加到 components，并在同一帧的 UpdateLists 里跑它的 Added()
+  add(c) { this.components.push(c); return c; }
+  /* Entity::Update() = Components.Update()，按 Add 的顺序逐个跑（EntityList 那边也是同序）。
+     Sprite 的 Update(dt) 需要显式喂 DeltaTime（Monocle.Sprite::UseRawDeltaTime 为假时取 Engine.DeltaTime），
+     Coroutine 是 Component，所以它跟着宿主的 Components.Update 一起被推进 —— 顺序也由此体现。 */
+  updateComponents() {
+    for (const c of this.components) {
+      if (c.active === false) continue;                 // Component::Update 只在 Active 时被调
+      if (c instanceof Sprite) c.update(DELTA);
+      else if (c instanceof Runner) c.step();
+      else if (typeof c.update === 'function') c.update();   // SoundSource 这类没有 Update 的组件也要能挂进来
+    }
+  }
+  /* ★ Solid::GetPlayerRider() 的本体（Mover.Rider as Actor + Actor.OnGround）在本次取证里没有产物，
+     而本页玩家撞电网箱只会被 Rebound 弹开、永远不会「骑」在平台上，所以按 Rider == null ⇒ false 实现；
+     Update 里 sink 的两条分支都保留，好让控制流与 IL 一一对得上。 */
+  hasPlayerRider() { return false; }
+  /* ★ Monocle.Mover::MoveToX / MoveToY 与 Platform::DestroyStaticMovers 没有产物（Mover 的补间机器整块没挖）。
+     BreakerBox 只有 sink(±6px) 与 bounce(±12px) 两种微位移，直接写 Position 与「补间到位」在数值上等价。 */
+  moveToX(x) { this.pos.x = x; }
+  moveToY(y) { this.pos.y = y; }
+  destroyStaticMovers() { /* no-op，见上 */ }
   get x() { return this.pos.x; } get y() { return this.pos.y; }
   get width() { return this.collider.width; } get height() { return this.collider.height; }
   get center() { return this.collider.absCenter; }
@@ -2479,6 +2876,10 @@ class SolidRect {
   get centerY() { return this.collider.absCenter.y; }
   get defaultCenterRight() { return v2(this.collider.right, this.centerY); }
   get defaultCenterLeft() { return v2(this.collider.left, this.centerY); }
+  // Entity::CenterRight / CenterLeft / BottomCenter / TopCenter 都是 virtual，默认实现就是这四个 Default*。
+  // LightningBreakerBox::SmashParticles 用的正是 CenterRight / CenterLeft / BottomCenter / TopCenter。
+  get centerRight() { return this.defaultCenterRight; }
+  get centerLeft() { return this.defaultCenterLeft; }
   get bottomCenter() { return v2(this.centerX, this.collider.bottom); }
   get topCenter() { return v2(this.centerX, this.top); }
   removeSelf() { this.removed = true; }
@@ -2498,6 +2899,216 @@ function collideCheckSpikes(e, at) {                             // Entity::Coll
   let hit = false;
   for (const s of spikes) { if (s.removed) continue; if (collideCheck(e, s)) { hit = true; break; } }
   e.pos = previous; return hit;
+}
+
+/* ================= LightningBreakerBox：砸两下就把电网拆掉的箱子 ================= */
+// 证据：breaker_il.txt（.ctor(EntityData, Vector2) / .ctor(Vector2, bool) / <.ctor>b__23_0 /
+//       Added / Awake / Break / Dashed / Pulse / Render / SmashParticles / Update 全量 IL）。
+// ★ 页面口径（每一条都写清楚为什么）：
+//   · 原版是 <b>32×32</b> 的 Solid，本页按 vs(32)=96 落地（与 FENCE 用 vs(6)/vs(58) 同一套换算）。
+//     但 SmashParticles 里的 count/12/(Height-6)*0.5 全是<b>虚拟像素与虚拟尺寸</b>，所以那一段
+//     必须用常量 32 算，不能拿页面的 96 去算（否则粒子数会从 18 粒变成 50 粒）。
+//   · Awake 的 CollideCheck<Spikes> 四向探测照写，但本页 spikes 表恒空 ⇒ 四个字段恒 false，
+//     Dashed 开头那四支 NormalOverride 因此<b>不可达</b>；保留形状是为了跟 IL 一一对上。
+//   · sine / bounce / shaker 三个 Component 全部按 IL 的顺序 Add 进 components，
+//     由 SolidRect.updateComponents() 按 Add 顺序推进（= Entity::Update → Components.Update）。
+//   · Session.GetFlag / SetFlag 在本页没有对应层；flag 恒 false（EntityData 里没给 flag 属性），
+//     所以 Added 里那句「已拆过 ⇒ RemoveSelf」永远不进。仍留一张本地表，让两处读写对着同一个名字。
+const BREAKER_VIRTUAL = 32;                            // .ctor IL_0010..0015 的两个 32f
+const BREAKER_SIZE = vs(BREAKER_VIRTUAL);
+const sessionFlags = Object.create(null);              // Session 的替身：只有 disable_lightning 这一个键
+const vecEq = (a, b) => a.x === b.x && a.y === b.y;    // Vector2::op_Equality（逐分量）
+let breakers = [];
+class LightningBreakerBox extends SolidRect {
+  constructor(x, y, flipX = false) {
+    super(x, y, BREAKER_SIZE, BREAKER_SIZE);           // Solid::.ctor(position, 32f, 32f, true)
+    this.health = 2;                                   // IL_0000..0002
+    this.musicProgress = -1;                           // IL_0007..0009（C# 字段初始化器）
+    this.surfaceSoundIndex = 9;                        // IL_0020..0023
+    this.start = v2(this.pos.x, this.pos.y);           // IL_0028..002f：start = Position（快照，之后只读）
+    this.visible = true;                               // ★ SolidRect 默认 false，箱子的 Sprite 必须能画
+    /* ---- .ctor(EntityData, Vector2) 的四个字段：本页用不到，只为对齐名字 ---- */
+    this.flag = false;                                 // EntityData.Bool("flag", false)
+    this.music = null;                                 // EntityData.Attr("music", null)
+    this.musicStoreInSession = false;                  // EntityData.Bool("music_session", false)
+    /* ---- 运行时状态 ---- */
+    this.sink = 0;                                     // Update IL_00c3 读写
+    this.shakeCounter = 0;
+    this.makeSparks = false; this.smashParticles = false;
+    this.pulseRoutine = null;
+    this.firstHitSfx = null;
+    this.spikesUp = false; this.spikesDown = false; this.spikesLeft = false; this.spikesRight = false;
+    this.bounceDir = v2(0, 0);
+    this.sprite = new Sprite('breakerBox', 'idle');     // GFX.SpriteBank.Create("breakerBox")
+    this.sprite.onLastFrame = id => this.onLastFrame(id);   // <.ctor>b__23_0 挂进 OnLastFrame
+    this.sprite.position = v2(this.width / 2, this.height / 2);   // IL_0070..0091：Sprite.Position = Size / 2
+    this.sprite.flipX = flipX;                          // IL_0096..009d（.ctor 的第二个实参直接喂给 FlipX）
+    this.add(this.sprite);                              // IL_00a2..00a9
+    this.sine = new SineWave(0.5, 0);                   // IL_00ae..00be：new SineWave(0.5f, 0f)
+    this.add(this.sine);
+    this.bounce = Wiggler.create(1, 0.5, null, false, false);   // IL_00cf..00e2：Create(1f, 0.5f, null, false, false)
+    this.bounce.startZero = false;                      // IL_00e7..00ee
+    this.add(this.bounce);
+    this.shaker = new Shaker(false, null);              // IL_00ff..0108：new Shaker(false, null)
+    this.add(this.shaker);
+    this.onDashCollide = (p, dir) => this.dashed(p, dir);   // IL_0115..0122 Platform::OnDashCollide
+    solids.push(this);                                  // Scene.Tracker（本页用扁平数组代替 Tracker）
+    this.awake();
+  }
+  /* <.ctor>b__23_0(string lastFrame)：只认 "break" 与 "open" 两个 id */
+  onLastFrame(id) {
+    if (id === 'break') { this.visible = false; return; }   // IL_0000..0014
+    if (id === 'open') this.makeSparks = true;              // IL_0015..0029
+  }
+  /* Added(Scene)：flag 且 Session 里已经记过 disable_lightning 就直接走人 */
+  added() {
+    if (this.flag && sessionFlags.disable_lightning) this.removeSelf();   // IL_0007..0029
+  }
+  /* Awake(Scene)：Position ∓ UnitY / UnitX 各探一次 Spikes（本页 spikes 恒空 ⇒ 恒 false） */
+  awake() {
+    this.spikesUp    = collideCheckSpikes(this, vsub(this.pos, UNIT_Y));   // IL_0008..001e
+    this.spikesDown  = collideCheckSpikes(this, vadd(this.pos, UNIT_Y));   // IL_0023..003a
+    this.spikesLeft  = collideCheckSpikes(this, vsub(this.pos, UNIT_X));   // IL_003f..0056
+    this.spikesRight = collideCheckSpikes(this, vadd(this.pos, UNIT_X));   // IL_005b..0072
+  }
+  /* Dashed(Player, Vector2)：被冲刺撞到时由 Player::OnCollideH/V 派发（见 onCollideH 的注释）。
+     返回值恒为 Rebound(0) —— IL_01c9 的 ldc.i4.0 是唯一的出口。 */
+  dashed(p, dir) {
+    if (!invincibleAssist) {                            // 前四支全在 Assists.Invincible 为假的分支里
+      if (vecEq(dir, UNIT_X) && this.spikesLeft) return DASH_COLLISION.NormalOverride;    // IL_0011..0027
+      if (vecEq(dir, v2(-1, 0)) && this.spikesRight) return DASH_COLLISION.NormalOverride; // IL_0028..0043
+      if (vecEq(dir, UNIT_Y) && this.spikesUp) return DASH_COLLISION.NormalOverride;      // IL_0044..005a
+      if (vecEq(dir, v2(0, -1)) && this.spikesDown) return DASH_COLLISION.NormalOverride; // IL_005b..0076
+    }
+    levelDirectionalShake(dir, 0.3);                    // IL_0077..0088：Level::DirectionalShake(dir, 0.3f)
+    // IL_008d..00ea：Scale = (1 + |dir.Y|*0.4 - |dir.X|*0.4, 1 + |dir.X|*0.4 - |dir.Y|*0.4)
+    // —— 正面撞是压扁到 0.6、侧面撞是拉高到 1.4，随后被 Update 末尾的 Approach(…,1,4*dt) 弹回来。
+    this.sprite.scale = v2(1 + Math.abs(dir.y) * 0.4 - Math.abs(dir.x) * 0.4,
+                           1 + Math.abs(dir.x) * 0.4 - Math.abs(dir.y) * 0.4);
+    this.health -= 1;                                   // IL_00ef..00f8
+    if (this.health > 0) {                              // IL_0103..0104：health <= 0 才走 else
+      /* ★ new SoundSource(event) 的 ctor 体在语料里没有产物（全 68 个文件搜 TYPE SoundSource 零命中），
+         但第二击对<b>同一个源</b>直接 Stop(true)，而两击之间没有任何 Play 调用 ——
+         唯一自洽的解释就是这个重载「构造即播放」。本页照这个解释实现，并在正文里标成推断。 */
+      this.firstHitSfx = new SoundSource(this);
+      this.firstHitSfx.play('event:/new_content/game/10_farewell/fusebox_hit_1', null, 0);
+      this.add(this.firstHitSfx);                       // IL_0106..011a Entity::Add(Component)
+      celesteFreeze(0.1);                               // IL_011f..0124 Celeste::Freeze(0.1f)
+      this.shakeCounter = 0.2;                          // IL_0129..012f
+      this.shaker.setOn(true);                          // IL_0134..013b
+      this.bounceDir = dir;                             // IL_0140..0142
+      this.bounce.start();                              // IL_0147..014d Wiggler::Start()
+      this.smashParticles = true;                       // IL_0152..0154
+      this.pulse();                                     // IL_0159..015a：电网整体脉冲一次
+      inputRumble(1, 1);                                // IL_015f..0161 Input::Rumble(1, 1)
+    } else {
+      if (this.firstHitSfx) this.firstHitSfx.stop(true);    // IL_0168..017c Stop(true)
+      playSfx('event:/new_content/game/10_farewell/fusebox_hit_2', this.pos);   // IL_017d..018d Audio::Play(…, Position)
+      celesteFreeze(0.2);                               // IL_018e..0193
+      if (p) p.refillDash();                            // IL_0198..019e Player::RefillDash()
+      this.breakBox();                                  // IL_019f..01a0
+      inputRumble(2, 2);                                // IL_01a5..01a7
+      this.smash(calcPerpendicular(dir));               // IL_01ac..01b3
+      this.smash(vmul(calcPerpendicular(dir), -1));     // IL_01b8..01c1 op_UnaryNegation
+    }
+    return DASH_COLLISION.Rebound;                      // IL_01c9 ldc.i4.0
+  }
+  /* Pulse()：把 Lightning::PulseRoutine 挂到<b>自己身上</b>（Coroutine 是 Component） */
+  pulse() {
+    this.pulseRoutine = new Runner(lightningPulseRoutine(this), this);   // IL_0000..0012
+    this.add(this.pulseRoutine);                        // IL_0017..001e Entity::Add
+  }
+  /* Break()：拆箱。★ 三处跳过的地方逐条说明，不编数字。 */
+  breakBox() {
+    /* RumbleTrigger::ManuallyTrigger(Center.X, 1.2f) —— 该类在语料里零命中，只留注释 */
+    // Tag = Tags.Persistent（IL_0026..0031）：本页没有 Tag 位，实体本来就不会被回收
+    this.shakeCounter = 0;                              // IL_0036..003c
+    this.shaker.setOn(false);                           // IL_0041..0048
+    this.sprite.play('break', false, false);            // IL_004d..005a
+    this.collidable = false;                            // IL_005f..0061
+    this.destroyStaticMovers();                         // IL_0066..0067（本页 no-op）
+    if (this.flag) sessionFlags.disable_lightning = true;   // IL_006c..007b Session::SetFlag
+    /* music / music_progress / music_session 三支（IL_0080..013c）：本页没有 AudioState.Music
+       这一层音乐状态机，整段跳过 —— 不伪造 SetMusic / SetMusicParam / CurrentMusicEventInstance。 */
+    if (this.pulseRoutine) this.pulseRoutine.active = false;   // IL_013d..014c Component::Active = false
+    // IL_0151..016f：Add(new Coroutine(Lightning::RemoveRoutine(Level, RemoveSelf), true))
+    const c = breakLightning(() => this.removeSelf(), this);
+    if (c) this.add(c);
+  }
+  /* SmashParticles(Vector2 direction)：四向各一套锚点/抖动范围/角度，count 统一 +2。
+     ★ 这里的 12 / 6 / 8 全是<b>虚拟像素与虚拟尺寸</b>，所以尺寸用常量 BREAKER_VIRTUAL。 */
+  smash(dir) {
+    const V = BREAKER_VIRTUAL, px = vs(1);
+    let at, range, angle, count;
+    if (vecEq(dir, UNIT_X)) {                           // IL_0000..000b
+      angle = 0;                                        // IL_000d..0012
+      at = vsub(this.centerRight, vmul(UNIT_X, 12 * px));               // IL_0013..002d
+      range = vmul(UNIT_Y, (V - 6) * 0.5 * px);                          // IL_002e..004e
+      count = ((V / 8) | 0) * 4;                        // IL_004f..005e
+    } else if (vecEq(dir, v2(-1, 0))) {                 // IL_0064..006f
+      angle = IL_PI;                                    // IL_0076..007b
+      at = vadd(this.centerLeft, vmul(UNIT_X, 12 * px));                // IL_007c..0096
+      range = vmul(UNIT_Y, (V - 6) * 0.5 * px);
+      count = ((V / 8) | 0) * 4;
+    } else if (vecEq(dir, UNIT_Y)) {                    // IL_00cd..00d8
+      angle = IL_HALF_PI;                               // IL_00da..00df
+      at = vsub(this.bottomCenter, vmul(UNIT_Y, 12 * px));              // IL_00e0..00fa
+      range = vmul(UNIT_X, (V - 6) * 0.5 * px);                          // IL_00fb..011b
+      count = ((V / 8) | 0) * 4;
+    } else {                                            // IL_012e：剩下的方向一律当「向上」
+      angle = -IL_HALF_PI;                              // IL_012e..0133
+      at = vadd(this.topCenter, vmul(UNIT_Y, 12 * px));                 // IL_0134..014e
+      range = vmul(UNIT_X, (V - 6) * 0.5 * px);
+      count = ((V / 8) | 0) * 4;
+    }
+    count += 2;                                         // IL_0180..0183
+    emitParticles(P_SMASH, count, at, range, angle);    // IL_0184..0198 Particles.Emit(P_Smash, …)
+  }
+  /* Update()：顺序就是 IL 顺序 —— base.Update 先跑，然后火花、抖动计时、sink 吸附、贴图回中 */
+  update() {
+    this.updateComponents();                            // IL_0000..0001 Solid::Update → Components.Update
+    if (this.makeSparks && onInterval(0.03))            // IL_0006..001e Scene::OnInterval(0.03f)
+      emitParticles(P_SPARKS, 1, this.center, vmul(v2(1, 1), 12 * vs(1)));   // IL_0020..0046
+    if (this.shakeCounter > 0) {                        // IL_004b..0056
+      this.shakeCounter -= DELTA;                       // IL_0058..0065 Engine::DeltaTime
+      if (!(this.shakeCounter > 0)) {                   // IL_006a..0075
+        this.shaker.setOn(false);                       // IL_0077..007e
+        this.sprite.scale = vmul(v2(1, 1), 1.2);        // IL_0083..0098：先胀到 1.2 再回落
+        this.sprite.play('open', false, false);          // IL_009d..00aa → OnLastFrame("open") 打开火花
+      }
+    }
+    if (this.collidable) {                              // IL_00af..00b5
+      const rider = this.hasPlayerRider();              // IL_00ba..00c0（本页恒 false）
+      this.sink = approach(this.sink, rider ? 1 : 0, 2 * DELTA);   // IL_00c1..00e0
+      this.sine.rate = lerpF(1, 0.5, this.sink);        // IL_00e5..0100 SineWave.Rate = Lerp(1, 0.5, sink)
+      /* IL_0105..0144：start 先<b>拷贝</b>到局部（stloc.1），再在副本上改 Y ——
+         所以 start 自己不被污染，sink 与 sine 不会累积漂移。 */
+      const at = v2(this.start.x,
+        this.start.y + this.sink * 6 * vs(1) + this.sine.value * lerpF(4, 2, this.sink) * vs(1));
+      // IL_0145..016b：at += (bounce.Value * bounceDir) * 12
+      const moved = vadd(at, vmul(vmul(this.bounceDir, this.bounce.value), 12 * vs(1)));
+      this.moveToX(moved.x); this.moveToY(moved.y);     // IL_016c..017f
+      if (this.smashParticles) {                        // IL_0184..018a
+        this.smashParticles = false;                    // IL_018c..018e
+        this.smash(calcPerpendicular(this.bounceDir));  // IL_0193..019f
+        this.smash(vmul(calcPerpendicular(this.bounceDir), -1));   // IL_01a4..01b5
+      }
+    }
+    // IL_01ba..021f：Scale 两分量各自 Approach(…, 1, 4*DeltaTime)（不分 Collidable）
+    this.sprite.scale = v2(approach(this.sprite.scale.x, 1, DELTA * 4),
+                           approach(this.sprite.scale.y, 1, DELTA * 4));
+    this.liftSpeed = v2(0, 0);                          // IL_0224..022f Platform::LiftSpeed = Zero
+    /* ★ 这里<b>不能</b>再 stepOwned(this)：base.Update 已经在第一行走过，pulseRoutine 与
+       breakBox 挂上来的 RemoveRoutine 都在 components 里被这一步推过了。 */
+  }
+  /* Render()：sprite.Position 临时加上 Shaker.Value，画完再还原（IL_000c..003a） */
+  draw() {
+    if (!this.visible) return;
+    const saved = this.sprite.position;
+    this.sprite.position = vadd(saved, vmul(this.shaker.value, vs(1)));
+    this.sprite.draw(this.pos, 0, v2(1, 1));
+    this.sprite.position = saved;
+  }
 }
 /* Actor::MoveHExact(int moveH, Collision onCollide, Solid pusher)：actor_moveexact_il.txt。
    ★ 两个反直觉的点：
@@ -2587,6 +3198,87 @@ const ST_FLING_BIRD = 24;                                // Player.StateMachine.
 const P_GRAVITY = 900, P_MAX_FALL = 160, P_FAST_FALL = 240, P_FAST_THRESH = 200;
 const P_HALF_GRAV_SPEED = 40, P_AIR_MULT = 0.65, P_MAX_RUN = 90, P_MAX_RUN_SLOW_FALL = 108.000008;
 const P_RUN_REDUCE = 400, P_RUN_ACCEL = 1000, P_FALL_ACCEL = 300;
+/* ---- dash 侧常量（actor_mover_il.txt L765-948 的 Player const 字段表逐字；const 在方法体里
+      一律以 ldc.r4 字面量出现，所以看不到 ldfld，这些数字的出处就是字面量本身）---- */
+const P_DASH_SPEED = 240, P_END_DASH_SPEED = 160, P_END_DASH_UP_MULT = 0.75;
+const P_DASH_TIME = 0.15, P_SUPER_DASH_TIME = 0.3;
+const P_DASH_COOLDOWN = 0.2, P_DASH_REFILL_COOLDOWN = 0.1, P_DASH_ATTACK_TIME = 0.3;
+const P_DASH_H_JUMPTHRU_NUDGE = 6, P_DASH_CORNER_CORRECTION = 4, P_DASH_V_FLOOR_SNAP_DIST = 3;
+const P_REBOUND_SPEED_X = 120, P_REBOUND_SPEED_Y = -120, P_REBOUND_VAR_JUMP_TIME = 0.15;
+const P_REFLECT_BOUND_SPEED = 220, P_GLIDER_DASH_BOOST_TIME = 0.55;
+const P_DODGE_SLIDE_SPEED_MULT = 1.2, P_DUCK_CORRECT_CHECK = 4;
+const P_UPWARD_CORNER_CORRECTION = 4, P_DASHING_UPWARD_CORNER_CORRECTION = 5;
+const P_WALL_SPEED_RETENTION_TIME = 0.06, P_LOW_FRICTION_STOP_TIME = 0.15;
+const P_SUPER_DASH_TURN = 4.18879032;        // DashUpdate 里 Calc.RotateTowards 的 maxRadians 实参（= 4π/3 / 秒）
+const P_CEILING_VAR_JUMP_GRACE = 0.05;       // ★ const 表里是 0.05，但 OnCollideV 的 IL_05d1 比的是 0.15f
+/* ---- Player::State 的整数（同一个 const 表）---- */
+const ST_NORMAL = 0, ST_CLIMB = 1, ST_DASH = 2, ST_SWIM = 3, ST_BOOST = 4, ST_REDDASH = 5;
+const ST_HITSQUASH = 6, ST_LAUNCH = 7, ST_PICKUP = 8, ST_DREAMDASH = 9, ST_SUMMITLAUNCH = 10;
+const ST_DUMMY = 11, ST_BIRDDASHTUTORIAL = 16, ST_FROZEN = 17, ST_REFLECTIONFALL = 18;
+const ST_STARFLY = 19, ST_TEMPLEFALL = 20, ST_CASSETTEFLY = 21, ST_ATTRACT = 22;
+/* ★ Player::.ctor 的 SetCallbacks 注册表（player_consts_il.txt L415-745 逐字，0..25 全 26 槽）：
+       0  NormalUpdate       /null              /NormalBegin        /NormalEnd
+       1  ClimbUpdate        /null              /ClimbBegin         /ClimbEnd
+     ★ 2  DashUpdate         /DashCoroutine     /DashBegin          /DashEnd          ← 本页要落地的那一行
+       3  SwimUpdate         /null              /SwimBegin          /null
+       4  BoostUpdate        /BoostCoroutine    /BoostBegin         /BoostEnd
+       5  RedDashUpdate      /RedDashCoroutine  /RedDashBegin       /RedDashEnd
+       6  HitSquashUpdate    /null              /HitSquashBegin     /null
+       7  LaunchUpdate       /null              /LaunchBegin        /null
+       8  null               /PickupCoroutine   /null               /null
+       9  DreamDashUpdate    /null              /DreamDashBegin     /DreamDashEnd
+      10  SummitLaunchUpdate /null              /SummitLaunchBegin  /null
+      11  DummyUpdate        /null              /DummyBegin         /null
+      12  null               /IntroWalkCoroutine      /null  /null
+      13  null               /IntroJumpCoroutine      /null  /null
+      14  null               /null                    /IntroRespawnBegin /IntroRespawnEnd
+      15  null               /IntroWakeUpCoroutine    /null  /null
+      16  BirdDashTutorialUpdate /BirdDashTutorialCoroutine /BirdDashTutorialBegin /null
+      17  FrozenUpdate       /null              /null               /null
+      18  ReflectionFallUpdate /ReflectionFallCoroutine /ReflectionFallBegin /ReflectionFallEnd
+      19  StarFlyUpdate      /StarFlyCoroutine  /StarFlyBegin       /StarFlyEnd
+      20  TempleFallUpdate   /TempleFallCoroutine /null             /null
+      21  CassetteFlyUpdate  /CassetteFlyCoroutine /CassetteFlyBegin /CassetteFlyEnd
+      22  AttractUpdate      /null              /AttractBegin       /AttractEnd
+      23  null               /IntroMoonJumpCoroutine /null            /null
+      24  FlingBirdUpdate    /FlingBirdCoroutine /FlingBirdBegin     /FlingBirdEnd
+      25  null               /IntroThinkForABitCoroutine /null        /null
+   ★ 有意偏差：本页只给 0 / 2 / 24 三格填了实现（其余 23 槽的方法本体一个都没取证），
+     填 null 而不是编一个假函数 —— StateMachine.set_State 对 null 本来就有守卫，行为等价于「进那个状态什么也不做」。 */
+/* ★ 有意偏差：下面四个是「原版环境量」在本页的最小替身，本次取证对它们<b>没有产物</b>
+   （SaveData.Assists 的其余开关、Level::CoreMode / InSpace / Wind、Player::LiftBoost 的来路）。
+   取值一律是「普通关卡 + 普通玩家」那一支，写成字段只是为了让上面的 IL 注释逐条对得上。 */
+let assistsNoGrabbing = false, assistsLowFriction = false;
+let levelCoreMode = 0, levelInSpace = false, levelWindY = 0;
+/* Calc::RotateTowards(Vector2 vector, float targetAngle, float maxRadians)（Vector2 重载）：
+   ★ 方法体无产物，但它的兄弟 float 重载（下面 calcRotateTowards）已经取证过，
+   两者的关系就是「求角差 → 不够就整转角、够就只转 maxRadians」，长度不变。 */
+function rotateTowardsV(vec, targetAngle, maxRadians) {
+  const len = Math.hypot(vec.x, vec.y);
+  const d = angleDiff(calcAngleV(vec), targetAngle);
+  const a = Math.abs(d) <= maxRadians ? targetAngle : calcAngleV(vec) + sign(d) * maxRadians;
+  return v2(Math.cos(a) * len, Math.sin(a) * len);
+}
+/* ★ CollideFirst<LedgeBlocker>(at)：本页没有 LedgeBlocker 实体 ⇒ 恒 null / false。
+   它被 NormalUpdate 的墙滑判定（IL_086e/08f6）与 DashUpdate 的抓墙跳各读一次。 */
+function climbBlockerCheck(p, at) { void p; void at; return false; }
+/* Player::NormalUpdate 的末尾段（IL_09e2..0b17）：落地与空中两条路都汇到这里。
+   顺序不可换 —— 先让 varJump 封顶，再处理「这一帧按了跳」。 */
+function goto_varJump(p) {
+  // if (varJumpTimer > 0f)：按住跳（或 AutoJump）就把上升速度钳到 varJumpSpeed，否则提前结束 varJump
+  if (p.varJumpTimer > 0) {
+    if (p.autoJump || vInput.Jump.check) p.setSY(Math.min(p.speed.y, p.varJumpSpeed));
+    else p.varJumpTimer = 0;
+  }
+  if (vInput.Jump.pressed) {
+    if (talkComponentPlayerOver && vInput.Talk.pressed) return;   // 正在跟 NPC 对话，吞掉这一下
+    if (p.jumpGraceTimer > 0) { p.jump(true, true); return; }     // 土狼时间内的二段（hop = true）
+    if (!p.canUnDuck) return;                                     // 头顶有东西，蹲着不能起跳
+    /* ★ WallJumpCheck(±1) 本体无产物 ⇒ 恒 false；两个分支在本页永不成立。
+       Water 那一条（CollideFirst<Water>(Position + UnitY*2f) ⇒ Jump(true,true) + TopSurface.DoRipple）
+       也因为本页没有 Water 实体恒不命中。 */
+  }
+}
 class PlayerEntity {
   constructor() {
     this.pos = v2(-999, -999);
@@ -2602,13 +3294,63 @@ class PlayerEntity {
     this.collider = this.normalHitbox;                   // Collider = normalHitbox（物理阻挡）
     this.hurtbox = this.normalHurtbox;                   // IL_0232-0239: hurtbox = normalHurtbox
     this.collidable = true; this.removed = false;
-    this.speed = v2(0, 0); this.state = 0; this.dead = false;
+    this.speed = v2(0, 0); this.dead = false;
     this.climbing = false; this.onGround = false;
     this.drivenByMouse = true; this.flingBird = null;
     this.launched = false; this.launchedTimer = 0; this.launchedFrom = { v: 0 };   // ref float previous
     this.autoJump = false; this.varJumpTimer = 0; this.varJumpSpeed = 0;
+    this.autoJumpTimer = 0;
     this.forceMoveX = 0; this.forceMoveXTimer = 0;
     this.wallSlideTimer = 1.2; this.stamina = 110; this.deadTimer = 0; this.groundedFor = 0;
+    /* ---- Actor / Player 的位移与 dash 现场 ---- */
+    this.movementCounter = v2(0, 0);                     // Actor::MovementCounter（MoveH/MoveV 的亚像素余量）
+    this.sm = new StateMachine(26, this);                // Player::.ctor：new StateMachine(26) 且 Add(StateMachine)
+    this.facing = 1;                                     // .ctor IL_071a：Facing = (Facings)1
+    this.lastAim = UNIT_X;                               // .ctor IL_0710：lastAim = Vector2.UnitX
+    this.dashes = 1;                                     // 立刻被填满到 get_MaxDashes()
+    this.inventoryDashes = 1;                            // ★ Celeste.Inventory.Dashes（无产物，按“普通玩家 1 段”）
+    this.dashDir = v2(0, 0);
+    this.dashCooldownTimer = 0; this.dashRefillCooldownTimer = 0; this.dashAttackTimer = 0;
+    this.dashTrailTimer = 0; this.dashTrailCounter = 0;
+    this.beforeDashSpeed = v2(0, 0);
+    this.wasDashB = false; this.calledDashEvents = false; this.dashStartedOnGround = false;
+    this.canCurveDash = true; this.demoDashed = false; this.startedDashing = false;
+    this.gliderBoostTimer = 0; this.wallSpeedRetentionTimer = 0; this.wallSpeedRetained = 0;
+    this.lowFrictionStopTimer = 0; this.wallBoostTimer = 0; this.jumpGraceTimer = 0;
+    this.highestAirY = 0; this.playFootstepOnLand = 0; this.muffleLanding = false;
+    this.maxFall = P_MAX_FALL;                           // Player::maxFall 是个字段，不恒等于 MaxFall 常量
+    this.moveX = 0; this.moveY = 0; this.wallSlideDir = 0;
+    this.spriteScale = v2(1, 1);                         // ★ PlayerSprite.Scale 的最小替身（Sprite 本体无产物）
+    this.spriteMode = 0;                                 // ★ PlayerSpriteMode，枚举成员名无产物 ⇒ 只留整数
+    this.overrideDashDirection = null;                   // Player::OverrideDashDirection
+    this.currentBooster = null; this.lastBooster = null; this.holding = null;
+    this.dreamJump = false; this.holdCannotDuck = false; this.windMovedUp = false;
+    /* ---- Player::orig_Update 头部自己读的那几个现场（IL 里的 ldfld 名逐字）---- */
+    this.wasOnGround = false;                            // IL_12be：wasOnGround = onGround（orig_Update 最末）
+    this.onSafeGround = false;                           // set_OnSafeGround，NormalUpdate 不读，只被 orig_Update 写
+    this.liftBoost = v2(0, 0);                           // ★ get_LiftBoost：骑在 Mover 上才有值，本页恒 Zero
+    this.flash = false; this.wasTired = false;           // IL_038b / IL_0bdc
+    this.wallBoostDir = 0; this.lastClimbMove = -1;      // IL_03e7 / IL_0c4e
+    this.minHoldTimer = 0;                               // IL_046e 之前的 IL_0af8
+    this.ignoreJumpThrus = false;                        // ★ Actor::IgnoreJumpThrus（MoveVExact / OnGround 读它）
+    this.dashes = this.maxDashes;
+    /* Player::.ctor 的 SetCallbacks：只把取到证的三格接上（见上面那张 0..25 表的 ★） */
+    this.sm.setCallbacks(ST_NORMAL, () => this.normalUpdate(), null, null, null);
+    this.sm.setCallbacks(ST_DASH, () => this.dashUpdate(), function (s) { return s.dashCoroutine(); },
+                        () => this.dashBegin(), () => this.dashEnd());
+    this.sm.setCallbacks(ST_FLING_BIRD, () => this.flingBirdUpdate(), null, null, null);
+  }
+  /* ★ C# 的 Speed / DashDir 都是结构体，`beforeDashSpeed = Speed` 是拷贝、`Speed.X += …` 是原地改；
+     JS 里对象是引用，所以本页一律「重新 v2 再整块赋值」，语义与结构体等价（也顺带避免了别名 bug）。 */
+  get state() { return this.sm.state; }
+  set state(v) { this.sm.setState(v); }
+  /* Player::set_Ducking / get_Ducking（player_ducking_il.txt L58-92）：Ducking <b>没有后台字段</b>，
+     它完全由「当前 Collider 是哪两个盒」推导：get = Collider == duckHitbox ‖ Collider == duckHurtbox；
+     set 同时换 Collider 与 hurtbox。原先把它当个 bool 字段存是错的。 */
+  get ducking() { return this.collider === this.duckHitbox || this.collider === this.duckHurtbox; }
+  set ducking(v) {
+    if (v) { this.collider = this.duckHitbox; this.hurtbox = this.duckHurtbox; }
+    else { this.collider = this.normalHitbox; this.hurtbox = this.normalHurtbox; }
   }
   get x() { return this.pos.x; }
   get y() { return this.pos.y; }
@@ -2646,7 +3388,14 @@ class PlayerEntity {
     //   Monocle.PlayerCollider 根本没有 Update 方法（只有 .ctor / Check / DebugRender）。
     playerColliderScan(this);
   }
+  /* ================= 结构体字段的「只改一个分量」=================
+     IL 里 `ldflda Speed … stfld X/Y` 是就地改 Vector2 的一个分量；本页 Speed 是对象，
+     而 C# 的结构体语义要求「拷贝之后互不影响」，所以一律重建整个对象。 */
+  setSX(v) { this.speed = v2(v, this.speed.y); }
+  setSY(v) { this.speed = v2(this.speed.x, v); }
+  /* ================= Player::orig_Update 的驱动顺序（player_origupdate_il.txt 逐字） ================= */
   stepUpdate() {
+    const dt = DELTA;
     if (this.dead) {
       this.deadTimer += RAW_DELTA;
       // ★ 演示专用的「原地重生」：复活那一帧不能直接 return，否则 Position 还停在致死的那格上，
@@ -2656,7 +3405,10 @@ class PlayerEntity {
       if (this.deadTimer > 1.2) { this.dead = false; this.drivenByMouse = true; this.launched = false; }
       else return;
     }
-    if (this.drivenByMouse) {
+    /* ★ 有意偏差（本页的演示架子）：没勾选「键盘 dash 演示」时，指针<b>就是</b> Player.Position，
+       整条 orig_Update 都不跑。这是最初取证 FlingBird 时定下的口径，保留它才能让
+       「抱鸟 → 甩出」那条链与既有的 60 项静态断言同时对上。勾选之后走下面的真顺序。 */
+    if (this.drivenByMouse && !ui.dashDemo.checked) {
       const was = this.pos; const w = screenToWorld(mouse);
       this.pos = w;
       // ★ 有意偏差：鼠标没有质量，但为了 flingSpeed = p.Speed * 0.4f 真的能做出事，
@@ -2665,64 +3417,701 @@ class PlayerEntity {
       this.speed = v2(clampF(v.x, -400, 400), clampF(v.y, -400, 400));
       this.climbing = mouseDown;
       this.onGround = w.y >= GROUND_Y - 4;
-      this.state = this.climbing ? 1 : 0;
+      this.state = this.climbing ? ST_CLIMB : ST_NORMAL;
       return;
     }
-    if (this.state === ST_FLING_BIRD) { this.flingBirdUpdate(); return; }
-    this.normalUpdate();
+    // ---- IL_0230..02cc：onGround / OnSafeGround ----
+    if (this.state === ST_DREAMDASH) { this.onSafeGround = false; this.onGround = false; }   // IL_023b
+    else if (!(this.speed.y < 0)) {                                                          // IL_0264
+      const solid = collideFirstSolid(this, vadd(this.pos, UNIT_Y));                         // IL_0277
+      const jt = null;                                                                       // ★ CollideFirstOutside<JumpThru>：本页无
+      if (solid || jt) { this.onGround = true; this.onSafeGround = !!(solid && solid.safe); } // IL_029a..02a8
+      else { this.onGround = false; this.onSafeGround = false; }                              // IL_02af
+    } else { this.onGround = false; this.onSafeGround = false; }                              // IL_02c1
+    if (this.state === ST_SWIM) this.onSafeGround = true;                                     // IL_02d1..02e6
+    if (this.onSafeGround) { /* ★ Tracker.GetComponents<SafeGroundBlocker>()：本页无该实体 ⇒ 循环体永不命中 */ }
+    this.playFootstepOnLand -= dt;                                                            // IL_033c
+    if (this.onGround) this.highestAirY = this.y;                                             // IL_034e..0362
+    else this.highestAirY = Math.min(this.y, this.highestAirY);                               // IL_0364..0376
+    if (onInterval(0.05)) this.flash = !this.flash;                                           // IL_037b..039b
+    if (this.wallSlideDir !== 0) {                                                            // IL_039c..03c6
+      this.wallSlideTimer = Math.max(this.wallSlideTimer - dt, 0);
+      this.wallSlideDir = 0;
+    }
+    if (this.wallBoostTimer > 0) {                                                            // IL_03c7..043b
+      this.wallBoostTimer -= dt;
+      if (this.moveX === this.wallBoostDir) {
+        this.setSX(130 * this.moveX);                                                         // IL_03f4..0407
+        this.stamina += 27.5;                                                                 // IL_040c..0419
+        this.wallBoostTimer = 0;                                                              // IL_041e
+        /* IL_0429：sweatSprite.Play("idle") ★ 无 PlayerHair / sweatSprite 产物 */
+      }
+    }
+    if (this.onGround && this.state !== ST_CLIMB) {                                           // IL_043b..0469
+      this.autoJump = false; this.stamina = 110; this.wallSlideTimer = 1.2;
+    }
+    if (this.dashAttackTimer > 0) this.dashAttackTimer -= dt;                                 // IL_046e..048c
+    if (this.onGround) { this.dreamJump = false; this.jumpGraceTimer = 0.1; }                  // IL_048d..04a7
+    else if (this.jumpGraceTimer > 0) this.jumpGraceTimer -= dt;                              // IL_04a9..04c7
+    if (this.dashCooldownTimer > 0) this.dashCooldownTimer -= dt;                             // IL_04c8..04e6
+    if (this.dashRefillCooldownTimer > 0) this.dashRefillCooldownTimer -= dt;                  // IL_04e7..0506
+    else if (inputDashMode === 2 && !inCutscene) this.refillDash();                            // IL_050b..0535
+    else {                                                                                    // IL_0536..
+      const noRefills = false;                                                               // ★ PlayerInventory::NoRefills 无产物
+      if (!noRefills) {
+        if (this.state === ST_SWIM) this.refillDash();                                       // IL_0546..055c
+        else if (this.onGround) {
+          const onSolid = collideCheckSolid(this, vadd(this.pos, UNIT_Y));                   // IL_0565 CollideCheck<Solid,NegaBlock>
+          const onJt = false;                                                                // ★ CollideCheckOutside<JumpThru>
+          if (onSolid || onJt) {
+            const onSpikes = collideCheckSpikes(this, this.pos);                              // IL_0595
+            if (!onSpikes || invincibleAssist) this.refillDash();                              // IL_05a1..05ba
+          }
+        }
+      }
+    }
+    if (this.varJumpTimer > 0) this.varJumpTimer -= dt;                                       // IL_05bb..05d9
+    if (this.autoJumpTimer > 0) {                                                             // IL_05da..0621
+      if (this.autoJump) { this.autoJumpTimer -= dt; if (this.autoJumpTimer <= 0) this.autoJump = false; }
+      else this.autoJumpTimer = 0;
+    }
+    if (this.forceMoveXTimer > 0) { this.forceMoveXTimer -= dt; this.moveX = this.forceMoveX; } // IL_0622..064d
+    else { this.moveX = clampF(vMove.x, -1, 1) | 0; /* ★ IL_065f climbHopSolid = null：本页无爬跳 */ }  // IL_064f
+    /* IL_0666..08c0：climbHopSolid 跟随 + noWindTimer 全部 ★ 无产物，直接略过 */
+    if (this.moveX !== 0 && this.inControl
+        && this.state !== ST_CLIMB && this.state !== ST_PICKUP
+        && this.state !== ST_REDDASH && this.state !== ST_HITSQUASH) {                          // IL_070b..0757
+      const v = this.moveX;
+      if (v !== this.facing && this.ducking) this.spriteScale = v2(0.8, 1.2);                   // IL_0761..0788
+      this.facing = v;                                                                          // IL_078d
+    }
+    this.lastAim = inputGetAimVector(this.facing);                                             // IL_0795..07a1
+    if (this.wallSpeedRetentionTimer > 0) {                                                    // IL_07a6..0839
+      if (sign(this.speed.x) === -sign(this.wallSpeedRetained)) this.wallSpeedRetentionTimer = 0;
+      else if (!collideCheckSolid(this, vadd(this.pos, vmul(UNIT_X, sign(this.wallSpeedRetained))))) {
+        this.setSX(this.wallSpeedRetained); this.wallSpeedRetentionTimer = 0;
+      } else this.wallSpeedRetentionTimer -= dt;
+    }
+    /* IL_083a..0ab0：hopWaitX（爬跳余震）与一整段 PlayerHair 的头发参数 ★ 无产物 */
+    if (this.state === ST_REDDASH) { /* ★ Sprite.HairCount = 1，本页没有 PlayerSprite */ }
+    else if (this.state !== ST_STARFLY) { /* ★ HairCount = Dashes > 1 ? startHairCount : 5 */ }
+    if (this.minHoldTimer > 0) this.minHoldTimer -= dt;                                        // IL_0af8..0b16
+    // ---- IL_0b17..0bcc：launched / SpeedRing 的唯一产生点 ----
+    if (this.launched) {
+      if (this.speed.x * this.speed.x + this.speed.y * this.speed.y < 19600) this.launched = false;
+      else {
+        const previous = this.launchedTimer;                                                   // IL_0b41 stloc V_6
+        this.launchedTimer += dt;
+        if (this.launchedTimer >= 0.5) { this.launched = false; this.launchedTimer = 0; }
+        else if (calcOnInterval(this.launchedTimer, this.launchedFrom, 0.15))
+          new SpeedRing().init(this.center, Math.atan2(this.speed.y, this.speed.x), '#ffffff');
+        void previous;
+      }
+    } else this.launchedTimer = 0;                                                             // IL_0bc1
+    if (this.isTired) { inputRumble(0, 0); if (!this.wasTired) this.wasTired = true; }          // IL_0bd2..0bea
+    else this.wasTired = false;                                                                  // IL_0bec
+    /* ---- IL_0bf4 call Actor::Update()：★ StateMachine::Update 的调用点在全语料里零命中，
+       本页把它放在这里（依据是数据流：NormalUpdate 写的 Speed 正是 IL_0d6b 要读的）。---- */
+    this.sm.update();                                 // → updates[state]()，回调里可能 set_State
+    // ★ Entity::Update() = Components.Update()。Player 的组件表里唯一会跑协程的就是 StateMachine
+    //   自己，而它已经在上一行 this.sm.update() 里把 currentCoroutine.Update() 走掉了（IL_0079..0096），
+    //   所以这里<b>不能</b>再 stepOwned(this) —— 那会把同一条协程在一帧里推两帧。
+    // ---- IL_0c25..0c79：穿过 JumpThru 时往上顶 40px/s ----
+    if (!this.onGround && !(this.speed.y > 0) &&
+        !(this.state === ST_CLIMB && this.lastClimbMove === -1)) {
+      const onJt = false;                                    // ★ CollideCheck<JumpThru>()：本页无 JumpThru
+      if (onJt && !this.jumpThruBoostBlockedCheck()) actorMoveV(this, -40 * dt);
+    }
+    // ---- IL_0c7a..0d06：冲刺砸地面前 3px 的贴地校正（DashVFloorSnapDistance）----
+    if (!this.onGround && this.dashAttacking && this.dashDir.y === 0) {
+      const at = vadd(this.pos, vmul(UNIT_Y, P_DASH_V_FLOOR_SNAP_DIST));
+      if (collideCheckSolid(this, at) && !this.dashCorrectCheck(vmul(UNIT_Y, P_DASH_V_FLOOR_SNAP_DIST)))
+        moveVExact(this, P_DASH_V_FLOOR_SNAP_DIST);
+    }
+    // ---- IL_0d07..0d4a：上升途中自动解除下蹲 ----
+    if (this.speed.y > 0 && this.canUnDuck && this.collider !== this.starFlyHitbox &&
+        !this.onGround && this.jumpGraceTimer <= 0) this.ducking = false;
+    // ---- IL_0d5b / IL_0d88：唯一的两处位移 ----
+    if (this.state !== ST_DREAMDASH && this.state !== ST_ATTRACT) {
+      actorMoveH(this, this.speed.x * dt, d => this.onCollideH(d));
+      actorMoveV(this, this.speed.y * dt, d => this.onCollideV(d));
+    }
+    /* ---- IL_0dc5..0ed6：进水的三个分支全部依赖 Water / SwimCheck，本页无 Water ⇒ 恒不命中 ----
+       （State==3 的下沉检测、State==0 的入水、State==1 的出水，形状保留在这里备查。） */
+    /* ---- IL_0f90 UpdateSprite() / IL_0f96 UpdateCarry()：★ 无产物 ---- */
+    /* ---- IL_12be：orig_Update 的最后一行 ---- */
+    this.wasOnGround = this.onGround;
+    // ---- 演示专用：落地 0.6s 后把控制权还给鼠标，否则「鼠标即 Player」的模型回不来 ----
+    if (!ui.dashDemo.checked) {
+      if (this.onGround) { this.groundedFor += dt;
+        if (this.groundedFor > 0.6) { this.drivenByMouse = true; this.state = ST_NORMAL; this.groundedFor = 0; }
+      } else this.groundedFor = 0;
+    }
   }
   /* FlingBirdUpdate：被鸟拎着的时候，每帧定速往鸟肚子下面靠 */
   flingBirdUpdate() {
     const b = this.flingBird;
-    if (!b || b.removed) { this.state = 0; return; }
+    if (!b || b.removed) return ST_NORMAL;                   // ★ 交回 Normal（FlingBirdEnd 无产物）
     this.pos.x = approach(this.pos.x, b.pos.x, 250 * DELTA);
     // bird.Y + 8f + Collider.Height，Collider 此刻是 normalHitbox(高 11) ⇒ 挂在鸟下方 19px
     this.pos.y = approach(this.pos.y, b.pos.y + 8 + this.height, 250 * DELTA);
     this.speed = v2(0, 0);
+    return ST_FLING_BIRD;
   }
-  /* ================= Player::NormalUpdate 的空中部分（重力 / 上限 / 变跳 / 塑性） ================= */
+  /* ================= Player::NormalUpdate()（player_gravity_il.txt IL_0000..IL_0c0b 逐字） ================= */
   normalUpdate() {
-    let gravMult = 1;
-    if (Math.abs(this.speed.y) < P_HALF_GRAV_SPEED && this.autoJump) gravMult = 0.5;
-    // 水平：无键盘输入 ⇒ moveX = forceMoveXTimer > 0 ? forceMoveX : 0
-    const moveX = this.forceMoveXTimer > 0 ? this.forceMoveX : 0;
-    if (this.forceMoveXTimer > 0) this.forceMoveXTimer -= DELTA;
-    const mult = this.onGround ? 1 : P_AIR_MULT;
-    const maxRun = P_MAX_RUN;
-    if (Math.abs(this.speed.x) > maxRun && sign(this.speed.x) === sign(moveX))
-      this.speed.x = approach(this.speed.x, maxRun * sign(moveX || this.speed.x), P_RUN_REDUCE * mult * DELTA);
-    else this.speed.x = approach(this.speed.x, maxRun * moveX, P_RUN_ACCEL * mult * DELTA);
-    // 重力
-    let maxFall = P_MAX_FALL;
-    this.speed.y = approach(this.speed.y, maxFall, P_GRAVITY * gravMult * DELTA);
-    if (this.varJumpTimer > 0) {
-      if (this.autoJump) this.speed.y = Math.min(this.speed.y, this.varJumpSpeed);
-      else this.varJumpTimer = 0;
-    }
-    this.pos = vadd(this.pos, vmul(this.speed, DELTA));
-    // 地面：本页只有一块地板（GROUND_Y）与左右房壁
-    if (this.pos.y >= GROUND_Y) {
-      this.pos.y = GROUND_Y;
-      if (this.speed.y > 0) this.speed.y = 0;
-      if (!this.onGround) { this.autoJump = false; this.stamina = 110; this.wallSlideTimer = 1.2; }  // orig_Update 头部
-      this.onGround = true;
-    } else this.onGround = false;
-    if (this.pos.x < 8) { this.pos.x = 8; this.speed.x = 0; }
-    if (this.pos.x > LEVEL_BOUNDS_RIGHT - 8) { this.pos.x = LEVEL_BOUNDS_RIGHT - 8; this.speed.x = 0; }
-    // launched：SpeedRing 只在这一段产生，也是“甩出去了”唯一的可见反馈
-    if (this.launched) {
-      if (this.speed.x * this.speed.x + this.speed.y * this.speed.y < 19600) this.launched = false;
-      else {
-        this.launchedTimer += DELTA;
-        if (this.launchedTimer >= 0.5) this.launched = false;
-        else if (calcOnInterval(this.launchedTimer, this.launchedFrom, 0.15))
-          new SpeedRing().init(this.center, Math.atan2(this.speed.y, this.speed.x), '#ffffff');
+    const dt = DELTA;
+    const lift = this.liftBoost;
+    // ---- IL_0000..0045：刚离地那一帧的下坠补偿（平台撤走时把 LiftBoost 接到 Speed 上）----
+    if (lift.y < 0 && this.wasOnGround && !this.onGround && !(this.speed.y < 0)) this.setSY(lift.y);
+    if (this.holding) {
+      // ---- IL_0337..034c：松手 && minHoldTimer <= 0 ⇒ Throw ----
+      if (!inputGrabCheck() && this.minHoldTimer <= 0) this.throwHeld();
+      if (!this.ducking && this.onGround && this.moveY === 1 && !(this.speed.y < 0) && !this.holdCannotDuck) {
+        this.dropHeld(); this.ducking = true; this.spriteScale = v2(1.4, 0.6);              // IL_0384..03b3
+      } else if (this.onGround && this.ducking && !(this.speed.y < 0)) {                     // IL_03b5..03ee
+        if (this.canUnDuck) this.ducking = false; else this.dropHeld();
+      } else if (this.onGround && this.moveY !== 1 && this.holdCannotDuck) this.holdCannotDuck = false;
+    } else {
+      // ---- IL_0055..00cb：GrabCheck && !IsTired && !Ducking ⇒ foreach Holdable ⇒ Pickup ⇒ State 8 ----
+      if (inputGrabCheck() && !this.isTired && !this.ducking) { /* ★ 本页无 Holdable ⇒ 循环空转 */ }
+      // ---- IL_00cc..01b8：往反方向跑时自动上墙（ClimbCheck / 逆风跳）----
+      if (!(this.speed.y < 0) && sign(this.speed.x) !== -this.facing) {
+        if (this.climbCheck(-this.facing, 0)) {                                              // IL_010a
+          this.ducking = false;
+          if (assistsNoGrabbing) this.climbTrigger(this.facing);                             // IL_011d..0130
+          else return ST_CLIMB;                                                              // IL_0132
+        }
+        if (!assistsNoGrabbing && this.moveY < 1 && levelWindY > 0) {                         // IL_0134..0171
+          for (let i = 1; i <= 2; i++) {                                                     // IL_0174..01be
+            if (collideCheckSolid(this, vadd(this.pos, vmul(UNIT_Y, -i)))) continue;
+            if (!this.climbCheck(this.facing, -i)) continue;
+            moveVExact(this, -i); this.ducking = false; return ST_CLIMB;                      // IL_01a4..01b7
+          }
+        }
+      }
+      // ---- IL_01c0..01e5：冲刺的入口 ----
+      if (this.canDash()) { this.speed = vadd(this.speed, lift); return this.startDash(); }
+      // ---- IL_01e6..02dd：下蹲 / 脱蹲的状态机 ----
+      if (this.ducking) {
+        if (this.onGround && this.moveY !== 1) {
+          if (this.canUnDuck) { this.ducking = false; this.spriteScale = v2(0.8, 1.2); }        // IL_0211..0239
+          else if (this.speed.x === 0) {                                                       // IL_023e..02d8
+            for (let i = P_DUCK_CORRECT_CHECK; i > 0; i--) {                                   // V_4 = 4; V_4--
+              if (this.canUnDuckAt(vadd(this.pos, vmul(UNIT_X, i)))) { actorMoveH(this, 50 * dt); break; }
+              if (this.canUnDuckAt(vsub(this.pos, vmul(UNIT_X, i)))) { actorMoveH(this, -50 * dt); break; }
+            }
+          }
+        }
+      } else if (this.onGround && this.moveY === 1 && !(this.speed.y < 0)) {                    // IL_02dd..0332
+        this.ducking = true; this.spriteScale = v2(1.4, 0.6);
       }
     }
-    // 演示：落地 0.6s 后把控制权还给鼠标（否则玩家永远回不到“鼠标即 Player”的演示模型）
-    if (this.onGround) { this.groundedFor += DELTA; if (this.groundedFor > 0.6) { this.drivenByMouse = true;
-      this.state = 0; this.groundedFor = 0; } } else this.groundedFor = 0;
+    // ---- IL_0418..0454：蹲着且贴地 ⇒ 水平速度直接刹到 0（RunReduce 那一支整个跳过）----
+    if (this.ducking && this.onGround) { this.setSX(approach(this.speed.x, 0, 500 * dt)); }
+    else {
+      // ---- IL_0459..0519：mult（摩擦倍率）与 maxRun ----
+      let mult = this.onGround ? 1 : 0.65;
+      if (this.onGround && levelCoreMode === 2) mult *= 0.3;                                  // IL_0475..048e ★ CoreMode
+      if (assistsLowFriction && this.lowFrictionStopTimer <= 0) mult *= this.onGround ? 0.35 : 0.5;
+      let maxRun;
+      if (this.holding && this.holding.slowRun) maxRun = 70;                                   // IL_04c6..04e2
+      else if (this.holding && this.holding.slowFall && !this.onGround) { maxRun = P_MAX_RUN_SLOW_FALL; mult *= 0.5; }
+      else maxRun = P_MAX_RUN;                                                                 // IL_0514
+      if (levelInSpace) maxRun *= 0.6;                                                          // IL_051b..0530
+      // ★ IL_055c 比的是 Sign(Speed.X) == moveX（moveX 是 int），原先写成 sign(moveX) 会漏掉 moveX == 0
+      if (!(Math.abs(this.speed.x) <= maxRun) && sign(this.speed.x) === this.moveX)
+        this.setSX(approach(this.speed.x, maxRun * this.moveX, P_RUN_REDUCE * mult * dt));      // IL_0546..0593
+      else
+        this.setSX(approach(this.speed.x, maxRun * this.moveX, P_RUN_ACCEL * mult * dt));       // IL_0595..05c9
+    }
+    // ---- IL_05ca..07a0：maxFall 是个字段，在 160 与 240 之间以 300/s 爬 ----
+    let v7 = P_MAX_FALL, v8 = P_FAST_FALL;                                                     // V_7 / V_8
+    if (levelInSpace) { v7 *= 0.6; v8 *= 0.6; }
+    if (this.holding && this.holding.slowFall && this.forceMoveXTimer <= 0) {                   // IL_05ca..06c4 ★ glider 段
+      this.maxFall = approach(this.maxFall, 120, P_FALL_ACCEL * dt);
+    } else if (this.moveY === 1 && this.speed.y >= v7) {                                         // IL_06c5..06d5
+      this.maxFall = approach(this.maxFall, v8, P_FALL_ACCEL * dt);
+      const v9 = v7 + (v8 - v7) * 0.5;                                                           // IL_06fb = 200
+      if (!(this.speed.y < v9)) {                                                                // IL_0718
+        const v10 = Math.min(1, (this.speed.y - v9) / (v8 - v9));
+        this.spriteScale = v2(lerpF(1, 0.5, v10), lerpF(1, 1.5, v10));                           // IL_073d..077a
+      }
+    } else this.maxFall = approach(this.maxFall, v7, P_FALL_ACCEL * dt);                          // IL_0781
+    if (this.onGround) { goto_varJump(this); return ST_NORMAL; }                                 // IL_07a6 brtrue IL_09e2
+    let v11 = this.maxFall;                                                                      // IL_07ab
+    if (this.holding && this.holding.slowFall) this.holdCannotDuck = (this.moveY === 1);          // IL_07b3..07da
+    if ((this.moveX === this.facing || this.moveX === 0 || inputGrabCheck()) && this.moveY !== 1) { // IL_07df..0811
+      if (!(this.speed.y < 0) && this.wallSlideTimer > 0 && this.holding == null &&
+          this.climbBoundsCheck(this.facing) &&                                                  // IL_083c ★ 无产物
+          collideCheckSolid(this, vadd(this.pos, vmul(UNIT_X, this.facing))) &&                   // IL_084a
+          !climbBlockerCheck(this, vadd(this.pos, vmul(UNIT_X, this.facing))) &&                   // IL_086e ★ 无产物
+          this.canUnDuck) { this.ducking = false; this.wallSlideDir = this.facing; }                // IL_0882..0898
+    }
+    if (this.wallSlideDir !== 0) {                                                               // IL_089d..0938
+      if (inputGrabCheck()) this.climbTrigger(this.wallSlideDir);                                 // IL_08a8..08b6
+      if (this.wallSlideTimer > 0.6 && climbBlockerCheck(this,
+            vadd(this.pos, vmul(UNIT_X, this.wallSlideDir)))) this.wallSlideTimer = 0.6;          // IL_08bb..08f8
+      v11 = lerpF(160, 20, this.wallSlideTimer / 1.2);                                            // IL_08fd..0918
+      if (this.wallSlideTimer / 1.2 > 0.65) { /* ★ CreateWallSlideParticles：无产物 */ }
+    }
+    let gravMult = 1;                                                                            // IL_0939..
+    if (Math.abs(this.speed.y) < P_HALF_GRAV_SPEED && (vInput.Jump.check || this.autoJump)) gravMult = 0.5;
+    if (this.holding && this.holding.slowFall && this.forceMoveXTimer <= 0) gravMult *= 0.5;
+    if (levelInSpace) gravMult *= 0.6;
+    this.setSY(approach(this.speed.y, v11, P_GRAVITY * gravMult * dt));
+    goto_varJump(this);
+    return ST_NORMAL;
   }
+
+  /* =====================================================================================
+     以下是 Player 的 dash 全链：player_dashentry / player_dash / player_dashcoroutine /
+     player_dashupdate / player_collide / player_ducking / player_origupdate 六份取证文件
+     的方法体逐条直译。凡是本次取证没有产物的被调方，一律写成 ★ 常量替身并就地标注。
+     ===================================================================================== */
+  /* Player::get_MaxDashes（player_startdash_il.txt L359-380）
+     Assists.DashMode != 0 且不在过场里 ⇒ 2 段，否则取存档里的 Inventory.Dashes。
+     ★ Inventory.Dashes 的读写点在本次取证里没有产物，本页保留成字段。 */
+  get maxDashes() { return inputDashMode !== 0 && !inCutscene ? 2 : this.inventoryDashes; }
+  /* get_CheckStamina（player_ducking_il.txt L92-…）：墙面 boost 有效期内把 stamina 视作 +27.5。
+     注意是<b>加</b>（IL_0018 是 add，早先误记成减）。 */
+  get checkStamina() { return this.wallBoostTimer > 0 ? this.stamina + 27.5 : this.stamina; }
+  get isTired() { return this.checkStamina < 20; }
+  /* get_DashAttacking：dashAttackTimer > 0f || State == 5（RedDash）。 */
+  get dashAttacking() { return this.dashAttackTimer > 0 || this.state === ST_REDDASH; }
+  /* get_SuperWallJumpAngleCheck：|DashDir.X| <= 0.2f && !(DashDir.Y > -0.75f)。 */
+  get superWallJumpAngleCheck() { return Math.abs(this.dashDir.x) <= 0.2 && !(this.dashDir.y > -0.75); }
+  /* get_CanUnDuck：不蹲 ⇒ true；蹲着 ⇒ 临时换成 normalHitbox 看会不会卡进 Solid。
+     ★ set_Collider / get_Collider 只换 Collider，hurtbox 不动（这一点与 set_Ducking 不同）。 */
+  get canUnDuck() {
+    if (!this.ducking) return true;
+    const previous = this.collider;
+    this.collider = this.normalHitbox;
+    const blocked = collideCheckSolid(this, this.pos);
+    this.collider = previous;
+    return !blocked;
+  }
+  /* CanUnDuckAt(Vector2 at)：临时换 Position 再问一次 CanUnDuck。 */
+  canUnDuckAt(at) {
+    const previous = this.pos; this.pos = at;
+    const ok = this.canUnDuck; this.pos = previous;
+    return ok;
+  }
+  /* DuckFreeAt(Vector2 at)：临时换 Position + Collider = duckHitbox，看蹲姿放过去空不空。 */
+  duckFreeAt(at) {
+    const prevPos = this.pos, prevCollider = this.collider;
+    this.pos = at; this.collider = this.duckHitbox;
+    const free = !collideCheckSolid(this, this.pos);
+    this.pos = prevPos; this.collider = prevCollider;
+    return free;
+  }
+  /* Player::CorrectDashPrecision（player_dashcoroutine_il.txt）：把一个几乎水平的向量
+     归成<b>整水平</b>、几乎竖直的归成<b>整竖直</b>，其余原样。阈值 0.001f 两边都有。 */
+  correctDashPrecision(d) {
+    let x = d.x, y = d.y;
+    if (Math.abs(x) < 0.001 && x !== 0) { x = 0; y = sign(y); }
+    else if (Math.abs(y) < 0.001 && y !== 0) { y = 0; x = sign(x); }
+    return v2(x, y);
+  }
+  /* get_CanDash（player_dashentry_il.txt L334-368）：五个前置条件，顺序不可换。 */
+  canDash() {
+    if (!(inputCrouchDashPressed() || inputDashPressed())) return false;
+    if (this.dashCooldownTimer > 0) return false;
+    if (this.dashes <= 0) return false;
+    if (talkComponentPlayerOver && vInput.Talk.pressed) return false;
+    if (this.lastBooster && this.lastBooster.ch9HubTransition)
+      return !this.lastBooster.boostingPlayer;
+    return true;
+  }
+  /* Player::StartDash（L382-405）：返回值就是目标状态 2。两个 ConsumeBuffer 是
+     「一次按键只冲一次」的唯一保证 —— 少了它，Pressed 的缓冲会让同一帧之后再次 CanDash。 */
+  startDash() {
+    this.wasDashB = this.dashes === 2;                   // Dashes == 2 ⇒ 粉色冲刺
+    this.dashes = Math.max(0, this.dashes - 1);
+    this.demoDashed = inputCrouchDashPressed();
+    vInput.Dash.consumeBuffer(); vInput.CrouchDash.consumeBuffer();
+    return ST_DASH;
+  }
+  /* Player::DashBegin（player_dash_il.txt L359-457）—— set_State 的 Begin 回调。 */
+  dashBegin() {
+    this.calledDashEvents = false;
+    this.dashStartedOnGround = this.onGround;
+    this.launched = false; this.canCurveDash = true;
+    if (timeRate >= 0.25) celesteFreeze(0.05);            // Engine.TimeRate < 0.25 时不冻（慢动作里不叠冻）
+    this.dashCooldownTimer = P_DASH_COOLDOWN;
+    this.dashRefillCooldownTimer = P_DASH_REFILL_COOLDOWN;
+    this.startedDashing = true;
+    this.wallSlideTimer = 1.2;
+    this.dashTrailTimer = 0; this.dashTrailCounter = 0;
+    if (!inputDashAssist) inputRumble(2, 1);              // ★ Input.Rumble(2, 1)
+    this.dashAttackTimer = P_DASH_ATTACK_TIME;
+    this.gliderBoostTimer = P_GLIDER_DASH_BOOST_TIME;
+    if (inputSuperDashing) this.dashAttackTimer += 0.15;
+    this.beforeDashSpeed = this.speed;                    // 结构体拷贝，之后改 Speed 不影响它
+    this.speed = v2(0, 0); this.dashDir = v2(0, 0);
+    if (!this.onGround && this.ducking && this.canUnDuck) this.ducking = false;
+    else if (!this.ducking && (this.demoDashed || vMoveY.value === 1)) this.ducking = true;
+    this.dashAssistInit();
+  }
+  /* Player::DashEnd（player_dashentry_il.txt L1568）：全文只有两行。 */
+  dashEnd() { this.callDashEvents(); this.demoDashed = false; }
+  /* Player::Rebound(int i)：撞墙回弹。OnCollideH 传 -Sign(Speed.X)、OnCollideV 传 0
+     （所以竖直回弹时 Speed.X 被清 0，这是原版「砸地后不再横向滑」的来源）。 */
+  rebound(i) {
+    this.speed = v2(i * P_REBOUND_SPEED_X, P_REBOUND_SPEED_Y);
+    this.varJumpSpeed = this.speed.y;
+    this.varJumpTimer = P_REBOUND_VAR_JUMP_TIME;
+    this.autoJump = true; this.autoJumpTimer = 0;
+    this.dashAttackTimer = 0; this.gliderBoostTimer = 0;
+    this.wallSlideTimer = 1.2; this.wallBoostTimer = 0;
+    this.launched = false; this.lowFrictionStopTimer = P_LOW_FRICTION_STOP_TIME;
+    this.forceMoveXTimer = 0;
+    this.state = ST_NORMAL;                                // ⇒ 触发 ends[2] = DashEnd
+  }
+  /* Player::RefillDash：已满返回 false；否则补满并返回 true（返回值被 CanDash 之外的
+     「一次性音效」调用点用到，本页没有那类音效，保留返回值形状）。 */
+  refillDash() {
+    if (this.dashes >= this.maxDashes) return false;
+    this.dashes = this.maxDashes; return true;
+  }
+  /* Player::ReflectBounce(Vector2 v)：两个分量各自「非零才赋值」，倍率 220f。 */
+  reflectBounce(v) {
+    let x = this.speed.x, y = this.speed.y;
+    if (v.x !== 0) x = v.x * P_REFLECT_BOUND_SPEED;
+    if (v.y !== 0) y = v.y * P_REFLECT_BOUND_SPEED;
+    this.speed = v2(x, y);
+    this.autoJumpTimer = 0; this.dashAttackTimer = 0; this.gliderBoostTimer = 0;
+    this.wallBoostTimer = 0; this.forceMoveXTimer = 0;
+    this.wallSlideTimer = 1.2; this.launched = false;
+    this.state = ST_NORMAL;
+  }
+  /* Player::DashUpdate（player_dashupdate_il.txt L359-736）—— 冲刺中的每帧逻辑。 */
+  dashUpdate() {
+    this.startedDashing = false;
+    // ---- IL_000d..0086：拖尾计时器（扣到 0 那一帧补一条，再按剩余次数决定是否续上 0.1s）----
+    if (this.dashTrailTimer > 0) {
+      this.dashTrailTimer -= DELTA;
+      if (!(this.dashTrailTimer > 0)) {
+        this.createTrail();
+        this.dashTrailCounter--;
+        if (this.dashTrailCounter > 0) this.dashTrailTimer = 0.1;
+      }
+    }
+    // ---- IL_008b..01e6：SuperDashing 的弯道冲刺 ----
+    const aim = vAim.value;
+    if (inputSuperDashing && this.canCurveDash && (aim.x !== 0 || aim.y !== 0)
+        && (this.speed.x !== 0 || this.speed.y !== 0)) {
+      const want = this.correctDashPrecision(inputGetAimVector(1));
+      const cur = safeNorm(this.speed.x, this.speed.y);
+      const dot = want.x * cur.x + want.y * cur.y;        // Vector2::Dot
+      if (dot >= -0.1 && dot < 0.99) {
+        this.speed = rotateTowardsV(this.speed, calcAngleV(want), P_SUPER_DASH_TURN * DELTA);
+        this.dashDir = this.correctDashPrecision(safeNorm(this.speed.x, this.speed.y));
+      }
+    }
+    // ---- IL_01e7..0218：SuperDashing 下再按一次冲刺 = 立刻重开（ForceState 绕过同值守卫）----
+    if (inputSuperDashing && this.canDash()) {
+      this.startDash(); this.sm.forceState(ST_DASH); return ST_DASH;
+    }
+    /* ---- IL_0219..0317：Holding == null 时找工作台抓着拿起 -→ State 8
+       ★ Holdable / Pickup 整块没有产物，本页 holding 恒 null 且没有 Holdable 实体 ⇒ 循环体永不命中。 */
+    /* ---- IL_0318..03a8：DashDir 基本水平时穿过 JumpThru 往上顶 MoveVExact(JumpThru.Top - Bottom)
+       ★ 本页没有 JumpThru 实体。 */
+    // ---- IL_03a9..0445：落地冲刺时按跳 = SuperJump（回 Normal）----
+    if (this.canUnDuck && vInput.Jump.pressed && this.jumpGraceTimer > 0) {
+      this.superJump(); return ST_NORMAL;
+    }
+    // ---- IL_0446..05b5：冲刺中按跳 = 超级跳 / 上墙跳 ----
+    if (this.superWallJumpAngleCheck) {
+      if (vInput.Jump.pressed && this.canUnDuck) {
+        if (this.wallJumpCheck(1)) { this.superWallJump(-1); return ST_NORMAL; }
+        if (this.wallJumpCheck(-1)) { this.superWallJump(1); return ST_NORMAL; }
+      }
+    } else if (vInput.Jump.pressed && this.canUnDuck) {
+      if (this.wallJumpCheck(1)) {
+        if (this.facing === 1 && inputGrabCheck() && this.stamina > 0 && this.holding == null
+            && !climbBlockerCheck(this, vadd(this.pos, vmul(UNIT_X, 3)))) this.climbJump();
+        else this.wallJump(-1);
+        return ST_NORMAL;
+      }
+      if (this.wallJumpCheck(-1)) {
+        if (this.facing === -1 && inputGrabCheck() && this.stamina > 0 && this.holding == null
+            && !climbBlockerCheck(this, vadd(this.pos, vmul(UNIT_X, -3)))) this.climbJump();
+        else this.wallJump(1);
+        return ST_NORMAL;
+      }
+    }
+    // ---- IL_05b6..06fd：每 0.02s 喷一颗冲刺粒子 ----
+    if ((this.speed.x !== 0 || this.speed.y !== 0) && onInterval(0.02)) {
+      // Sprite.Mode == PlayerSpriteMode.Badeline(3) 才用紫色，否则粉/蓝
+      const t = !this.wasDashB ? P_DASH_A : (this.spriteMode === 3 ? P_DASH_BAD_B : P_DASH_B);
+      // Emit(t, 1, Center, Calc.Range(Random, One*-2f, One*2f), Calc.Angle(DashDir)) ⇒ 半径 2 的方框
+      emitParticles(t, 1, this.center, v2(2, 2), calcAngleV(this.dashDir));
+    }
+    return ST_DASH;
+  }
+  /* Player::*DashCoroutine（player_dashcoroutine_il.txt 全文）—— 状态 2 的协程。
+     ★ 首帧不空转：IL 的 switch 入口 case 0 直接跳到条件测试，函数体开头没有 yield return null。 */
+  *dashCoroutine() {
+    if (inputDashAssist) inputRumble(2, 1);
+    // level.Displacement.AddBurst(Center, 0.4f, 8f, 64f, 0.5f, QuadOut, QuadOut)
+    // ★ DisplacementRenderer 整块无产物，本页没有位移波
+    let aim = this.lastAim;                                // Vector2 aim = lastAim;
+    if (this.overrideDashDirection) aim = this.overrideDashDirection;
+    aim = this.correctDashPrecision(aim);
+    let speed = vmul(aim, P_DASH_SPEED);                   // aim * 240f
+    // 「同向且原来是更快」时保留原水平速度（冲刺不掉速）
+    if (sign(this.beforeDashSpeed.x) === sign(speed.x)
+        && Math.abs(this.beforeDashSpeed.x) > Math.abs(speed.x))
+      speed = v2(this.beforeDashSpeed.x, speed.y);
+    this.speed = speed;
+    // if (CollideCheck<Water>()) Speed *= 0.75f    ★ 本页无 Water
+    this.dashDir = aim;
+    // IL_0139 是 <b>dup; stloc.v; stfld</b> 的双写：gliderBoostDir 与 DashDir 被写成同一个向量
+    this.gliderBoostDir = aim;
+    levelDirectionalShake(this.dashDir, 0.2);
+    if (this.dashDir.x !== 0) this.facing = sign(this.dashDir.x);
+    this.callDashEvents();
+    /* StateMachine.PreviousState == 19（StarFly）⇒ level.Particles.Emit(FlyFeather.P_Boost, 12, Center,
+       Vector2.One*4f, Calc.Angle(-aim))  ★ 没有 StarFly 之前的转入路径，本页跳过 */
+    // ---- 落地且朝斜下冲 ⇒ 压平成贴地滑行 ----
+    if (this.onGround && this.dashDir.x !== 0 && this.dashDir.y > 0 && this.speed.y > 0
+        && (!this.inventoryDreamDash || true)) {           // ★ 后半个条件是 !CollideCheck<DreamBlock>，本页无 DreamBlock
+      this.dashDir = v2(sign(this.dashDir.x), 0);
+      this.setSY(0);
+      this.setSX(this.speed.x * P_DODGE_SLIDE_SPEED_MULT);
+      this.ducking = true;
+    }
+    this.createTrail();                                    // SlashFx.Burst 之前先补一条尾迹
+    // SlashFx.Burst(Center, Calc.Angle(DashDir))    ★ SlashFx 无产物
+    if (inputSuperDashing) { this.dashTrailTimer = 0.1; this.dashTrailCounter = 2; }
+    else { this.dashTrailTimer = 0.08; this.dashTrailCounter = 1; }
+    /* ---- SwapBlock 两段（抓握取消 + Tracker 全体 Cancel）★ 本页没有 SwapBlock ---- */
+    yield (inputSuperDashing ? P_SUPER_DASH_TIME : P_DASH_TIME);
+    this.createTrail();
+    this.autoJump = true; this.autoJumpTimer = 0;
+    if (!(this.dashDir.y > 0)) {                           // 朝上/水平的冲刺才吃 160 的收尾速度
+      this.speed = v2(this.dashDir.x * P_END_DASH_SPEED, this.dashDir.y * P_END_DASH_SPEED);
+    }
+    if (this.speed.y < 0) this.setSY(this.speed.y * P_END_DASH_UP_MULT);
+    this.state = ST_NORMAL;
+  }
+  /* Player::OnCollideH（player_collide_il.txt L359-663）。实参是 Actor::CollisionData 的替身对象。 */
+  onCollideH(data) {
+    const dir = data.direction, hit = data.hit;
+    this.canCurveDash = false;
+    if (this.state === ST_STARFLY) {
+      /* ★ StarFlyUpdate 对碰撞的改速（speedCounter 累计、Speed.Y 归零那一段）没有取到方法体，
+         这里不编数字，只保留「撞墙后不再往下坠」这一条可见后果。 */
+    }
+    if (this.state === ST_DREAMDASH) return;
+    // ---- dash 撞墙：先问对方的 OnDashCollide，再按 DashCollisionResults 分派 ----
+    if (this.dashAttacking && hit && hit.onDashCollide
+        && sign(this.speed.x) === sign(this.dashDir.x)) {
+      let r = hit.onDashCollide(this, dir);
+      if (r === DASH_COLLISION.NormalOverride) r = DASH_COLLISION.NormalCollision;   // 2 ⇒ 1
+      else if (this.state === ST_REDDASH) r = DASH_COLLISION.Ignore;                  // State==5 一律 Ignore
+      if (r === DASH_COLLISION.Rebound) { this.rebound(-sign(this.speed.x)); return; }
+      if (r === DASH_COLLISION.Bounce) { this.reflectBounce(v2(-sign(this.speed.x), 0)); return; }
+      if (r === DASH_COLLISION.Ignore) return;
+    }
+    // ---- 冲刺贴地时撞到台阶下沿 ⇒ 直接蹲回去（避免卡在台阶里）----
+    if (this.state === ST_DASH || this.state === ST_REDDASH) {
+      if (this.onGround && this.duckFreeAt(vadd(this.pos, vmul(UNIT_X, sign(this.speed.x))))) {
+        this.ducking = true; return;
+      }
+    }
+    // ---- 水平冲刺的「拐角修正」：在 ±4 像素、上下各 1 像素的格子里找一条能过一格的口 ----
+    if (this.speed.y === 0 && this.speed.x !== 0) {
+      for (let i = 1; i <= P_DASH_CORNER_CORRECTION; i++)
+        for (let j = 1; j >= -1; j -= 2) {
+          const offset = v2(sign(this.speed.x) * i, j);
+          const at = vadd(this.pos, offset);
+          if (!collideCheckSolid(this, at)
+              && collideCheckSolid(this, vsub(at, vmul(UNIT_Y, j)))
+              && !this.dashCorrectCheck(offset)) {
+            moveVExact(this, i * j); moveHExact(this, sign(this.speed.x)); return;
+          }
+        }
+    }
+    if (this.dreamDashCheck(vmul(UNIT_X, sign(this.speed.x)))) {   // ★ 恒 false
+      this.state = ST_DREAMDASH; this.dashAttackTimer = 0; this.gliderBoostTimer = 0; return;
+    }
+    // ---- 撞墙保留水平速度（离墙后 wallSpeedRetentionTimer 内立刻还回去）----
+    if (!(this.wallSpeedRetentionTimer > 0)) {
+      this.wallSpeedRetained = this.speed.x;
+      this.wallSpeedRetentionTimer = P_WALL_SPEED_RETENTION_TIME;
+    }
+    if (hit && hit.onCollide) hit.onCollide(dir);          // Hit.OnCollide?.Invoke(Direction)
+    this.setSX(0);
+    this.dashAttackTimer = 0; this.gliderBoostTimer = 0;
+    if (this.state === ST_REDDASH) {                       // State == 5 ⇒ 撞墙变 HitSquash
+      inputRumble(1, 0);
+      // Displacement.AddBurst(Center, 0.5f, 8f, 48f, 0.4f, QuadOut, QuadOut)  ★ 无产物
+      this.state = ST_HITSQUASH;
+    }
+  }
+  /* Player::OnCollideV（player_collide_il.txt L664-1244）。
+     ★ 两处与原版不同且必须标出来：
+       1) 落地/天花板音效走 SurfaceIndex / Dust，本页没有这两套资源，整段跳过；
+       2) 天花板那一段的字面量是 <b>0.15f</b>（IL_05d1），与 const 表里的 CeilingVarJumpGrace(0.05)
+          对不上，本页按 IL 字面量写 0.15。 */
+  onCollideV(data) {
+    const dir = data.direction, hit = data.hit;
+    this.canCurveDash = false;
+    if (this.state === ST_STARFLY) { /* ★ 同 OnCollideH：无 Speed.Y 归零以外的方法体 */ }
+    if (this.state === ST_SWIM) { this.setSY(0); return; }   // State == 3 直接吃根竖速
+    if (this.state === ST_DREAMDASH) return;
+    // ---- dash 砸地/顶天花板：先问对方，再分派（State == 10 只调不取返回值）----
+    if (this.dashAttacking && sign(this.speed.y) === sign(this.dashDir.y)) {
+      if (hit && hit.onDashCollide) {
+        let r = hit.onDashCollide(this, dir);
+        if (this.state === ST_REDDASH) r = DASH_COLLISION.Ignore;
+        if (r === DASH_COLLISION.Rebound) { this.rebound(0); return; }        // 注意传 0 ⇒ Speed.X 清 0
+        if (r === DASH_COLLISION.Bounce) { this.reflectBounce(v2(0, -sign(this.speed.y))); return; }
+        if (r === DASH_COLLISION.Ignore) return;
+      }
+    } else if (this.state === ST_SUMMITLAUNCH && hit && hit.onDashCollide) {
+      hit.onDashCollide(this, dir);
+    }
+    if (this.speed.y > 0) {
+      // ---- 在空中开始的地面冲刺落地时，先试着往旁边错一格再落（避免卡在缝里）----
+      if ((this.state === ST_DASH || this.state === ST_REDDASH) && !this.dashStartedOnGround) {
+        if (this.speed.x >= 0.01) {
+          for (let i = -1; i >= -4; i--)
+            if (actorOnGroundAt(this, vadd(this.pos, v2(i, 0)), 1)) {
+              moveHExact(this, i); moveVExact(this, 1); return; }
+        } else if (this.speed.x < -0.01) {
+          for (let i = 1; i <= 4; i++)
+            if (actorOnGroundAt(this, vadd(this.pos, v2(i, 0)), 1)) {
+              moveHExact(this, i); moveVExact(this, 1); return; }
+        }
+      }
+      if (this.dreamDashCheck(vmul(UNIT_Y, sign(this.speed.y)))) {   // ★ 恒 false
+        this.state = ST_DREAMDASH; this.dashAttackTimer = 0; this.gliderBoostTimer = 0; return;
+      }
+      // ---- 斜下冲刺砸地 ⇒ 压平成贴地滑行（与 DashCoroutine 里那段同式）----
+      if (this.dashDir.x !== 0 && this.dashDir.y > 0 && this.speed.y > 0) {
+        this.dashDir = v2(sign(this.dashDir.x), 0);
+        this.setSY(0);
+        this.setSX(this.speed.x * P_DODGE_SLIDE_SPEED_MULT);
+        this.ducking = true;
+      }
+      // ---- 落地：State == 1 跳过整段压扁；否则按 |Speed.Y| 压扁并考虑踩地音 ----
+      if (this.state !== ST_CLIMB) {
+        const mult = Math.min(this.speed.y / P_FAST_FALL, 1);          // Math.Min(Speed.Y / 240f, 1f)
+        this.spriteScale = v2(lerpF(1, 1.6, mult), lerpF(1, 0.4, mult));
+        if (this.highestAirY >= this.y - 50 && this.speed.y >= 160 && Math.abs(this.speed.x) >= 90) {
+          /* ★ Sprite.Play("runStumble") 的 PlayerSprite 无产物 */
+        }
+        inputRumble(0, 0);
+        /* ★ SurfaceIndex.GetPlatformByPriority / GetLandSoundIndex / GetPathFromIndex / Dust.Burst
+           全部无产物 ⇒ 落地音与尘土整段跳过（不伪造音效名）*/ 
+        this.playFootstepOnLand = 0;
+      }
+    } else if (this.speed.y < 0) {
+      // ---- 顶天花板：在 ±4/±5 像素内往旁边找空位把玩家塞过去 ----
+      const num = (this.dashAttacking && Math.abs(this.speed.x) < 0.01)
+        ? P_DASHING_UPWARD_CORNER_CORRECTION : P_UPWARD_CORNER_CORRECTION;
+      if (this.speed.x >= 0.01) {
+        for (let i = 1; i <= num; i++)
+          if (!collideCheckSolid(this, vadd(this.pos, v2(-i, -1)))) {
+            this.pos = vadd(this.pos, v2(-i, -1)); return; }
+      } else if (this.speed.x < -0.01) {
+        for (let i = 1; i <= num; i++)
+          if (!collideCheckSolid(this, vadd(this.pos, v2(i, -1)))) {
+            this.pos = vadd(this.pos, v2(i, -1)); return; }
+      }
+      // ★ 字面量是 0.15f（IL_05d1），不是 CeilingVarJumpGrace 的 0.05
+      if (!(this.varJumpTimer >= 0.15)) this.varJumpTimer = 0;
+    }
+    // ---- END（IL_0c19）：派发撞面回调、清 dash 攻击窗、吃根竖速 ----
+    if (hit && hit.onCollide) hit.onCollide(dir);
+    this.dashAttackTimer = 0; this.gliderBoostTimer = 0;
+    this.setSY(0);
+    if (this.state === ST_REDDASH) {
+      inputRumble(1, 0);
+      // Displacement.AddBurst(...)  ★ 无产物
+      this.state = ST_HITSQUASH;
+    }
+  }
+  /* Player::CallDashEvents：一次冲刺只跑一次（calledDashEvents 守卫）。
+     四段音效名按 wasDashB × right 组合，另加 SwimCheck 的入水冲刺。 */
+  callDashEvents() {
+    if (this.calledDashEvents) return;
+    this.calledDashEvents = true;
+    // ★ SaveData.TotalDashes / Session.Dashes / Stats.Increment(1,1) 三处计数无产物
+    let right = this.dashDir.y < 0 || (this.dashDir.y === 0 && this.dashDir.x > 0);
+    if (this.dashDir.x === 0 && this.dashDir.y === 0) right = this.facing === 1;
+    playSfx(this.wasDashB
+      ? (right ? 'event:/char/madeline/dash_pink_right' : 'event:/char/madeline/dash_pink_left')
+      : (right ? 'event:/char/madeline/dash_red_right' : 'event:/char/madeline/dash_red_left'), this.pos);
+    if (this.swimCheck()) playSfx('event:/char/madeline/water_dash_gen', this.pos);
+    /* foreach (DashListener …) component.OnDash(DashDir)  ★ 无该组件
+       if (CurrentBooster != null) PlayerBoosted(this, DashDir) + CurrentBooster = null  ★ 无 Booster */
+  }
+  /* Player::CreateTrail：TrailManager.Add(this, new Vector2(|Sprite.Scale.X| * Facing, Sprite.Scale.Y), color, 1f)
+     ★ TrailManager 的补间/消隐机器整块没有产物，本页沿用既有的 trails 圆点数组近似。 */
+  createTrail() {
+    trails.push({ x: this.pos.x, y: this.pos.y - this.height / 2, born: clock });
+  }
+  /* Player::DashAssistInit：★ PlayerDashAssist 实体、它的 Direction/Scale/Offset 与
+     Engine.DashAssistFreeze 的消费方全都没有产物，本页只做「把 LastAim 锁成当前朝向」。 */
+  dashAssistInit() {
+    if (!inputDashAssist || this.demoDashed) return;
+    inputLastAim = vmul(UNIT_X, this.facing);
+  }
+  /* ★ 下面四个是被调方<b>没有取证到方法体</b>的判定函数。一律按「这个实体在本页不存在」
+     返回 false，而不是编一组数字。 */
+  swimCheck() { return false; }                            // CollideCheck<Water>：本页无 Water
+  jumpThruBoostBlockedCheck() { return false; }            // CollideCheck<JumpThru>：本页无 JumpThru
+  dreamDashCheck(v) { void v; return false; }              // !Inventory.DreamDash ⇒ 恒 false
+  dashCorrectCheck(v) { void v; return false; }            // CollideFirst<LedgeBlocker>：本页无 ⇒ 恒 false
+  /* ★ WallJumpCheck 本体（68 个语料文件里零命中）⇒ 恒 false。
+     因此 WallJump / SuperWallJump / ClimbJump / SuperJump 四个被调方在本页都<b>不可达</b>，
+     它们只在 State 2 里挂着形状，不参与任何数值。 */
+  wallJumpCheck(dir) { void dir; return false; }
+  superJump() { this.jump(true, true); }                   // ★ 本体无产物：按普通跳处理
+  wallJump(dir) { void dir; }                              // ★ 不可达
+  superWallJump(dir) { void dir; }                         // ★ 不可达
+  climbJump() { }                                          // ★ 不可达
+  /* ★ ClimbCheck 本体无产物 ⇒ 恒 false：本页永远进不了 State 1 的抓墙分支。 */
+  climbCheck(dir, dy) { void dir; void dy; return false; }
+  /* ★ ClimbBoundsCheck：方法体无产物。它在原版里就是「离关卡左右边界还够远」，
+     本页房间是有界的固定画布，且 climbCheck 已恒 false ⇒ 返回 true 不会带来任何新行为，
+     只让 NormalUpdate 的墙面下滑判定（IL_083c）能继续往下一项走。 */
+  climbBoundsCheck(dir) { void dir; return true; }
+  climbTrigger(dir) { void dir; }                          // ★ ClimbTrigger 无产物
+  /* Player::Jump(bool fromHold, bool hop)（player_origupdate_il.txt L1589-1698 逐字）。
+     ★ 三处没有产物的被调方：LaunchedBoostCheck / Dust.Burst / SaveData.TotalJumps。 */
+  jump(fromHold, hop) {
+    vInput.Jump.consumeBuffer();
+    this.jumpGraceTimer = 0;
+    this.varJumpTimer = 0.2;
+    this.autoJump = false;
+    this.dashAttackTimer = 0; this.gliderBoostTimer = 0;
+    this.wallSlideTimer = 1.2; this.wallBoostTimer = 0;
+    this.setSX(this.speed.x + 40 * this.moveX);            // JumpHBoost = 40f
+    this.setSY(-105);                                      // JumpSpeed = -105f
+    this.speed = vadd(this.speed, this.liftBoost);         // Speed += LiftBoost
+    this.varJumpSpeed = this.speed.y;
+    // LaunchedBoostCheck()  ★ 无产物
+    if (hop) {
+      if (this.launched) playSfx('event:/char/madeline/jump_assisted', this.pos);
+      if (this.dreamJump) playSfx('event:/char/madeline/jump_dreamblock', this.pos);
+      else playSfx('event:/char/madeline/jump', this.pos);
+    }
+    this.spriteScale = v2(0.6, 1.4);
+    if (fromHold) {
+      /* Dust.Burst(BottomCenter, -1.57079637f, 4, DustParticleFromSurfaceIndex(soundIndex))
+         ★ Dust 与 SurfaceIndex 都没有产物，本页不伪造尘土（emitDust 那条简化尘雾同样未取证）*/ 
+    }
+    // SaveData.Instance.TotalJumps++  ★ 无产物
+  }
+  /* ★ ThrowHeld / DropHeld：holding 在本页恒为 null（没有 Holdable），两条不可达，
+     保留空方法只是为了让 NormalUpdate 的控制流与 IL 一一对应。 */
+  throwHeld() { }
+  dropHeld() { }
   drawDebug() {
     if (!this.active) return;
     ctx.lineWidth = 1.5; ctx.strokeStyle = '#f9e2af';
@@ -2753,6 +4142,7 @@ function drawBird(pos, rot, s, color) {                // rot 已经是「右边
 /* ================= 场景装配 ================= */
 let birds = [];
 function spawnFlock() {
+  for (const b of birds) b.disposeAudio();              // 旧鸟的待机循环不能留着一直响
   birds = [];
   for (let i = 0; i < 6; i++) birds.push(new FlutterBird(110 + i * (70 + nextFloat(40)), GROUND_Y));
 }
@@ -2776,6 +4166,7 @@ function spawnBirds() {
   thePlayer = new PlayerEntity();
   spawnFlingBirds();
   spawnLightnings();
+  spawnBreakers();
 }
 
 /* ================= FlingBird / Lightning 的装配 ================= */
@@ -2815,11 +4206,22 @@ function spawnLightnings() {
   if (!ui.lightning.checked) return;
   lightnings.push(new Lightning(v2(FENCE.x, FENCE.y), FENCE.w, FENCE.h));
 }
+/* 电闸（LightningBreakerBox）：贴在电网底端的正下方，砸两下就把整屏电网拆掉。
+   它跟电网共用同一个开关 —— 没有电网就没有电闸可砸。 */
+const BREAKER = { x: FENCE.x + FENCE.w / 2 - BREAKER_SIZE / 2,
+                  y: FENCE.y + FENCE.h + 8, flipX: false };
+function spawnBreakers() {
+  for (const b of breakers) b.removeSelf();
+  breakers = [];
+  for (let i = solids.length - 1; i >= 0; i--) if (solids[i].removed) solids.splice(i, 1);
+  if (!ui.lightning.checked) return;
+  breakers.push(new LightningBreakerBox(BREAKER.x, BREAKER.y, BREAKER.flipX));
+}
 ui.fling.addEventListener('change', () => spawnFlingBirds());
 ui.lightning.addEventListener('change', () => {
   // 勾选 = 关卡里本来就布着电网（重验一次 FlingBird.SegmentsWaiting）；
   // 取消 = 过场里把电网拆了，走的正是 Lightning.<RemoveRoutine>d__21。
-  if (ui.lightning.checked) { spawnLightnings(); spawnFlingBirds(); }
+  if (ui.lightning.checked) { spawnLightnings(); spawnBreakers(); spawnFlingBirds(); }
   else breakLightning();
 });
 const path = new BirdPath(v2(250, 300), [
@@ -2848,6 +4250,7 @@ function frame(now) {
   // EntityList::UpdateLists 在 Engine::Update 里排在 freeze 判定之前（IL_0108），
   // 所以「定格」那几帧 Add / Remove 照样提交，只是没人 Update。
   pruneRunners();
+  updateAudio();                                        // 循环源按到玩家的距离刷新音量（★ bank 里的 3D 衰减近似）
   if (!paused) {
     if (freezeTimer > 0) {                                // IL_0127..IL_0158：整帧只跑 FreezeFrameUpdate
       freezeFrameUpdate();
@@ -2867,6 +4270,7 @@ function frame(now) {
         b.update();
         if (b.removed && clock > b.respawnAt) b.respawn(); }
       for (const l of lightnings) l.update();
+      for (const b of breakers) b.update();
       for (const s of speedRings) s.update();
       speedRings = speedRings.filter(s => !s.removed);
       for (const g of guis) g.update(RAW_DELTA);          // BirdTutorialGui.Update 用 RawDeltaTime
@@ -2902,6 +4306,7 @@ function frame(now) {
   for (const b of npcs) b.draw();
   for (const b of flingBirds) b.draw();
   for (const l of lightnings) l.draw();
+  for (const b of breakers) b.draw();
   for (const s of speedRings) s.draw();
   drawFeathers();
   thePlayer.drawDebug();                                  // 黄框 = normalHitbox(8×11)，粉框 = normalHurtbox(8×9)
@@ -2925,11 +4330,12 @@ function frame(now) {
   ctx.fillText(npcs.map(b => `${b.hud.mode}:${b.removed ? 'gone' : b.hud.anim + '#' + b.hud.frame}`).join('  '),
                10, H - 26);
   ctx.fillText(`fling: ${flingBirds.map(b => `${b.hud.state}#${b.hud.seg}${b.removed ? '(gone)' : ''}`).join('|') || 'off'}` +
-    `  lightning×${lightnings.filter(l => !l.removed).length}  rings×${speedRings.length}` +
+    `  lightning×${lightnings.filter(l => !l.removed).length}` +
+    `  box:${breakers.filter(b => !b.removed).map(b => b.health).join(',') || 'off'}  rings×${speedRings.length}` +
     `  TimeRate=${timeRate.toFixed(2)} B=${timeRateB.toFixed(1)} freeze=${freezeTimer.toFixed(2)}` +
     `  player=${thePlayer.dead ? 'DEAD' : thePlayer.state === ST_FLING_BIRD ? 'FLUNG' : thePlayer.state}` +
     ` v=(${thePlayer.speed.x.toFixed(0)},${thePlayer.speed.y.toFixed(0)})`, 10, H - 42);
-  // —— SFX 日志（本机没有鸟叫音效素材，只记原版事件名）——
+  // —— SFX 日志（事件名逐字照抄 IL；声音本身由 celeste-sounds/Birds/ 真正播放）——
   ctx.textAlign = 'right'; ctx.fillStyle = '#89b4fa';
   for (let i = 0; i < sfxLog.length; i++) {
     const s = sfxLog[sfxLog.length - 1 - i];

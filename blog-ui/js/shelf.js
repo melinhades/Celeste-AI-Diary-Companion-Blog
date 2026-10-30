@@ -1833,14 +1833,46 @@ function stopPeSnow() {
         }
     })();
 
-    // ===== dream 金羽毛：REA 还原第六章（Reflection）FlyFeather + 星飞 StStarFly =====
-    // 待机 FlyFeather：精灵 loop(idle00-20) ↔ flash(00-20) 逐帧 0.06s；sine(0.6Hz) 上下 ±2 世界像素浮动；
-    //   light/bloom 柔光；重生瞬间 wiggler(1s / 4Hz) 弹一下（Scale = 1 + Value * 0.2）
-    // 收集 OnPlayer → CollectRoutine：Shake(0.3) → sprite.Visible=false → 0.05s 后 P_Collect×10 + SlashFx
-    // 星飞 StStarFly：Speed=dir×250；无输入 91 / 逆向 140 / 顺向 140→190（1000/s 逼近）；
-    //   moveDir 以 5.585rad/s 追输入；每 0.02s 发射 P_Flying；starFlyTimer=2s；末 0.5s 每 0.05s 警告闪
-    // 结束 → P_Boost×12；羽毛 3s 后（respawnTimer）原位重生 + P_Respawn×16
-    // 对页面里的 Madeline 不做任何交互（不驱动玩家、无变身）
+    // ===== dream 金羽毛：REA 还原第六章（Reflection）FlyFeather + Player.StStarFly =====
+    // 待机 FlyFeather（IL 0000-0193）：精灵 loop(idle00-20) ↔ flash(00-20) 逐帧 0.06s；
+    //   SineWave(0.6Hz).Randomize() 上下 ±2 世界像素；bloom(0.5, r20) + light(α1, 16, 48)；
+    //   light.Alpha = Approach(..., sprite.Visible?1:0, 4*dt) → bloom.Alpha = light.Alpha * 0.8
+    //   重生（Respawn）：outline 隐 / 可碰 / wiggler(1s / 4Hz) → Scale = 1 + Value * 0.2 + P_Respawn×16
+    // 收集（OnPlayer → CollectRoutine）：Collidable=false → Shake(0.3) → sprite.Visible=false → 0.05s
+    //   → P_Collect×10（One×6）+ SlashFx.Burst(Pos, Angle(playerSpeed))；羽毛 3s 后原位重生
+    //   飞行中撞到另一根走的是同一条协程（StartStarFly 的 renew 分支：timer 回满 + Sprite.Color=starFlyColor）
+    // 星飞（StarFlyBegin / Coroutine / Update）：
+    //   0.42s 变形（startStarFly 4×0.08 播完 + Speed 归零 + 0.1s）→ Speed=dir×250 + P_Boost×12
+    //   + DirectionalShake(dir, 0.3)；之后无输入 91 / 逆向 140 / 顺向 140→190（1000/s 逼近，lerp 速率 1/s）；
+    //   moveDir 以 5.5850534 rad/s 追输入；每 0.02s 发射 P_Flying；starFlyTimer=2s（页面调到 4s）；
+    //   末 0.5s 每 0.05s 在 starFlyColor(#ffd65c) ⇄ NormalHairColor 间闪；
+    //   撞墙：timer<0.2 → Speed.axis=0，否则 Speed.axis *= -0.5（OnCollideH/V）
+    //   结束（StarFlyEnd）：Speed 夹取（|X|≤140、按↑则 Y=-100、Y>0→0）后交回普通状态 + P_Boost×12
+    // 星飞时"操作的那个东西"长什么样（Player.Render + PlayerHair.Render/AfterUpdate 逐行，这才是像不像的关键）：
+    //   Player::.ctor 里是 Add(Hair) 然后才 Add(Sprite)（ctor @01bd / @01c9）⇒ Entity.Render 按添加顺序跑，
+    //   ⇒ 屏幕上从底到顶恒为这 4 层（顺序错了整个观感就废了）：
+    //     (1) 精灵黑边：DrawPlayerSpriteOutline=true 时 Hair.Render 开头先把 Border(=Black)*Alpha 的精灵
+    //         在 Position+(0,-1)/(0,1)/(-1,0)/(1,0) 各 Render 一次 —— 4 次纯黑剪影在最底层（@0033-00e6）
+    //     (2) 头发描边趟：i=0→HairCount-1，每节 4 次 ±1 世界像素的 Border 偏移（@011d-01e8）
+    //     (3) 头发本体趟：i=HairCount-1→0，从梢到根叠上去（@01f9-022d）
+    //     (4) 精灵本体：Entity.Render → Sprite.Render（starFly00 是 32×32 里只有 10×9 的实心圆盘，origin=(16,32)）
+    //     (5) 仅 startStarFly 帧：Player.Render 在 base.Render() 之后再叠一张 startStarFlyWhite[N]，
+    //         颜色 starFlyColor * (Frame/TotalFrames)（player_render_il.txt @01cd-0229）—— 金色是这么“点亮”的
+    //   ⇒ 头发被球体压住，只从边缘露出来、尾巴从球后面伸出（贴图中心 = Node，origin=(5,5)）
+    //     GetHairScale(i) = 0.25 + (1 - i/HairCount)*0.75 ⇒ 发根 1.0、末端 0.357（描边宽度不随缩放变，恒 1 世界像素）
+    //     GetHairColor(i) = Hair.Color*Alpha；而 UpdateHair 里 State==19 → Hair.Color = Sprite.Color ⇒ 跟精灵同色同闪
+    //   颜色语义是 MTexture.Draw 的**乘法**：hair00 是纯白贴图（乘成什么就是什么），bangs00 带 134,134,134 高光
+    //     ⇒ 必须乘法染色才能留住刘海明暗；startStarFly00-03 是本色 Madeline ⇒ Sprite.Color=White 时原样画，不能染白
+    //   头发跟随：Nodes[0] = Sprite.RenderPosition + (0,-9) + HairOffset*(Facing,1)，starFly 的 HairOffset=(0,3)
+    //     ⇒ 发根正好落在球心 (0,-6)；StarFly 时 SimulateMotion=false（applyGravity=false）⇒ 不走 Approach，
+    //     只剩 |V2-Nodes[i]|>3 的硬链约束 ⇒ 被 Node0 一帧一拽，拉成 3 世界像素/节 × 6 节的直线拖尾（总长 18）
+    //   变形时序：0–0.32s 播 startStarFly×4（Sprite.Color 仍是 White、HairOffset=(0,-2)、HairCount=4）
+    //     → 0.32–0.42s 帧已切 starFly 但仍白 → 0.42s 才 #ffd65c + HairCount=7；bloom 在球心、半径 16、α→0.7
+    // 取证：playerhair_il.txt（AfterUpdate/Render）+ player_ctor_il.txt（Add 顺序）+ player_render_il.txt
+    //   + hair_helpers_il.txt + player_updatehair_il.txt + player_cctor_il.txt（NormalHairColor="AC3232"）
+    //   + feather_il.txt（starFlyColor="ffd65c"）；贴图像素用 decode_png.js 核过
+    // 对页面里的 Madeline 不做任何交互（不驱动玩家、无变身）；shielded(泡泡) / singleUse 页面无 EntityData，未实现
+    // 取证：.screenshots/.tmp/celeste-re/feather_il.txt（FlyFeather / Player.StarFly* / SlashFx）+ feather_collide.txt
     (function () {
         var scene = document.getElementById('dreamScene');
         var host = document.getElementById('dsFeathers');
@@ -1870,25 +1902,64 @@ function stopPeSnow() {
         IMG.rect = loadImg('Atlases/Gameplay/particles/rect.png');          // P_Flying（默认 Source）
         IMG.smoke = loadImg('Atlases/Gameplay/particles/smoke0.png');       // P_Regen / P_Respawn（Dust 系）
         ['00', '01', '02', '03'].forEach(function (k) { IMG.slash.push(loadImg('Atlases/Gameplay/effects/slash/' + k + '.png')); });
+        // 星飞时玩家本体的素材（Content/Graphics/Atlases/Gameplay/characters/player/）：
+        //   Sprites.xml <Anim id="startStarFly" path="startStarFly" delay="0.08" goto="starFly"/> 4 帧
+        //              <Loop id="starFly" path="starFly" delay="0.08"/> 只有 1 帧
+        //              GetHairTexture：i==0 → bangs[HairFrame]（3 帧），i>0 → hair00（10×10）
+        var SRC_P = 'Atlases/Gameplay/characters/player/';
+        IMG.startFly0 = loadImg(SRC_P + 'startStarFly00.png');
+        IMG.startFly1 = loadImg(SRC_P + 'startStarFly01.png');
+        IMG.startFly2 = loadImg(SRC_P + 'startStarFly02.png');
+        IMG.startFly3 = loadImg(SRC_P + 'startStarFly03.png');
+        IMG.starFly = loadImg(SRC_P + 'starFly00.png');
+        IMG.hair00 = loadImg(SRC_P + 'hair00.png');
+        IMG.bangs0 = loadImg(SRC_P + 'bangs00.png');
+        // Player::Render 的 startStarFly 专用叠加层：同形的白色剪影，按 starFlyColor*帧比例逐帧点亮
+        IMG.startWhite0 = loadImg(SRC_P + 'startStarFlyWhite00.png');
+        IMG.startWhite1 = loadImg(SRC_P + 'startStarFlyWhite01.png');
+        IMG.startWhite2 = loadImg(SRC_P + 'startStarFlyWhite02.png');
+        IMG.startWhite3 = loadImg(SRC_P + 'startStarFlyWhite03.png');
 
         // ---------- 数值（均取自 Celeste.dll IL / Sprites.xml） ----------
         var FRAME_MS = 60;             // <Anim delay="0.06"/>
         var FRAMES_HALF = 21;          // idle / flash 各 21 帧
         var RESPAWN_MS = 3000;         // respawnTimer = 3
-        var FLY_TIME = 2;              // starFlyTimer = 2
+        var FLY_TIME = 4;              // starFlyTimer：原作 2s，页面按手感延长到 4s（唯一非原作的时长）
         var WARN_TIME = 0.5;           // timer < 0.5 开始警告闪
         var WARN_STEP = 0.05;
-        var CHARGE = 0.26;             // startStarFly 播完 + Speed==Zero 再等 0.1s（压缩到点击手感）
+        // StarFlyCoroutine：等 startStarFly 播完（Sprites.xml delay=0.08 × 4 帧 = 0.32s）
+        //   → 等 Speed == Zero（1000/s 减速，早已达成）→ 再等 0.1s ⇒ 0.42s
+        var CHARGE_ANIM = 0.32;        // 前 0.32s 仍是 startStarFly 的白色变形帧
+        var CHARGE = CHARGE_ANIM + 0.1;
         var TURN_RATE = 5.5850534;     // RotateTowards(..., 5.5850534 * dt)
         var ACCEL = 1000;              // Approach(|Speed|, target, 1000 * dt)
         var V_START = 250, V_IDLE = 91, V_TURN = 140, V_FAST = 190;
         var SLASH_FRAME = 0.1, SLASH_LIFE = 0.4;   // SlashFx：<Anim delay="0.1" frames 0-3>
+        // Player::OnCollideH / OnCollideV（State == StStarFly 分支）：
+        //   starFlyTimer < 0.2 → Speed.axis = 0；否则 Speed.axis *= -0.5 + feather_state_bump
+        var WALL_REST = 0.5, WALL_DEAD = 0.2;
+        // 碰撞半径（世界像素）：羽毛 Hitbox(20,20,-10,-10) 半宽 10 + starFlyHitbox(8,8,-4,-10) 半宽 4
+        var COLLECT_R = 14;
+        // StarFlyUpdate 收尾：|Speed.X| 夹到 140；按住 ↑ 则 Speed.Y = -100；Speed.Y > 0 → 0
+        var EXIT_X = 140, EXIT_UP = 100;
+        var EXIT_TTL = 0.35;           // 交回普通状态后余晖的存活时间（原作交给 gravity）
+        var GRAV = 900, MAX_FALL = 160;    // Player 普通状态 gravity / maxFall
         // 像素倍率：场景其它美术都是 3 倍（篝火 64→~200px、Madeline 32→~100px），
         // 所以原图 32px 对应 CSS 96px；canvas 再按 devicePixelRatio 取整数倍，保证一个美术像素=整数设备像素
         var DPR = 1, SPR_S = 3, FSIZE = 96, PXF = 3;
         var GAP_MIN = 144, GAP_MAX = 288, GAP_FLOOR = 101;
-        var GOLD = [[255, 253, 240], [255, 235, 140], [255, 203, 52], [206, 130, 16]];
-        var RED = [[255, 244, 238], [255, 158, 130], [232, 84, 62], [150, 32, 28]];
+        // ---- 星飞视觉常量（Player / PlayerHair / Sprites.xml 取证） ----
+        var STAR_COLOR = '#ffd65c';    // Player::starFlyColor = HexToColor("ffd65c")
+        var NORMAL_HAIR = '#ac3232';   // Player::NormalHairColor = HexToColor("AC3232")（.cctor）
+        var STAR_WHITE = '#ffffff';    // 变形期与 0.32–0.42s 之间 Sprite.Color 仍是 Color.White
+        var STAR_FRAME_MS = 80;        // <Anim path="startStarFly" delay="0.08"/>
+        var HAIR_SEG = 3;              // AfterUpdate：|V2 - Nodes[i]| > 3 → 夹回 3 世界像素
+        // StepPerSegment=(0,2) / StepInFacingPerSegment=0.5 只在 SimulateMotion=true 的 Approach 分支里用；
+        // 星飞时 applyGravity=false → SimulateMotion=false，那两个值不参与计算
+        var HAIR_N_MORPH = 4;          // 普通 PlayerSprite.HairCount = 4
+        var HAIR_N_FLY = 7;            // 星飞时 PlayerSprite.HairCount = 7（0.42s 才切）
+        var STAR_BLOOM_R = 16;         // starFlyBloom = BloomPoint(offset(0,-6), 0, 16)
+        var STAR_R = 4;                // starFlyHitbox = Hitbox(8, 8, -4, -10) → 以球心为中心的 8×8，半宽 4
 
         // ---------- 粒子（ParticleTypes::Load 里 FlyFeather.P_* 的字段值，逐条来自 IL） ----------
         // P_Collect: Source=particles/feather, Color=FlyPowerHairColor, Color2=fff20f, ColorMode/FadeMode=2,
@@ -1906,10 +1977,11 @@ function stopPeSnow() {
 
         // ---------- 状态 ----------
         var active = false, raf = 0, prevT = 0, clock = 0;
-        var feathers = [], placed = [], orb = null, parts = [], slashes = [], ghosts = [];
+        var feathers = [], placed = [], orb = null, parts = [], slashes = [], exits = [];
         var keys = {}, keysActive = false;
+        var ptr = null, ptrLast = null;    // 指针速度（≈ 原作的 player.Speed，决定 SlashFx 朝向）
         var cv = null, ctx2 = null, hint = null, shakeTimer = null;
-        var orbCache = { size: 0, px: 0, gold: null, red: null, glow: null };
+        var starGlow = null, starGlowSize = 0;   // starFlyBloom 的柔光贴图（随 FSIZE 重建）
         var TINTS = {};
         var DIR_KEYS = { arrowup: 1, arrowdown: 1, arrowleft: 1, arrowright: 1, w: 1, a: 1, s: 1, d: 1 };
 
@@ -1925,7 +1997,6 @@ function stopPeSnow() {
             var a = a0 + (d > 0 ? step : -step);
             return { x: Math.cos(a), y: Math.sin(a) };
         }
-        function hash(a, b) { var v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return v - Math.floor(v); }
         // 场景统一像素倍率：32px 原图铺成 ~96 CSS px；canvas 再按 dpr 取整数倍备份，避免美术像素被拉伸成 1/2px
         function updateSizes() {
             DPR = Math.max(1, window.devicePixelRatio || 1);
@@ -1937,10 +2008,35 @@ function stopPeSnow() {
             GAP_FLOOR = Math.round(FSIZE * 1.05);
         }
         function nowMs() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
-        function orbCellPx() { return Math.max(2, Math.round(FSIZE / 16)); }
-        function orbRadius() { return orbCellPx() * 6; }
+        function orbRadius() {
+            // starFlyHitbox = Hitbox(8, 8, -4, -10)：以球心 (0,-6) 为中心的 8×8 ⇒ 碰墙半径 4 世界像素
+            return STAR_R * PXF;
+        }
+        // Player::Render 的 startStarFlyWhite 叠加用：把 #rrggbb 整体乘一个系数（对应 XNA 的 Color * float）
+        function scaleHex(hex, k) {
+            var n = parseInt(hex.slice(1), 16);
+            var r = Math.round(((n >> 16) & 255) * k), g = Math.round(((n >> 8) & 255) * k), b = Math.round((n & 255) * k);
+            return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+        }
+        // 当前动画帧号（Sprites.xml：startStarFly delay=0.08 共 4 帧，之后 goto starFly 单帧）
+        function starFrame(charge) { return Math.min(3, Math.floor(charge / (STAR_FRAME_MS / 1000))); }
         function featherCenter(f) {
             return { x: f.x / 100 * left.clientWidth, y: f.y / 100 * left.clientHeight };
+        }
+        // 原作的兜底：Calc.Angle(feather.Position - player.Center)——页面里就是睡着的 Madeline
+        function madelineCenter() {
+            var md = document.getElementById('dsMadeline');
+            if (!md) return null;
+            var a = md.getBoundingClientRect(), b = left.getBoundingClientRect();
+            if (!a.width) return null;
+            return { x: a.left - b.left + a.width / 2, y: a.top - b.top + a.height / 2 };
+        }
+        // SlashFx.Burst 的朝向：原作取 Calc.Angle(playerSpeed)，速度为零才退化到"羽毛→玩家"
+        function slashAngle(f, e) {
+            if (ptr && nowMs() - ptr.t < 150) return Math.atan2(ptr.y, ptr.x);
+            var fc = featherCenter(f), mc = madelineCenter();
+            if (mc) return Math.atan2(fc.y - mc.y, fc.x - mc.x);
+            return Math.atan2(e && e.movementY || 0, e && e.movementX || 0) || 0;
         }
 
         // ---------- 粒子 ----------
@@ -1979,7 +2075,20 @@ function stopPeSnow() {
                 var t0 = AC.currentTime, g = AC.createGain(), o = AC.createOscillator();
                 o.connect(g); g.connect(AC.destination);
                 g.gain.setValueAtTime(0.0001, t0);
-                if (kind === 'boost') {
+                if (kind === 'bump') {                 // event:/game/06_reflection/feather_state_bump
+                    o.type = 'square';
+                    o.frequency.setValueAtTime(180, t0);
+                    o.frequency.exponentialRampToValueAtTime(96, t0 + 0.1);
+                    g.gain.linearRampToValueAtTime(0.05, t0 + 0.008);
+                    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.13);
+                    o.start(t0); o.stop(t0 + 0.15);
+                } else if (kind === 'warn') {          // event:/game/06_reflection/feather_state_warning
+                    o.type = 'triangle';
+                    o.frequency.setValueAtTime(880, t0);
+                    g.gain.linearRampToValueAtTime(0.035, t0 + 0.01);
+                    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.12);
+                    o.start(t0); o.stop(t0 + 0.14);
+                } else if (kind === 'boost') {
                     o.type = 'sawtooth';
                     o.frequency.setValueAtTime(360, t0);
                     o.frequency.exponentialRampToValueAtTime(900, t0 + 0.09);
@@ -2019,7 +2128,8 @@ function stopPeSnow() {
             cv.height = Math.max(1, left.clientHeight);
             ctx2 = cv.getContext('2d');
             ctx2.imageSmoothingEnabled = false;
-            orbCache.size = 0;
+            starGlowSize = 0;
+            TINTS = {};            // PXF 变了 → 染色/描边缓存全部作废
         }
         function showHint(on) {
             if (!hint) {
@@ -2030,12 +2140,23 @@ function stopPeSnow() {
             }
             hint.classList.toggle('show', !!on);
         }
-        function shake() {
+        // level.Shake(0.3)：无参 = 随机抖（收集）；传方向 = DirectionalShake(dir, 0.3)（发射）
+        function shake(dx, dy) {
             clearTimeout(shakeTimer);
             left.classList.remove('ff-shake');
+            left.classList.remove('ff-shake-dir');
             void left.offsetWidth;
-            left.classList.add('ff-shake');
-            shakeTimer = setTimeout(function () { left.classList.remove('ff-shake'); }, 380);
+            if (dx || dy) {
+                left.style.setProperty('--ffdx', (dx || 0).toFixed(3));
+                left.style.setProperty('--ffdy', (dy || 0).toFixed(3));
+                left.classList.add('ff-shake-dir');
+            } else {
+                left.classList.add('ff-shake');
+            }
+            shakeTimer = setTimeout(function () {
+                left.classList.remove('ff-shake');
+                left.classList.remove('ff-shake-dir');
+            }, 380);
         }
 
         // ---------- 材质染色（particles/feather/rect/smoke0.png → ParticleType 的 Color / Color2） ----------
@@ -2054,12 +2175,35 @@ function stopPeSnow() {
             TINTS[key] = c;
             return c;
         }
-        function ramp(stops, t) {
-            var f = t * (stops.length - 1), i0 = Math.floor(f), i1 = Math.min(stops.length - 1, i0 + 1), m = f - i0;
-            var a = stops[i0], b = stops[i1];
-            return 'rgb(' + Math.round(a[0] + (b[0] - a[0]) * m) + ',' +
-                            Math.round(a[1] + (b[1] - a[1]) * m) + ',' +
-                            Math.round(a[2] + (b[2] - a[2]) * m) + ')';
+        // 原作的着色语义是 MTexture.Draw(pos, origin, color, scale) 里的 color —— 它是**乘法**，不是替换：
+        //   hair00 是纯白贴图（乘什么就是什么）、bangs00 带 134,134,134 的灰高光、startStarFlyWhite 是白剪影。
+        //   用 source-in 直接刷色会把高光抹平（刘海就变成一块死色），所以必须乘法；
+        //   canvas 没有“乘色并保留 alpha”，所以 multiply 之后用 destination-in 把透明区裁回去。
+        //   乘白 = 原图，直接返回省一次预烘。
+        var WHITE_TAG = '#ffffff';
+        function mulTint(tex, color) {
+            var src = IMG[tex];
+            if (!src || !src.naturalWidth) return null;
+            if (color === WHITE_TAG) return src;
+            var key = tex + '|m|' + color;
+            if (TINTS[key]) return TINTS[key];
+            var c = document.createElement('canvas');
+            c.width = src.naturalWidth; c.height = src.naturalHeight;
+            var g = c.getContext('2d');
+            g.imageSmoothingEnabled = false;
+            g.drawImage(src, 0, 0);
+            g.globalCompositeOperation = 'multiply';
+            g.fillStyle = color;
+            g.fillRect(0, 0, c.width, c.height);
+            g.globalCompositeOperation = 'destination-in';
+            g.drawImage(src, 0, 0);
+            TINTS[key] = c;
+            return c;
+        }
+        // starFlyBloom = BloomPoint(offset(0,-6), alpha 0, radius 16)；offset 就是球心
+        function buildStarGlow() {
+            starGlow = makeGlow(STAR_BLOOM_R * PXF);
+            starGlowSize = FSIZE;
         }
         function makeGlow(r) {
             var c = document.createElement('canvas');
@@ -2074,25 +2218,6 @@ function stopPeSnow() {
             g.fillRect(0, 0, c.width, c.height);
             return c;
         }
-        // 光球像素格（确定性 hash → 逐帧不闪；两套色板对应 starFlyColor ↔ NormalHairColor 警告闪）
-        function buildOrb() {
-            var px = orbCellPx(), n = 6, tmp = [];
-            for (var gy = -n; gy <= n; gy++) {
-                for (var gx = -n; gx <= n; gx++) {
-                    var d = Math.sqrt(gx * gx + gy * gy);
-                    if (d > n + 0.2) continue;
-                    var t = Math.min(1, d / n) + (hash(gx * 3 + 1, gy * 7 - 2) - 0.5) * 0.12;
-                    t = Math.max(0, Math.min(1, t));
-                    tmp.push({ dx: gx * px, dy: gy * px, cg: ramp(GOLD, t), cr: ramp(RED, t) });
-                }
-            }
-            orbCache.size = FSIZE;
-            orbCache.px = px;
-            orbCache.gold = tmp.map(function (c) { return { dx: c.dx, dy: c.dy, c: c.cg }; });
-            orbCache.red = tmp.map(function (c) { return { dx: c.dx, dy: c.dy, c: c.cr }; });
-            orbCache.glow = makeGlow(px * 12);
-        }
-
         // ---------- 羽毛（FlyFeather） ----------
         function randPos(need, ignoreMax) {
             for (var t = 0; t < 300; t++) {
@@ -2136,14 +2261,14 @@ function stopPeSnow() {
             var f = {
                 el: b, cvs: cvs, ctx: null, sprS: SPR_S, cssPx: FSIZE,
                 x: p.x, y: p.y, phase: Math.random() * Math.PI * 2,
-                state: 'idle', respawnAt: 0, burstAt: 0, burstAng: 0, renewAt: 0,
+                state: 'idle', respawnAt: 0, burstAt: 0, burstAng: 0,
                 wigT: -1, wigDur: 1, wigFreq: 4, drawn: -1
             };
             applyScale(f);
             b.addEventListener('click', function (e) {
                 e.preventDefault();
                 e.stopPropagation();
-                onFeatherClick(f);
+                onFeatherClick(f, e);
             });
             feathers.push(f);
             return f;
@@ -2155,9 +2280,22 @@ function stopPeSnow() {
             var im = f.state === 'idle' ? IMG.frames[idx] : IMG.outline;
             if (im && im.naturalWidth) c.drawImage(im, 0, 0, size, size);
         }
-        function onFeatherClick(f) {
+        function onFeatherClick(f, e) {
             if (!active || f.state !== 'idle' || orb) return;
-            startStarFly(f);
+            startStarFly(f, e);
+        }
+        // FlyFeather::OnPlayer → CollectRoutine（两击共用同一条协程）：
+        //   Level.Shake(0.3) → sprite.Visible=false → yield 0.05s → Emit(P_Collect,10,Pos,One*6) + SlashFx.Burst
+        //   飞行中撞到另一根羽毛也走这里（StartStarFly 的 renew 分支只把 timer 回满 + 把 Sprite.Color 改回 starFlyColor）
+        function collect(f, renew, ang) {
+            shake();                                     // level.Shake(0.3)
+            f.state = 'wait';
+            f.el.classList.add('wait');                  // sprite.Visible=false → light.Alpha 于 0.25s 内淡到 0
+            f.drawn = -1;
+            f.burstAt = nowMs() + 50;                    // yield return 0.05f
+            f.burstAng = ang;
+            f.respawnAt = nowMs() + RESPAWN_MS;          // respawnTimer = 3（singleUse 才跳过）
+            sfx(renew ? 'renew' : 'get');
         }
         function stepFeathers(dt) {
             var idx = Math.floor(clock / FRAME_MS) % FRAMES.length;
@@ -2202,45 +2340,77 @@ function stopPeSnow() {
             }
         }
 
-        // ---------- 星飞光球（StStarFly 逐行移植） ----------
-        function startStarFly(f) {
+        // ---------- 星飞光球（Player::StStarFly 逐行移植） ----------
+        // StartStarFly → StateMachine.State = 19；StarFlyBegin 里 timer=FLY_TIME / Bloom(0,-6,r16,α→0.7)；
+        // 变形期由 StarFlyCoroutine 卡住：startStarFly 播完（4×0.08）=0.32s → Speed 已归零 → 再等 0.1s
+        function startStarFly(f, e) {
             var c = featherCenter(f);
-            var dir = inputDir() || { x: 1, y: 0 };
+            var ax = axisX(), ay = axisY();
+            var l = Math.sqrt(ax * ax + ay * ay);
+            // 无输入 → UnitX * Facing（页面没有朝向，取 +x）
+            var dir = l ? { x: ax / l, y: ay / l } : { x: 1, y: 0 };
             orb = {
                 x: c.x, y: c.y, mx: dir.x, my: dir.y, last: dir,
                 len: 0, lerp: 0, glow: 0,
-                charge: 0, timer: FLY_TIME, emitT: 0, ghostT: 0,
-                warnT: 0, flash: false
+                charge: 0, timer: FLY_TIME, emitT: 0,
+                warnT: 0, flash: false, warned: false,
+                hair: [], hairCount: HAIR_N_MORPH
             };
-            f.state = 'wait';
-            f.respawnAt = nowMs() + RESPAWN_MS;    // 必须用真实时刻：clock 是上一帧时间戳，掉帧时会偏旧
-            f.el.classList.add('wait');
-            f.drawn = -1;
-            f.burstAt = nowMs() + 50;              // CollectRoutine：隐藏后再等 0.05s
-            f.burstAng = Math.atan2(dir.y, dir.x);
-            shake();                                    // level.Shake(0.3)
+            // PlayerHair.Start：所有 node 一次性设成 Position + (-Facing*200, 200)（左下方）。
+            // 紧接着 AfterUpdate 的 |V2-Nodes[i]|>3 夹取会在同一帧把整条链摄成 3 世界像素/节，
+            // 方向就是「从左下指向头部」——所以预铺时直接按这个方向摆链，省两帧乱动。
+            var bx = -Math.SQRT1_2, by = Math.SQRT1_2;
+            for (var hi = 0; hi < HAIR_N_FLY; hi++) {
+                orb.hair.push({ x: c.x + bx * hi * HAIR_SEG * PXF, y: c.y - 5 * PXF + by * hi * HAIR_SEG * PXF });
+            }
+            collect(f, false, slashAngle(f, e));         // 同一个协程：Shake → 隐藏 → 0.05s → 粒子 + SlashFx
             showHint(true);
             bindActive(true);
             ensureCanvas();
-            sfx('get');
+        }
+        // PlayerHair::AfterUpdate 在星飞状态下的化简（SimulateMotion=false / StepYSinePerSegment=0 / Scale=1）：
+        //   Nodes[0] = Sprite.RenderPosition + (0,-9*Scale.Y) + HairOffset*(Facing,1)
+        //     RenderPosition 就是 Player.Position（脚底），所以 starFly 的 HairOffset=(0,3) ⇒ 发根 = 球心；
+        //     startStarFly 的 HairOffset=(0,-2) ⇒ 发根在球心上 5 世界像素
+        //   SimulateMotion=false（UpdateHair: State==19 → applyGravity=false）⇒ 不进
+        //     Nodes[i] = Approach(Nodes[i], V1, ...) 那一支，只剩 |V2 - Nodes[i]| > 3 夹回 3 世界像素。
+        //     于是飞行时 Node0 每帧把链条往外拽一截、超出 3 就夹回来 ⇒ 自然拉成一条直线拖尾。
+        function stepHair(o) {
+            if (!o.hair.length) return;
+            var seg = HAIR_SEG * PXF;
+            var ay = (o.charge < CHARGE_ANIM) ? o.y - 5 * PXF : o.y;
+            var head = o.hair[0];
+            head.x = o.x; head.y = ay;
+            var px = o.x, py = ay;
+            for (var i = 1; i < o.hair.length; i++) {
+                var nd = o.hair[i];
+                var dx = nd.x - px, dy = nd.y - py, d = Math.sqrt(dx * dx + dy * dy);
+                if (d > seg) { nd.x = px + dx / d * seg; nd.y = py + dy / d * seg; }
+                px = nd.x; py = nd.y;
+            }
         }
         function stepOrb(dt) {
             if (!orb) return;
             var o = orb;
-            o.glow = approach(o.glow, 1, dt * 4);       // light.Alpha = Approach(..., dt*4)
+            o.glow = approach(o.glow, 0.7, dt * 2);       // starFlyBloom.Alpha = Approach(..., 0.7, 2*dt)
 
             if (o.charge < CHARGE) {
                 // starFlyTransforming：Speed = Approach(Speed, Zero, 1000 * dt)
                 o.charge += dt;
                 o.len = approach(o.len, 0, ACCEL * PXF * dt);
                 if (o.charge >= CHARGE) {
+                    // 协程尾部才读 Input.Feather ⇒ 变形期（0.42s）里按住的方向才是发射方向
+                    var d0 = inputDir() || o.last;
+                    o.mx = d0.x; o.my = d0.y; o.last = d0;
+                    o.len = V_START * PXF;                // Speed = dir * 250
                     o.timer = FLY_TIME;
-                    o.len = V_START * PXF;              // Speed = dir * 250
-                    o.mx = o.last.x; o.my = o.last.y;
+                    o.flash = false; o.warnT = 0; o.warned = false;
+                    o.hairCount = HAIR_N_FLY;             // Sprite.HairCount = 7（与变金色同一时刻）
                     emit(PT.boost, 12, o.x, o.y, 4 * PXF, Math.atan2(-o.my, -o.mx));
-                    shake();
+                    shake(o.mx, o.my);                    // level.DirectionalShake(starFlyLastDir, 0.3)
                     sfx('boost');
                 }
+                stepHair(o);
                 return;
             }
 
@@ -2253,6 +2423,7 @@ function stopPeSnow() {
             m = m ? rotateToward(m, dir, TURN_RATE * dt) : dir;
             o.mx = m.x; o.my = m.y; o.last = m;
 
+            // Dot(moveDir, dir) < 0.45 → 掉头，目标速度回到 140 并清空 lerp
             var target;
             if (idle) { o.lerp = 0; target = V_IDLE; }
             else if (dot(m, dir) >= 0.45) { o.lerp = approach(o.lerp, 1, dt); target = V_TURN + (V_FAST - V_TURN) * o.lerp; }
@@ -2262,12 +2433,27 @@ function stopPeSnow() {
             o.x += o.mx * o.len * dt;
             o.y += o.my * o.len * dt;
 
-            // 房间边界（左屏）：贴边滑行
+            // 房间边界（左屏 = 游戏房间）：OnCollideH / OnCollideV 的 StStarFly 分支
             var w = left.clientWidth, h = left.clientHeight, R = orbRadius();
-            if (o.x < R) { o.x = R; o.len *= 0.94; }
-            if (o.x > w - R) { o.x = w - R; o.len *= 0.94; }
-            if (o.y < R) { o.y = R; o.len *= 0.94; }
-            if (o.y > h - R) { o.y = h - R; o.len *= 0.94; }
+            var hx = false, hy = false;
+            if (o.x < R) { o.x = R; hx = true; }
+            else if (o.x > w - R) { o.x = w - R; hx = true; }
+            if (o.y < R) { o.y = R; hy = true; }
+            else if (o.y > h - R) { o.y = h - R; hy = true; }
+            if (hx || hy) {
+                var vx = o.mx * o.len, vy = o.my * o.len;
+                if (o.timer < WALL_DEAD) {                 // 快结束时贴墙：Speed.axis = 0，不反弹
+                    if (hx) vx = 0;
+                    if (hy) vy = 0;
+                } else {                                   // Speed.axis *= -0.5 + feather_state_bump
+                    if (hx) vx *= -WALL_REST;
+                    if (hy) vy *= -WALL_REST;
+                    sfx('bump');
+                }
+                o.len = Math.sqrt(vx * vx + vy * vy);
+                if (o.len > 0.001) { o.mx = vx / o.len; o.my = vy / o.len; }
+                else { o.mx = 0; o.my = 0; }               // SafeNormalize → Zero，下帧重取输入朝向
+            }
 
             // Scene.OnInterval(0.02) → Emit(P_Flying, 1, Center, One*2, Angle(-Speed))
             o.emitT += dt;
@@ -2275,44 +2461,46 @@ function stopPeSnow() {
                 o.emitT -= 0.02;
                 emit(PT.flying, 1, o.x, o.y, 2 * PXF, Math.atan2(-o.my, -o.mx));
             }
-            // 网页端补一点运动残影（原作靠 P_Flying 粒子；这里让快速移动更连贯）
-            o.ghostT += dt;
-            if (o.ghostT >= 0.03) {
-                o.ghostT = 0;
-                if (orbCache.glow) ghosts.push({ x: o.x, y: o.y, t: 0, ttl: 0.12 });
-            }
+            // 头发拖尾（原作没有“彗星残影”，方向感全靠这条硬链）
+            stepHair(o);
 
-            // starFlyTimer -= DeltaTime；末 0.5s 每 0.05s 在 starFlyColor ↔ NormalHairColor 间闪
+            // starFlyTimer -= DeltaTime；末 0.5s 每 0.05s 在 starFlyColor ⇄ NormalHairColor 间闪
             o.timer -= dt;
             if (o.timer < WARN_TIME) {
+                if (!o.warned) { o.warned = true; sfx('warn'); }   // feather_state_warning（< 0.5s 时响起）
                 o.warnT += dt;
                 if (o.warnT >= WARN_STEP) { o.warnT = 0; o.flash = !o.flash; }
             }
             if (o.timer <= 0) { endFly(false); return; }
 
-            // 飞行中碰到别的羽毛 → feather_renew：timer 回满，羽毛不消失
+            // 飞行中碰到别的羽毛 → StartStarFly 的 renew 分支：timer 回满 + 清掉警告闪，
+            // 然后照样走 CollectRoutine（羽毛隐没、3s 后重生）
             for (var k = 0; k < feathers.length; k++) {
                 var f = feathers[k];
-                if (f.state !== 'idle' || nowMs() < f.renewAt) continue;
+                if (f.state !== 'idle') continue;
                 var fc = featherCenter(f);
-                if (Math.hypot(fc.x - o.x, fc.y - o.y) > R + FSIZE * 0.42) continue;
-                f.renewAt = nowMs() + 500;
-                f.wigT = 0; f.wigDur = 1; f.wigFreq = 4;
-                o.timer = FLY_TIME; o.flash = false; o.warnT = 0;
-                emit(PT.boost, 4, fc.x, fc.y, 2 * PXF, Math.atan2(-o.my, -o.mx));
-                sfx('renew');
+                if (Math.hypot(fc.x - o.x, fc.y - o.y) > COLLECT_R * PXF) continue;
+                o.timer = FLY_TIME; o.flash = false; o.warnT = 0; o.warned = false;
+                collect(f, true, Math.atan2(o.my, o.mx));   // 原作此处 playerSpeed = 当前飞行 Speed
             }
         }
+        // StarFlyEnd：P_Boost ×12 + 交回普通状态。
+        // 原作在此处夹取 Speed（|Speed.X|≤140、按住 ↑ 则 Speed.Y=-100、向下速度归零），
+        // 随后由 gravity 接管——页面里用一段带重力的余晖把“被抛出去”读出来。
         function endFly(silent) {
+            var ay = axisY();          // 必须在 bindActive(false) 清空 keys 之前读（原作此处看 Input.MoveY）
             bindActive(false);
             showHint(false);
             if (!orb) return;
             var o = orb;
             orb = null;
             if (silent) return;
-            // StarFlyEnd：P_Boost ×12（Angle(-Speed)）+ 光球余晖
-            emit(PT.boost, 12, o.x, o.y, 4 * PXF, Math.atan2(-o.my, -o.mx));
-            ghosts.push({ x: o.x, y: o.y, t: 0, ttl: 0.2 });
+            var vx = o.mx * o.len, vy = o.my * o.len;
+            if (ay === -1) vy = -EXIT_UP * PXF;                      // Input.MoveY == -1
+            if (vy > 0) vy = 0;                                     // Speed.Y > 0 → 0
+            if (Math.abs(vx) > EXIT_X * PXF) vx = (vx < 0 ? -1 : 1) * EXIT_X * PXF;
+            emit(PT.boost, 12, o.x, o.y, 4 * PXF, Math.atan2(-o.my, -o.mx));   // Angle(-Speed)
+            exits.push({ x: o.x, y: o.y, vx: vx, vy: vy, t: 0, ttl: EXIT_TTL });
             sfx('end');
         }
         function stepFx(dt) {
@@ -2333,35 +2521,101 @@ function stopPeSnow() {
                 sl.x += Math.cos(sl.ang) * 8 * PXF * dt;
                 sl.y += Math.sin(sl.ang) * 8 * PXF * dt;
             }
-            for (var g = ghosts.length - 1; g >= 0; g--) {
-                ghosts[g].t += dt;
-                if (ghosts[g].t >= ghosts[g].ttl) ghosts.splice(g, 1);
+            // StarFlyEnd 之后的余晖：Speed 已被夹取，此处只交给 gravity（Player 普通状态）
+            for (var x = exits.length - 1; x >= 0; x--) {
+                var ex = exits[x];
+                ex.t += dt;
+                if (ex.t >= ex.ttl) { exits.splice(x, 1); continue; }
+                ex.vy = Math.min(ex.vy + GRAV * PXF * dt, MAX_FALL * PXF);
+                ex.x += ex.vx * dt;
+                ex.y += ex.vy * dt;
             }
             if (parts.length > 400) parts.splice(0, parts.length - 400);
         }
 
         // ---------- 渲染 ----------
+        // 层级严格照 Player 的组件顺序：Hair 先 Add（ctor @01bd）⇒ Hair.Render 先跑，Sprite 后 Add（@01c9）。
+        // 底到顶 = 精灵黑边×4（在 Hair.Render 开头）→ 头发描边趟 → 头发本体趟 → 精灵本体 → startStarFlyWhite 叠加。
+        // Sprites.xml Justify(0.5,1) ⇒ origin=(16,32)；球心 = Player.Position + (0,-6)
+        // ⇒ 32×32 贴图左上角 = 球心 + (-16,-26) 世界像素。
+        function drawSprite(x, y, tex, color, alpha) {
+            var src = mulTint(tex, color);
+            if (!src || alpha <= 0) return;
+            var w = 32 * PXF;
+            ctx2.globalAlpha = alpha;
+            ctx2.drawImage(src, Math.round(x - 16 * PXF), Math.round(y - 26 * PXF), w, w);
+            ctx2.globalAlpha = 1;
+        }
+        // DrawPlayerSpriteOutline：Sprite.Color = Border(=Black)*Alpha，Position 依次 ±(0,1)/±(1,0) 再 Render 一次
+        function drawSpriteOutline(x, y, tex, alpha) {
+            var black = mulTint(tex, '#000000');
+            if (!black || alpha <= 0) return;
+            var w = 32 * PXF, pad = Math.round(PXF);
+            var l = Math.round(x - 16 * PXF), t = Math.round(y - 26 * PXF);
+            ctx2.globalAlpha = alpha;
+            ctx2.drawImage(black, l, t - pad, w, w);        // ( 0,-1)
+            ctx2.drawImage(black, l, t + pad, w, w);        // ( 0, 1)
+            ctx2.drawImage(black, l - pad, t, w, w);        // (-1, 0)
+            ctx2.drawImage(black, l + pad, t, w, w);        // ( 1, 0)
+            ctx2.globalAlpha = 1;
+        }
+        // 余晖（已交回普通状态）：留一层带黑边的金色精灵淡出
+        function drawStar(x, y, tex, color, alpha) {
+            drawSpriteOutline(x, y, tex, alpha);
+            drawSprite(x, y, tex, color, alpha);
+        }
+        // PlayerHair.Render 原序（两趟不能合）：先 i=0→n-1 把每节描边全画完，再 i=n-1→0 画本体（梢先根后）。
+        // 合成一节一节画的话，后一节的黑边会压住前一节的本体，拖尾上会冒出一圈圈黑色分节缝。
+        // 描边偏移恒为 1 世界像素（IL 是 Nodes[i] + (±1,0)/(0,±1)，不经 GetHairScale），缩放只作用在贴图尺寸上。
+        // i==0 的 GetHairTexture 是 bangs[HairFrame]；星飞状态不会调 UpdateHairFrame，页面取 bangs00。
+        function drawHair(o, color, alpha) {
+            var n = Math.min(o.hairCount, o.hair.length), i, nd, s, body, black;
+            var pad = Math.round(PXF);
+            for (i = 0; i < n; i++) {
+                black = mulTint(i === 0 ? 'bangs0' : 'hair00', '#000000');
+                if (!black) continue;
+                nd = o.hair[i];
+                s = 10 * (0.25 + (1 - i / n) * 0.75) * PXF;    // GetHairScale：10×10 贴图 × 0.357…1.0
+                var bx = Math.round(nd.x - s / 2), by = Math.round(nd.y - s / 2);
+                ctx2.globalAlpha = alpha;
+                ctx2.drawImage(black, bx - pad, by, s, s);
+                ctx2.drawImage(black, bx + pad, by, s, s);
+                ctx2.drawImage(black, bx, by - pad, s, s);
+                ctx2.drawImage(black, bx, by + pad, s, s);
+            }
+            for (i = n - 1; i >= 0; i--) {
+                body = mulTint(i === 0 ? 'bangs0' : 'hair00', color);
+                if (!body) continue;
+                nd = o.hair[i];
+                s = 10 * (0.25 + (1 - i / n) * 0.75) * PXF;
+                ctx2.globalAlpha = alpha;
+                ctx2.drawImage(body, Math.round(nd.x - s / 2), Math.round(nd.y - s / 2), s, s);
+            }
+            ctx2.globalAlpha = 1;
+        }
         function drawOrb(o) {
-            if (orbCache.size !== FSIZE) buildOrb();
-            var cx = Math.round(o.x), cy = Math.round(o.y), half = orbCache.px >> 1;
-            if (orbCache.glow && o.glow > 0.02) {
-                ctx2.globalAlpha = 0.6 * o.glow;           // starFlyBloom.Alpha → 0.7
-                var gs = orbCache.glow;
-                ctx2.drawImage(gs, cx - gs.width / 2, cy - gs.height / 2 - orbCache.px * 1.5);
-                ctx2.globalAlpha = 1;
+            // 两个不同步的门槛：0–0.32s 才是 startStarFly 动画；Sprite.Color 的白色一直到 0.42s
+            var anim = o.charge < CHARGE_ANIM;
+            var morph = o.charge < CHARGE;
+            var tex = anim ? 'startFly' + starFrame(o.charge) : 'starFly';
+            var col = morph ? STAR_WHITE : (o.flash ? NORMAL_HAIR : STAR_COLOR);
+            drawSpriteOutline(o.x, o.y, tex, 1);       // (1) 精灵黑边 ×4：压在最底
+            drawHair(o, col, 1);                       // (2)(3) 头发两趟：被本体压住，只从球体边缘露出来
+            drawSprite(o.x, o.y, tex, col, 1);         // (4) 精灵本体（startStarFly 是本色贴图，乘 White = 原样）
+            if (anim) {                                // (5) startStarFlyWhite 叠加：颜色 = starFlyColor * (帧/4)
+                // XNA 的 Color * float 是连 A 一起乘，SpriteBatch 又按预乘混合
+                // ⇒ 屏幕上看到的等效值是「starFlyColor×t 的颜色」+ 「t 的不透明度」
+                var fr = starFrame(o.charge), t = fr / 4;
+                drawSprite(o.x, o.y, 'startWhite' + fr, scaleHex(STAR_COLOR, t), t);
             }
-            var cells = o.flash ? orbCache.red : orbCache.gold;
-            for (var i = 0; i < cells.length; i++) {
-                ctx2.fillStyle = cells[i].c;
-                ctx2.fillRect(cx + cells[i].dx - half, cy + cells[i].dy - half, orbCache.px, orbCache.px);
-            }
-            if (o.charge < CHARGE) {                       // 变形期白闪（startStarFly 起手）
-                var q = 1 - o.charge / CHARGE;
-                ctx2.globalAlpha = q * 0.85;
-                ctx2.fillStyle = '#fffdf2';
-                ctx2.beginPath();
-                ctx2.arc(cx, cy, orbCache.px * (2 + 4 * q), 0, Math.PI * 2);
-                ctx2.fill();
+            // (6) starFlyBloom = BloomPoint(offset(0,-6), 0→0.7, r16)：Monocle 的 bloom 是 Level
+            //     把所有实体画完之后再 Additive 叠上去，所以放最后、用 lighter，球体自己被点亮
+            if (starGlowSize !== FSIZE) buildStarGlow();
+            if (starGlow && o.glow > 0.02) {
+                ctx2.globalCompositeOperation = 'lighter';
+                ctx2.globalAlpha = o.glow * 0.55;
+                ctx2.drawImage(starGlow, Math.round(o.x - starGlow.width / 2), Math.round(o.y - starGlow.height / 2));
+                ctx2.globalCompositeOperation = 'source-over';
                 ctx2.globalAlpha = 1;
             }
         }
@@ -2369,16 +2623,11 @@ function stopPeSnow() {
             if (!ctx2) return;
             ctx2.clearRect(0, 0, cv.width, cv.height);
 
-            // 1) 光球余晖 / 运动残影
-            if (orbCache.glow) {
-                for (var g = 0; g < ghosts.length; g++) {
-                    var gh = ghosts[g], ga = 1 - gh.t / gh.ttl;
-                    ctx2.globalAlpha = ga * 0.42;
-                    ctx2.drawImage(orbCache.glow, gh.x - orbCache.glow.width / 2, gh.y - orbCache.glow.height / 2);
-                }
-                ctx2.globalAlpha = 1;
+            // 1) 星飞结束后的余晖（原作交回普通状态：Speed 夹取 → gravity；这里用金色精灵淡出收尾）
+            for (var q2 = 0; q2 < exits.length; q2++) {
+                var exi = exits[q2], ea = 1 - exi.t / exi.ttl;
+                drawStar(exi.x, exi.y, 'starFly', STAR_COLOR, ea * ea);
             }
-
             // 2) 粒子（P_Collect / P_Boost 用 feather 贴图并自转，P_Flying 用 rect，P_Respawn 用 smoke0）
             for (var k = 0; k < parts.length; k++) {
                 var p = parts[k];
@@ -2459,6 +2708,15 @@ function stopPeSnow() {
         }
         function onTrack(e) { var k = (e.key || '').toLowerCase(); if (DIR_KEYS[k]) keys[k] = true; }
         function onTrackUp(e) { var k = (e.key || '').toLowerCase(); if (DIR_KEYS[k]) keys[k] = false; }
+        // 指针速度 ≈ 原作 player.Speed：收集瞬间的 SlashFx 就朝这个方向
+        function onPointer(e) {
+            var t = nowMs();
+            if (ptrLast && t - ptrLast.t < 150) {
+                var dx = e.clientX - ptrLast.x, dy = e.clientY - ptrLast.y, l = Math.sqrt(dx * dx + dy * dy);
+                if (l > 2) ptr = { x: dx / l, y: dy / l, t: t };
+            }
+            ptrLast = { x: e.clientX, y: e.clientY, t: t };
+        }
         function bindTrack(on) {
             if (on) {
                 document.addEventListener('keydown', onTrack);
@@ -2469,14 +2727,23 @@ function stopPeSnow() {
             }
         }
         function inputDir() {
-            var x = 0, y = 0;
-            if (keys.arrowleft || keys.a) x -= 1;
-            if (keys.arrowright || keys.d) x += 1;
-            if (keys.arrowup || keys.w) y -= 1;
-            if (keys.arrowdown || keys.s) y += 1;
+            var x = axisX(), y = axisY();
             if (!x && !y) return null;
             var l = Math.sqrt(x * x + y * y);
             return { x: x / l, y: y / l };
+        }
+        // Input.Feather 的整数轴（原文两处判断都比对 -1 / 1）
+        function axisX() {
+            var v = 0;
+            if (keys.arrowleft || keys.a) v -= 1;
+            if (keys.arrowright || keys.d) v += 1;
+            return v;
+        }
+        function axisY() {
+            var v = 0;
+            if (keys.arrowup || keys.w) v -= 1;
+            if (keys.arrowdown || keys.s) v += 1;
+            return v;
         }
 
         // ---------- dream 进出 ----------
@@ -2494,8 +2761,9 @@ function stopPeSnow() {
             ensureCanvas();
             resizeCanvas();
             bindTrack(true);
+            document.addEventListener('pointermove', onPointer, { passive: true });
             host.innerHTML = '';
-            feathers = []; placed = []; parts = []; slashes = []; ghosts = []; orb = null;
+            feathers = []; placed = []; parts = []; slashes = []; exits = []; orb = null;
             countFeathers(function (n) {
                 if (!active) return;
                 for (var k = 0; k < n; k++) addFeather();
@@ -2508,8 +2776,9 @@ function stopPeSnow() {
             active = false;
             stopLoop();
             bindTrack(false);
+            document.removeEventListener('pointermove', onPointer);
             host.innerHTML = '';
-            feathers = []; placed = []; parts = []; slashes = []; ghosts = []; orb = null;
+            feathers = []; placed = []; parts = []; slashes = []; exits = []; orb = null;
             if (ctx2 && cv) ctx2.clearRect(0, 0, cv.width, cv.height);
         }
 
