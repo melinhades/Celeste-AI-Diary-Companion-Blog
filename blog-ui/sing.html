@@ -1,0 +1,288 @@
+<                                                                                                        !DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Sing Studio · 让 Madeline 唱任何歌</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { background:#14101c; color:#e8def7; font:14px/1.6 "Microsoft YaHei",sans-serif; margin:0; padding:16px; }
+  h1 { font-size:18px; margin:0 0 2px; }
+  .sub { color:#9a8cba; font-size:12px; margin-bottom:12px; }
+  fieldset { border:1px solid #332949; border-radius:8px; margin:0 0 10px; padding:8px 12px 10px; }
+  legend { color:#c3b3e8; font-size:13px; padding:0 6px; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:6px 0; }
+  button { background:#3a2d5c; color:#fff; border:1px solid #6b57a0; border-radius:6px; padding:6px 11px; cursor:pointer; font-size:13px; }
+  button:hover { background:#4a3a73; } button:disabled { opacity:.45; cursor:wait; }
+  button.pri { background:#6b4fa8; border-color:#9a78e6; }
+  select,input[type=text],input[type=number],textarea { background:#221a36; color:#e8def7; border:1px solid #6b57a0; border-radius:6px; padding:5px 7px; font-size:13px; }
+  textarea { width:100%; min-height:46px; resize:vertical; box-sizing:border-box; }
+  input[type=range] { width:130px; vertical-align:middle; }
+  label { font-size:12px; color:#b6a7d6; }
+  .tag { display:inline-block; background:#2e2447; border-radius:4px; padding:1px 7px; margin-right:6px; font-size:12px; }
+  canvas { background:#0d0a16; border:1px solid #332949; border-radius:8px; width:100%; box-sizing:border-box; display:block; }
+  pre { background:#0d0a16; border:1px solid #332949; border-radius:8px; padding:10px; max-height:260px; overflow:auto; font-size:12px; white-space:pre-wrap; margin:0; }
+  .hint { color:#7d6ea6; font-size:11.5px; }
+  .sliders span { display:inline-block; margin-right:14px; white-space:nowrap; }
+  .sliders b { color:#e8def7; font-weight:normal; }
+</style>
+</head>
+<body>
+<h1>Sing Studio · 歌曲音频 → Madeline 唱出来</h1>
+<div class="sub">提取 js/melody.js（谐波+Viterbi） · 合成 js/sing-v5.js（TD-PSOLA / LPC） · 总线 js/sing-studio.js（压缩 + 混响 send，照官方 FMOD speech→dialogue→char→gameplay_sfx→Master）</div>
+
+<fieldset>
+  <legend>① 歌曲与歌词</legend>
+  <div class="row">
+    <input type="file" id="file" accept="audio/*">
+    <button id="btnDemo" title="仓库自带的干声真值，用来验证提取精度">用 wow_so_secret 干声试</button>
+    <span class="tag">只分析</span><input type="number" id="fromSec" value="0" step="1" style="width:64px" min="0">
+    <span class="tag">到</span><input type="number" id="toSec" value="0" step="1" style="width:64px" min="0">
+    <span class="hint">秒，0=全曲</span>
+  </div>
+  <textarea id="lyric" placeholder="歌词：中文一字一音；英文按元音粗切；换行/句号当呼吸位。留空=整曲唱「啊」"></textarea>
+</fieldset>
+
+<fieldset>
+  <legend>② 库存审计（选情绪池，30 个文件/池 × 4 组）</legend>
+  <div class="row" id="poolBox"></div>
+  <div class="row">
+    <button id="btnAudit" class="pri">跑审计</button>
+    <span class="hint" id="auditHint">未审计</span>
+  </div>
+</fieldset>
+
+<fieldset>
+  <legend>③ 提取主旋律</legend>
+  <div class="row sliders" id="sliders"></div>
+  <div class="row">
+    <button id="btnDetect" class="pri">提取音符</button>
+    <button id="btnReset">阈值恢复默认</button>
+    <span class="hint" id="detectHint">—</span>
+  </div>
+</fieldset>
+
+<fieldset>
+  <legend>④ 钢琴卷帘（自动提取必然有错，这里手改）</legend>
+  <div class="row">
+    <button id="btnAutoT" class="pri">自动移调到安全音域</button>
+    <span class="tag">手动</span>
+    <button id="btnDown">♭ 半音</button><button id="btnUp">♯ 半音</button>
+    <button id="btnRealign">重对齐歌词</button>
+    <button id="btnFitView">视图自适应</button>
+    <span class="hint" id="covHint">未审计</span>
+  </div>
+  <canvas id="roll" width="1200" height="380"></canvas>
+  <div class="hint">拖动=改音高（Shift 拖动同时改起点，Alt=按行相对移动）｜拖右端=改时长｜双击空白=加音｜右键=删音｜选中后 ↑↓ 改音高（Shift=八度）、←→ 挪时间、Del 删除｜滚轮缩放</div>
+</fieldset>
+
+<fieldset>
+  <legend>⑤ 合成与导出</legend>
+  <div class="row">
+    <span class="tag">情绪</span><select id="strategy"><option value="auto">auto（逐乐句挑覆盖最准的池）</option><option value="cross">cross（允许跨池）</option></select>
+    <span class="tag">链路</span><select id="chain"><option value="psola">TD-PSOLA</option><option value="lpc">LPC 源-滤波</option></select>
+    <span class="tag">混响</span><input type="range" id="wet" min="0" max="0.6" step="0.02" value="0.22"><b id="wetV">0.22</b>
+    <span class="tag">尾巴秒</span><input type="range" id="decay" min="0.2" max="6" step="0.1" value="1"><b id="decayV">1.0</b>
+    <span class="tag">暗一点(高切Hz)</span><input type="range" id="cut" min="800" max="12000" step="100" value="1350"><b id="cutV">1350</b>
+    <label><input type="checkbox" id="comp" checked> 压缩</label>
+  </div>
+  <div class="row">
+    <button id="btnSing" class="pri">唱！</button>
+    <button id="btnPlay">▶ 成品</button>
+    <button id="btnPlayDry">▶ 干声</button>
+    <button id="btnSpoke">▶ 先说话（不变调）</button>
+    <button id="btnPlayAb">▶ 原曲垫背</button>
+    <button id="btnPlaySong">▶ 原曲</button>
+    <button id="btnStop">■</button>
+    <button id="btnWav">导出 WAV</button>
+    <label><input type="checkbox" id="withSong"> 导出里混原曲</label>
+    <input type="range" id="sgain" min="0" max="1" step="0.05" value="0.3"><b id="sgainV">0.30</b>
+  </div>
+  <div class="row">
+    <span class="tag">试听音量</span><input type="range" id="vol" min="0" max="1" step="0.05" value="0.9"><b id="volV">0.90</b>
+    <label><input type="checkbox" id="legato" checked> 连唱（只在字头起音，音间滑音+等功率交叠）</label>
+    <label><input type="checkbox" id="sentence"> 两段式（先拼成一句话，再对整句变调）</label>
+    <label><input type="checkbox" id="autoPlay" checked> 唱完直接播</label>
+    <span class="tag">取消连唱就是旧的逐音模式，可直接 A/B 听差别</span>
+  </div>
+</fieldset>
+
+<pre id="log">就绪。顺序：① 选歌填词 → ② 审计 → ③ 提取 → ④ 在卷帘上修 → ⑤ 唱（默认唱完直接播）。
+首次点任何按钮会解锁音频上下文；空格 = 重播，Esc = 停。想快速看效果就点「用 wow_so_secret 干声试」——它的真值音符在 sing-v5.js 里，提取结果应当几乎全中。
+勾上「两段式」再唱，就能单独听「▶ 先说话」：那是按字把一个音效一个音效摆成的一句话（完全没变调），唱腔是第二段对这条整句统一变调得来的。</pre>
+
+<script src="js/sing-v5.js?v=20261031b"></script>
+<script src="js/melody.js?v=20261031b"></script>
+<script src="js/sing-studio.js?v=20261031b"></script>
+<script>
+const $ = id => document.getElementById(id), logEl = $('log');
+const st = SingStudio.create();
+function log(s) { logEl.textContent += '\n' + s; logEl.scrollTop = logEl.scrollHeight; }
+const busy = async (btn, fn) => { btn.disabled = true; try { await fn(); } catch (e) { log('✗ ' + (e.message || e)); } btn.disabled = false; };
+const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+
+// ---------- 情绪池勾选 ----------
+SingV5.ALL_POOLS.forEach((p, i) => {
+  const l = document.createElement('label');
+  l.innerHTML = `<input type="checkbox" value="${p}" ${i < 2 ? 'checked' : ''}> ${p}`;
+  $('poolBox').appendChild(l);
+});
+const pickedPools = () => [...$('poolBox').querySelectorAll('input:checked')].map(c => c.value);
+
+// ---------- 阈值滑杆（只放最影响结果的几项，其余走 Melody.DEFAULTS） ----------
+const SL = [
+  ['gainFloor', 0, 4, 0.1, '含糊押金 gainFloor'],
+  ['lamPerSemis', 0.05, 1, 0.05, '连续性 lamPerSemis'],
+  ['splitCents', 60, 400, 10, '切音阈值 splitCents'],
+  ['minNoteSec', 0.05, 0.3, 0.005, '最短音符 minNoteSec'],
+  ['silSplitFrames', 1, 8, 1, '断句帧数 silSplitFrames']
+];
+SL.forEach(([k, lo, hi, step, label]) => {
+  const s = document.createElement('span');
+  s.innerHTML = `${label}<br><input type="range" data-k="${k}" min="${lo}" max="${hi}" step="${step}" value="${st.opt[k]}"><b data-v="${k}">${st.opt[k]}</b>`;
+  $('sliders').appendChild(s);
+});
+$('sliders').addEventListener('input', e => {
+  const k = e.target.dataset.k; if (!k) return;
+  st.opt[k] = +e.target.value;
+  $('sliders').querySelector(`[data-v="${k}"]`).textContent = e.target.value;
+});
+$('btnReset').onclick = () => {
+  SL.forEach(([k]) => {
+    st.opt[k] = Melody.DEFAULTS[k];
+    const inp = $('sliders').querySelector(`input[data-k="${k}"]`);
+    inp.value = Melody.DEFAULTS[k];
+    $('sliders').querySelector(`[data-v="${k}"]`).textContent = Melody.DEFAULTS[k];
+  });
+  log('阈值已恢复 Melody.DEFAULTS');
+};
+
+// ---------- 滑杆显示 ----------
+[['wet', 'wetV'], ['decay', 'decayV'], ['cut', 'cutV'], ['sgain', 'sgainV']].forEach(([id, out]) => {
+  $(id).addEventListener('input', () => { $(out).textContent = (+$(id).value).toFixed(id === 'cut' ? 0 : 2); });
+});
+$('vol').addEventListener('input', () => {
+  st.opt.vol = +$('vol').value;
+  $('volV').textContent = st.opt.vol.toFixed(2);
+});
+
+// 浏览器自动播放策略：上下文只能在真手势里 resume，任何第一次按下/点住都去推一把
+const unlockOnce = () => { st.unlock().then(s => { if (s === 'running') window.removeEventListener('pointerdown', unlockOnce); }); };
+window.addEventListener('pointerdown', unlockOnce);
+
+// ---------- ① 歌曲 ----------
+$('file').onchange = e => busy(e.target, async () => {
+  const f = e.target.files[0]; if (!f) return;
+  const b = await st.loadFile(f);
+  log(`已载入 ${f.name}：${b.duration.toFixed(2)}s / ${b.sampleRate}Hz / ${b.numberOfChannels}ch`);
+});
+$('btnDemo').onclick = e => busy(e.target, async () => {
+  const b = await st.loadUrl('celeste-sounds/wow_so_secret.wav', 'wow_so_secret');
+  log(`已载入 wow 干声真值：${b.duration.toFixed(2)}s / ${b.sampleRate}Hz —— 提取应当接近 WOW_NOTES 的 ${SingV5.WOW_NOTES.length} 个音`);
+});
+$('lyric').oninput = () => { if (st.S.notes.length) { st.setLyric($('lyric').value); st.draw(); } };
+
+// ---------- ② 审计 ----------
+$('btnAudit').onclick = e => busy(e.target, async () => {
+  const pools = pickedPools();
+  if (!pools.length) { log('✗ 至少勾一个池'); return; }
+  await st.ensureEngine(pools);
+  const t0 = performance.now();
+  const a = await st.audit(pools, (i, n, url) => { if (i % 12 === 0 || i === n) log(`  审计 ${i}/${n} ${url.split('/').slice(-2).join('/')}`); });
+  const r = st.getEngine().safeRange();
+  $('auditHint').textContent = `${pools.join('+')}：准入 ${Object.values(a.pools).reduce((s, p) => s + p.admissible, 0)}/${a.dedup.filesPresent}，音色门 ${a.mfccSim.toFixed(3)}${a.crossPoolAllowed ? '（允许跨池）' : '（句内锁池）'}`;
+  log(`审计完成（${((performance.now() - t0) / 1000).toFixed(1)}s）${$('auditHint').textContent}`);
+  log(`安全音域（变调率 0.7~1.4 内可准唱）：${st.nameOf(r.lo)}–${st.nameOf(r.hi)}，共 ${r.n} 个半音`);
+  // 策略下拉补上已审计的池
+  const sel = $('strategy');
+  [...sel.options].forEach(o => { if (o.value !== 'auto' && o.value !== 'cross') sel.removeChild(o); });
+  Object.keys(a.pools).forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = p; sel.appendChild(o); });
+  $('covHint').textContent = st.coverageHint();
+});
+
+// ---------- ③ 提取 ----------
+$('btnDetect').onclick = async e => {
+  e.target.disabled = true;
+  await nextFrame();                                     // 让"提取中"先刷出来，重算是同步的
+  try {
+    st.opt.fromSec = +$('fromSec').value || 0;
+    st.opt.toSec = +$('toSec').value || 0;
+    const t0 = performance.now();
+    const notes = st.detect();
+    const ms = Math.round(performance.now() - t0);
+    $('detectHint').textContent = `${notes.length} 个音符，${ms}ms`;
+    log(`提取：${notes.length} 音（${ms}ms，阈值 gainFloor=${st.opt.gainFloor} lam=${st.opt.lamPerSemis} split=${st.opt.splitCents} min=${st.opt.minNoteSec}）`);
+    if (notes.length) log('  音高范围 ' + st.nameOf(Math.min(...notes.map(n => n[2]))) + '–' + st.nameOf(Math.max(...notes.map(n => n[2]))));
+    if (st.auditReady()) { $('covHint').textContent = st.coverageHint(); }
+  } catch (err) { log('✗ ' + (err.message || err)); }
+  e.target.disabled = false;
+};
+
+// ---------- ④ 卷帘 ----------
+st.attachCanvas($('roll'));
+$('roll').width = Math.max(600, $('roll').clientWidth);
+window.addEventListener('resize', () => { $('roll').width = Math.max(600, $('roll').clientWidth); st.fitView(); });
+$('btnAutoT').onclick = e => busy(e.target, async () => {
+  if (!st.S.notes.length) { log('✗ 先提取音符'); return; }
+  const r = st.autoTranspose();
+  if (!r) { log('✗ 未审计，无法确定安全音域'); return; }
+  log(`自动移调 ${r.k >= 0 ? '+' : ''}${r.k} 半音 → 落进 ${st.nameOf(r.range.lo)}–${st.nameOf(r.range.hi)}；${st.coverageHint()}`);
+  st.draw();
+});
+$('btnUp').onclick = () => { st.transpose(1); st.draw(); $('covHint').textContent = st.coverageHint(); };
+$('btnDown').onclick = () => { st.transpose(-1); st.draw(); $('covHint').textContent = st.coverageHint(); };
+$('btnRealign').onclick = () => { const a = st.setLyric($('lyric').value); st.draw(); log(`重对齐：${a.noteCount} 音 / ${a.sylCount} 音节 → ${st.S.notes.length} 个字位`); };
+$('btnFitView').onclick = () => st.fitView();
+
+// ---------- ⑤ 合成 ----------
+function busOpt(withSong) {
+  return { wet: +$('wet').value, decaySec: +$('decay').value, cutHz: +$('cut').value,
+           comp: $('comp').checked, withSong: !!withSong, songGain: +$('sgain').value };
+}
+$('btnSing').onclick = e => busy(e.target, async () => {
+  const mode = $('sentence').checked ? 'sentence' : 'note';
+  const t = await st.sing($('strategy').value, $('chain').value, busOpt($('withSong').checked), $('autoPlay').checked, $('legato').checked, mode);
+  log(`唱好了：${t.voices} 音（${$('strategy').value} × ${$('chain').value} × ${t.legato ? '连唱' : '逐音'} × ${t.mode === 'sentence' ? '整句变调' : '逐音变调'}），渲染 ${t.ms.render}ms / 总线 ${t.ms.bus}ms`);
+  if (t.mode === 'sentence') log(`  两段式：第一段拼出 ${st.S.spokeBuf.duration.toFixed(2)}s 的一句话（不变调），第二段用 ${t.marks} 个基音标记把整句变调`);
+  log(`  起音次数 ${t.heads}/${t.voices} —— 连唱时应接近字数而不是音数（每个字只起一次音）`);
+  log(`  独立裁判（倒谱，干声）：RMSE ${t.metrics.rmse} 音分，MAE ${t.metrics.mae}，粗错率 ${(t.metrics.grossRate * 100).toFixed(0)}%，click ${t.metrics.clicks}`);
+  log(`  电平：干声峰值 ${t.peak.voice}，成品峰值 ${t.peak.mix}；上下文 ${t.audio}${t.playing ? '，正在试听' : ''}`);
+  if (t.peak.mix < 0.02) log('  ✗ 成品几乎是静音：音符没排上字，或卷帘上被清空了。');
+  else if (t.audio !== 'running') log('  ⚠ 听不到是因为浏览器把声音上下文挂着（suspended）：先点一下页面任意处再点 ▶ 成品。');
+});
+/** 播一块 buffer，并把“为什么没声”直接说出来（悬着 vs 真的静音） */
+function playIt(buf, label, withSong) {
+  if (!buf) { log(`✗ ${label}：手上没有这块音频，先点「唱！」`); return; }
+  if (st.peakOf(buf) < 0.02) { log(`✗ ${label}：内容是静音的（峰值 ${st.peakOf(buf).toFixed(3)}），不是音量问题`); return; }
+  st.play(buf, withSong, +$('sgain').value).then(ok => {
+    log(ok ? `▶ ${label}：峰值 ${st.peakOf(buf).toFixed(2)}，音量 ${st.opt.vol.toFixed(2)}，上下文 ${st.audioState()}`
+           : `⚠ ${label}：已排上播放但上下文是 ${st.audioState()}——再点一次这个按钮就解锁`);
+  });
+}
+$('btnPlay').onclick = () => playIt(st.S.mixBuf || st.S.voiceBuf, '成品', $('withSong').checked);
+$('btnPlayDry').onclick = () => playIt(st.S.voiceBuf, '干声');
+$('btnSpoke').onclick = e => busy(e.target, async () => {
+  // 直接点「先说话」也能用：没跑过两段式就在后台补跑一遍，不用先「唱！」再回头点
+  if (!st.S.spokeBuf) {
+    const t = await st.sing($('strategy').value, $('chain').value, busOpt(false), false, $('legato').checked, 'sentence');
+    log(`先说话：临时跑了一遍两段式（${t.voices} 字 → ${st.S.spokeBuf.duration.toFixed(2)}s 的一句话，完全没变调）`);
+  }
+  playIt(st.S.spokeBuf, '先说话（一句完整的话，没变调）');
+});
+$('btnPlayAb').onclick = () => playIt(st.S.mixBuf, '原曲垫背', true);
+$('btnPlaySong').onclick = () => playIt(st.S.song, '原曲');
+$('btnStop').onclick = () => st.stop();
+// 空格重播 / Esc 停（落在输入控件里时不抢键盘）
+window.addEventListener('keydown', e => {
+  if (e.target.matches('input,textarea,select')) return;
+  if (e.key === ' ') { e.preventDefault(); playIt(st.S.mixBuf || st.S.voiceBuf, '成品', $('withSong').checked); }
+  else if (e.key === 'Escape') st.stop();
+});
+$('btnWav').onclick = () => {
+  if (!st.S.mixBuf) { log('✗ 先「唱！」'); return; }
+  st.saveWav(st.S.mixBuf);
+  log('已导出 WAV（16bit PCM，' + st.S.mixBuf.sampleRate + 'Hz ' + st.S.mixBuf.numberOfChannels + 'ch ' + st.S.mixBuf.duration.toFixed(2) + 's）');
+};
+window.__studio = st;
+</script>
+</body>
+</html>

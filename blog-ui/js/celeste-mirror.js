@@ -20,9 +20,12 @@ var ROOM_W = MAP.room.w, ROOM_H = MAP.room.h;
 var COLS = ROOM_W / TILE, ROWS = ROOM_H / TILE;
 var VIEW_W = 320, VIEW_H = 180;            // Celeste 原生视口（16:9）
 
-var cv = document.getElementById('cv');
-var ctx = cv.getContext('2d');
+var cv = null, ctx = null;                 // 由 MirrorScene.init 注入（独立页自动取 #cv）
+var ctx_ready = false;
 var W = 0, H = 0, Z = 1;
+// 嵌入模式配置：drawBadeline=false 屏蔽自带 BadelineDummy（交 DOM 版）；onBreak 破碎那一刻回调宿主
+var SCENE = { drawBadeline: true, onBreak: null, autoStart: true };
+var _assetsReady = false, _sceneReady = false;
 
 /* =====================================================================
    1. 素材
@@ -108,6 +111,7 @@ var cam = { x: 160, y: 216, zoom: 1, shakeT: 0, sx: 0, sy: 0 };
 var zoomTween = null;
 
 function resize() {
+  if (!cv) return;
   var r = Math.min(window.devicePixelRatio || 1, 2);
   W = cv.clientWidth; H = cv.clientHeight;
   cv.width = Math.round(W * r); cv.height = Math.round(H * r);
@@ -641,6 +645,7 @@ function bdUpdate(dt) {
   if (BD.hair) BD.hair.update(Math.floor(BD.x), Math.floor(BD.y), BD.scaleX < 0 ? -1 : 1, 0, 0, dt, 1);
 }
 function bdDraw() {
+  if (!SCENE.drawBadeline) return;
   if (!BD.alive) return;
   var x = Math.floor(BD.x), y = Math.floor(BD.y);
   if (!cull(x - 20, y - 40, 40, 48)) return;
@@ -1079,6 +1084,7 @@ function* breakRoutine(dir) {
   }
   MIRROR.smashed = true; MIRROR.breakT = 0;
   SESSION_DREAMING = true;                        // 碎镜入梦：StarsBG 转入下坠拖尾分支
+  if (SCENE.onBreak) { try { SCENE.onBreak(); } catch (e) {} }   // 嵌入模式：通知宿主触发 summon/BGM/对话
   glassCrack();
   yield 0.6;
   shake(0.3);
@@ -1324,6 +1330,9 @@ function resetScene() {
 
 function boot() {
   resize();
+  if (window.ResizeObserver) {
+    try { new ResizeObserver(function () { resize(); }).observe(cv); } catch (e) {}
+  }
   IMG.vanish = tintTex(IMG.starfield0, '#C9A0FF');
   mirrorInit();
   buildStars();
@@ -1340,24 +1349,28 @@ function boot() {
     autoHook();                            // 头发就绪后再做无头快进
   });
 
-  cv.addEventListener('pointerdown', function () {
-    if (CUT.started) return;
-    startCoro(cutscene());
-  });
+  // 独立页（autoStart）自带点击/快捷键/调试控件；嵌入 shelf 时这些交由宿主处理，
+  // 避免劫持全局 Space/R 键与重复触发过场。
+  if (SCENE.autoStart) {
+    cv.addEventListener('pointerdown', function () {
+      if (CUT.started) return;
+      startCoro(cutscene());
+    });
 
-  var dbg = document.getElementById('debug');
-  if (dbg) dbg.addEventListener('change', function () { DBG = dbg.checked; });
+    var dbg = document.getElementById('debug');
+    if (dbg) dbg.addEventListener('change', function () { DBG = dbg.checked; });
 
-  var rp = document.getElementById('replay');
-  if (rp) rp.addEventListener('click', resetScene);
+    var rp = document.getElementById('replay');
+    if (rp) rp.addEventListener('click', resetScene);
 
-  var sx = document.getElementById('sfx');
-  if (sx) sx.addEventListener('change', function () { sfxOn = sx.checked; });
+    var sx = document.getElementById('sfx');
+    if (sx) sx.addEventListener('change', function () { sfxOn = sx.checked; });
 
-  window.addEventListener('keydown', function (e) {
-    if (e.code === 'KeyR') resetScene();
-    if (e.code === 'Space' && !CUT.started) startCoro(cutscene());
-  });
+    window.addEventListener('keydown', function (e) {
+      if (e.code === 'KeyR') resetScene();
+      if (e.code === 'Space' && !CUT.started) startCoro(cutscene());
+    });
+  }
 
   // 调试钩：?auto=秒 开场并快进到指定时刻（无头截图 / 逐帧核对用）
   function autoHook() {
@@ -1393,10 +1406,57 @@ function boot() {
   requestAnimationFrame(loop);
 }
 
-loadAll(boot);
+// 组件化入口：canvasEl 为挂载的 <canvas>，opts 覆盖 SCENE 行为。
+// shelf 嵌入用 { drawBadeline:false, onBreak:fn, autoStart:false } —— 过场只画场景与碎镜，
+// Badeline 交回 shelf 的 DOM 图层（保持行为树/对话/BGM class 契约不变）。
+function initScene(canvasEl, opts) {
+  if (!canvasEl || cv) return;
+  opts = opts || {};
+  cv = canvasEl;
+  ctx = cv.getContext('2d');
+  SCENE.drawBadeline = opts.drawBadeline !== undefined ? !!opts.drawBadeline : true;
+  SCENE.onBreak = opts.onBreak || null;
+  SCENE.autoStart = opts.autoStart !== undefined ? !!opts.autoStart : true;
+  var go = function () { if (!_sceneReady) { _sceneReady = true; boot(); } };
+  if (_assetsReady) go();
+  else loadAll(function () { _assetsReady = true; go(); });
+}
 
-window.addEventListener('error', function (e) {
-  document.body.setAttribute('data-err', (e.message || 'err') + ' @' + (e.lineno || 0));
-});
+window.MirrorScene = {
+  init: initScene,
+  // 宿主（shelf 镜子点击）主动触发完整过场：推近→碎镜→上移→入梦
+  breakNow: function () { if (_sceneReady && !CUT.started) startCoro(cutscene()); },
+  // 同步快进 n 秒（60Hz）：宿主无头验证用，不受 rAF 节流影响
+  ff: function (n) {
+    for (var i = 0; i < Math.round((+n || 0) * 60); i++) { DT = 1 / 60; tGlobal += DT; update(DT); }
+  },
+  reset: function () { if (_sceneReady) resetScene(); },
+  resize: function () { resize(); },
+  isReady: function () { return _sceneReady; },
+  // 诊断快照：宿主页无头验证/排错用（过场协程是否在推进、碎镜是否发生）
+  dbg: function () {
+    return { cut: CUT.started, done: CUT.done, smashed: MIRROR.smashed, coros: coros.length, t: +tGlobal.toFixed(2) };
+  },
+  // 游戏像素 → canvas CSS 像素缩放因子（Z = H/180）：宿主用它把 DOM 人物尺寸对齐过场里 32px 角色
+  scale: function () { return Z; },
+  // 镜子在 canvas 内的当前屏幕包围盒（CSS px，相对画布左上=房间左上）。
+  // shelf 用它把 #shelfMirror 命中区盖到画出的镜子上，其余区域点击透传给房间做 goBack。
+  mirrorRect: function () {
+    if (!cv || !W || !H) return null;
+    var a = toScreen(MIRROR.x - FRAME_W / 2, MIRROR.y - FRAME_H);
+    var b = toScreen(MIRROR.x + FRAME_W / 2, MIRROR.y);
+    return { left: a.x, top: a.y, width: b.x - a.x, height: b.y - a.y };
+  }
+};
+
+// 独立页自动挂载：存在 #cv 即以其为 canvas 启动（行为与旧版一致）。
+(function () {
+  var auto = document.getElementById('cv');
+  if (!auto) return;
+  initScene(auto, { drawBadeline: true, autoStart: true });
+  window.addEventListener('error', function (e) {
+    document.body.setAttribute('data-err', (e.message || 'err') + ' @' + (e.lineno || 0));
+  });
+})();
 
 })();

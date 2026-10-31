@@ -5,23 +5,35 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" href="icon/OIP.webp" type="image/webp">
 <title>Celeste · Internet Cafe</title>
-<link rel="stylesheet" href="css/internet_cafe.css?v=20261028c">
+<link rel="stylesheet" href="css/internet_cafe.css?v=20261031b">
 </head>
 <body>
+  <!-- 统一加载层：与 article / login 同一套夜空加载动画
+       （点阵星星 + 雪花画布 + 雪带 + 十帧跑动的 Madeline + LOADING…），
+       场景贴图就绪后由 js/page-loading.js 淡出移除 -->
+  <div id="pageLoadingOverlay">
+    <div class="ld-stars"></div>
+    <div class="ld-stars2"></div>
+    <canvas id="ldSnowCanvas"></canvas>
+    <div class="ld-snow-strip"></div>
+    <div class="loading-madeline"></div>
+    <div class="loading-text">LOADING<span class="loading-dots"></span></div>
+  </div>
+
   <!-- 整个房间由画布实时绘制：背景星空 → 瓦片 → 装饰 → 咖啡厅 → Madeline -->
   <canvas id="scene" aria-label="第九章铭记之后的网吧房间：可操控 Madeline 走进网络咖啡厅"></canvas>
   <div class="vignette"></div>
 
   <div class="hud" id="hud">门外 &middot; 走近咖啡厅</div>
-  <button class="mute" id="mute" type="button" title="静音（M）">&#9835;</button>
   <div class="tvPrompt" id="tvPrompt">点击屏幕 &middot; 启动 berryOS</div>
   <div class="fade" id="fade"></div>
 
+<script src="js/page-loading.js?v=20261031a"></script>
 <script src="js/celeste-hair.js?v=8"></script>
 <script src="js/celeste-character.js?v=12"></script>
 <script src="js/internet_cafe-map.js?v=20261028a"></script>
 <script src="js/internet_cafe-2.js?v=20261028a"></script>
-<script src="js/internet_cafe-1.js?v=20261029c"></script>
+<script src="js/internet_cafe-1.js?v=20261031c"></script>
 <script src="js/api.js?v=20261002"></script>
 <script src="js/seed.js?v=20261028b"></script>
 </body>

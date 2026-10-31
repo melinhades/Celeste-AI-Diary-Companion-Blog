@@ -138,7 +138,6 @@
   var hudEl = document.getElementById('hud');
   var promptEl = document.getElementById('tvPrompt');
   var fadeEl = document.getElementById('fade');
-  var muteBtn = document.getElementById('mute');
 
   var W = 0, H = 0, dpr = 1;
 
@@ -638,7 +637,6 @@
   // ===== 输入 =====
   var keys = Object.create(null);
   var jumpEdge = false, dashEdge = false;
-  function audioUnlock() { unlock = true; }
   window.addEventListener('keydown', function (e) {
     var k = e.key.toLowerCase();
     var first = !keys[k];
@@ -647,9 +645,8 @@
     if (first && k === 'c') jumpEdge = true;
     if (first && (k === 'x' || k === 'k')) dashEdge = true;
     if (first && k === 'r') respawn();
-    if (first && k === 'm') toggleMute();
     if (first && (k === 'enter' || k === 'e') && playerInside && !leaving) enterBerryOS();
-    audioUnlock();
+    unlockAudio();
   });
   window.addEventListener('keyup', function (e) {
     var k = e.key.toLowerCase();
@@ -680,21 +677,26 @@
     sfxCarUp.push(snd(CAR_SND + 'game_00_car_up_0' + ci + '.ogg', 0.55));
     sfxCarDown.push(snd(CAR_SND + 'game_00_car_down_0' + ci + '.ogg', 0.55));
   }
-  var muted = false, unlock = false;
+  // ===== BGM：In Stasis（循环）=====
+  // 页面不再提供音乐开关（右上角那个按钮已删）：音量/静音交给浏览器自带的标签页控制。
+  // 自动播放策略要求首次用户手势后才能出声，所以统一挂在 unlockAudio() 里起播。
+  var BGM_VOL = 0.3;
+  var bgm = new Audio('bgm/in-stasis.mp3');
+  bgm.loop = true;
+  bgm.preload = 'auto';
+  bgm.volume = BGM_VOL;
+  var unlock = false;
+  function unlockAudio() {
+    if (unlock) return;
+    unlock = true;
+    try { var p = bgm.play(); if (p && p.catch) p.catch(function () {}); } catch (err) {}
+  }
   function playSfx(a) {
-    if (muted || !unlock) return;
+    if (!unlock) return;
     try { a.currentTime = 0; a.play().catch(function () {}); } catch (err) {}
   }
-  function toggleMute() {
-    muted = !muted;
-    muteBtn.innerHTML = muted ? '&#128263;' : '&#9835;';
-  }
-  muteBtn.addEventListener('click', function (e) {
-    e.stopPropagation();
-    unlock = true;
-    toggleMute();
-  });
-  window.addEventListener('pointerdown', function () { unlock = true; });
+  window.addEventListener('pointerdown', unlockAudio);
+  window.addEventListener('keydown', unlockAudio);
 
   // ===== DreamBlock 音效（REA 取证：Celeste.Player.DreamDashBegin / DreamDashEnd）=====
   // DreamDashBegin：Play("event:/char/madeline/dreamblock_enter")
@@ -710,7 +712,7 @@
   var sfxDreamTravel = snd(DB_SND + 'dreamblock_travel_loop.wav', 0.5);
   sfxDreamTravel.loop = true;
   function dreamTravelStart() {
-    if (muted || !unlock) return;
+    if (!unlock) return;
     try { sfxDreamTravel.currentTime = 0; sfxDreamTravel.play().catch(function () {}); } catch (err) {}
   }
   function dreamTravelStop() {
@@ -1126,13 +1128,15 @@
     cv.style.cursor = tvHit(eventWorld(e)) ? 'pointer' : 'default';
   });
   cv.addEventListener('pointerdown', function (e) {
-    unlock = true;
+    // 注意：这里必须调 unlockAudio()，不能只把 unlock 置 true——那样会先占用解锁哨兵，
+    // 随后冒泡到 window 的 unlockAudio() 直接早退，BGM 永远不会起播。
+    unlockAudio();
     if (tvHit(eventWorld(e))) enterBerryOS();
   });
   // 提示胶囊本身也当按钮：它浮在电视上方，直接点它一样进 berryOS
   promptEl.addEventListener('pointerdown', function (e) {
     e.stopPropagation();
-    unlock = true;
+    unlockAudio();
     enterBerryOS();
   });
 
@@ -1749,4 +1753,7 @@
 
   respawn(true);
   requestAnimationFrame(frame);
+  // 统一加载层退场：贴图 preload 与 Madeline 都就绪、场景首帧已排进 rAF 后
+  // 由 js/page-loading.js 等两帧再淡出，避免闪出半成品画面
+  if (window.PageLoading) window.PageLoading.ready();
 })();

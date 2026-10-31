@@ -194,7 +194,6 @@
     inset: 0;
     z-index: 20;
     display: none;
-    perspective: 2200px;
     transform-origin: center center;
     transition: transform .55s cubic-bezier(.2,.8,.25,1), opacity .42s ease;
     will-change: transform, opacity;
@@ -265,43 +264,25 @@
   }
   @keyframes zoomSpin { 0%{opacity:0; transform: scale(.2) rotate(-200deg);} 100%{opacity:1; transform:none;} }
 
-  /* 转场：入场 */
-  .slide.active.tr-cube    { animation: cubeIn  1.17s ease both; transform-origin: right center; }
-  .slide.active.tr-dissolve{ animation: dissolveIn 1.04s ease both; }
-  .slide.active.tr-fade    { animation: fadeIn .91s ease both; }
-  .slide.active.tr-spin    { animation: spinIn  1.14s cubic-bezier(.3,.8,.4,1) both; }
-  @keyframes cubeIn     { from{opacity:0; transform: rotateY(-90deg);} to{opacity:1; transform:none;} }
-  @keyframes dissolveIn { from{opacity:0; filter: blur(6px);} to{opacity:1; filter:none;} }
-  @keyframes fadeIn     { from{opacity:0;} to{opacity:1;} }
-  @keyframes spinIn     { 0%{opacity:0; transform: scale(2) rotate(-420deg);} 100%{opacity:1; transform:none;} }
-  /* 转场：出场 */
-  .slide.leaving.tr-cube     { animation: cubeOut 1.17s ease both; transform-origin: left center; }
-  .slide.leaving.tr-dissolve { animation: dissolveOut 1.04s ease both; }
-  .slide.leaving.tr-fade     { animation: fadeOut .91s ease both; }
-  .slide.leaving.tr-spin     { animation: spinOut 1.14s ease-in both; }
-  @keyframes cubeOut     { from{opacity:1; transform:none;} to{opacity:0; transform: rotateY(90deg);} }
-  @keyframes dissolveOut { from{opacity:1; filter:none;} to{opacity:0; filter: blur(6px);} }
-  @keyframes fadeOut     { from{opacity:1;} to{opacity:0;} }
-  @keyframes spinOut     { 0%{opacity:1; transform:none;} 100%{opacity:0; transform: scale(.25) rotate(420deg);} }
-
-  /* ---- 真立方体转场（仅 tr = cube3d，目前只有第 3 页用）----
-     两页分居立方体相邻两面，整盒绕 Y 轴转 90°。
-     与 tr-cube（绕页边缘掀一页，只有单页单轴）不同，这里有共同 3D 枢轴，才转得出"盒子"。 */
-  #pptCube {
-    position: absolute; inset: 0;
-    transform-style: preserve-3d;
+  /* ---- 转场容器（对应原作 WaveDashPresentation.TurnPage 的 5 种 Transitions）----
+     Rotate3D 1.5s / Blocky 1.0s / ScaleIn·FadeIn·Spiral 0.5s；
+     新页内容在转场走到 80% 时才登场（原作 yield return num * 0.8f）。
+     两页始终留在 #pptTurnBox 里、由 JS 逐帧改 transform，不搬 DOM——
+     一旦 removeChild/appendChild，页内 CSS 动画会被重挂而从头再播一遍。 */
+  #pptTurn { position: absolute; inset: 0; z-index: 1; }
+  #pptTurnBox { position: absolute; inset: 0; transform-style: preserve-3d; }
+  /* 转场中两页都要显示；旧页保留 .active，否则 `.slide.active .it` 一失效整页文字就透明 */
+  .slide.turning { display: block; }
+  #pptTurnBox > .slide {
     transform-origin: center center;
-    transition: transform 1.17s cubic-bezier(.45,.05,.25,1);
-    will-change: transform;
-    pointer-events: none;
+    backface-visibility: visible;   /* 原作 RasterizerState.CullNone：转到侧面背面照样画 */
+    -webkit-backface-visibility: visible;
   }
-  /* 两个面由 JS 内联 transform 定位（正面 translateZ(+hw)，侧面 rotateY(±90deg) translateZ(+hw)） */
-  #pptCube > .slide {
-    display: block !important;
-    inset: 0;
-    animation: none !important;
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
+  /* Blocky：新页盖在旧页上，按 32×18 网格随机开洞（mask 由 JS 逐帧画进 32×18 canvas） */
+  .slide.blk {
+    -webkit-mask-size: 100% 100%; mask-size: 100% 100%;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+    -webkit-mask-position: 0 0; mask-position: 0 0;
   }
 
   /* 新闻闪白屏 */
@@ -369,9 +350,11 @@
 
     <img id="bird" src="Atlases/WaveDashing/desktop/cursor.png" alt="cursor">
 
-    <!-- PPT 播放器：6 页由 JS 按 SLIDES 数据渲染（以后换成 AI 生成的月度 JSON） -->
+    <!-- PPT 播放器：6 页由 JS 按 SLIDES 数据渲染（以后换成 AI 生成的月度 JSON）。
+         所有页常驻 #pptTurnBox：转场时只改 transform / mask，不搬 DOM -->
     <div id="pptPlayer">
       <div id="pptFlash"></div>
+      <div id="pptTurn"><div id="pptTurnBox"></div></div>
       <div id="pptHint">点击 / 方向键翻页 · Esc 退出</div>
     </div>
   </div>
@@ -536,8 +519,10 @@
         { cls: 't-big anim-rot', d: 10.5, x: 53.06, y: 36.93, w: 46, t: '根本学不会？' },
         { kind: 'img', cls: 'anim-rise', d: 10.5, x: 63.90, y: 38.47, w: 35.21, src: 'Atlases/WaveDashing/Guy Clip Art.png' }
       ]},
-      // 只有这一页用 cube3d：2→3 走真立方体，其余页仍用原转场
-      { bg: '#D9EAD3', tr: 'cube3d', dur: 10000, items: [
+      // 转场按原作 WaveDashPage 各页的 Transition：
+      //   第2页(痛点) Rotate3D → 第3页(介绍) Blocky → 第4页(方法) FadeIn
+      //   → 第5页(麻烦) Spiral → 第6页(结尾) Rotate3D
+      { bg: '#D9EAD3', tr: 'blocky', dur: 10000, items: [
         { cls: 't-head-en white', chars: true, stream: true, d: .5, x: 5.36, y: 11.47, w: 90, t: '介绍…凌波微步与我.ppt!!' },
         { kind: 'ph', cls: 'anim-rise', d: 2.5, x: 29.63, y: 21.27, w: 40.76, ratio: 10.87/6.11, t: '本月配图位' },
         { cls: 't-body anim-rise', d: 3.5, x: 34.43, y: 62.47, w: 33, t: '凌波微步与我.ppt 可以让你学习凌波微步，而且教程很详细！' },
@@ -567,16 +552,19 @@
     // 注意：键名必须是 sfx 表里存在的音效，否则 playSfx 会抛错
     var PAGE_SFX = {
       1: [], // 封面：BGM 起播后才展示，无转场
-      2: [['cube', 0], ['impossible', 10500]],                 // p1→2 cube；小人从下浮现与文字同步 → impossible
-      3: [['cube', 0], ['whoosh', 2500], ['easy', 5000]],      // p2→3 cube3d 立方体；配图展现 whoosh；「这很简单」iteasy
-      4: [], // p3→4 fade 转场无专属音效
-      5: [['spin', 0]],                                        // p4→5 spinningtransition
-      6: [['happy', 3492]]                                      // Bird Clip Art 完成(≈2.54s)后等 2s → happy
+      2: [['impossible', 10500]],                 // 小人从下浮现与文字同步 → impossible
+      3: [['whoosh', 2500], ['easy', 5000]],      // 配图展现 whoosh；「这很简单」iteasy
+      4: [], // FadeIn 无专属音效
+      5: [], // Spiral 的转场音在转场引擎里放（TR_CONF.sfx）
+      6: [['happy', 3492]]                        // Bird Clip Art 完成(≈2.54s)后等 2s → happy
     };
 
     var PPT = (function () {
       var player = document.getElementById('pptPlayer');
       var hint = document.getElementById('pptHint');
+      // 转场舞台：turn 提供 perspective，turnBox 是 preserve-3d 的盒子，所有页常驻在里面
+      var turn = document.getElementById('pptTurn');
+      var turnBox = document.getElementById('pptTurnBox');
       var cur = -1, busy = false, autoTimer = null, rendered = false;
       var slideEls = [];
 
@@ -630,7 +618,7 @@
             }
             sec.appendChild(el);
           });
-          player.appendChild(sec);
+          turnBox.appendChild(sec);
           slideEls.push(sec);
         });
         rendered = true;
@@ -659,94 +647,40 @@
         if (dur) autoTimer = setTimeout(function () { go(n + 1); }, dur * 1.3);
       }
 
-      // 真立方体转场（仅 tr = cube3d）：两页分居立方体相邻两面，整盒绕 Y 轴转 90°
-      function cubeTo(n) {
-        var prev = slideEls[cur];
-        var next = slideEls[n];
-        if (!prev || !next) return false;
-        busy = true;
-        clearTimeout(autoTimer);
+      // ===== 转场引擎（原作 WaveDashPresentation.TurnPage / BeforeRender）=====
+      // 原作 WaveDashPage.Transitions 共 5 种，TurnPage 里定时长：
+      //   Rotate3D 1.5s、Blocky 1.0s、ScaleIn/FadeIn/Spiral 0.5s，
+      //   然后 `yield return num * 0.8f` —— 新页的 Routine 到转场 80% 才开始（内容登场时机）。
+      // Transition 属于"进入的那一页"，所以按 SLIDES[n].tr 选效果。
+      var TR_CONF = {
+        '':       { dur: .5 },                      // 首页：从 splash 里直接出现，不转场
+        'fade':   { dur: .5 },                      // FadeIn：新页叠在旧页上淡入
+        'scale':  { dur: .5 },                      // ScaleIn：新页从中心（960,540）放大
+        'spin':   { dur: .5, sfx: 'spin' },         // Spiral：边转边放大，旋转 (1-ease)*12 rad
+        'spiral': { dur: .5, sfx: 'spin' },
+        'blocky': { dur: 1,  sfx: 'dissolve' },     // Blocky：60px 网格随机开洞
+        'cube':   { dur: 1.5, sfx: 'cube' },        // Rotate3D：两页贴成立方体转 90°
+        'cube3d': { dur: 1.5, sfx: 'cube' }         // 旧数据的别名
+      };
+      var BLK_W = 32, BLK_H = 18;                   // 原作 1920/60 × 1080/60
 
-        var hw = player.clientWidth / 2;         // 立方体半宽 = 半页宽
-        var forward = n > cur;                    // 前进从右边转进来，后退从左边
-        var sideDeg = forward ? 90 : -90;
-        var endDeg  = forward ? -90 : 90;
+      // 原作 Calc.YoYo()：t<=0.5 线性升、之后线性降（三角波），做立方体中途的相机后拉
+      function yoyo(t) { return t <= .5 ? t * 2 : 1 - (t - .5) * 2; }
 
-        var box = document.createElement('div');
-        box.id = 'pptCube';
-
-        // 只摘掉残留的 tr-* / leaving，不要整串重写 className：
-        // 出场页必须保留 active，否则 `.slide.active .it` 失效，整页文字瞬间透明（立方体一面变白）
-        var TR_CLS = ['leaving', 'tr-cube', 'tr-dissolve', 'tr-fade', 'tr-spin'];
-        var stripTr = function (el) { TR_CLS.forEach(function (c) { el.classList.remove(c); }); };
-        stripTr(prev);
-        stripTr(next);
-        next.classList.remove('active');   // 到位前先空着，700ms 再统一登场
-        prev.style.transform = 'translateZ(' + hw + 'px)';
-        next.style.transform = 'rotateY(' + sideDeg + 'deg) translateZ(' + hw + 'px)';
-        box.appendChild(prev);
-        box.appendChild(next);
-        player.appendChild(box);
-        cur = n;
-
-        // 先把立方体中心推到屏幕平面上（z = -hw），否则整盒会朝观众"鼓"出来
-        box.style.transform = 'translateZ(-' + hw + 'px) rotateY(0deg)';
-        void box.offsetWidth;                     // 强制重排，让起始帧被浏览器记住
-        box.style.transform = 'translateZ(-' + hw + 'px) rotateY(' + endDeg + 'deg)';
-        enterSfx(n);
-
-        // 转到一半再让内容登场：太早会被切在屏幕外，太晚像卡住了
-        setTimeout(function () {
-          next.classList.add('active');
-          triggerStream(next);
-        }, 700);
-
-        setTimeout(function () {
-          prev.className = 'slide';
-          next.className = 'slide active';
-          prev.style.transform = '';
-          next.style.transform = '';
-          player.appendChild(prev);
-          player.appendChild(next);
-          box.remove();
-          busy = false;
-          if (n === SLIDES.length - 1) {
-            hint.textContent = '点击 / 方向键 退出 · Esc 退出';
-            hint.style.opacity = '.6';
-            setTimeout(function(){ hint.style.opacity = '0'; }, 3000);
-          }
-          if (SLIDES[n].dur) autoTimer = setTimeout(function () { go(n + 1); }, SLIDES[n].dur * 1.3);
-        }, 1180);
-        return true;
+      // 原作 PseudoRand（xorshift32）+ PseudoRandRange → 每块一个 0~0.999 的出现阈值
+      function blockOrder() {
+        var s = 1, out = [];
+        for (var i = 0; i < BLK_W; i++) for (var j = 0; j < BLK_H; j++) {
+          s = (s ^ (s << 13)) >>> 0;
+          s = (s ^ (s >>> 17)) >>> 0;
+          s = (s ^ (s << 5)) >>> 0;
+          out.push({ x: i, y: j, t: (s % 1000) / 1000 });
+        }
+        return out;
       }
 
-      function go(n) {
-        if (n < 0 || n >= SLIDES.length || busy) return;
-        // 真立方体页单独分流，其余页沿用原有转场逻辑
-        if (SLIDES[n].tr === 'cube3d' && cur >= 0 && cur !== n && cubeTo(n)) return;
-        clearTimeout(autoTimer);
-        var prev = slideEls[cur];
-        var next = slideEls[n];
-        var same = (cur === n);
-        if (prev && !same) {
-          busy = true;
-          // 从立方体页离开时没有对应的出场动画类，退回淡出，避免两页叠在一起
-          var leaveTr = SLIDES[cur].tr === 'cube3d' ? 'fade' : SLIDES[cur].tr;
-          prev.classList.remove('active');
-          prev.classList.add('leaving', 'tr-' + leaveTr);
-          (function (old) { setTimeout(function () {
-            old.classList.remove('leaving', 'tr-cube', 'tr-dissolve', 'tr-fade', 'tr-spin');
-          }, 1300); })(prev);
-        }
-        // 强制重排以重放入场动画
-        if (SLIDES[n].tr === 'spin') { void next.offsetWidth; player.classList.add('flash'); setTimeout(function(){player.classList.remove('flash');},800); }
-        void next.offsetWidth;
-        next.classList.add('active');
-        if (SLIDES[n].tr) next.classList.add('tr-' + SLIDES[n].tr);
-        if (!same) { if (prev) setTimeout(function(){busy=false;}, 1250); else busy = false; }
-        cur = n;
-        enterSfx(n);
-        // hint 只在最后一页（点击=退出）显示，其他页隐藏
+      // hint 只在最后一页（点击=退出）显示，其他页隐藏
+      function hintFor(n) {
         if (n === SLIDES.length - 1) {
           hint.textContent = '点击 / 方向键 退出 · Esc 退出';
           hint.style.opacity = '.6';
@@ -754,10 +688,127 @@
         } else {
           hint.style.opacity = '0';
         }
-        // 触发当前页的流式打字（逐句/逐字）
-        triggerStream(next);
+      }
+
+      // 页“落脚”：音效 + 流式打字（原作里这一页的 Routine 开始跑）
+      function land(n) {
+        enterSfx(n);
+        triggerStream(slideEls[n]);
+      }
+
+      function scheduleNext(n) {
         var dur = SLIDES[n].dur;
         if (dur) autoTimer = setTimeout(function () { go(n + 1); }, dur * 1.3);
+      }
+
+      // 一次翻页：返回 true 表示已接管（异步完成）
+      function turnTo(n) {
+        var key = SLIDES[n].tr || '';
+        var conf = TR_CONF[key] || TR_CONF[''];
+        var prev = slideEls[cur];
+        var next = slideEls[n];
+        if (!prev || !next || prev === next) return false;
+        var cube = (key === 'cube' || key === 'cube3d');
+        var forward = n > cur;                       // 原作只有前进：旧页 0→-90°、新页 +90°→0
+
+        busy = true;
+        clearTimeout(autoTimer);
+        // 旧页保留 active（`.slide.active .it` 一失效整页文字就透明，立方体会变白面）
+        prev.classList.add('turning');
+        next.classList.remove('active');
+        next.classList.add('turning');
+        cur = n;
+        if (conf.sfx) playSfx(conf.sfx, 0);          // Rotate3D/Blocky/Spiral 的转场音
+
+        // Blocky：32×18 小画布当 mask，新页按随机阈值逐块“长”出来
+        var blk = null;
+        if (key === 'blocky') {
+          var cv = document.createElement('canvas');
+          cv.width = BLK_W; cv.height = BLK_H;
+          blk = { list: blockOrder(), cv: cv, g: cv.getContext('2d'), dirty: true };
+          blk.g.fillStyle = '#000';
+          next.classList.add('blk');
+          next.style.webkitMaskImage = next.style.maskImage = 'url(' + cv.toDataURL() + ')';
+        }
+
+        var t0 = performance.now(), D = conf.dur * 1000, revealed = false;
+        var hh = (player.clientHeight || 2) / 2;     // 半屏高 = 原作的 1 个世界单位
+
+        function frame(now) {
+          var e = Math.min(1, (now - t0) / D);
+          if (cube) {
+            // 原作：num = -π/2 * pageEase；prev 在 num，curr 在 π/2 + num；
+            // 相机 num4 = 4.15 + YoYo(ease)*1.7，FOV 45°，四角 ±(16/9, 1)。
+            // 换算成 CSS：perspective = 2.373 * 半屏高，盒子 translateZ(-YoYo*1.7*半屏高)。
+            turn.style.perspective = (2.373 * hh) + 'px';
+            turnBox.style.transform = 'translateZ(' + (-yoyo(e) * 1.7 * hh) + 'px)';
+            var a = e * 90;
+            prev.style.transform = 'rotateY(' + (forward ? -a : a) + 'deg)';
+            next.style.transform = 'rotateY(' + (forward ? 90 - a : a - 90) + 'deg)';
+          } else if (key === 'spin' || key === 'spiral') {
+            next.style.transform = 'scale(' + e + ') rotate(' + ((1 - e) * 12) + 'rad)';
+          } else if (key === 'scale') {
+            next.style.transform = 'scale(' + e + ')';
+          } else if (key === 'fade') {
+            next.style.opacity = String(e);
+          } else if (blk) {
+            // 原作：PseudoRandRange(seed,0,1) <= pageEase 就把这一块盖上去
+            for (var k = blk.list.length - 1; k >= 0; k--) {
+              if (blk.list[k].t > e) continue;
+              blk.g.fillRect(blk.list[k].x, blk.list[k].y, 1, 1);
+              blk.list.splice(k, 1);
+              blk.dirty = true;
+            }
+            if (blk.dirty) {
+              blk.dirty = false;
+              next.style.webkitMaskImage = next.style.maskImage = 'url(' + blk.cv.toDataURL() + ')';
+            }
+          }
+          // 转场到 80% 才让内容登场（太早会被切在屏幕外，正好原作也是这个点）
+          if (!revealed && e >= .8) {
+            revealed = true;
+            next.classList.add('active');
+            land(n);
+          }
+          if (e < 1) requestAnimationFrame(frame);
+          else finish();
+        }
+
+        function finish() {
+          prev.style.transform = ''; prev.style.opacity = '';
+          next.style.transform = ''; next.style.opacity = '';
+          next.style.webkitMaskImage = next.style.maskImage = '';
+          next.classList.remove('blk');
+          prev.classList.remove('turning', 'active');
+          next.classList.remove('turning');
+          turn.style.perspective = '';
+          turnBox.style.transform = '';
+          next.classList.add('active');
+          busy = false;
+          hintFor(n);
+          scheduleNext(n);
+        }
+
+        requestAnimationFrame(frame);
+        return true;
+      }
+
+      function go(n) {
+        if (n < 0 || n >= SLIDES.length || busy) return;
+        var next = slideEls[n];
+        if (!next) return;
+        var same = (cur === n);
+        clearTimeout(autoTimer);
+        // 有前一页且这一页配了转场 → 交给转场引擎
+        if (!same && cur >= 0 && turnTo(n)) return;
+        // 首页（cur < 0）或 tr 为空：直接换页
+        if (cur >= 0 && !same && slideEls[cur]) slideEls[cur].classList.remove('active');
+        void next.offsetWidth;                       // 强制重排以重放入场动画
+        next.classList.add('active');
+        cur = n;
+        land(n);
+        hintFor(n);
+        scheduleNext(n);
       }
 
       // 流式打字引擎：按元素 --d 顺序依次解除 opacity:0，让 charPop/streamLine 生效
@@ -859,7 +910,13 @@
             splash.style.transformOrigin = '';
             splash.style.opacity = '';
             splash.style.transition = '';
-            slideEls.forEach(function (s) { s.classList.remove('active', 'leaving', 'tr-cube', 'tr-dissolve', 'tr-fade', 'tr-spin'); });
+            slideEls.forEach(function (s) {
+              s.classList.remove('active', 'leaving', 'turning', 'blk');
+              s.style.transform = ''; s.style.opacity = '';
+              s.style.webkitMaskImage = ''; s.style.maskImage = '';
+            });
+            turn.style.perspective = '';
+            turnBox.style.transform = '';
             cur = -1; busy = false;
           }, 1050);
         },
@@ -871,16 +928,14 @@
           SLIDES = newSlides;
           rendered = false;
           // 【安全】重建 DOM 前把播放状态归零：否则异步热更新时若正处在转场中，
-          // 旧的 #pptCube 会被清掉、busy 永远停在 true，整个播放器就翻不动了
+          // 旧页被清掉、busy 永远停在 true，整个播放器就翻不动了
           clearTimeout(autoTimer);
           cur = -1;
           busy = false;
-          var staleCube = document.getElementById('pptCube');
-          if (staleCube) staleCube.remove();
-          // 清掉旧 DOM
-          while (player.firstChild) player.removeChild(player.firstChild);
-          player.appendChild(document.getElementById('pptFlash') || (function(){ var d=document.createElement('div'); d.id='pptFlash'; return d; })());
-          player.appendChild(hint);
+          turn.style.perspective = '';
+          turnBox.style.transform = '';
+          // 清掉旧 DOM（只清页；#pptFlash / #pptHint / #pptTurn 不能动）
+          while (turnBox.firstChild) turnBox.removeChild(turnBox.firstChild);
           slideEls = [];
           rendered = true;
           SLIDES.forEach(function (sd) {
@@ -926,7 +981,7 @@
               }
               sec.appendChild(el);
             });
-            player.appendChild(sec);
+            turnBox.appendChild(sec);
             slideEls.push(sec);
           });
         },
@@ -956,7 +1011,7 @@
   </script>
   <script src="js/api.js?v=20261002"></script>
   <script src="js/detect.js"></script>
-  <script src="js/pptgen.js?v=20261025a"></script>
+  <script src="js/pptgen.js?v=20261031a"></script>
   <script>
     // berryos 页面一打开就自动跑：detect → generate → setSlides（如果检测到困恼的话）
     (function () {

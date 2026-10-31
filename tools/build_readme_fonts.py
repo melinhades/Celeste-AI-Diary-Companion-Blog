@@ -1,15 +1,35 @@
 # -*- coding: utf-8 -*-
-"""Bake the repo README's prose into Renogare + CelesteZH webp images.
+"""Bake repo docs' prose into Renogare + CelesteZH webp images.
 
-GitHub sanitizes style attributes and @font-face out of README HTML, so the
-game fonts can only survive as pictures. This script reads README.src.md
-(hand-maintained markdown source) and writes README.md + assets/readme/*.webp:
+GitHub sanitizes style attributes and @font-face out of rendered markdown, so
+the game fonts can only survive as pictures. Each target pairs a hand-maintained
+`*.src.md` source with the committed output, and gets its own asset dir + slug
+prefix so images never collide:
 
     python tools/build_readme_fonts.py
+
+Targets (see TARGETS): README.src.md → README.md, CONTRIBUTING.src.md →
+CONTRIBUTING.md, docs/LICENSE.src.md → docs/LICENSE.md. The root LICENSE stays
+plain text — GitHub shows it in the license viewer (no markdown/HTML) and the
+MIT detection hinges on the raw wording.
+
+Pass target names on the command line to pick what to rebuild; with no arguments
+only the `default=True` targets run:
+
+    python tools/build_readme_fonts.py                 # contributing + license
+    python tools/build_readme_fonts.py readme all      # explicit
+
+README is `default=False` on purpose: the committed README.md carries a manual
+pass on top of this script's output (heading emoji swapped for Celeste icons,
+and their tiles cropped to drop the emoji). Regenerating it from README.src.md
+alone silently reverts that pass, so it only runs when you intend to redo the
+whole chain.
 
 Baked: headings, paragraphs, blockquotes, lists, table cells, TOC links.
 Kept as-is: fenced code blocks, shields badges, screenshots, the star-history
 chart, and bare URLs in the Access table (copy-paste beats typography there).
+Everything before the first `---` of a source is copied verbatim (that's where
+pre-baked banner art goes), so a source must not put prose above its first rule.
 
 Inline markdown supported in baked text: **bold** (faux stroke), *italic*
 (faux shear), `code` (Consolas on a translucent chip), [links](url) (baked in
@@ -21,16 +41,40 @@ from __future__ import annotations
 
 import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 from fontTools.ttLib import TTFont
 
 ROOT = Path(__file__).resolve().parents[1]
-SRC_MD = ROOT / "README.src.md"
-OUT_MD = ROOT / "README.md"
 OUT = ROOT / "assets" / "readme"
 BLOG_UI = ROOT / "blog-ui"
+
+# ---------------------------------------------------------------- targets
+@dataclass(frozen=True)
+class Target:
+    """One source → output pair, with its own image dir, href prefix and slug."""
+    src: Path
+    out: Path
+    disk: Path    # where the .webp tiles are written
+    url: str      # href prefix as seen from the generated markdown's own dir
+    prefix: str
+    default: bool = True   # rebuilt when no target is named on the CLI
+
+
+TARGETS = (
+    Target(ROOT / "README.src.md", ROOT / "README.md", OUT,
+           "assets/readme", "t", default=False),
+    Target(ROOT / "CONTRIBUTING.src.md", ROOT / "CONTRIBUTING.md", OUT / "contributing",
+           "assets/readme/contributing", "c"),
+    # docs/ sits one level down, hence the ../ ; heading icons there must be
+    # static .png (a .gif icon is emitted as a raw url, which would 404 here)
+    Target(ROOT / "docs" / "LICENSE.src.md", ROOT / "docs" / "LICENSE.md",
+           OUT / "license", "../assets/readme/license", "l"),
+)
+
+ACTIVE = TARGETS[0]      # swapped per target by build()
 
 REN = BLOG_UI / "celeste-font-en" / "Renogare-Regular.otf"
 CJK = BLOG_UI / "fonts" / "NotoSansCJKsc-Medium.otf"
@@ -226,12 +270,17 @@ def wrap_payload(payload, px: int, wrap_w: float | None):
     return out
 
 
+CHIP_PAD = 8                         # breathing room so a chip can't eat the glyph before it
+
+
 def _line_metrics(lines, px):
     asc = desc = 0
     widths = []
     for line in lines:
         w = 8.0
         for kind, text, _, _ in line:
+            if kind == "code":
+                w += CHIP_PAD * 2
             for cl in clusters(text):
                 w += cluster_width(cl, px, kind)
                 if pick(cl) == EMOJI:
@@ -301,6 +350,7 @@ def render(lines, px: int, theme: str, color: str, bold_all: bool,
                 continue
             col = link_fg if kind == "link" else fg
             if kind == "code":
+                x += CHIP_PAD
                 w_seg = seg_width(text, px, "code")
                 mf = font_for(MONO, int(px * 0.9))
                 ma, md = mf.getmetrics()
@@ -331,7 +381,7 @@ def bake(payload, disp_px: int, color: str = "body", bold: bool = False,
     """payload: [line]; line = [seg]. Bakes light+dark, returns slug."""
     global _counter
     _counter += 1
-    slug = f"t{_counter:03d}"
+    slug = f"{ACTIVE.prefix}{_counter:03d}"
     px = disp_px * 2
     if bold:
         payload = [[(k, t, u, True) for k, t, u, _ in line] for line in payload]
@@ -346,7 +396,7 @@ def bake(payload, disp_px: int, color: str = "body", bold: bool = False,
     img = None
     for theme in ("", "-dark"):
         img = render(lines, px, theme, color, bold_all=False, icon=icon_img)
-        path = OUT / f"{slug}{theme}.webp"
+        path = ACTIVE.disk / f"{slug}{theme}.webp"
         path.parent.mkdir(parents=True, exist_ok=True)
         img.save(path, "WEBP", quality=Q_UI, method=4)
         _report.append((f"{slug}{theme}.webp", path.stat().st_size))
@@ -357,8 +407,8 @@ def bake(payload, disp_px: int, color: str = "body", bold: bool = False,
 def pic(slug: str, link: str | None = None) -> str:
     w, alt = _manifest[slug]
     p = (f'<picture><source media="(prefers-color-scheme: dark)" '
-         f'srcset="assets/readme/{slug}-dark.webp">'
-         f'<img src="assets/readme/{slug}.webp" width="{w}" alt="{alt}"></picture>')
+         f'srcset="{ACTIVE.url}/{slug}-dark.webp">'
+         f'<img src="{ACTIVE.url}/{slug}.webp" width="{w}" alt="{alt}"></picture>')
     return f'<a href="{link}">{p}</a>' if link else p
 
 
@@ -409,7 +459,7 @@ def segs_html(segs, disp_px: int, wrap=None, color: str = "body", bold_all: bool
             g[-1] = (k, t.rstrip(" "), u, b)
             if not plain(g).strip():
                 continue
-            parts.append(pic(bake([g], disp_px, color=color)))
+            parts.append(pic(bake([g], disp_px, color=color, wrap=wrap)))
     return " ".join(parts)
 
 
@@ -504,7 +554,7 @@ def convert(md: str) -> str:
                 icon, body = im.group(1), im.group(2)
             emoji_pref, rest = split_emoji_prefix(body)
             segs = parse_inline(rest)
-            size = {2: 18, 3: 16}.get(level, 16)
+            size = {1: 20, 2: 18, 3: 16}.get(level, 16)
             if icon and icon.lower().endswith(".gif"):   # animated: keep as <img>
                 icon_tag = f'<img src="{icon}" height="{int(size * 1.875)}"> '
                 icon = None
@@ -580,16 +630,49 @@ def convert(md: str) -> str:
     return "\n".join(out) + "\n"
 
 
+def build(target: Target) -> tuple[int, int]:
+    """Bake one target; returns (image count, total bytes)."""
+    global ACTIVE, _counter, _report
+    ACTIVE, _counter, _report = target, 0, []
+    md = target.src.read_text(encoding="utf-8-sig")
+    target.disk.mkdir(parents=True, exist_ok=True)
+    target.out.write_text(convert(md), encoding="utf-8")
+    return len(_report), sum(sz for _, sz in _report)
+
+
+def select(argv: list[str]) -> list[Target]:
+    """Resolve CLI names to targets; no names → the default=True set."""
+    if not argv:
+        return [t for t in TARGETS if t.default]
+    picked: list[Target] = []
+    for name in argv:
+        if name.lower() == "all":
+            return list(TARGETS)
+        hit = [t for t in TARGETS if t.out.stem.lower() == name.lower()
+               or t.out.stem.lower().removesuffix(".src") == name.lower()]
+        if not hit:
+            known = ", ".join(t.out.name for t in TARGETS)
+            print(f"unknown target {name!r} (known: {known}, all)", file=sys.stderr)
+            return []
+        picked += [t for t in hit if t not in picked]
+    return picked
+
+
 def main() -> int:
-    if not SRC_MD.exists():
-        print(f"source not found: {SRC_MD}", file=sys.stderr)
+    todo = select(sys.argv[1:])
+    if not todo:
         return 1
-    md = SRC_MD.read_text(encoding="utf-8-sig")
-    OUT.mkdir(parents=True, exist_ok=True)
-    html = convert(md)
-    OUT_MD.write_text(html, encoding="utf-8")
-    total = sum(sz for _, sz in _report)
-    print(f"{len(_report)} images, {total / 1024:.0f} KB, README.md {len(html) / 1024:.1f} KB")
+    for target in todo:
+        if not target.src.exists():
+            print(f"source not found: {target.src}", file=sys.stderr)
+            return 1
+    for target in todo:
+        if not target.default:
+            print(f"note: {target.out.name} has a manual icon/crop pass on top of "
+                  f"this output — expect heading art to move", file=sys.stderr)
+        count, size = build(target)
+        print(f"{target.out.name}: {count} images, {size / 1024:.0f} KB, "
+              f"{target.out.stat().st_size / 1024:.1f} KB")
     # warn about clusters no font could cover (would render as tofu)
     return 0
 

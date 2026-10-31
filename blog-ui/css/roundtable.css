@@ -351,13 +351,31 @@
     .sp.typing .b-bubble::after { content:'▍'; animation:pulse 1s steps(1) infinite; color:var(--c); }
     .sys-line { text-align:center; font-size:12px; color:rgba(200,210,255,.4); margin:10px 0; }
 
-    /* ===== 主持鸟（在会议卡片上方盘旋） ===== */
+    /* ===== 主持鸟（在会议卡片上方盘旋）；动作系统见 js/bird-motion.js + js/roundtable-bird.js ===== */
     #stageView .rt-panel { position:relative; }
     .bird-sprite {
         position:fixed; left:0; top:0; width:96px; height:72px;
         image-rendering:pixelated; image-rendering:crisp-edges;
-        pointer-events:auto; cursor:pointer; z-index:999; display:none;
+        pointer-events:auto; cursor:grab; z-index:999; display:none;
+        transform-origin:50% 50%;   /* 曲线飞行绕中心旋转/压扁（FlingBird draw 口径） */
+        touch-action:none;         /* 抱鸟甩鸟：阻止移动端拖拽被滚动手势吃掉 */
     }
+    .bird-sprite.bird-grabbed { cursor:grabbing; }
+    /* 拖尾层：#639bff 蓝尾点阵，盖在内容之上、鸟之下 */
+    .bird-trail {
+        position:fixed; left:0; top:0; pointer-events:none; z-index:998;
+    }
+    /* 鸟声开关：小挂在右下角，不干扰主内容 */
+    .bird-sfx-toggle {
+        position:fixed; right:14px; bottom:14px; z-index:1000;
+        display:none;              /* enter/perch 后才显形，由 JS 控制 */
+        align-items:center; justify-content:center;
+        width:34px; height:34px; border-radius:50%;
+        background:rgba(12,20,40,.55); border:1px solid rgba(120,200,255,.3);
+        color:#9cc8ff; font-size:14px; cursor:pointer; line-height:1;
+        backdrop-filter:blur(4px); transition:background .2s;
+    }
+    .bird-sfx-toggle:hover { background:rgba(24,40,72,.8); }
 
     /* ===== Task 12：AI 发言 = diary 版 textbox 对话框原比例放大 1.4 倍
        （左方形头像帧 / 名字在文本上方 / 打字机文本，字体 Renogare + CelesteZH） ===== */

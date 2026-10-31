@@ -64,8 +64,10 @@
             ]
         },
         {
-            bg: '#D9EAD3', tr: 'cube3d', dur: 10000, name: 'p3_intro',
-            // 仅第 3 页用 cube3d（berryos.html 的 cubeTo）：2→3 真立方体，其余页不变
+            bg: '#D9EAD3', tr: 'blocky', dur: 10000, name: 'p3_intro',
+            // 转场跟原作 WaveDashPage 的 Transition 一一对应：
+            //   p2 痛点 Rotate3D('cube') → p3 介绍 Blocky → p4 方法 FadeIn('fade')
+            //   → p5 麻烦 Spiral('spin') → p6 结尾 Rotate3D('cube')
             slots: [
                 { slotId: 'p3_title', cls: 't-head-en white', chars: true, stream: true, d: .5,  x: 5.36, y: 11.47, w: 90, max: 28 },
                 { slotId: 'p3_placeholder', kind: 'ph', cls: 'anim-rise', d: 2.5, x: 29.63, y: 21.27, w: 40.76, ratio: 10.87/6.11, t: '本月配图位' },

@@ -1,3 +1,12 @@
+    // dream 场景（#dreamScene，z-index 1500）会把书架整屏盖住：书架侧的逐帧动画（雪花 / 篝火 / 奖杯 /
+    // 夜话按钮）那个时候一点也看不见，却仍在 decode + 绘制。下面的逐帧循环统一用这个判断跳过。
+    var __dreamSceneEl = null;
+    function dreamCoveringShelf() {
+        if (document.hidden) return true;
+        if (!__dreamSceneEl) __dreamSceneEl = document.getElementById('dreamScene');
+        return !!(__dreamSceneEl && __dreamSceneEl.classList.contains('show'));
+    }
+
     // ===== 雪花动画（mountainSnow 原版贴图） =====
     (function () {
         const canvas = document.getElementById('shelfSnow');
@@ -21,7 +30,12 @@
             };
         }
         function init() { flakes = []; for (let i = 0; i < 50; i++) flakes.push(mk(true)); }
+        // 性能：dream 场景整屏盖住这层雪花时它一点也看不见，原来的 rAF 照样每帧全屏 clearRect +
+        // 50 片 save/rotate/drawImage —— 进 dream 后就白烧。盖住期间不再排 rAF（每帧一次空回调也会
+        // 让浏览器每帧都留一次唤醒），改成 200ms 轮询探一下：退出 dream 后最多 0.2s 就自动接回逐帧，
+        // 雪片位置不跳、立刻接着飘（判断见顶部 dreamCoveringShelf）。
         function draw() {
+            if (dreamCoveringShelf()) { setTimeout(draw, 200); return; }
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             if (flakeImg.complete && flakeImg.naturalWidth > 0) {
                 for (const f of flakes) {
@@ -46,11 +60,11 @@
 
     const bgmPlayer = document.getElementById('bgmPlayer');
     // 默认 Dearest Friends（磁带选曲已删，用户无法手动切换 BGM）
-    const savedTime = parseFloat(localStorage.getItem('bgmTimeShelf') || '0');
+    const savedTime = Store.getFloat(Store.KEYS.BGM_TIME_SHELF);
     if (savedTime > 0) bgmPlayer.currentTime = savedTime;
     bgmPlayer.volume = 0.3;
     bgmPlayer.play().catch(() => {});
-    setInterval(() => { localStorage.setItem('bgmTimeShelf', bgmPlayer.currentTime); }, 2000);
+    setInterval(() => { Store.set(Store.KEYS.BGM_TIME_SHELF, bgmPlayer.currentTime); }, 2000);
     function tryPlayBGM() {
         bgmPlayer.play().then(() => { document.removeEventListener('click', tryPlayBGM); document.removeEventListener('keydown', tryPlayBGM); }).catch(() => {});
         // 书架常态篝火：start → loop 底噪（音量压 BGM 之下）；进 dream 不断，镜之房间让位
@@ -173,15 +187,9 @@ function loadPostcardImg() {
         im.src = 'celeste-gui/postcard.webp';
     });
 }
-var PC_SOUNDS = {};
+// 明信片开合音：走全站音效池（js/lib/sfx.js），音量口径保持 0.9
 function pcPlay(name) {
-    try {
-        if (!PC_SOUNDS[name]) PC_SOUNDS[name] = new Audio('celeste-sounds/' + name);
-        var a = PC_SOUNDS[name];
-        a.currentTime = 0;
-        a.volume = 0.9;
-        a.play().catch(function(){});
-    } catch (e) { }
+    Sfx.play(name, { volume: 0.9 });
 }
 function exportPostcard(data) {
     var modal = document.getElementById('postcardExportModal');
@@ -209,7 +217,7 @@ function exportPostcard(data) {
         modal.addEventListener('click', function(e) { if (e.target === modal) closePe(); });
     }
     var canvas = document.getElementById('postcardCanvas');
-    renderPostcardCanvas(canvas, data.title, data.date, data.content, data.summary, parseInt(localStorage.getItem('diarySaveCount') || '0')).then(function () {
+    renderPostcardCanvas(canvas, data.title, data.date, data.content, data.summary, Store.count(Store.KEYS.DIARY_SAVE_COUNT)).then(function () {
         modal.classList.add('show');
         startPeSnow();
         setTimeout(function () { modal.querySelector('.pe-stage').classList.add('slide-in'); }, 400);
@@ -316,17 +324,10 @@ function stopPeSnow() {
         forward: ['ui_world_journal_page_cover_forward_01.wav', 'ui_world_journal_page_cover_forward_02.wav', 'ui_world_journal_page_cover_forward_03.wav'],
         back: ['ui_world_journal_page_main_back_01.wav', 'ui_world_journal_page_main_back_02.wav', 'ui_world_journal_page_main_back_03.wav']
     };
-    const PAGE_AUDIO = {};
     function playPageSfx(dir) {
-        try {
-            const list = PAGE_SFX[dir];
-            const name = list[Math.floor(Math.random() * list.length)];
-            if (!PAGE_AUDIO[name]) PAGE_AUDIO[name] = new Audio('celeste-sounds/' + name);
-            const a = PAGE_AUDIO[name];
-            a.currentTime = 0;
-            a.volume = 0.20;
-            a.play().catch(() => {});
-        } catch (e) { /* 无声降级 */ }
+        const list = PAGE_SFX[dir];
+        if (!list || !list.length) return;
+        Sfx.play(list[Math.floor(Math.random() * list.length)], { volume: 0.20 });
     }
     // ===== 滚动进场：往下滑 → 新行从下方上滑入；往上翻 → 上方行从上方下滑入 =====
     const shelfIO = new IntersectionObserver(list => {
@@ -448,7 +449,7 @@ function stopPeSnow() {
 
     async function load() {
         status.value = 'loading';
-        const res = await api('/diary/list?page=1&pageSize=50&type=day', 'GET');
+        const res = await DiaryApi.listDays();
         if (res.success && res.data && Array.isArray(res.data.list)) {
             data = res.data.list;
             if (window.__setDoorProgress) window.__setDoorProgress(data.length);
@@ -488,7 +489,7 @@ function stopPeSnow() {
     detail.querySelector('.del').addEventListener('click', async () => {
         if (!cur) return;
         if (!confirm('确定要删掉这篇日记吗？删了就找不回来了。')) return;
-        const res = await api('/diary?diaryId=' + encodeURIComponent(cur.id), 'DELETE');
+        const res = await DiaryApi.remove(cur.id);
         if (res.success) { showToast('这一页合上了'); showList(); load(); }
         else showToast(res.msg || '删除失败');
     });
@@ -498,14 +499,14 @@ function stopPeSnow() {
         const btn = detail.querySelector('.publish');
         btn.disabled = true;
         try {
-            const res = await api('/articles/publish-from-diary', 'POST', { diaryId: cur.id });
+            const res = await DiaryApi.publishFromDiary(cur.id);
             if (!res.success) { showToast(res.msg || '发布失败'); return; }
             const articleId = res.data && res.data.id;
             const current = res.data && res.data.visibility === 1 ? 1 : 0;
             if (res.data && res.data.existed) {
                 // 已发布过：这一下当作切换可见性（公开 ↔ 私密）
                 const to = current === 1 ? 0 : 1;
-                const r2 = await api('/articles/visibility', 'POST', { articleId, visibility: to });
+                const r2 = await DiaryApi.setArticleVisibility(articleId, to);
                 if (!r2.success) { showToast(r2.msg || '切换失败'); return; }
                 btn.dataset.vis = String(to);
                 showToast(to === 1 ? '这篇公开了' : '这篇收回私密了');
@@ -571,16 +572,16 @@ function stopPeSnow() {
             return best;
         }
         function getSnaps() {
-            try {
-                const arr = JSON.parse(localStorage.getItem('diarySnapshots') || '[]');
-                return arr.map(s => {
-                    if (s.type === 'week') s.label = 'Weekly Recap';
-                    else if (s.type === 'month') s.label = 'Monthly Recap';
-                    return s;
-                });
-            } catch (e) { return []; }
+            // 脏数据（非数组 / 解析失败）一律当空书架，与改造前 try/catch 返回 [] 的口径一致
+            const arr = Store.getJson(Store.KEYS.DIARY_SNAPSHOTS, []);
+            if (!Array.isArray(arr)) return [];
+            return arr.map(s => {
+                if (s.type === 'week') s.label = 'Weekly Recap';
+                else if (s.type === 'month') s.label = 'Monthly Recap';
+                return s;
+            });
         }
-        function setSnaps(s) { localStorage.setItem('diarySnapshots', JSON.stringify(s)); }
+        function setSnaps(s) { Store.set(Store.KEYS.DIARY_SNAPSHOTS, s); }
 
         // ===== 聚合每篇日记落库的情绪数据（保存时后端 AI 已分析好） =====
         function aggregateStoredEmotions(list) {
@@ -657,12 +658,12 @@ function stopPeSnow() {
                 let emotionData = aggregateStoredEmotions(list);
                 if (!emotionData) {
                     try {
-                        const res = await api('/diary/emotion-analyze', 'POST', { content: joined.slice(0, 1500) });
+                        const res = await DiaryApi.emotionAnalyze(joined);
                         if (res.success && res.data) emotionData = res.data;
                     } catch (e) {}
                 }
                 try {
-                    const res = await api('/diary/snap-reflect', 'POST', { content: joined.slice(0, 1200), emotion: emotionSummaryText(emotionData) });
+                    const res = await DiaryApi.snapReflect(joined, emotionSummaryText(emotionData));
                     if (res.success && res.data && res.data.message) reflect = res.data.message;
                 } catch (e) {}
                 return {
@@ -746,7 +747,7 @@ function stopPeSnow() {
             moonberry: 'celeste-collectables/moonberry/normal00.png'
         };
         let owned = [];
-        try { owned = JSON.parse(localStorage.getItem('berryOwned') || '[]'); } catch (e) {}
+        try { owned = Store.getJson(Store.KEYS.BERRY_OWNED, []); } catch (e) {}
         const trophy = document.getElementById('berryTrophy');
         owned.forEach(id => {
             if (!TROPHIES[id]) return;
@@ -757,7 +758,7 @@ function stopPeSnow() {
         if (trophy.children.length) trophy.classList.remove('empty');
         function mkTrophyFrames(prefix, n) { const a = []; for (let i = 0; i < n; i++) a.push(prefix + String(i).padStart(2, '0') + '.png'); return a; }
         function heartTier() {
-            const c = parseInt(localStorage.getItem('diarySaveCount') || '0');
+            const c = Store.count(Store.KEYS.DIARY_SAVE_COUNT);
             return c >= 100 ? 3 : c >= 60 ? 2 : c >= 30 ? 1 : 0;
         }
         const TROPHY_FRAMES = {
@@ -771,7 +772,7 @@ function stopPeSnow() {
         const trophyImgs = trophy.querySelectorAll('img');
         const sbStrawImg = document.getElementById('sbStrawImg');
         setInterval(() => {
-            if (document.hidden) return;
+            if (dreamCoveringShelf()) return;
             trophyImgs.forEach(im => {
                 if (im.dataset.id === 'heartgem') {
                     const tier = heartTier();
@@ -798,14 +799,14 @@ function stopPeSnow() {
         const flameImg = document.getElementById('sbFlameImg');
         let curFrames = null, fi = 0;
         setInterval(() => {
-            if (document.hidden || !curFrames || !curFrames.length) return;
+            if (dreamCoveringShelf() || !curFrames || !curFrames.length) return;
             flameImg.src = curFrames[fi % curFrames.length];
             fi++;
         }, 70);
 
         function updateBonfire() {
             const fire = document.getElementById('sbFire');
-            const s = parseInt(localStorage.getItem('diaryStreak') || '0');
+            const s = Store.count(Store.KEYS.DIARY_STREAK);
             fire.querySelectorAll('.sb-label').forEach(e => e.remove());
             if (s >= 1) {
                 curFrames = FIRE_FRAMES; fi = 0;
@@ -838,6 +839,16 @@ function stopPeSnow() {
         if (!mirror) return;
         var badelineWrap = mirror.querySelector('.badeline-wrap');
 
+        // Canvas 镜子房间模式：MirrorScene 全权接管「背景 + 镜子本体 + 破碎过场 + 星场」整间房的绘制，
+        // 跳过 DOM 镜子图层（玻璃/掩膜/碎帧/镜框）的构建。Badeline 的 DOM 图层、.summoned/.bye 的
+        // BGM 切换契约、动作树、对话系统全部原样保留。MirrorScene 或 canvas 缺失时回退原 DOM 镜子。
+        var CANVAS_MIRROR = !!(window.MirrorScene && document.getElementById('mirrorScene'));
+        var maskImgs = [], breakImgs = [];
+        function showFrame(list, idx) {
+            list.forEach(function (im, i) { im.style.display = i === idx ? 'block' : 'none'; });
+        }
+
+        if (!CANVAS_MIRROR) {
         function addLayer(src, zIndex, cls, kind) {
             var im = new Image();
             im.className = 'm-layer' + (kind ? ' ' + kind : '') + (cls ? ' ' + cls : '');
@@ -865,14 +876,12 @@ function stopPeSnow() {
         // .m-glass = 镜面系（玻璃 + 反射 + 破碎 + Badeline 角色）
         // .m-frame = 镜框（frame.png，雕花边框）
         addLayer('glassbg.png', 1, '', 'm-glass');
-        var maskImgs = [];
         for (var mi = 0; mi < 6; mi++) {
             var mk = addLayer('mirrormask' + String(mi).padStart(2, '0') + '.png', 2, 'm-mask', 'm-glass');
             if (mi > 0) mk.style.display = 'none';
             maskImgs.push(mk);
         }
         addLayer('glassfg.png', 3, '', 'm-glass');
-        var breakImgs = [];
         for (var bi = 0; bi < 10; bi++) {
             var bk = addLayer('glassbreak' + String(bi).padStart(2, '0') + '.png', 4, '', 'm-glass');
             bk.style.display = 'none';
@@ -883,7 +892,7 @@ function stopPeSnow() {
         // 截图镜框中心（cropped 2453×1429 中的分数坐标）
         var MR_FX = 1269 / 2453, MR_FY = 936 / 1429;
         // 清除旧调节面板持久化的值，让 CSS 默认值生效
-        try { localStorage.removeItem('shelfAdj'); } catch (e) {}
+        Store.remove(Store.KEYS.SHELF_ADJ);
         function positionMirror() {
             var room = document.getElementById('mirrorRoom');
             var rw = room.clientWidth, rh = room.clientHeight;
@@ -914,17 +923,14 @@ function stopPeSnow() {
             });
         }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
 
-        function showFrame(list, idx) {
-            list.forEach(function (im, i) { im.style.display = i === idx ? 'block' : 'none'; });
-        }
-
         // 镜内影子慢慢变幻
         var maskFi = 0;
         setInterval(function () {
-            if (busy || document.hidden) return;
+            if (busy || dreamCoveringShelf()) return;
             maskFi = (maskFi + 1) % maskImgs.length;
             showFrame(maskImgs, maskFi);
         }, 700);
+        }   // ===== end if (!CANVAS_MIRROR)：以下 DOM 镜子图层机制仅在回退模式下构建 =====
 
         // Badeline 待机帧已改为 lookingUp.gif（HTML 默认 src），动作树 IIFE 接管所有动作切换
         // —— idle00-08 帧序列与 walk00-11 已删除，不再需要 setInterval 切帧
@@ -932,7 +938,8 @@ function stopPeSnow() {
         // 玻璃碎裂声（WebAudio 合成，点击即手势，无需音频文件）
         function crackSound() {
             try {
-                var ctx = window.__mirrorAC || (window.__mirrorAC = new (window.AudioContext || window.webkitAudioContext)());
+                var ctx = Sfx.ac();
+                if (!ctx) return;
                 var dur = 0.35;
                 var buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);
                 var d = buf.getChannelData(0);
@@ -962,25 +969,20 @@ function stopPeSnow() {
         var blMsgs = document.getElementById('blMsgs');
         var blInput = document.getElementById('blInput');
         var blSendBtn = document.getElementById('blSend');
-        var blHist = [];
-        var blSending = false;
-        try {
-            blHist = JSON.parse(localStorage.getItem('badelineChatLog') || '[]');
-        } catch (e) { blHist = []; }
+        var blHist = Store.getJson(Store.KEYS.BADELINE_CHAT_LOG, []);
         if (!Array.isArray(blHist)) blHist = [];
+        var blSending = false;
 
         function heartsPayload() {
-            try {
-                var h = JSON.parse(localStorage.getItem('heartDoorHearts') || 'null');
-                if (!h || !h.length) {
-                    var c = JSON.parse(localStorage.getItem('crystalHeart') || 'null');
-                    h = c ? [c] : [];
-                }
-                return JSON.stringify(Array.isArray(h) ? h.slice(-4) : []);
-            } catch (e) { return '[]'; }
+            var h = Store.getJson(Store.KEYS.HEART_DOOR_HEARTS, null);
+            if (!h || !h.length) {
+                var c = Store.getJson(Store.KEYS.CRYSTAL_HEART, null);
+                h = c ? [c] : [];
+            }
+            return JSON.stringify(Array.isArray(h) ? h.slice(-4) : []);
         }
         function blPersist() {
-            try { localStorage.setItem('badelineChatLog', JSON.stringify(blHist.slice(-20))); } catch (e) {}
+            Store.set(Store.KEYS.BADELINE_CHAT_LOG, blHist.slice(-20));
         }
         function blAdd(role, text, emo) {
             var d = document.createElement('div');
@@ -1054,14 +1056,8 @@ function stopPeSnow() {
             blDialogImg.src = s; blHeadImg.src = s;
         }
         // 文本框弹出/收起音效（复用官方 textbox in/out 音效，音量压低）
-        var BL_SFX = {};
         function blTextboxSfx(which) {
-            try {
-                var name = 'textbox/ui_game_textbox_madeline_' + which + '.wav';
-                if (!BL_SFX[name]) BL_SFX[name] = new Audio('celeste-sounds/' + name);
-                var a = BL_SFX[name]; a.currentTime = 0; a.volume = 0.4;
-                a.play().catch(function () {});
-            } catch (e) { /* 无声降级 */ }
+            Sfx.play('textbox/ui_game_textbox_madeline_' + which + '.wav', { volume: 0.4 });
         }
         // 4) 说话声：真实音效文件 —— 由专用工具类 js/badeline-voice.js 提供
         //    情绪map（badeline-sounds/ 文件夹名）+ pre+abcabc 循环 + sad_solo 特殊音效，
@@ -1175,12 +1171,11 @@ function stopPeSnow() {
             blAdd('user', v);
             blPush('user', v);
             // 玩家提出"dream 模式"：标记镜子刷新判定，下次进 dream 时 50% 复原 / 50% 保持破碎
-            if (/dream/i.test(v)) { try { localStorage.setItem('mirrorReroll', '1'); } catch (e) {} }
+            if (/dream/i.test(v)) { Store.set(Store.KEYS.MIRROR_REROLL, '1'); }
             blSending = true;
             blSendBtn.disabled = true;
             var ld = blAdd('loading', '……');
-            api('/diary/badeline-chat', 'POST',
-                { message: v, history: JSON.stringify(blHist.slice(-10)), hearts: heartsPayload() }, 15000)
+            DiaryApi.badelineChat(v, blHist, heartsPayload())
                 .then(function (res) {
                     ld.remove();
                     var m = (res && res.success && res.data && res.data.message)
@@ -1231,7 +1226,7 @@ function stopPeSnow() {
             }, 260);
         }
         function isMirrorBroken() {
-            try { return localStorage.getItem('mirrorBroken') === '1'; } catch (e) { return false; }
+            return Store.getFlag(Store.KEYS.MIRROR_BROKEN);
         }
         function byeSheLeaves() {
             badelineWrap.classList.remove('done');     // 离场：移除驻留态，让 badelineBye 动画接管
@@ -1246,9 +1241,23 @@ function stopPeSnow() {
         }
         document.getElementById('blClose').addEventListener('click', closeChat);
 
-        mirror.addEventListener('click', function () {
+        mirror.addEventListener('click', function (ev) {
+            if (ev) ev.stopPropagation();
             if (busy) return;
             busy = true;
+            // Canvas 模式：触发 MirrorScene 完整碎镜过场，破碎那一刻经 onBreak→summon() 召唤（BGM/对话不变）
+            if (CANVAS_MIRROR) {
+                if (window.MirrorScene.isReady()) {
+                    window.MirrorScene.reset();     // 告别后再敲：先复位成完好镜，干净重演整段过场
+                    window.MirrorScene.breakNow();
+                    // 调试专用：?ff=秒 —— 无头验证时同步快进过场（真实浏览器无此参数，行为不变）
+                    var mff = /[?&]ff=([\d.]+)/.exec(location.search);
+                    if (mff) window.MirrorScene.ff(parseFloat(mff[1]));
+                } else {
+                    summon();                        // 素材未就绪时的兜底
+                }
+                return;
+            }
             if (isMirrorBroken()) { summon(); return; }   // 已碎：不重播碎裂动画，直接再召唤
             crackSound();
             mirror.classList.add('mirror-shake');
@@ -1269,7 +1278,8 @@ function stopPeSnow() {
         function summon() {
             // 影子离开镜面
             maskImgs.forEach(function (im) { im.style.display = 'none'; });
-            try { localStorage.setItem('mirrorBroken', '1'); } catch (e) {}   // 破碎持久化：持续保持直到刷新判定
+            // DOM 回退模式才持久化破碎态；canvas 模式不持久化 —— 刷新后镜子永远完好，重演过场
+            if (!CANVAS_MIRROR) { Store.set(Store.KEYS.MIRROR_BROKEN, '1'); }
             badelineWrap.classList.remove('done');     // 重新召唤：清除上次驻留态，让 badelineRise 动画从头播
             mirror.classList.add('summoned');
             // animationend → 加 .done 类，由静态 CSS 接管 transform（含 --glass-scale），避免 forwards 冻结 scale(1)
@@ -1302,6 +1312,62 @@ function stopPeSnow() {
         };
         // 暴露 openChat 给动作树 IIFE 调用（点击 Badeline 本人时触发对话）
         window.__badelineOpenChat = openChat;
+
+        // ===== Canvas 镜子房间挂载点：panRight 调 enter、goBack 调 leave（在 dream IIFE 里接） =====
+        if (CANVAS_MIRROR) {
+            document.body.classList.add('mirror-canvas');
+            window.__CANVAS_MIRROR = true;   // 动作树 IIFE 据此决定 closeChat 不让退场（旧版失误修正）
+            // canvas 模式全局错误探针：静默失败落到 body[data-err]，无头验证/线上排错可见
+            window.addEventListener('error', function (e) {
+                document.body.setAttribute('data-err', (e.message || 'err') + ' @' + (e.filename || '') + ':' + (e.lineno || 0));
+            });
+            var msCanvasEl = document.getElementById('mirrorScene');
+            var msInited = false;
+            function msPosition() {
+                var r = window.MirrorScene.mirrorRect && window.MirrorScene.mirrorRect();
+                if (!r || !r.width) return false;
+                mirror.style.left = r.left + 'px';
+                mirror.style.top = r.top + 'px';
+                mirror.style.width = r.width + 'px';
+                mirror.style.height = r.height + 'px';
+                // DOM Badeline 尺寸绑定 canvas 角色：32 游戏像素精灵框 × Z，与碎镜过场里的人物大小一致
+                var zs = window.MirrorScene.scale && window.MirrorScene.scale();
+                if (zs) document.body.style.setProperty('--bd-size', Math.round(32 * zs) + 'px');
+                return true;
+            }
+            window.__mirrorScene = {
+                enter: function () {
+                    if (!msInited) {
+                        msInited = true;
+                        window.MirrorScene.init(msCanvasEl, {
+                            drawBadeline: false, autoStart: false,
+                            onBreak: function () { summon(); }
+                        });
+                    }
+                    window.MirrorScene.reset();
+                    // canvas 模式无「破碎延续」：清掉 DOM 时代的持久化残留 → 刷新/重进 100% 完好镜
+                    Store.remove(Store.KEYS.MIRROR_BROKEN);
+                    Store.remove(Store.KEYS.MIRROR_REROLL);
+                    // 重置 DOM 镜子态：上次召唤后未告别就回书架，重进时完好镜 + 她不在场 + 对话/演出收起
+                    mirror.classList.remove('summoned');
+                    mirror.classList.remove('bye');
+                    badelineWrap.classList.remove('done');
+                    blDialogToken++;      // 作废没说完的话
+                    blDialogClose();
+                    blPanel.classList.remove('vis');
+                    blPanel.classList.remove('show');
+                    if (window.__badelineLeaveRoom) window.__badelineLeaveRoom();   // 行为树复位（wrap 移回镜面）
+                    busy = false;   // 每次进入都可重新敲镜（播放一遍完整过场）
+                    var tries = 0;
+                    (function align() {   // 等房间布局完成（canvas 有非零尺寸）再摆镜子命中区
+                        if (msPosition() || ++tries > 30) return;
+                        requestAnimationFrame(align);
+                    })();
+                },
+                leave: function () { if (window.MirrorScene.reset) window.MirrorScene.reset(); }
+            };
+            window.addEventListener('resize', function () { if (msInited) msPosition(); });
+        }
     })();
 
     // ===== Badeline 动作树：镜之房间内自由游荡（5 套 gif + 状态机 + 全屏定位）=====
@@ -1496,16 +1562,16 @@ function stopPeSnow() {
         window.__badelineStartFreeRoam = startFreeRoam;
         window.__badelineLeaveRoom = stopFreeRoam;
         // closeChat 钩子：模式 A 返回 'summoned'（让外部走 byeSheLeaves 让她走）；模式 B 返回 'free'（恢复游荡）
+        // Canvas 模式例外：镜子已碎、她常驻房间，关面板不退场（旧版失误），双击本人可重开聊天面板
         window.__badelineCloseChat = function () {
             if (!roaming) return 'summoned';
-            if (summonedMode) {
+            if (summonedMode && !window.__CANVAS_MIRROR) {
                 stopFreeRoam();           // 模式 A：DOM 复位回 #shelfMirror，让 byeSheLeaves 的 .bye 动画接管
                 return 'summoned';
-            } else {
-                inDialog = false;         // 模式 B：恢复游荡（若积了生气情绪 → 先 roll）
-                if (pendingRoll) enterRollChain(); else enterMode('roam');
-                return 'free';
             }
+            inDialog = false;             // 模式 B / canvas 常驻：恢复游荡（若积了生气情绪 → 先 roll）
+            if (pendingRoll) enterRollChain(); else enterMode('roam');
+            return 'free';
         };
         // 情绪事件：通用 emo → 大立绘 mode（无论对话/游荡）；ANGRY 额外记账 pendingRoll（对话结束补 rollChain）
         window.__badelineOnEmotion = function (emo) {
@@ -1617,25 +1683,48 @@ function stopPeSnow() {
         var MAX_STARS = 36;   // 同屏上限（略增）
 
         // 生成一颗星点；prefillDelay>0 时用负 animation-delay 让它"已经在下落途中"（随机相位遍布全屏）
+        // 性能：原来每颗星各起一个 setInterval（同屏最多 36 个定时器、约 150+ 次 background 写/秒）。
+        // 改成一颗共享节拍器统一推进切帧（定时器 36 → 1，各自节奏靠单星 next 时间保留）。
+        var live = [], ticker = null;
+        function pump() {
+            var now = nowClock();
+            for (var i = live.length - 1; i >= 0; i--) {
+                var s = live[i];
+                // 到期就自己收尾，不依赖 animationend：只动 transform/opacity 的动画在合成器上跑，
+                // 那些「负延迟已经过了终点」的星不会派发 animationend，否则 36 个槽位会被占死
+                if (!s.el.parentNode || now >= s.endAt) {
+                    if (s.el.parentNode) s.el.remove();
+                    live.splice(i, 1);
+                    continue;
+                }
+                if (now < s.next) continue;
+                s.next = now + s.period;
+                s.idx = (s.idx + 1) % FRAMES;
+                s.el.style.background = cache[s.t][s.idx];
+            }
+            if (!live.length && ticker) { clearInterval(ticker); ticker = null; }
+        }
+        function nowClock() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
         function makeStar(prefillDelay) {
             var t = TYPES[Math.floor(Math.random() * TYPES.length)];
             var el = document.createElement('i');
             el.className = 'star';
             el.style.width = el.style.height = SIZE + 'px';
-            el.style.background = cache[t][Math.floor(Math.random() * FRAMES)];
+            var frameIdx = Math.floor(Math.random() * FRAMES);
+            el.style.background = cache[t][frameIdx];
             el.style.setProperty('--x', (Math.random() * 96).toFixed(1) + '%');
             el.style.setProperty('--dist', (room.clientHeight + 64) + 'px');
             var dur = 6 + Math.random() * 9;                 // 下降时长：6–15s
+            // 预填相位夹到 dur 之内：否则「已经播完」的星进场就是结束态，屏幕会先空一块再慢慢补回来
+            var pre = prefillDelay > 0 ? Math.min(prefillDelay, dur * 0.92) : 0;
             el.style.animationDuration = dur.toFixed(2) + 's';
-            if (prefillDelay > 0) el.style.animationDelay = (-prefillDelay).toFixed(2) + 's';
-            var frameIdx = Math.floor(Math.random() * FRAMES);
-            var interval = setInterval(function () {
-                if (!el.parentNode) { clearInterval(interval); return; }
-                frameIdx = (frameIdx + 1) % FRAMES;
-                el.style.background = cache[t][frameIdx];
-            }, 160 + Math.random() * 160);                   // 切帧也略快
+            if (pre > 0) el.style.animationDelay = (-pre).toFixed(2) + 's';
+            var period = 160 + Math.random() * 160;
+            var now = nowClock();
+            live.push({ el: el, t: t, idx: frameIdx, period: period, next: now + period, endAt: now + (dur - pre) * 1000 });
             el.addEventListener('animationend', function () { el.remove(); });
             layer.appendChild(el);
+            if (!ticker) ticker = setInterval(pump, 80);
         }
 
         var wasPanned = false;
@@ -1645,6 +1734,7 @@ function stopPeSnow() {
                 if (!wasPanned) {
                     // 刚进入镜之房间：一次性预填满屏，各粒子处于随机下落相位（不再从零慢慢积累）
                     layer.innerHTML = '';
+                    live.length = 0;
                     for (var i = 0; i < MAX_STARS; i++) makeStar(Math.random() * 15);
                 } else if (layer.children.length < MAX_STARS) {
                     makeStar(0);                             // 稳态：补足飘走的
@@ -1655,6 +1745,8 @@ function stopPeSnow() {
             }
             wasPanned = false;
             layer.innerHTML = '';
+            live.length = 0;
+            if (ticker) { clearInterval(ticker); ticker = null; }
             setTimeout(spawn, 800);
         }
         spawn();
@@ -1899,8 +1991,8 @@ function stopPeSnow() {
         FRAMES.forEach(function (s) { IMG.frames.push(loadImg(s)); });
         IMG.outline = loadImg(SRC_F + 'outline.png');
         IMG.feather = loadImg('Atlases/Gameplay/particles/feather.png');    // P_Collect / P_Boost 的 Source
-        IMG.rect = loadImg('Atlases/Gameplay/particles/rect.png');          // P_Flying（默认 Source）
-        IMG.smoke = loadImg('Atlases/Gameplay/particles/smoke0.png');       // P_Regen / P_Respawn（Dust 系）
+        // P_Flying（飞行拖尾）/ P_Respawn（重生）没有 Source，原作落的是 Draw.Particle = 1×1 纯白像素，
+        // 不用贴图、直接 fillRect，所以这里不预载 rect.png / smoke0.png
         ['00', '01', '02', '03'].forEach(function (k) { IMG.slash.push(loadImg('Atlases/Gameplay/effects/slash/' + k + '.png')); });
         // 星飞时玩家本体的素材（Content/Graphics/Atlases/Gameplay/characters/player/）：
         //   Sprites.xml <Anim id="startStarFly" path="startStarFly" delay="0.08" goto="starFly"/> 4 帧
@@ -1961,22 +2053,37 @@ function stopPeSnow() {
         var STAR_BLOOM_R = 16;         // starFlyBloom = BloomPoint(offset(0,-6), 0, 16)
         var STAR_R = 4;                // starFlyHitbox = Hitbox(8, 8, -4, -10) → 以球心为中心的 8×8，半宽 4
 
-        // ---------- 粒子（ParticleTypes::Load 里 FlyFeather.P_* 的字段值，逐条来自 IL） ----------
-        // P_Collect: Source=particles/feather, Color=FlyPowerHairColor, Color2=fff20f, ColorMode/FadeMode=2,
-        //            RotationMode=1, Size=1, Life .6-.9, Speed 60-70, SpeedMultiplier .1, DirectionRange 2π,
-        //            SpinFlippedChance=1, SpinMin 30° SpinMax 80°
-        // P_Boost  : new ParticleType(P_Collect) { DirectionRange 80°, Speed 20-80, SpeedMultiplier .2 }
-        // P_Flying : 默认 Source(rect), 同色, FadeMode 2, Size 1, Life .4-.8, Speed 60-70, mult .25, dirRange 60°
-        // P_Respawn: new ParticleType(P_Regen=P_Dust) { Color ffdca4, Color2 ffe95e }, Life .8-1.6, Speed 8-12, Size 1.2±.5
+        // ---------- 粒子（Monocle ParticleSystem 的逐行移植；字段全部来自 ParticleTypes::Load 的 IL） ----------
+        // P_Collect: Source=particles/feather, Color=FlyPowerHairColor(F2EB6D), Color2=fff20f,
+        //            ColorMode=2, FadeMode=2, RotationMode=1(自转), Size=1, Life .6-.9, Speed 60-70,
+        //            SpeedMultiplier .1, DirectionRange 2π, SpinFlippedChance=1, Spin 30°-80°
+        // P_Boost  : new ParticleType(P_Collect){ DirectionRange 80°, Speed 20-80, SpeedMultiplier .2 }
+        // P_Flying : **new ParticleType()，全篇没有设 Source** ⇒ ParticleType.Create 里
+        //            `if (Source == null) Source = Draw.Particle`，而 Draw::.cctor 是
+        //            `Draw.Particle = new MTexture(1, 1, 1, 1)` —— 一个 1×1 的纯白像素。
+        //            ⇒ 飞行拖尾是**单像素金点**，不是 particles/rect(4×2)。这一条以前搞错了：
+        //            按 rect 画，每个点变成 12×6 CSS px 的小方块排成一条带子，所以“散落粒子”看着不对。
+        //            ColorMode=2, FadeMode=2, Size=1, Life .4-.8, Speed 60-70, mult .25, dirRange 60°
+        // P_Respawn: new ParticleType(Refill.P_Regen){ Color ffdca4, Color2 ffe95e }；
+        //            P_Regen = new ParticleType(Refill.P_Glow){ Speed 30-40, mult .2, dirRange 2π }；
+        //            P_Glow 同样没有 Source ⇒ 也是单像素点，Life 继承 .4-.6、Size 1、ColorMode/FadeMode=2
+        // 两个共同语义（Particle.Update，照 IL 抄）：
+        //   ColorMode=2 → Color ⇄ Color2 按**剩余寿命**每 0.1s 交替（Calc.BetweenInterval(Life, .1)
+        //                 = (Life % .2) > .1）
+        //   FadeMode=2  → alpha = min(1, (Life/StartLife) / .25)：前 3/4 完全不透明，最后 1/4 才淡出
         var PT = {
-            collect: { tex: 'feather', cols: ['#f2eb6d', '#fff20f'], dir: Math.PI * 2, spd: [60, 70], mult: 0.1, life: [0.6, 0.9], size: 1, sizeRange: 0, spin: [Math.PI / 6, 1.3962634], spinChance: 1 },
-            boost: { tex: 'feather', cols: ['#f2eb6d', '#fff20f'], dir: 1.3962634, spd: [20, 80], mult: 0.2, life: [0.6, 0.9], size: 1, sizeRange: 0, spin: [Math.PI / 6, 1.3962634], spinChance: 1 },
-            flying: { tex: 'rect', cols: ['#f2eb6d', '#fff20f'], dir: 1.0471976, spd: [60, 70], mult: 0.25, life: [0.4, 0.8], size: 1, sizeRange: 0, spin: [0, 0], spinChance: 0 },
-            respawn: { tex: 'smoke', cols: ['#ffdca4', '#ffe95e'], dir: Math.PI * 2, spd: [8, 12], mult: 0.9, life: [0.8, 1.6], size: 1.2, sizeRange: 0.5, spin: [0, 0], spinChance: 0 }
+            collect: { src: 'feather', col: ['#f2eb6d', '#fff20f'], colorMode: 2, fadeMode: 2, rotMode: 1, size: 1, sizeRange: 0, life: [0.6, 0.9], spd: [60, 70], mult: 0.1, dir: Math.PI * 2, spin: [0.5235988, 1.3962634], spinFlip: true },
+            boost: { src: 'feather', col: ['#f2eb6d', '#fff20f'], colorMode: 2, fadeMode: 2, rotMode: 1, size: 1, sizeRange: 0, life: [0.6, 0.9], spd: [20, 80], mult: 0.2, dir: 1.3962634, spin: [0.5235988, 1.3962634], spinFlip: true },
+            flying: { src: 'pixel', col: ['#f2eb6d', '#fff20f'], colorMode: 2, fadeMode: 2, rotMode: 0, size: 1, sizeRange: 0, life: [0.4, 0.8], spd: [60, 70], mult: 0.25, dir: 1.0471976, spin: [0, 0], spinFlip: false },
+            respawn: { src: 'pixel', col: ['#ffdca4', '#ffe95e'], colorMode: 2, fadeMode: 2, rotMode: 0, size: 1, sizeRange: 0, life: [0.4, 0.6], spd: [30, 40], mult: 0.2, dir: Math.PI * 2, spin: [0, 0], spinFlip: false }
         };
 
         // ---------- 状态 ----------
         var active = false, raf = 0, prevT = 0, clock = 0;
+        // CW/CH：.ds-left 的尺寸缓存（resizeCanvas 时更新）。原来 featherCenter / stepOrb 每帧都读
+        // left.clientWidth/clientHeight，会让浏览器在每帧里强制同步布局（一帧最多 7 次），纯属白烧。
+        // painted：上一帧画布是否还有内容（无粒子/光球时跳过每帧全画布 clearRect）。
+        var CW = 1, CH = 1, painted = false;
         var feathers = [], placed = [], orb = null, parts = [], slashes = [], exits = [];
         var keys = {}, keysActive = false;
         var ptr = null, ptrLast = null;    // 指针速度（≈ 原作的 player.Speed，决定 SlashFx 朝向）
@@ -2021,7 +2128,7 @@ function stopPeSnow() {
         // 当前动画帧号（Sprites.xml：startStarFly delay=0.08 共 4 帧，之后 goto starFly 单帧）
         function starFrame(charge) { return Math.min(3, Math.floor(charge / (STAR_FRAME_MS / 1000))); }
         function featherCenter(f) {
-            return { x: f.x / 100 * left.clientWidth, y: f.y / 100 * left.clientHeight };
+            return { x: f.x / 100 * CW, y: f.y / 100 * CH };
         }
         // 原作的兜底：Calc.Angle(feather.Position - player.Center)——页面里就是睡着的 Madeline
         function madelineCenter() {
@@ -2040,78 +2147,126 @@ function stopPeSnow() {
         }
 
         // ---------- 粒子 ----------
+        // ParticleType.Create 逐条：
+        //   位置 = ParticleSystem.Emit 的 Calc.Range(Random, pos - range, pos + range)（range 是**半宽**）
+        //   Size：SizeRange 非 0 时 SizeRange 半宽随机，否则就是 Size
+        //   方向 = direction - DirectionRange/2 + Random * DirectionRange；速度 = Range(SpeedMin, SpeedMax)
+        //   RotationMode 1 → 随机初始角；2 → 取发射方向；0 → 0
+        //   Spin = Range(SpinMin, SpinMax)，SpinFlippedChance 为真时再乘 Choose(Random, 1, -1)
         function emit(type, n, x, y, rangePx, baseAngle) {
             for (var k = 0; k < n; k++) {
+                var sz = type.sizeRange
+                    ? type.size - type.sizeRange * 0.5 + Math.random() * type.sizeRange
+                    : type.size;
                 var ang = baseAngle + (Math.random() - 0.5) * type.dir;
                 var spd = (type.spd[0] + Math.random() * (type.spd[1] - type.spd[0])) * PXF;
-                var spin = 0;
-                if (type.spinChance) {
-                    spin = type.spin[0] + Math.random() * (type.spin[1] - type.spin[0]);
-                    if (Math.random() < type.spinChance) spin = -spin;   // SpinFlippedChance
-                }
+                var rot = type.rotMode === 1 ? Math.random() * Math.PI * 2 : (type.rotMode === 2 ? ang : 0);
+                var spin = type.spin[0] + Math.random() * (type.spin[1] - type.spin[0]);
+                if (type.spinFlip && Math.random() < 0.5) spin = -spin;   // SpinFlippedChance=1 ⇒ 正负随机
+                var life = type.life[0] + Math.random() * (type.life[1] - type.life[0]);
                 parts.push({
+                    t: type,
                     x: x + (Math.random() - 0.5) * 2 * rangePx,
                     y: y + (Math.random() - 0.5) * 2 * rangePx,
                     vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
-                    rot: Math.random() * Math.PI * 2, spin: spin,
-                    mult: type.mult, tex: type.tex, col: type.cols[Math.random() < 0.5 ? 0 : 1],
-                    life: 0, ttl: type.life[0] + Math.random() * (type.life[1] - type.life[0]),
-                    sz: Math.max(0.5, (type.size + (Math.random() - 0.5) * type.sizeRange) * PXF)
+                    rot: rot, spin: spin, size: sz,
+                    life: life, startLife: life, alpha: 1, col: type.col[0]
                 });
             }
         }
 
-        // ---------- 音效（无原版音源，WebAudio 合成；复用镜之房间的共享 AudioContext） ----------
+        // ---------- 音效（celeste-sounds/feather/ 下的原作事件采样） ----------
+        // 对应原作 FMOD 事件（FlyFeather / Player.StStarFly 里触发的那几个）：
+        //   feather_get            FlyFeather::OnPlayer 首次收集（CollectRoutine）
+        //   feather_renew          飞行中撞到另一根羽毛（StartStarFly 的 renew 分支）
+        //   feather_reappear       FlyFeather::Respawn（3s 后回来）
+        //   feather_state_warning  StarFlyUpdate：timer < 0.5 起响一次
+        //   feather_state_end      StarFlyEnd（交回普通状态）
+        //   feather_state_slow_loop / feather_state_fast_loop
+        //                          飞行循环：同一个事件的 "faster" 参数在两条 12s 轨之间交叉淡化
+        //   feather_state_bump     撞墙反弹——没采到这个事件，沿用原来的合成短音（音量压得很低）
+        var SND_F = 'celeste-sounds/feather/';
+        var ONESHOT = {
+            get: 'feather_get', renew: 'feather_renew', reappear: 'feather_reappear',
+            warn: 'feather_state_warning', end: 'feather_state_end'
+        };
+        var VOL = { get: 0.55, renew: 0.5, reappear: 0.5, warn: 0.45, end: 0.5 };
         var AC = null;
-        function sfx(kind) {
+        function bumpSfx() {
             try {
-                AC = AC || window.__mirrorAC;
-                if (!AC) {
-                    var C = window.AudioContext || window.webkitAudioContext;
-                    if (!C) return;
-                    AC = window.__mirrorAC = new C();
-                }
+                AC = AC || Sfx.ac();
+                if (!AC) return;
                 if (AC.state === 'suspended') AC.resume();
                 var t0 = AC.currentTime, g = AC.createGain(), o = AC.createOscillator();
                 o.connect(g); g.connect(AC.destination);
                 g.gain.setValueAtTime(0.0001, t0);
-                if (kind === 'bump') {                 // event:/game/06_reflection/feather_state_bump
-                    o.type = 'square';
-                    o.frequency.setValueAtTime(180, t0);
-                    o.frequency.exponentialRampToValueAtTime(96, t0 + 0.1);
-                    g.gain.linearRampToValueAtTime(0.05, t0 + 0.008);
-                    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.13);
-                    o.start(t0); o.stop(t0 + 0.15);
-                } else if (kind === 'warn') {          // event:/game/06_reflection/feather_state_warning
-                    o.type = 'triangle';
-                    o.frequency.setValueAtTime(880, t0);
-                    g.gain.linearRampToValueAtTime(0.035, t0 + 0.01);
-                    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.12);
-                    o.start(t0); o.stop(t0 + 0.14);
-                } else if (kind === 'boost') {
-                    o.type = 'sawtooth';
-                    o.frequency.setValueAtTime(360, t0);
-                    o.frequency.exponentialRampToValueAtTime(900, t0 + 0.09);
-                    g.gain.linearRampToValueAtTime(0.05, t0 + 0.01);
-                    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
-                    o.start(t0); o.stop(t0 + 0.18);
-                } else if (kind === 'end') {
-                    o.type = 'triangle';
-                    o.frequency.setValueAtTime(720, t0);
-                    o.frequency.exponentialRampToValueAtTime(260, t0 + 0.25);
-                    g.gain.linearRampToValueAtTime(0.06, t0 + 0.015);
-                    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.3);
-                    o.start(t0); o.stop(t0 + 0.32);
-                } else {
-                    var f0 = kind === 'get' ? 760 : (kind === 'renew' ? 620 : 480);
-                    o.type = 'triangle';
-                    o.frequency.setValueAtTime(f0, t0);
-                    o.frequency.exponentialRampToValueAtTime(f0 * 1.9, t0 + 0.13);
-                    g.gain.linearRampToValueAtTime(kind === 'reappear' ? 0.05 : 0.085, t0 + 0.012);
-                    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.24);
-                    o.start(t0); o.stop(t0 + 0.26);
-                }
+                o.type = 'square';
+                o.frequency.setValueAtTime(180, t0);
+                o.frequency.exponentialRampToValueAtTime(96, t0 + 0.1);
+                g.gain.linearRampToValueAtTime(0.05, t0 + 0.008);
+                g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.13);
+                o.start(t0); o.stop(t0 + 0.15);
             } catch (e) { /* 无声降级 */ }
+        }
+        function sfx(kind) {
+            if (kind === 'bump') { bumpSfx(); return; }
+            var n = ONESHOT[kind];
+            if (n) Sfx.play(n, { dir: SND_F, volume: VOL[kind] });
+        }
+        // 飞行循环：两条等长的 12s 无缝轨同时起播（起点对齐 ⇒ 永远同相），只改 volume 做 slow→fast
+        // 交叉淡化。淡化量 = |Speed| 归一到 [V_TURN, V_FAST]：闲置 91 → 0，巡航 140 → 0，急速 190 → 1。
+        var LOOP_VOL = 0.30;
+        var loops = null, loopRun = false, fadeTimer = 0;
+        function ensureLoops() {
+            if (loops) return loops;
+            function mk(n) {
+                var a = new Audio(SND_F + n);
+                a.loop = true; a.preload = 'auto'; a.volume = 0;
+                return a;
+            }
+            loops = { slow: mk('feather_state_slow_loop.wav'), fast: mk('feather_state_fast_loop.wav'), mix: -1 };
+            return loops;
+        }
+        function startLoops() {
+            var L = ensureLoops();
+            if (loopRun) return;
+            loopRun = true; L.mix = -1;
+            clearInterval(fadeTimer); fadeTimer = 0;
+            L.slow.currentTime = 0; L.fast.currentTime = 0;
+            L.slow.volume = 0; L.fast.volume = 0;
+            L.slow.play().catch(function () {});
+            L.fast.play().catch(function () {});
+            mixLoops(0);
+        }
+        function mixLoops(t) {
+            var L = loops;
+            if (!L || !loopRun) return;
+            if (Math.abs(t - L.mix) < 0.03) return;      // 音量写太密没必要，0.03 一档
+            L.mix = t;
+            L.slow.volume = LOOP_VOL * (1 - t);
+            L.fast.volume = LOOP_VOL * t;
+        }
+        function stopLoops() {
+            var L = loops;
+            if (!L || !loopRun) return;
+            loopRun = false; L.mix = -1;
+            clearInterval(fadeTimer);
+            var v0s = L.slow.volume, v0f = L.fast.volume, t0 = nowMs();
+            fadeTimer = setInterval(function () {        // 0.2s 淡出，直接 pause 会“啪”一声
+                var k = 1 - (nowMs() - t0) / 200;
+                if (k <= 0) {
+                    clearInterval(fadeTimer); fadeTimer = 0;
+                    L.slow.volume = 0; L.fast.volume = 0;
+                    L.slow.pause(); L.fast.pause();
+                    return;
+                }
+                L.slow.volume = v0s * k; L.fast.volume = v0f * k;
+            }, 25);
+        }
+        // 进 dream 时把一次性音效建成实例（循环轨 12s 大文件，起播那刻再拉也够快，这里一并预热）
+        function preheatSfx() {
+            Sfx.preload(Object.keys(ONESHOT).map(function (k) { return ONESHOT[k]; }), { dir: SND_F });
+            ensureLoops();
         }
 
         // ---------- 画布 / 提示 ----------
@@ -2124,11 +2279,14 @@ function stopPeSnow() {
         }
         function resizeCanvas() {
             if (!cv) return;
-            cv.width = Math.max(1, left.clientWidth);
-            cv.height = Math.max(1, left.clientHeight);
+            CW = Math.max(1, left.clientWidth);
+            CH = Math.max(1, left.clientHeight);
+            cv.width = CW;
+            cv.height = CH;
             ctx2 = cv.getContext('2d');
             ctx2.imageSmoothingEnabled = false;
             starGlowSize = 0;
+            painted = false;       // 改画布尺寸本身就会清空
             TINTS = {};            // PXF 变了 → 染色/描边缓存全部作废
         }
         function showHint(on) {
@@ -2262,7 +2420,7 @@ function stopPeSnow() {
                 el: b, cvs: cvs, ctx: null, sprS: SPR_S, cssPx: FSIZE,
                 x: p.x, y: p.y, phase: Math.random() * Math.PI * 2,
                 state: 'idle', respawnAt: 0, burstAt: 0, burstAng: 0,
-                wigT: -1, wigDur: 1, wigFreq: 4, drawn: -1
+                wigT: -1, wigDur: 1, wigFreq: 4, drawn: -1, tf: ''
             };
             applyScale(f);
             b.addEventListener('click', function (e) {
@@ -2334,9 +2492,12 @@ function stopPeSnow() {
                     if (f.wigT >= f.wigDur) f.wigT = -1;
                     else sc = 1 + 0.2 * Math.cos(f.wigT * Math.PI * 2 * f.wigFreq) * (1 - f.wigT / f.wigDur);
                 }
-                f.el.style.transform = 'translate(-50%,-50%)' +
+                // 上下浮动 ±2 世界像素只有 13 个整数档位（bob 已 round），稳定态下绝大多数帧算出来的是同一个
+                // transform；只在字符串真的变了才写 style，省掉每帧 6 次样式失效 + 合成器更新
+                var tf = 'translate(-50%,-50%)' +
                     (bob ? ' translateY(' + bob + 'px)' : '') +
                     (sc !== 1 ? ' scale(' + sc.toFixed(3) + ')' : '');
+                if (tf !== f.tf) { f.tf = tf; f.el.style.transform = tf; }
             }
         }
 
@@ -2408,7 +2569,7 @@ function stopPeSnow() {
                     o.hairCount = HAIR_N_FLY;             // Sprite.HairCount = 7（与变金色同一时刻）
                     emit(PT.boost, 12, o.x, o.y, 4 * PXF, Math.atan2(-o.my, -o.mx));
                     shake(o.mx, o.my);                    // level.DirectionalShake(starFlyLastDir, 0.3)
-                    sfx('boost');
+                    startLoops();                         // feather_state_*_loop：变形结束才起循环
                 }
                 stepHair(o);
                 return;
@@ -2430,11 +2591,13 @@ function stopPeSnow() {
             else { o.lerp = 0; target = V_TURN; }
 
             o.len = approach(o.len, target * PXF, ACCEL * PXF * dt);   // Approach(|Speed|, target, 1000 * dt)
+            // 循环轨的 "faster" 参数：V_TURN 以下全 slow（闲置 91 / 掉头 140），V_FAST 全 fast
+            mixLoops(Math.min(1, Math.max(0, (o.len / PXF - V_TURN) / (V_FAST - V_TURN))));
             o.x += o.mx * o.len * dt;
             o.y += o.my * o.len * dt;
 
             // 房间边界（左屏 = 游戏房间）：OnCollideH / OnCollideV 的 StStarFly 分支
-            var w = left.clientWidth, h = left.clientHeight, R = orbRadius();
+            var w = CW, h = CH, R = orbRadius();
             var hx = false, hy = false;
             if (o.x < R) { o.x = R; hx = true; }
             else if (o.x > w - R) { o.x = w - R; hx = true; }
@@ -2491,6 +2654,7 @@ function stopPeSnow() {
             var ay = axisY();          // 必须在 bindActive(false) 清空 keys 之前读（原作此处看 Input.MoveY）
             bindActive(false);
             showHint(false);
+            stopLoops();               // 飞行循环 0.2s 淡出（silent 的 exitDream 也要停）
             if (!orb) return;
             var o = orb;
             orb = null;
@@ -2504,13 +2668,26 @@ function stopPeSnow() {
             sfx('end');
         }
         function stepFx(dt) {
+            // Particle.Update（IL）：t = Life/StartLife → Life -= dt → 旋转 → FadeMode/ColorMode
+            //   → Position += Speed*dt → Speed *= SpeedMultiplier^dt
             for (var i = parts.length - 1; i >= 0; i--) {
-                var p = parts[i];
-                p.life += dt;
-                if (p.life >= p.ttl) { parts.splice(i, 1); continue; }
+                var p = parts[i], ty = p.t;
+                var t = p.life / p.startLife;              // 注意：比例用的是**减之前**的 Life
+                p.life -= dt;
+                if (p.life <= 0) { parts.splice(i, 1); continue; }
+                if (ty.rotMode === 2) {                    // SameAsDirection
+                    if (p.vx || p.vy) p.rot = Math.atan2(p.vy, p.vx);
+                } else {
+                    p.rot += p.spin * dt;
+                }
+                p.alpha = 1;
+                if (ty.fadeMode === 1) p.alpha = t;
+                else if (ty.fadeMode === 2) p.alpha = Math.min(1, t / 0.25);
+                else if (ty.fadeMode === 3) p.alpha = t > 0.75 ? 1 - (t - 0.75) / 0.25 : (t < 0.25 ? t / 0.25 : 1);
+                // ColorMode=2（Flicker）：Calc.BetweenInterval(Life, .1) = (Life % .2) > .1
+                p.col = (ty.colorMode === 2 && (p.life % 0.2) <= 0.1) ? ty.col[1] : ty.col[0];
                 p.x += p.vx * dt; p.y += p.vy * dt;
-                p.rot += p.spin * dt;                      // RotationMode=1：粒子自转（SpinMin 30°~SpinMax 80°/s）
-                var drag = Math.pow(p.mult, dt);           // SpeedMultiplier：每秒按该系数衰减
+                var drag = Math.pow(ty.mult, dt);          // SpeedMultiplier：每秒按此系数衰减
                 p.vx *= drag; p.vy *= drag;
             }
             for (var j = slashes.length - 1; j >= 0; j--) {
@@ -2621,34 +2798,42 @@ function stopPeSnow() {
         }
         function drawFrame() {
             if (!ctx2) return;
-            ctx2.clearRect(0, 0, cv.width, cv.height);
+            // 没粒子 / 余晖 / 刀光 / 光球时整帧没有内容，只要上一帧已经清空过就不必再 clearRect
+            var busy = !!orb || parts.length > 0 || slashes.length > 0 || exits.length > 0;
+            if (!busy && !painted) return;
+            painted = busy;
+            ctx2.clearRect(0, 0, CW, CH);
 
             // 1) 星飞结束后的余晖（原作交回普通状态：Speed 夹取 → gravity；这里用金色精灵淡出收尾）
             for (var q2 = 0; q2 < exits.length; q2++) {
                 var exi = exits[q2], ea = 1 - exi.t / exi.ttl;
                 drawStar(exi.x, exi.y, 'starFly', STAR_COLOR, ea * ea);
             }
-            // 2) 粒子（P_Collect / P_Boost 用 feather 贴图并自转，P_Flying 用 rect，P_Respawn 用 smoke0）
+            // 2) 粒子（Particle.Render 是“先截断成整数世界像素，再按原点=贴图中心、scale=Size 画”）
+            //    P_Flying / P_Respawn 的源是 Draw.Particle（1×1）⇒ 一个世界像素的方块：PXF×PXF
+            //    P_Collect / P_Boost 的源是 particles/feather（5×3）⇒ 自转后按 Size=1 画原大
             for (var k = 0; k < parts.length; k++) {
-                var p = parts[k];
-                var a = 1 - p.life / p.ttl;                // FadeMode=2：随寿命淡出
-                if (a <= 0.02) continue;
+                var p = parts[k], a = p.alpha;
+                if (a <= 0.004) continue;
+                var wx = Math.round(p.x / PXF) * PXF;     // (int)Position.X
                 ctx2.globalAlpha = a;
-                var tex = tintFor(p.tex, p.col);
-                if (tex) {
-                    var dw = tex.width * p.sz, dh = tex.height * p.sz;
-                    if (p.spin) {
-                        ctx2.save();
-                        ctx2.translate(p.x, p.y);
-                        ctx2.rotate(p.rot);
-                        ctx2.drawImage(tex, -dw / 2, -dh / 2, dw, dh);
-                        ctx2.restore();
-                    } else {
-                        ctx2.drawImage(tex, p.x - dw / 2, p.y - dh / 2, dw, dh);
-                    }
-                } else {
+                if (p.t.src === 'pixel') {
+                    var side = Math.max(1, Math.round(p.size)) * PXF;
                     ctx2.fillStyle = p.col;
-                    ctx2.fillRect(p.x - p.sz / 2, p.y - p.sz / 2, p.sz, p.sz);
+                    ctx2.fillRect(wx, Math.round(p.y / PXF) * PXF, side, side);
+                    continue;
+                }
+                var tex = tintFor(p.t.src, p.col);
+                if (!tex) continue;
+                var dw = tex.width * p.size * PXF, dh = tex.height * p.size * PXF;
+                if (p.t.rotMode) {
+                    ctx2.save();
+                    ctx2.translate(wx, Math.round(p.y / PXF) * PXF);
+                    ctx2.rotate(p.rot);
+                    ctx2.drawImage(tex, -dw / 2, -dh / 2, dw, dh);
+                    ctx2.restore();
+                } else {
+                    ctx2.drawImage(tex, wx - dw / 2, Math.round(p.y / PXF) * PXF - dh / 2, dw, dh);
                 }
             }
             ctx2.globalAlpha = 1;
@@ -2748,8 +2933,7 @@ function stopPeSnow() {
 
         // ---------- dream 进出 ----------
         function countFeathers(done) {
-            if (typeof api !== 'function') { done(3); return; }
-            api('/feather/count', 'GET').then(function (res) {
+            DiaryApi.featherCount().then(function (res) {
                 var n = (res && res.success && res.data && res.data.count) || 0;
                 done(n > 0 ? Math.min(n, 6) : 3);         // 有记录 → min(n,6)；空 → 3 根
             }).catch(function () { done(3); });
@@ -2760,6 +2944,7 @@ function stopPeSnow() {
             updateSizes();
             ensureCanvas();
             resizeCanvas();
+            preheatSfx();
             bindTrack(true);
             document.addEventListener('pointermove', onPointer, { passive: true });
             host.innerHTML = '';
@@ -2779,7 +2964,7 @@ function stopPeSnow() {
             document.removeEventListener('pointermove', onPointer);
             host.innerHTML = '';
             feathers = []; placed = []; parts = []; slashes = []; exits = []; orb = null;
-            if (ctx2 && cv) ctx2.clearRect(0, 0, cv.width, cv.height);
+            if (ctx2 && cv) { ctx2.clearRect(0, 0, CW, CH); painted = false; }
         }
 
         document.addEventListener('dream:entered', enterDream);
@@ -2791,6 +2976,11 @@ function stopPeSnow() {
             for (var k = 0; k < feathers.length; k++) applyScale(feathers[k]);
         });
         window.addEventListener('blur', function () { keys = {}; });
+        // 切走标签页时 rAF 会停，循环轨必须自己收掉；回来若还在飞就续上
+        document.addEventListener('visibilitychange', function () {
+            if (document.hidden) stopLoops();
+            else if (orb && orb.charge >= CHARGE) startLoops();
+        });
         // 叫醒 Madeline 时立刻收掉飞行，避免与睡醒动画叠在一起
         var mdEl = document.getElementById('dsMadeline');
         if (mdEl) mdEl.addEventListener('click', function () { if (orb) endFly(false); });
@@ -2823,7 +3013,7 @@ function stopPeSnow() {
             catch (e) { return ''; }
         }
         function loadDreams() {
-            return api('/diary/list?page=1&pageSize=50&type=dream', 'GET').then(function (res) {
+            return DiaryApi.listDreams().then(function (res) {
                 dreams = (res && res.success && res.data && Array.isArray(res.data.list)) ? res.data.list : [];
                 renderDreamList();
                 renderDreamPick();
@@ -2855,20 +3045,27 @@ function stopPeSnow() {
                     }
                 }, ms);
             }
-            playSeq(idle, 80, true);
-            return { flash: flash, playSeq: playSeq, playIdle: function () { playSeq(idle, 80, true); }, busy: false };
+            // 不在加载时就起播（idle00 静态帧就是 HTML 里的初始图），等 dream:entered 再转
+            return {
+                flash: flash, playSeq: playSeq,
+                playIdle: function () { playSeq(idle, 80, true); },
+                stopIdle: function () { clearInterval(t); t = null; k = 0; },
+                busy: false
+            };
         })();
+        // 夜话按钮只在 dream 场景里看得见：进 dream 才起播，离场就停。
+        // 原来从页面加载起就整页 80ms 刷一次 img.src（12.5 次/秒空转）。
+        document.addEventListener('dream:entered', function () { nightBoost.busy = false; nightBoost.playIdle(); });
+        document.addEventListener('dream:exiting', function () { nightBoost.stopIdle(); });
         // 记梦入口：点击 dream 场景现有的绿色篝火本身
         document.getElementById('dsFire').addEventListener('click', function () {
             // 镜子刷新机制：玩家提出过"dream 模式"后再次进 dream → 50% 保持破碎 / 50% 恢复完好
-            try {
-                if (localStorage.getItem('mirrorReroll') === '1') {
-                    localStorage.removeItem('mirrorReroll');
-                    if (localStorage.getItem('mirrorBroken') === '1' && Math.random() < 0.5) {
-                        localStorage.removeItem('mirrorBroken');   // 恢复完好（呈现于下次进镜之房间）
-                    }
+            if (Store.getFlag(Store.KEYS.MIRROR_REROLL)) {
+                Store.remove(Store.KEYS.MIRROR_REROLL);
+                if (Store.getFlag(Store.KEYS.MIRROR_BROKEN) && Math.random() < 0.5) {
+                    Store.remove(Store.KEYS.MIRROR_BROKEN);   // 恢复完好（呈现于下次进镜之房间）
                 }
-            } catch (e) {}
+            }
             loadDreams().then(function () { openPanel(jPanel); });
         });
 
@@ -2950,7 +3147,7 @@ function stopPeSnow() {
             if (!content) { contentEl.focus(); return; }
             saveBtn.disabled = true;
             saveBtn.textContent = '封存中…';
-            api('/diary/dream', 'POST', { title: titleEl.value.trim(), content: content }, 20000)
+            DiaryApi.saveDream(titleEl.value.trim(), content)
                 .then(function (res) {
                     if (res && res.success && res.data) {
                         typeReply(res.data.message || '……我在呢。');
@@ -3034,7 +3231,7 @@ function stopPeSnow() {
             resetNight(id);
             ntBusy = true; ntSend.disabled = true;
             addRow('bl', '……', 'normal').classList.add('nt-typing');
-            api('/diary/dream-night-talk', 'POST', { dreamId: id, message: '', history: '[]' }, 20000)
+            DiaryApi.dreamNightTalk(id, '', [])
                 .then(function (res) {
                     msgs.innerHTML = '';
                     if (res && res.success && res.data) {
@@ -3056,8 +3253,7 @@ function stopPeSnow() {
             addRow('user', v);
             ntHist.push({ role: 'user', content: v });
             ntBusy = true; ntSend.disabled = true;
-            api('/diary/dream-night-talk', 'POST',
-                { dreamId: ntDreamId, message: v, history: JSON.stringify(ntHist.slice(-10)) }, 20000)
+            DiaryApi.dreamNightTalk(ntDreamId, v, ntHist)
                 .then(function (res) {
                     if (res && res.success && res.data) {
                         addRow('bl', res.data.message, res.data.emotion || 'normal');
@@ -3085,16 +3281,11 @@ function stopPeSnow() {
         var DIR = 'heartdoor/sounds/';
         var NAMES = ['heartdoor_entry','heartdoor_slam','frontdoor_heartfill_1','frontdoor_heartfill_2','frontdoor_heartfill_3','frontdoor_heartfill_4','frontdoor_unlock'];
         var VOL = 0.7;
-        var pool = {};
-        NAMES.forEach(function (n) {
-            var a = new Audio(DIR + n + '.wav');
-            a.preload = 'auto'; a.volume = VOL; a.muted = false;
-            pool[n] = a;
-        });
-        // play 支持多实例：每次 new Audio 避免同标签重入打断
+        Sfx.preload(NAMES, { dir: DIR, volume: VOL });   // 先建实例触发下载，首次点击零延迟
+        // play 支持多实例：每次新建 Audio 避免同标签重入打断
         function play(name) {
-            var src = pool[name]; if (!src) return;
-            var a = new Audio(src.src); a.volume = VOL; a.play().catch(function () {});
+            if (NAMES.indexOf(name) === -1) return;
+            Sfx.fire(name, { dir: DIR, volume: VOL });
         }
         window.__hdSfx = { play: play };
     })();
@@ -3110,8 +3301,7 @@ function stopPeSnow() {
         var litNow = 0;                        // 当前已点亮的颗数
         var splitting = false;                 // 分裂动画播放中
         // 分裂为一次性动画：播过即永久保持最终态，刷新直接恢复 split 态、不再重播
-        var splitDone = false;
-        try { splitDone = localStorage.getItem('heartDoorSplit') === '1'; } catch (e) {}
+        var splitDone = Store.getFlag(Store.KEYS.HEART_DOOR_SPLIT);
         if (splitDone) { opened = true; door.classList.add('split'); }
 
         // ===== 开启条件：四心为初始条件——心门由商店炼制的水晶心驱动（heartDoorHearts 数组） =====
@@ -3121,39 +3311,26 @@ function stopPeSnow() {
         function targetOf() {
             if (forceOpen()) return TOTAL;
             var n = 0;
-            try {
-                var arr = JSON.parse(localStorage.getItem('heartDoorHearts') || 'null');
-                if (Array.isArray(arr) && arr.length) n = arr.length;
-                else {
-                    var c = JSON.parse(localStorage.getItem('crystalHeart') || 'null');
-                    n = (c && c.color) ? 1 : 0;
-                }
-            } catch (e) {}
+            var arr = Store.getJson(Store.KEYS.HEART_DOOR_HEARTS, null);
+            if (Array.isArray(arr) && arr.length) n = arr.length;
+            else {
+                var c = Store.getJson(Store.KEYS.CRYSTAL_HEART, null);
+                n = (c && c.color) ? 1 : 0;
+            }
             return Math.max(0, Math.min(TOTAL, n));
         }
-        function persist() { try { localStorage.setItem('heartDoorLit', String(litNow)); } catch (e) {} }
+        function persist() { Store.set(Store.KEYS.HEART_DOOR_LIT, litNow); }
         function refreshState() {
-            door.classList.toggle('locked', litNow < TOTAL);
-            door.classList.toggle('ready', litNow >= TOTAL && !opened && !splitting);
+            // 门已开过（opened）就不再回到「锁住」：那会变成 not-allowed 指针，
+            // 明明点一下就进镜之房间却看着像不能点
+            door.classList.toggle('locked', !opened && litNow < TOTAL);
+            door.classList.toggle('ready', !opened && !splitting && litNow >= TOTAL);
         }
         function paint(im, lit) { im.src = lit ? 'heartdoor/icon06.png' : 'heartdoor/icon00.png'; }
 
-        // 极光色像素星点：天空与桥底下随机位置闪烁（蓝/绿，每点独立节奏）
-        (function initAuroraStars() {
-            var host = document.querySelector('#dreamScene .ds-left');
-            var box = document.getElementById('dsAStars');
-            if (!host || !box || box.children.length) return;
-            for (var k = 0; k < 30; k++) {
-                var i = document.createElement('i');
-                var sky = Math.random() < 0.62;                                  // 62% 天空、38% 桥底下
-                i.style.left = (2 + Math.random() * 96).toFixed(2) + '%';
-                i.style.top = (sky ? 6 + Math.random() * 28 : 55 + Math.random() * 17).toFixed(2) + '%';
-                i.style.background = Math.random() < 0.5 ? '#6fd8ff' : '#7dffc8';
-                i.style.setProperty('--dur', (0.9 + Math.random() * 1.1).toFixed(2) + 's');
-                i.style.setProperty('--del', (Math.random() * 3.5).toFixed(2) + 's');
-                document.getElementById('dsAStars').appendChild(i);
-            }
-        })();
+        // 极光色像素星点已改为画进 #dsBirds 画布（见 dream-birds.js 的 drawAstars）：
+        // 原来这里生成 30 个 <i> + CSS opacity 动画，实测每个元素每帧都要主线程 tick，
+        // 合计约 0.45ms/帧，而且让整份文档每帧重算样式。
 
         // 开门特效：白闪 / 门底残影暗斑，挂到 #dreamScene，动画结束自清理
         function spawnDoorFx() {
@@ -3191,6 +3368,7 @@ function stopPeSnow() {
         var GUI_HG = 'Atlases/Gui/collectables/heartgem';
         var GUI_HEART_FRAMES = { blue: [], red: [], yellow: [], fake: [] };
         Object.keys(COLOR_SUBDIR).forEach(function (c) {
+            if (c === 'fake') return;      // heartgem/3 只打包了 FakeHeart 帧（没有 spin），别去预载 11 张不存在的图
             for (var i = 0; i < 11; i++) (function (c, i) {
                 GUI_HEART_FRAMES[c].push(null);
                 promImg(GUI_HG + '/' + COLOR_SUBDIR[c] + '/spin' + pad2(i) + '.png')
@@ -3254,7 +3432,12 @@ function stopPeSnow() {
             if (poemTip) poemTip.style.visibility = '';
         }
         function updatePoem(rdt) {
-            if (!poem) { if (poemEl) poemEl.style.opacity = '0'; return; }
+            if (!poem) {
+                // 原来这里每帧都写一次 style.opacity='0'，即使根本没开过 Poem（书架常态）
+                // → 每帧一次样式失效。只在真的需要复位时写
+                if (poemEl && poemEl.style.opacity !== '0') poemEl.style.opacity = '0';
+                return;
+            }
             poem.timer += rdt;
             // 巨心 spin 帧推进
             if (!poem.fake && poem.spinFrames) {
@@ -3551,6 +3734,12 @@ function stopPeSnow() {
             var rdt = poemLast ? Math.min((ts - poemLast) / 1000, 0.05) : 1 / 60;
             poemLast = ts;
             rdtSaved = rdt;
+            // 空闲（无心门仪式 / 无 Poem / 无闪光 / 无黑幕 / 无吸收光球）时整帧跳过：
+            // 只留一个几乎零成本的 rAF 回调，醒着时再接管
+            if (!ritual && !poem && flashA <= 0 && backdropFade <= 0.002 && !orbs.length) {
+                requestAnimationFrame(poemTick);
+                return;
+            }
             tickRitual(rdt);
             updatePoem(rdt);
             drawPoem();
@@ -3558,14 +3747,12 @@ function stopPeSnow() {
         }
         requestAnimationFrame(poemTick);
 
-        // 从 localStorage 拿最近那颗心的颜色和文案（heartCrystalDay / crystalHeart 兜底）
+        // 取最近那颗心的颜色和文案（Store.HEART_CRYSTAL_DAY / CRYSTAL_HEART 兜底）
         function latestHeartMeta() {
-            try {
-                var hc = JSON.parse(localStorage.getItem('heartCrystalDay') || 'null');
-                if (hc && POEM_COLORS[hc.color]) return { color: hc.color, title: hc.title || '一道光', desc: hc.desc || undefined };
-                var ch = JSON.parse(localStorage.getItem('crystalHeart') || 'null');
-                if (ch && POEM_COLORS[ch.color]) return { color: ch.color, title: ch.title || '一道光', desc: ch.desc || undefined };
-            } catch (e) {}
+            var hc = Store.getJson(Store.KEYS.HEART_CRYSTAL_DAY, null);
+            if (hc && POEM_COLORS[hc.color]) return { color: hc.color, title: hc.title || '一道光', desc: hc.desc || undefined };
+            var ch = Store.getJson(Store.KEYS.CRYSTAL_HEART, null);
+            if (ch && POEM_COLORS[ch.color]) return { color: ch.color, title: ch.title || '一道光', desc: ch.desc || undefined };
             return { color: 'blue', title: '一道光', desc: '照进心里最柔软的角落' };
         }
 
@@ -3576,7 +3763,7 @@ function stopPeSnow() {
             splitting = true;
             door.classList.remove('ready');
             door.title = '走进门后……';
-            try { localStorage.setItem('heartDoorSplit', '1'); } catch (e) {}
+            Store.set(Store.KEYS.HEART_DOOR_SPLIT, '1');
             // 隐藏门 DOM（fade out 动画），Poem 期间不显示
             door.style.transition = 'opacity 0.4s ease';
             door.style.opacity = '0';
@@ -3616,19 +3803,25 @@ function stopPeSnow() {
         // 把点亮数推进到 target：新增部分逐颗动画点亮，减少则静默校正
         // applySeq 链序号：新的推进会作废上一条填充链，防止双链并发把 litNow 跳奇数颗
         var applySeq = 0;
+        var entryPlayed = false;        // 入场音每次加载只响一次（applyTarget 会被初始化和日记加载各调一遍）
+        var filledSeen = {};            // 第 n 颗的填充音每次加载只响一次
         function applyTarget(target, animate) {
             target = Math.max(0, Math.min(TOTAL, target));
             var seq = ++applySeq;
+            // 门已经开过（分裂已播）：之后再有任何变化都只静默更新显示，
+            // 不重播 entry / heartfill / unlock，也不走逐颗填充动画
+            if (splitDone) animate = false;
             // 第一次有心点亮 → heartdoor_entry
-            if (animate && litNow === 0 && target > 0 && window.__hdSfx) window.__hdSfx.play('heartdoor_entry');
+            if (animate && !entryPlayed && litNow === 0 && target > 0 && window.__hdSfx) {
+                entryPlayed = true;
+                window.__hdSfx.play('heartdoor_entry');
+            }
             if (target <= litNow || !animate) {
                 hearts.forEach(function (im, i) { paint(im, i < target); });
                 litNow = target; persist(); refreshState();
-                if (target >= TOTAL) {
-                    // 满心静默校正 → frontdoor_unlock
-                    if (window.__hdSfx) window.__hdSfx.play('frontdoor_unlock');
-                    maybePlaySplit(650);
-                }
+                // 注意：这里不再播 frontdoor_unlock —— 静默校正不是「开门那一下」。
+                // 开门音效只在真正从「不满」推进到「满」的填充链末尾播一次（见下）。
+                if (target >= TOTAL) maybePlaySplit(650);
                 return;
             }
             refreshState();                    // 动画期间保持锁定
@@ -3638,8 +3831,8 @@ function stopPeSnow() {
                 if (litNow >= target) {
                     persist(); refreshState();
                     if (target >= TOTAL) {
-                        // 最后一颗 pop 落定 → frontdoor_unlock
-                        if (window.__hdSfx) window.__hdSfx.play('frontdoor_unlock');
+                        // 真正攒满的那一下 → frontdoor_unlock（门已开过的不再播）
+                        if (!splitDone && window.__hdSfx) window.__hdSfx.play('frontdoor_unlock');
                         maybePlaySplit(580);
                     }
                     return;
@@ -3647,19 +3840,41 @@ function stopPeSnow() {
                 var idx = litNow;  // 当前要填第几颗（0-based，对应 heartfill idx+1）
                 fillHeart(hearts[litNow], function () {
                     if (seq !== applySeq) return;   // 过期链不计进度
-                    // 每颗心填充完成 → frontdoor_heartfill_{idx+1}
-                    if (window.__hdSfx) window.__hdSfx.play('frontdoor_heartfill_' + (idx + 1));
-                    litNow++; setTimeout(next, 300);
+                    // 每颗心填充完成 → frontdoor_heartfill_{idx+1}（同一颗只响一次）
+                    if (!splitDone && window.__hdSfx && !filledSeen[idx + 1]) {
+                        filledSeen[idx + 1] = 1;
+                        window.__hdSfx.play('frontdoor_heartfill_' + (idx + 1));
+                    }
+                    litNow++;
+                    persist();              // 逐颗落盘：中途被打断（刷新/切页）下次不会再重播已亮过的填充音
+                    setTimeout(next, 300);
                 });
             })();
         }
 
-        // 初始：按已炼心数恢复（heartDoorHearts 驱动，有新增则动画点亮）
-        var saved = parseInt(localStorage.getItem('heartDoorLit') || '0', 10);
+        // ===== 旧数据一次性补齐 =====
+        // 旧版「商店炼金」删掉后 heartDoorHearts 就没人写了，于是门开过的用户
+        // 存储里一颗心也没有（心门永远显示零星一颗）。门开过必然意味着曾经攒满四颗，
+        // 所以按四颗补记占位（legacy 标记 + 空日期），之后收下的心继续追加、颗数封顶四。
+        (function migrateLegacyHearts() {
+            if (!splitDone) return;
+            var arr = Store.getJson(Store.KEYS.HEART_DOOR_HEARTS, null);
+            if (Array.isArray(arr) && arr.length) return;
+            var ch = Store.getJson(Store.KEYS.CRYSTAL_HEART, null) || {};
+            var out = [];
+            for (var i = 0; i < TOTAL; i++) {
+                out.push({ color: ch.color || 'blue', title: ch.title || '', desc: ch.desc || '', date: '', legacy: 1 });
+            }
+            Store.set(Store.KEYS.HEART_DOOR_HEARTS, out);
+        })();
+
+        // 初始：按已点心数恢复；门已开过的直接静默对齐，不再播开门音效与填充动画
+        var saved = Store.getInt(Store.KEYS.HEART_DOOR_LIT);
         litNow = Math.max(0, Math.min(TOTAL, isNaN(saved) ? 0 : saved));
-        applyTarget(targetOf(), litNow < targetOf());
+        applyTarget(targetOf(), litNow < targetOf() && !splitDone);
 
         // 书架日记加载完成后推进进度（按已炼心数，真实数据优先）
+        // 入参（日记篇数）故意忽略：颗数只认已收集的心；门已开过时 applyTarget 内部静默对齐，不重播开门音效
         window.__setDoorProgress = function () { applyTarget(targetOf(), true); };
 
         function panRight() {
@@ -3667,10 +3882,17 @@ function stopPeSnow() {
             if (window.__dreamBGM) window.__dreamBGM.pause();   // Starjump 暂停留位，让位 Resurrections
             if (window.CampfireAudio) window.CampfireAudio.suspend();   // 镜之房间不要篝火声
             // 不再 door.classList.add('away') — 心门在镜之房间侧只露一半，可点击回书架
-            if (window.__mirrorBGM) window.__mirrorBGM.enter();
-            // 镜子破碎态优先：破碎 → 碎镜呈现 + Badeline 强制出场；完好 → 随机模式 A/B
-            if (!(window.__mirrorState && window.__mirrorState.sync())) {
-                if (window.__badelineEnterRoom) window.__badelineEnterRoom();
+            // Canvas 镜子房间：先挂载/复位（完好镜 + 重置 DOM 镜子态 → Badeline 只在破镜后由 summon() 出场），
+            // 再让 BGM 进场（phaseOf 读 .summoned 决定 p1/p2，完好镜必须从 p1 起播）
+            if (window.__mirrorScene) {
+                window.__mirrorScene.enter();
+                if (window.__mirrorBGM) window.__mirrorBGM.enter();
+            } else {
+                if (window.__mirrorBGM) window.__mirrorBGM.enter();
+                // DOM 回退模式：镜子破碎态优先：破碎 → 碎镜呈现 + Badeline 强制出场；完好 → 随机模式 A/B
+                if (!(window.__mirrorState && window.__mirrorState.sync())) {
+                    if (window.__badelineEnterRoom) window.__badelineEnterRoom();
+                }
             }
         }
 
@@ -3703,27 +3925,29 @@ function stopPeSnow() {
                     life: 0, ttl: 0.8 + Math.random() * 0.9
                 });
             }
-            // 爆裂音：高频噪声 + 水晶 ping
-            try {
-                var AC = window.__mirrorAC || (window.__mirrorAC = new (window.AudioContext || window.webkitAudioContext)());
-                var buf = AC.createBuffer(1, Math.floor(AC.sampleRate * 0.35), AC.sampleRate);
-                var d = buf.getChannelData(0);
-                for (var n = 0; n < d.length; n++) d[n] = (Math.random() * 2 - 1) * Math.pow(1 - n / d.length, 2.2);
-                var src = AC.createBufferSource(); src.buffer = buf;
-                var hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2400;
-                var g = AC.createGain(); g.gain.value = 0.35;
-                src.connect(hp); hp.connect(g); g.connect(AC.destination); src.start();
-                [3200, 2500].forEach(function (f, i2) {
-                    var o = AC.createOscillator(), og = AC.createGain();
-                    o.type = 'triangle';
-                    o.frequency.setValueAtTime(f, AC.currentTime);
-                    o.frequency.exponentialRampToValueAtTime(f * 0.55, AC.currentTime + 0.22);
-                    og.gain.setValueAtTime(i2 ? 0.07 : 0.11, AC.currentTime);
-                    og.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + 0.28);
-                    o.connect(og); og.connect(AC.destination);
-                    o.start(); o.stop(AC.currentTime + 0.3);
-                });
-            } catch (e) {}
+            // 爆裂音：高频噪声 + 水晶 ping（拿不到 WebAudio 时只飞星尘、不出声）
+            var AC = Sfx.ac();
+            if (AC) {
+                try {
+                    var buf = AC.createBuffer(1, Math.floor(AC.sampleRate * 0.35), AC.sampleRate);
+                    var d = buf.getChannelData(0);
+                    for (var n = 0; n < d.length; n++) d[n] = (Math.random() * 2 - 1) * Math.pow(1 - n / d.length, 2.2);
+                    var src = AC.createBufferSource(); src.buffer = buf;
+                    var hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2400;
+                    var g = AC.createGain(); g.gain.value = 0.35;
+                    src.connect(hp); hp.connect(g); g.connect(AC.destination); src.start();
+                    [3200, 2500].forEach(function (f, i2) {
+                        var o = AC.createOscillator(), og = AC.createGain();
+                        o.type = 'triangle';
+                        o.frequency.setValueAtTime(f, AC.currentTime);
+                        o.frequency.exponentialRampToValueAtTime(f * 0.55, AC.currentTime + 0.22);
+                        og.gain.setValueAtTime(i2 ? 0.07 : 0.11, AC.currentTime);
+                        og.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + 0.28);
+                        o.connect(og); og.connect(AC.destination);
+                        o.start(); o.stop(AC.currentTime + 0.3);
+                    });
+                } catch (e) {}
+            }
             // 物理：微重力横向扩散，逐渐淡出
             var last = performance.now();
             function tick(now) {
@@ -3749,6 +3973,7 @@ function stopPeSnow() {
             dsWorld.classList.remove('panned');
             if (window.__blDialogKill) window.__blDialogKill();
             if (window.__mirrorBGM) window.__mirrorBGM.exit();
+            if (window.__mirrorScene) window.__mirrorScene.leave();   // Canvas 镜子房间：离开复位
             if (window.__dreamBGM) window.__dreamBGM.resume();   // 回雪夜：Starjump 从暂停处续播
             if (window.CampfireAudio) window.CampfireAudio.resume();    // 回雪夜：篝火接着烧
             if (window.__badelineLeaveRoom) window.__badelineLeaveRoom();
@@ -3798,10 +4023,8 @@ function stopPeSnow() {
         function ensureCtx() {
             if (actx) return actx;
             try {
-                var AC = window.AudioContext || window.webkitAudioContext;
-                if (!AC) { failed = true; return null; }
-                actx = window.__mirrorAC || new AC();   // 与碎裂音效共用上下文
-                window.__mirrorAC = actx;
+                actx = Sfx.ac();                 // 与碎裂音效/羽毛合成音共用同一上下文
+                if (!actx) { failed = true; return null; }
                 master = actx.createGain();
                 master.gain.value = VOL;
                 master.connect(actx.destination);

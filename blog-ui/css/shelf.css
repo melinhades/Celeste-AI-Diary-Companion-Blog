@@ -254,7 +254,7 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     to   { opacity: 0; transform: translate(-50%, -50%) scale(calc(var(--glass-scale) * .7)) translateY(var(--glass-top)) translateX(var(--glass-left)) translateY(calc(-120% + var(--anim-top))) translateX(var(--anim-left)) scale(var(--anim-scale)); }
 }
 .badeline-inner {
-    width: 128px; height: 128px;             /* 固定尺寸：img 绝对定位居中，不撑大父级（不限父容器） */
+    width: var(--bd-size, 128px); height: var(--bd-size, 128px);   /* canvas 模式由 JS 设 --bd-size=32×Z 对齐过场人物；DOM 回退保持 128px */
     position: relative;
 }
 #shelfMirror .badeline-inner { animation: badelineFloat 2.6s ease-in-out infinite; }
@@ -267,18 +267,20 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
  * Badeline 立绘尺寸：base 128px，与 diary Madeline sitdown(100px) 同量级
  *   全部动作素材统一 32×32 画布（lookingUp 原 96×96 但角色只占 15×13，已裁白边重排到 32×32）
  *   → 4× 整数放大 = 128px，锐边保持；各姿势角色高度 12–18px，视觉尺寸一致
- *   --anim-scale 补偿 --glass-scale(0.70)：0.70 × 1.43 ≈ 1 → 召唤态最终 = 自由游荡态 = 128px
+ *   --anim-scale 补偿 --glass-scale(0.70)：0.70 × 1.43 ≈ 1 → 召唤态最终 = 自由游荡态
+ *   --bd-size：canvas 模式下由 shelf.js 按 32(游戏像素精灵框)×Z(房间高/180) 动态设置，
+ *             与镜子里画的人物大小严格一致；DOM 回退模式无此变量 → 仍用 128px
  */
 #badelineImg {
     position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
-    width: 128px; height: 128px;
+    width: var(--bd-size, 128px); height: var(--bd-size, 128px);
     object-fit: contain;
     image-rendering: pixelated;
     cursor: pointer;
     user-select: none;
     -webkit-user-drag: none;
 }
-#badelineImg.big { width: 128px; height: 128px; }   /* lookingUp 和 spin/sleep/roll 统一 128px */
+#badelineImg.big { width: var(--bd-size, 128px); height: var(--bd-size, 128px); }   /* lookingUp 和 spin/sleep/roll 同尺寸 */
 
 /* ===== Badeline 聊天面板：镜子召唤后出现 ===== */
 #blChat {
@@ -359,6 +361,17 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 /* ===== 横向世界：书架（单屏，常规态） ===== */
 html, body { overflow-x: hidden; }
 #world { display:block; width:100%; }
+/* dream 场景（#dreamScene，z-index 1500）整屏盖住书架时，书架一点也看不见，却仍在被绘制：
+   纸卡 .cards 挂着三层 drop-shadow（26/48/30px 大半径模糊 + 纸张不规则毛边 alpha），
+   #dreamScene 里每帧都在变的画面（鸟群画布 / 羽毛浮动 / 火焰换帧）会让它跟着重新栅格化 ——
+   无头软件光栅实测：留着它 8fps，摘掉这一块 60fps（与直接去掉 .cards 的 filter 等效）。
+   用 visibility 而不是 display：布局与滚动位置都不动，退出 dream 时立即恢复可见。
+   延迟 0.9s 再摘：进梦前 1.1s 是极光场景淡入，此时纸卡还该在下面接着透出来（一上来就摘会硬生生消失）；
+   而离开是「先摘 .show 再淡出」→ 规则不成立，书架立即回来，淡出过程中透出来的就是书架。 */
+#dreamScene.show ~ #world {
+    visibility: hidden;
+    transition: visibility 0s linear .9s;
+}
 #world .view { width:100%; min-height:100vh; position:relative; box-sizing:border-box; }
 
 /* ===== dreamScene 内部双屏容器：左=心门+篝火，右=镜之房间 ===== */
@@ -510,6 +523,16 @@ body.dream-active #heartDoor {
 }
 body.dream-active #mirrorRoom { display: flex !important; }
 
+/* ===== Canvas 镜子房间（MirrorScene）：canvas 接管整间房绘制，隐藏 DOM 镜子图层/旧背景/紫星层 ===== */
+#mirrorScene { position:absolute; inset:0; width:100%; height:100%; z-index:0; pointer-events:none; display:none; image-rendering:pixelated; }
+body.mirror-canvas #mirrorScene { display:block; }
+/* canvas 已铺满房间并自绘背景，旧截图背景与紫星下落层隐藏（星场交由 canvas 的 StarsBG） */
+body.mirror-canvas #mirrorRoom { background:none; }
+body.mirror-canvas #mirrorRoom .mv-layer { display:none !important; }
+/* canvas 模式镜子本体由 canvas 画：#shelfMirror 仅作点击命中区(由 JS 按 mirrorRect 定位)+Badeline 容器，
+   去掉投影避免空命中区产生脏影；其内 .m-layer 子图层在 canvas 模式下根本不会被构建(见 shelf.js) */
+body.mirror-canvas #shelfMirror { filter:none; cursor:pointer; }
+
 /* ===== Poem 仪式层（替换旧的心门 split 视觉） ===== */
 #heartGet {
     position:fixed; inset:0; z-index:1950; display:none;
@@ -555,20 +578,19 @@ body:has(.ds-world.panned) #strawberryBonfire { opacity:0; pointer-events:none; 
     position:absolute; top:-56px; left:var(--x);
     image-rendering:pixelated; opacity:0;
     animation:starFall linear forwards;
-    will-change:transform, opacity, filter;
-    /* drop-shadow 发光半径用 --glowAmount 变量，由 keyframes 从 0 逐步涨到 72px */
-    filter:drop-shadow(0 0 calc(var(--glowAmount) * .4) rgba(95,205,228,.7))
-           drop-shadow(0 0 var(--glowAmount) rgba(48,96,130,.45));
+    /* 性能：发光原来是「--glowAmount 驱动两层 drop-shadow 逐帧变大」，等于每帧给 36 颗星重算两次
+       大半径高斯模糊（blur 最大 72px），主线程/合成器都被拖住。改成固定半径的一次性滤镜：
+       光晕在第一次栅格化后就缓存住，之后下落只走 transform/opacity（合成器线程，不重绘）。 */
+    filter:drop-shadow(0 0 18px rgba(95,205,228,.55));
+    will-change:transform, opacity;
 }
-/* 注册 --glowAmount 为 <length>，让 drop-shadow 在 keyframes 里能插值动画（Chrome 85+/Safari 15.4+ 支持） */
-@property --glowAmount { syntax:'<length>'; initial-value:0px; inherits:false; }
 @keyframes starFall {
     /* 纯竖直下落 + 发光从小到大：入场弱光 → 中段爆亮 → 消散前光最盛 */
-    0%   { transform:translate3d(0,0,0); opacity:0;   --glowAmount: 0px; }
-    6%   { opacity:1;  --glowAmount: 24px; }
-    50%  { --glowAmount: 48px; }
-    92%  { opacity:.55; --glowAmount: 64px; }
-    100% { transform:translate3d(0, var(--dist), 0); opacity:0; --glowAmount: 72px; }
+    0%   { transform:translate3d(0,0,0); opacity:0; }
+    6%   { opacity:1; }
+    50%  { opacity:.85; }
+    92%  { opacity:.55; }
+    100% { transform:translate3d(0, var(--dist), 0); opacity:0; }
 }
 
 /* ===== dream 场景：极光夜空 + 雪原篝火（像素风：硬边缘 · 平色带 · 台阶轮廓） ===== */
@@ -601,12 +623,10 @@ body:has(.ds-world.panned) #strawberryBonfire { opacity:0; pointer-events:none; 
     animation:dsTwinkle 3.6s steps(2) infinite;
 }
 @keyframes dsTwinkle { 0%,100% { opacity:.4; } 50% { opacity:.95; } }
-/* 极光色像素星点：天空与桥底下随机闪烁（JS 生成，蓝 #6fd8ff / 绿 #7dffc8，每点独立节奏） */
+/* 极光色像素星点：天空与桥底下随机闪烁。原来这里是 30 个 <i> + dsAuroraTw 动画，
+   每个元素每帧都要在主线程 tick（约 0.45ms/帧，并让整份文档每帧重算样式），
+   现在改画在 #dsBirds 画布上（dream-birds.js 的 drawAstars），本层仅留层级占位。 */
 .ds-astars { position:absolute; inset:0; z-index:1; pointer-events:none; }
-.ds-astars i { position:absolute; width:3px; height:3px; opacity:0;
-    --dur: 3s; --del: 0s;   /* JS 动态覆盖（闪烁时长/延迟），静态初值供 IDE 解析 */
-    animation:dsAuroraTw var(--dur,3s) ease-in-out var(--del,0s) infinite; }
-@keyframes dsAuroraTw { 0%,100% { opacity:0; } 50% { opacity:.95; } }
 /* dream 左屏：整幅游戏截图铺底（celeste-gui/dream/scene.png，2540x1429=16:9，
    已抹除原截图中的 Madeline 与篝火），含极光/远山/两侧雪墙/雪台；
    cover+bottom 锚定：16:9 屏零裁切，其他比例裁两侧、雪台始终贴底 */
@@ -627,6 +647,55 @@ body:has(.ds-world.panned) #strawberryBonfire { opacity:0; pointer-events:none; 
 }
 #dsMadeline:hover { filter:drop-shadow(0 0 10px rgba(255,210,150,.85)); transform:translateY(-2px); }
 #dsMadeline.waking { cursor:default; pointer-events:none; }
+
+/* ===== 雪脊上的鸟群（js/dream-birds.js）：单画布一次绘制 =====
+   层次：场景底图 < 极光星点(z1) < 鸟(本层 z2) < Madeline(z3) < 金羽毛(z4)；
+   pointer-events:none —— 鸟不发点击，靠近惊飞走的是 .ds-left 的 pointermove */
+#dsBirds {
+    position:absolute; inset:0; z-index:2; pointer-events:none;
+    image-rendering:pixelated;
+}
+/* 金色鸟的首次引导面板：跟页面同一套像素卡口（暗底 + 金边 + 硬阴影） */
+#dsBirdTip {
+    position:absolute; left:50%; top:11%; z-index:6;
+    width:min(88vw,420px); box-sizing:border-box;
+    padding:13px 18px 11px; will-change:transform,opacity;
+    transform:translateX(-50%) translateY(-10px) scale(.96);
+    background:linear-gradient(180deg, rgba(24,20,52,.93), rgba(11,10,28,.95));
+    border:1px solid rgba(255,208,110,.34);
+    box-shadow:0 0 0 2px rgba(6,6,20,.75), 0 0 24px rgba(255,190,80,.16), 6px 6px 0 rgba(0,0,0,.35);
+    font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif;
+    color:rgba(232,238,255,.9); font-size:13px; line-height:1.9;
+    opacity:0; visibility:hidden; pointer-events:none; cursor:pointer;
+    transition:opacity .35s ease, transform .35s cubic-bezier(.2,1.3,.4,1), visibility 0s linear .35s;
+}
+#dsBirdTip.show {
+    opacity:1; visibility:visible; pointer-events:auto;
+    transform:translateX(-50%) translateY(0) scale(1);
+    transition:opacity .35s ease, transform .35s cubic-bezier(.2,1.3,.4,1);
+}
+/* 指向雪桥那侧的小尖角（蜜色硬边，不用三角形，和卡片阴影同色系）；
+   --tail 由 dream-birds.js 在弹出时按金鸟实际位置写入，固定 72% 会偏 */
+#dsBirdTip::after {
+    content:''; position:absolute; left:var(--tail,72%); bottom:-5px; width:10px; height:10px;
+    background:rgba(13,12,32,.95);
+    border-right:1px solid rgba(255,208,110,.34); border-bottom:1px solid rgba(255,208,110,.34);
+    transform:rotate(45deg);
+}
+#dsBirdTip .bt-head {
+    display:flex; align-items:center; gap:8px; margin-bottom:6px;
+    font-size:11px; letter-spacing:3px; color:#ffd75e;
+    text-shadow:0 0 12px rgba(255,190,70,.55);
+}
+#dsBirdTip .bt-head i { width:8px; height:8px; background:#ffd75e; box-shadow:0 0 8px 1px rgba(255,200,90,.85); }
+#dsBirdTip ul { margin:0; padding:0; list-style:none; }
+#dsBirdTip li { display:flex; gap:10px; align-items:baseline; }
+#dsBirdTip li b { flex:0 0 auto; font-weight:normal; letter-spacing:1px; color:#ffe9a8; }
+#dsBirdTip li span { color:rgba(214,224,250,.82); }
+#dsBirdTip .bt-foot {
+    margin-top:7px; text-align:right;
+    font-size:11px; letter-spacing:2px; color:rgba(200,214,246,.45);
+}
 
 /* ===== dream 功能入口：夜话（badelineboost 动画，置于心门左侧） ===== */
 /* transition 放基础态：panned 淡出、goBack 回雪夜时逐渐浮现（渐显渐隐双向生效） */
@@ -728,6 +797,12 @@ body:has(.ds-world.panned) #strawberryBonfire { opacity:0; pointer-events:none; 
     animation:dpMote linear infinite;
 }
 #dreamNightPanel .dp-motes i { background:rgba(214,190,255,.85); box-shadow:0 0 6px 1px rgba(180,140,255,.7); }
+/* 性能：光尘是 28 个元素 × infinite 动画。面板没展开（opacity:0/visibility:hidden）时动画
+   仍在主线程逐帧 tick，实测每帧都会多触发一次整份文档的样式重算，纯白烧。暂停后状态保留，
+   打开面板的瞬间接着走即可。 */
+.dream-panel:not(.show) .dp-motes i { animation-play-state: paused; }
+/* 性能：同一类浪费——dream 整屏盖住书架时，书架侧篝火的 sbGlow 呼吸照样在跑 */
+body.dream-active .sb-scene::before { animation-play-state: paused; }
 @keyframes dpMote {
     0%   { transform:translateY(0) translateX(0); opacity:0; }
     12%  { opacity:.9; }

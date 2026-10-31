@@ -1299,8 +1299,31 @@
             endRealRitual();
         });
 
+        // ===== 收下的心写回心门颗数 =====
+        // heartDoorHearts 是「已收下的心」的唯一真源：shelf 的心门按它的长度点四颗心，
+        // Badeline 聊天也拿它当人格光谱。（商店炼金删除后这里就断链了，导致心门永远是 0 颗）
+        // 同一天只记一颗：重复进店看到同一颗心不会再收一次。
+        function recordHeart() {
+            // 后端的 AI 命名可能还没回来，用同色兜底文案，避免记下一颗无字心
+            var fb = CRYSTAL_FALLBACK[heart.color] || CRYSTAL_FALLBACK.blue;
+            var cr = { color: heart.color, title: heart.title || fb.title, desc: heart.desc || fb.desc, date: todayStr() };
+            var arr = [];
+            try {
+                var raw = JSON.parse(localStorage.getItem('heartDoorHearts') || 'null');
+                if (Array.isArray(raw)) arr = raw;
+            } catch (e) {}
+            for (var i = 0; i < arr.length; i++) {
+                if (arr[i] && (arr[i].date === cr.date || (!arr[i].date && arr[i].color === cr.color && arr[i].title === cr.title))) return;
+            }
+            arr.push(cr);
+            try { localStorage.setItem('heartDoorHearts', JSON.stringify(arr)); } catch (e) {}
+            try { localStorage.setItem('crystalHeart', JSON.stringify(cr)); } catch (e) {}   // 兼容旧展示：同步最新一颗
+        }
+        window.__recordHeart = recordHeart;   // 调试/冒烟入口（与 window.__audioGestured 同类）
+
         // ===== 真心收集仪式（IL: HeartGem.CollectRoutine 时间轴） =====
         function startRealRitual() {
+            recordHeart();                                        // 收下的瞬间就计入心门颗数
             ritual = { kind: 'real', phase: 'freeze', t: 0, introA: null, loopA: null };
             freezeT = 0.2;                                        // IL: Celeste.Freeze(0.2)
         }

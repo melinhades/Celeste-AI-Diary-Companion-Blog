@@ -7,7 +7,7 @@
 <link rel="icon" href="icon/OIP.webp" type="image/webp">
 <!-- 字体全部走 css/shelf.css 里的本地 @font-face，不再引 Google Fonts（外链 render-blocking，被墙会导致整页字体回退） -->
 <link rel="stylesheet" href="css/text-fx.css?v=20261004a">
-<link rel="stylesheet" href="css/shelf.css?v=20261030a">
+<link rel="stylesheet" href="css/shelf.css?v=20261031f">
 </head>
 <body>
 <div class="topbar"><a href="diary.html" class="nav-diary-btn" title="回到日记本 · Back to Diary"><img src="celeste-gui/journal.png" alt="Diary" loading="lazy" decoding="async"></a></div>
@@ -18,6 +18,19 @@
     <div class="ds-world">
         <div class="ds-left">
             <div class="ds-astars" id="dsAStars" aria-hidden="true"></div>
+            <!-- 雪脊上的鸟群（js/dream-birds.js）：金羽毛鸟 + 普通鸟 + 蹦跳小鸟 + 巡航鸟，
+                 单画布一次绘制；金鸟第一次进梦会啄地叫你并弹出 #dsBirdTip -->
+            <canvas id="dsBirds" aria-hidden="true"></canvas>
+            <div id="dsBirdTip" role="dialog" aria-label="梦境里能做什么">
+                <div class="bt-head"><i></i>GOLDEN BIRD · 这样玩</div>
+                <ul>
+                    <li><b>篝火</b><span>点火焰 → 趁热把这个梦写下来</span></li>
+                    <li><b>金羽毛</b><span>点它 → 化身星飞（方向键 / WASD，Esc 收回）</span></li>
+                    <li><b>Madeline</b><span>点她或按 Esc → 叫醒她，回书架</span></li>
+                    <li><b>心门</b><span>四颗水晶心点亮后点门 → 镜之房间</span></li>
+                </ul>
+                <div class="bt-foot">点这里收起 · 只说这一次</div>
+            </div>
             <!-- 金羽毛：随机散布天空（≤6 根）；点击 → 星飞光球（方向键/WASD 操控，Esc 收回） -->
             <div id="dsFeathers" aria-hidden="false"></div>
             <img id="dsFire" src="celeste-gui/campfire/dream00.png" alt="" decoding="async" onerror="if(!this.dataset.r){this.dataset.r=1;var s=this.src,t=this;setTimeout(function(){t.src=s;},300);}">
@@ -26,6 +39,7 @@
         <!-- 过渡区：独立缓冲区域，背景为雪夜右缘实测垂直色带被镜之房间暗紫逐渐覆盖 -->
         <div class="ds-bridge" aria-hidden="true"></div>
         <section id="mirrorRoom">
+            <canvas id="mirrorScene" aria-hidden="true"></canvas>
             <div id="shelfMirror" role="button" title="敲一敲镜子？">
                 <div class="badeline-wrap"><div class="badeline-inner"><img id="badelineImg" class="big" src="celeste-player/badeline/lookingUp_f.gif" alt="Badeline" loading="lazy" decoding="async"></div></div>
             </div>
@@ -188,13 +202,23 @@
     </div>
 </div>
 <script src="js/api.js?v=20261002"></script>
+<!-- 地基层：本地状态 / 日记接口 / 音效池，均需先于 shelf.js 加载 -->
+<script src="js/lib/store.js?v=20261031a"></script>
+<script src="js/lib/diaryApi.js?v=20261031a"></script>
+<script src="js/lib/sfx.js?v=20261031a"></script>
 <script src="js/text-fx.js?v=20261005b"></script>
 <script src="js/badeline-voice.js"></script>
 <script src="js/vue.global.prod.js?v=20261008a"></script>
 <script src="js/gapless-audio.js?v=20261028b"></script>
 <script src="js/cassette.js?v=20261028b"></script>
 <script src="js/celeste-hair.js?v=20261026a"></script>
-<script src="js/shelf.js?v=20261030d"></script>
+<script src="js/celeste-mirror-map.js?v=20261030a"></script>
+<script src="js/celeste-mirror.js?v=20261031b"></script>
+<!-- 雪脊鸟群：bird-motion.js 是和圆桌会议主持鸟共用的运动引擎（拖尾 / 变体音效池 / 曲线原语），
+     dream-birds.js 监听 dream:entered / dream:exiting，必须排在 shelf.js 之前注册监听 -->
+<script src="js/bird-motion.js?v=20261031c"></script>
+<script src="js/dream-birds.js?v=20261031d"></script>
+<script src="js/shelf.js?v=20261031k"></script>
 <script src="js/seed.js?v=20261028b"></script>
 </body>
 </html>

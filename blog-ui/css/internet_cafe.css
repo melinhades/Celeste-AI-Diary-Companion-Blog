@@ -58,18 +58,6 @@ h1 {
 }
 .hud.inside { color: #86ffd9; }
 
-/* ---------- 静音键 ---------- */
-.mute {
-  position: fixed; right: clamp(20px, 4vw, 64px); top: clamp(20px, 5vh, 56px);
-  z-index: 22;
-  width: 38px; height: 38px; border-radius: 50%; cursor: pointer;
-  border: 1px solid rgba(160, 200, 230, .35);
-  background: rgba(8, 16, 32, .5); color: #cfe6f6; font-size: 15px;
-  backdrop-filter: blur(6px);
-  transition: border-color .2s, background .2s;
-}
-.mute:hover { border-color: #a9d9db; background: rgba(18, 40, 58, .65); }
-
 /* ---------- 电视交互提示（JS 每帧定位到屏幕上方） ---------- */
 .tvPrompt {
   position: fixed; left: 0; top: 0;
@@ -96,6 +84,93 @@ h1 {
   transition: opacity .9s ease;
 }
 .fade.show { opacity: 1; }
+
+/* ==========================================================================
+   统一加载层（与 article / login 同一套，逐条同口径）
+   进页先铺满夜空：月光晕 + 点阵星星 + 雪花画布 + 底部雪带 + 十帧跑动的
+   Madeline + LOADING…；场景贴图预载完成后由 js/page-loading.js 加 .done 淡出并移除
+   ========================================================================== */
+@font-face {
+  font-family: 'Renogare';
+  src: url('../celeste-font-en/Renogare-Regular.otf') format('opentype');
+}
+#pageLoadingOverlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background-color: #050514;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  transition: opacity .65s ease;
+}
+#pageLoadingOverlay.done { opacity: 0; pointer-events: none; }
+/* 同款夜空：月光晕 */
+#pageLoadingOverlay::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    radial-gradient(circle at 78% 16%, rgba(180,200,255,.16), transparent 32%),
+    radial-gradient(circle at 18% 82%, rgba(90,110,180,.10), transparent 40%);
+}
+/* 同款闪烁星星（两层点阵，节奏错开） */
+#pageLoadingOverlay .ld-stars,
+#pageLoadingOverlay .ld-stars2 {
+  position: absolute; inset: 0; pointer-events: none;
+  width: 1px; height: 1px; background: transparent;
+}
+#pageLoadingOverlay .ld-stars {
+  box-shadow: 12vw 8vh 0 1px rgba(255,255,255,.8), 34vw 22vh 0 rgba(255,255,255,.5), 58vw 6vh 0 1px rgba(255,255,255,.7),
+              82vw 18vh 0 rgba(255,255,255,.4), 46vw 12vh 0 rgba(255,255,255,.55), 90vw 40vh 0 1px rgba(255,255,255,.6),
+              8vw 34vh 0 rgba(255,255,255,.45), 68vw 30vh 0 rgba(255,255,255,.5), 24vw 46vh 0 1px rgba(255,255,255,.65),
+              94vw 8vh 0 rgba(255,255,255,.4), 52vw 40vh 0 rgba(255,255,255,.35), 16vw 16vh 0 rgba(255,255,255,.5);
+  animation: starTwinkle 4.5s ease-in-out infinite;
+}
+#pageLoadingOverlay .ld-stars2 {
+  box-shadow: 20vw 12vh 0 rgba(255,255,255,.5), 42vw 5vh 0 1px rgba(255,255,255,.7), 72vw 22vh 0 rgba(255,255,255,.45),
+              6vw 26vh 0 rgba(255,255,255,.5), 60vw 34vh 0 rgba(255,255,255,.4), 86vw 12vh 0 1px rgba(255,255,255,.6),
+              30vw 38vh 0 rgba(255,255,255,.35), 96vw 30vh 0 rgba(255,255,255,.45), 48vw 24vh 0 rgba(255,255,255,.5),
+              14vw 42vh 0 rgba(255,255,255,.3), 64vw 10vh 0 rgba(255,255,255,.4), 38vw 48vh 0 rgba(255,255,255,.35);
+  animation: starTwinkle 6s ease-in-out 1.6s infinite;
+}
+/* 雪花画布 + 底部雪带 */
+#pageLoadingOverlay #ldSnowCanvas {
+  position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;
+}
+#pageLoadingOverlay .ld-snow-strip {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 80px;
+  background: url('../celeste-areas/snow-front.webp') repeat-x bottom/220px auto;
+  animation: snowDrift 45s linear infinite;
+  opacity: .5; pointer-events: none;
+}
+@keyframes snowDrift { from { background-position-x: 0; } to { background-position-x: -440px; } }
+/* 跑动的 Madeline：十帧均分，00 同时放 0% 与 100%，循环首尾衔接无跳变 */
+#pageLoadingOverlay .loading-madeline {
+  width: 120px; height: 120px;
+  background-size: 100% 100%; background-repeat: no-repeat; background-position: center;
+  image-rendering: pixelated;
+  animation: loadingRun .8s steps(10) infinite;
+  position: relative; z-index: 1;
+}
+@keyframes loadingRun {
+  0%   { background-image: url('../celeste-gui/loading/00.png'); }
+  10%  { background-image: url('../celeste-gui/loading/01.png'); }
+  20%  { background-image: url('../celeste-gui/loading/02.png'); }
+  30%  { background-image: url('../celeste-gui/loading/03.png'); }
+  40%  { background-image: url('../celeste-gui/loading/04.png'); }
+  50%  { background-image: url('../celeste-gui/loading/05.png'); }
+  60%  { background-image: url('../celeste-gui/loading/06.png'); }
+  70%  { background-image: url('../celeste-gui/loading/07.png'); }
+  80%  { background-image: url('../celeste-gui/loading/08.png'); }
+  90%  { background-image: url('../celeste-gui/loading/09.png'); }
+  100% { background-image: url('../celeste-gui/loading/00.png'); }
+}
+#pageLoadingOverlay .loading-text {
+  margin-top: 20px; color: #ffe36d;
+  font-family: 'Renogare', 'CelesteZH', sans-serif; font-size: 18px;
+  letter-spacing: 3px;
+  text-shadow: 0 0 12px rgba(255,227,109,.4);
+  position: relative; z-index: 1;
+}
+#pageLoadingOverlay .loading-dots::after { content: ''; animation: dots 1.5s steps(4, end) infinite; }
+@keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
+@keyframes starTwinkle { 0%,100% { opacity: .25; } 50% { opacity: .9; } }
 
 @media (max-width: 720px) {
   .hint { right: clamp(20px, 4vw, 64px); font-size: 10px; letter-spacing: .06em; line-height: 2.1; }
