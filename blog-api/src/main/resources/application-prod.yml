@@ -39,6 +39,9 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
+      # Upstash 的 6379 强制 TLS，明文连接会被服务端直接断开；自建 Redis 可用 REDIS_SSL=false 关闭
+      ssl:
+        enabled: ${REDIS_SSL:true}
       database: 0
       lettuce:
         pool:
