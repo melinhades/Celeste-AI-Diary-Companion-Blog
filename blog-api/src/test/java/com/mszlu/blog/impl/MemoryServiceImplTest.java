@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Arrays;
 import java.util.List;
@@ -36,6 +37,8 @@ class MemoryServiceImplTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        // 单测不经过 Spring 容器，@Value 不会注入；显式给 30 天，避免 tau=0 时衰减恒为 0
+        ReflectionTestUtils.setField(memoryService, "decayTauDays", 30);
     }
 
     @Test
@@ -86,7 +89,7 @@ class MemoryServiceImplTest {
 
     @Test
     void testImportanceWeight_minMax() {
-        assertEquals(0.8, invokeImportanceWeight(1), 0.001, "重要性1权重应为0.8");
+        assertEquals(0.82, invokeImportanceWeight(1), 0.001, "重要性1权重应为0.82（0.8+0.2·1/10）");
         assertEquals(1.0, invokeImportanceWeight(10), 0.001, "重要性10权重应为1.0");
         assertEquals(1.0, invokeImportanceWeight(null), 0.001, "null重要性权重应为1.0");
     }

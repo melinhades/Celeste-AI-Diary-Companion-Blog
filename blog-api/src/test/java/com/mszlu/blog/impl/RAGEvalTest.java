@@ -10,8 +10,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -39,6 +41,9 @@ class RAGEvalTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        // 单测不经过 Spring 容器，@Value 不会注入；补齐衰减与相似度阈值
+        ReflectionTestUtils.setField(memoryService, "decayTauDays", 30);
+        ReflectionTestUtils.setField(memoryService, "similarityThreshold", 0.3);
     }
 
     /**
@@ -108,6 +113,7 @@ class RAGEvalTest {
         m1.setId("m1");
         m1.setUserId("u1");
         m1.setContent("旧记忆");
+        m1.setStatus("resolved");  // 不进入 open 预取，确保排序由 RAG 打分决定
         m1.setEmbedding("[1.0, 0.0, 0.0]");  // 相似度1.0
         m1.setImportance(5);
         m1.setCreateDate(now - 30L * 24 * 60 * 60 * 1000L);  // 30天前
@@ -117,12 +123,15 @@ class RAGEvalTest {
         m2.setId("m2");
         m2.setUserId("u1");
         m2.setContent("新记忆");
+        m2.setStatus("resolved");  // 不进入 open 预取，确保排序由 RAG 打分决定
         m2.setEmbedding("[1.0, 0.0, 0.0]");  // 相似度1.0
         m2.setImportance(5);
         m2.setCreateDate(now - 1 * 24 * 60 * 60 * 1000L);  // 1天前
         m2.setLastMentionedTime(now - 1 * 24 * 60 * 60 * 1000L);
 
-        when(memoryMapper.selectList(any())).thenReturn(Arrays.asList(m1, m2));
+        // 第一次是 open 记忆预取（本场景应返回空），之后才返回参与 RAG 打分的候选
+        when(memoryMapper.selectList(any()))
+                .thenReturn(Collections.emptyList(), Arrays.asList(m1, m2), Arrays.asList(m1, m2));
 
         List<Memory> result = memoryService.getRelevant("u1", "测试");
 
@@ -153,6 +162,7 @@ class RAGEvalTest {
         m1.setId("m1");
         m1.setUserId("u1");
         m1.setContent("低重要性");
+        m1.setStatus("resolved");  // 不进入 open 预取，确保排序由 RAG 打分决定
         m1.setEmbedding("[0.8, 0.0, 0.0]");  // 相似度0.8
         m1.setImportance(1);  // 权重0.8
         m1.setCreateDate(now);
@@ -161,11 +171,14 @@ class RAGEvalTest {
         m2.setId("m2");
         m2.setUserId("u1");
         m2.setContent("高重要性");
+        m2.setStatus("resolved");  // 不进入 open 预取，确保排序由 RAG 打分决定
         m2.setEmbedding("[0.8, 0.0, 0.0]");  // 相似度0.8
         m2.setImportance(10);  // 权重1.0
         m2.setCreateDate(now);
 
-        when(memoryMapper.selectList(any())).thenReturn(Arrays.asList(m1, m2));
+        // 第一次是 open 记忆预取（本场景应返回空），之后才返回参与 RAG 打分的候选
+        when(memoryMapper.selectList(any()))
+                .thenReturn(Collections.emptyList(), Arrays.asList(m1, m2), Arrays.asList(m1, m2));
 
         List<Memory> result = memoryService.getRelevant("u1", "测试");
 

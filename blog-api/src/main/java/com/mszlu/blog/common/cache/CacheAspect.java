@@ -286,8 +286,9 @@ public class CacheAspect {
         }
         try {
             registry.counter("blog.cache.requests", "cache", cacheName, "outcome", outcome).increment();
-        } catch (Exception ignored) {
-            // 指标失败不影响业务
+        } catch (Exception e) {
+            // 指标失败不影响业务，但记录异常供排查
+            log.debug("缓存指标记录失败 cache={} outcome={}", cacheName, outcome, e);
         }
     }
 
