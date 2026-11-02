@@ -347,6 +347,9 @@
             this.ducking = false;
             this.scaleX = 1; this.scaleY = 1;
             this.maxFall = MAX_FALL;
+            // Glider / 水母：Holdable.SlowFall = true 时（NormalUpdate IL 1530-1713）
+            // 每帧改走 120 / 24 / 40 的 maxFall 目标，且重力 ×0.5
+            this.holdSlowFall = false;
             this.varJumpTimer = 0; this.varJumpSpeed = 0;
             this.jumpGraceTimer = 0; this.jumpBufferTimer = 0;
             this.fastJump = false;
@@ -1086,15 +1089,23 @@
             if (this.ducking && this.onGround) {
                 this.vx = approach(this.vx, 0, DUCK_FRICTION * dt);
             } else {
-                const mult = this.onGround ? 1 : AIR_MULT;
-                if (Math.abs(this.vx) > MAX_RUN && Math.sign(this.vx) === moveX)
-                    this.vx = approach(this.vx, MAX_RUN * moveX, RUN_REDUCE * mult * dt);
+                let mult = this.onGround ? 1 : AIR_MULT;
+                // IL 1252-1296：Holding.SlowFall && !onGround → maxRun 108，水平加速度 ×0.5
+                const maxRun = (this.holdSlowFall && !this.onGround) ? 108 : MAX_RUN;
+                if (this.holdSlowFall && !this.onGround) mult *= 0.5;
+                if (Math.abs(this.vx) > maxRun && Math.sign(this.vx) === moveX)
+                    this.vx = approach(this.vx, maxRun * moveX, RUN_REDUCE * mult * dt);
                 else
-                    this.vx = approach(this.vx, MAX_RUN * moveX, RUN_ACCEL * mult * dt);
+                    this.vx = approach(this.vx, maxRun * moveX, RUN_ACCEL * mult * dt);
             }
 
             // —— maxFall 过渡 + 快落拉伸 ——
-            if (moveY === 1 && this.vy >= MAX_FALL) {
+            // 原作 IL 1530-1713：Holding.SlowFall 分支优先于普通快落逻辑
+            //   GliderMoveY == 1 → 120；== -1 → 24；否则 40（windMovedUp 分支本场景无风，gap）
+            if (this.holdSlowFall) {
+                const slowMax = moveY === 1 ? 120 : moveY === -1 ? 24 : 40;
+                this.maxFall = approach(this.maxFall, slowMax, 300 * dt);
+            } else if (moveY === 1 && this.vy >= MAX_FALL) {
                 this.maxFall = approach(this.maxFall, FAST_MAX_FALL, FAST_MAX_ACCEL * dt);
                 const mid = MAX_FALL + (FAST_MAX_FALL - MAX_FALL) * 0.5;
                 if (this.vy >= mid) {
@@ -1119,7 +1130,8 @@
                 const pushing = (moveX === dir) || (moveX === 0 && grab);
                 const touching = this.bodySolidAt(dir, 0);
                 const wallSliding = pushing && moveY !== 1 && this.vy >= 0 &&
-                    this.wallSlideTimer > 0 && touching && this.climbBoundsCheck(dir);
+                    this.wallSlideTimer > 0 && touching && this.climbBoundsCheck(dir) &&
+                    !this.holdSlowFall;   // IL 2101：Holding != null 时不进入墙滑
 
                 if (wallSliding) {
                     this.ducking = false;
@@ -1132,7 +1144,8 @@
                 } else {
                     this.wallSlideDir = 0;
                     const half = (Math.abs(this.vy) < HALF_GRAV_THRESHOLD && (input.jumpHeld || this.autoJump)) ? 0.5 : 1;
-                    this.vy = approach(this.vy, this.maxFall, GRAVITY * half * dt);
+                    // IL 2419-2515：Holding.SlowFall && forceMoveXTimer<=0 → Gravity 乘 0.5
+                    this.vy = approach(this.vy, this.maxFall, GRAVITY * half * (this.holdSlowFall ? 0.5 : 1) * dt);
                 }
             } else {
                 this.wallSlideDir = 0;

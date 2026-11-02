@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -517,11 +517,11 @@
         { cls: 't-body', chars: true, stream: true, d: 6.4, x: 9.15, y: 50.5, w: 25, t: '- 而且打第九章还必须得学' },
         { cls: 't-body', chars: true, stream: true, d: 8.2, x: 9.15, y: 58.0, w: 25, t: '- （这最坏了）' },
         { cls: 't-big anim-rot', d: 10.5, x: 53.06, y: 36.93, w: 46, t: '根本学不会？' },
-        { kind: 'img', cls: 'anim-rise', d: 10.5, x: 63.90, y: 38.47, w: 35.21, src: 'Atlases/WaveDashing/Guy Clip Art.png' }
+        { kind: 'img', cls: 'anim-bounce', d: 10.5, x: 64.14, y: 40.74, w: 35.86, src: 'Atlases/WaveDashing/Guy Clip Art.png' }
       ]},
-      // 转场按原作 WaveDashPage 各页的 Transition：
-      //   第2页(痛点) Rotate3D → 第3页(介绍) Blocky → 第4页(方法) FadeIn
-      //   → 第5页(麻烦) Spiral → 第6页(结尾) Rotate3D
+      // 转场按原作 WaveDashPage 各页的 Transition（属于「进入的那一页」，见 TurnPage/BeforeRender）：
+      //   进第2页(痛点) Rotate3D → 进第3页(介绍) Blocky → 进第4页(方法) FadeIn
+      //   → 进第5页(麻烦) Spiral → 进第6页(结尾) Rotate3D
       { bg: '#D9EAD3', tr: 'blocky', dur: 10000, items: [
         { cls: 't-head-en white', chars: true, stream: true, d: .5, x: 5.36, y: 11.47, w: 90, t: '介绍…凌波微步与我.ppt!!' },
         { kind: 'ph', cls: 'anim-rise', d: 2.5, x: 29.63, y: 21.27, w: 40.76, ratio: 10.87/6.11, t: '本月配图位' },
@@ -538,12 +538,12 @@
       ]},
       { bg: '#FFF2CC', tr: 'spin', dur: 8500, items: [
         { cls: 't-head anim-pop', d: .25, x: 5.59, y: 11.13, w: 55, t: '天堂中的麻烦？' },
-        { kind: 'ph', cls: 'anim-rise', d: .9, x: 17.93, y: 27.53, w: 17.48, ratio: 4.66/4.31, t: '配图位' },
-        { cls: 't-warn anim-rise', d: 1.5, x: 17.93, y: 63.6, w: 18.5, t: '如果你打不到视界线<br>请继续尝试 或者先打B或C面。' },
-        { kind: 'ph', cls: 'anim-rise', d: 1.3, x: 58.65, y: 27.53, w: 28.76, ratio: 7.67/4.31, t: '配图位' },
-        { cls: 't-warn anim-rise', d: 1.9, x: 60.5, y: 63.6, w: 24, t: '如果你过不去前面的心门<br>请自行攒满15个心 或者学习跳过心门教程。' }
+        { kind: 'ph', cls: 'anim-rise', d: .9, x: 19.26, y: 30.07, w: 17.48, ratio: 4.66/4.31, t: '配图位' },
+        { cls: 't-warn anim-rise', d: 1.5, x: 19.26, y: 63.6, w: 17.48, center: true, t: '如果你打不到视界线<br>请继续尝试 或者先打B或C面。' },
+        { kind: 'ph', cls: 'anim-rise', d: 1.3, x: 57.62, y: 30.07, w: 28.76, ratio: 7.67/4.31, t: '配图位' },
+        { cls: 't-warn anim-rise', d: 1.9, x: 57.62, y: 63.6, w: 28.76, center: true, t: '如果你过不去前面的心门<br>请自行攒满15个心 或者学习跳过心门教程。' }
       ]},
-      { bg: '#DBD8ED', tr: 'cube', dur: null, items: [
+      { bg: '#D9D2E9', tr: 'cube', dur: null, items: [
         { cls: 't-end', chars: true, d: .25, x: 2.5, y: 10.4, w: 95, t: '凌波微步与我.ppt, 快乐的ppt!' },
         { kind: 'img', cls: 'anim-zoom', d: 1.4, x: 30, y: 25, w: 40, src: 'Atlases/WaveDashing/Bird Clip Art.png' }
       ]}
@@ -594,8 +594,9 @@
               img.src = it.src;
               el.appendChild(img);
             } else if (it.kind === 'ph') {
-              el.style.paddingTop = (100 / it.ratio) + '%';
-              el.style.height = '0';
+              // ratio 是 w/h；百分比 padding 会按"父容器宽度"算，导致占位框被撑成整屏高，
+              // 所以用 aspect-ratio 直接按自身宽度定高
+              el.style.aspectRatio = String(it.ratio);
               var inner = document.createElement('div');
               inner.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;';
               inner.textContent = it.t;
@@ -733,6 +734,13 @@
 
         var t0 = performance.now(), D = conf.dur * 1000, revealed = false;
         var hh = (player.clientHeight || 2) / 2;     // 半屏高 = 原作的 1 个世界单位
+        var hw = (player.clientWidth || 2) / 2;      // 半屏宽 = 原作立方体面心到旋转轴的距离
+        if (cube) {
+          // 原作 RenderQuad：矩阵是 Translate(0,0,+hw) → RotateY → Translate(0,0,-相机距离)，
+          // 即面心在旋转轴前方半个面宽处（立方体的中心在屏幕后方 hw）。
+          // CSS 默认绕元素自身中心转，等于零体积的“折纸”；把 origin 退到 z=-hw 才是真立方体。
+          prev.style.transformOrigin = next.style.transformOrigin = '50% 50% ' + (-hw) + 'px';
+        }
 
         function frame(now) {
           var e = Math.min(1, (now - t0) / D);
@@ -775,8 +783,8 @@
         }
 
         function finish() {
-          prev.style.transform = ''; prev.style.opacity = '';
-          next.style.transform = ''; next.style.opacity = '';
+          prev.style.transform = ''; prev.style.opacity = ''; prev.style.transformOrigin = '';
+          next.style.transform = ''; next.style.opacity = ''; next.style.transformOrigin = '';
           next.style.webkitMaskImage = next.style.maskImage = '';
           next.classList.remove('blk');
           prev.classList.remove('turning', 'active');
@@ -958,8 +966,7 @@
                 img.onerror = function() { this.style.visibility = 'hidden'; };
                 el.appendChild(img);
               } else if (it.kind === 'ph') {
-                el.style.paddingTop = (100 / it.ratio) + '%';
-                el.style.height = '0';
+                el.style.aspectRatio = String(it.ratio);
                 var inner = document.createElement('div');
                 inner.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;';
                 inner.textContent = it.t;
@@ -1028,6 +1035,6 @@
       tryAuto();
     })();
   </script>
-<script src="js/seed.js?v=20261028b"></script>
+<script src="js/seed.js?v=20261101c"></script>
 </body>
 </html>

@@ -279,11 +279,18 @@
         var origCaret = cs.caretColor;
 
         /* 镜像与输入框完全对齐。
-           注意必须用 offset*（布局量，不受祖先 CSS transform 影响），
-           不能用 getBoundingClientRect：翻页时书页带 scale(.96) 动画，
-           动画中途取值会把缩放后的尺寸/偏移写死进镜像层，动画结束后错位（重影、光标偏一个字）。*/
+           优先直接沿用输入框的百分比定位（日记本输入框都是 % 定位）：
+           父级尺寸一变（窗口缩放、笔记本宽度重算、翻页动画），两边同步跟着变，
+           不会像 px 快照那样留下旧位置（表现为文字整体偏一格/偏一行）。
+           没有内联百分比时才退回 offset / rect 的 px 方案。 */
         function syncBox() {
-            if (mirror.offsetParent === input.offsetParent) {
+            var sameParent = mirror.offsetParent === input.offsetParent;
+            if (sameParent && input.style.left && input.style.width) {
+                mirror.style.left = input.style.left;
+                mirror.style.top = input.style.top;
+                mirror.style.width = input.style.width;
+                mirror.style.height = input.style.height;
+            } else if (sameParent) {
                 mirror.style.left = input.offsetLeft + 'px';
                 mirror.style.top = input.offsetTop + 'px';
                 mirror.style.width = input.offsetWidth + 'px';
@@ -295,15 +302,28 @@
                 mirror.style.width = box0.width + 'px';
                 mirror.style.height = box0.height + 'px';
             }
+            /* 逐项抄字体度量：font 简写在部分浏览器会返回空串，
+               一旦抄不到就退回继承字体，换行位置跟着错，文字看起来就"偏了"。 */
             var c = getComputedStyle(input);
-            mirror.style.font = c.font;
+            mirror.style.fontFamily = c.fontFamily;
+            mirror.style.fontSize = c.fontSize;
+            mirror.style.fontWeight = c.fontWeight;
+            mirror.style.fontStyle = c.fontStyle;
+            mirror.style.fontVariant = c.fontVariant;
+            mirror.style.fontStretch = c.fontStretch;
+            mirror.style.lineHeight = c.lineHeight;
             mirror.style.letterSpacing = c.letterSpacing;
+            mirror.style.wordSpacing = c.wordSpacing;
+            mirror.style.textTransform = c.textTransform;
+            mirror.style.textIndent = c.textIndent;
             mirror.style.padding = c.padding;
             mirror.style.border = c.border;
             mirror.style.borderRadius = c.borderRadius;
             mirror.style.boxSizing = c.boxSizing;
-            mirror.style.lineHeight = c.lineHeight;
-            mirror.style.textIndent = c.textIndent;
+            mirror.style.whiteSpace = 'pre-wrap';
+            mirror.style.wordBreak = c.wordBreak;
+            mirror.style.overflowWrap = c.overflowWrap;
+            mirror.style.tabSize = c.tabSize;
         }
 
         /* 状态：几何量只在可能变化时读；渲染按帧合并。
@@ -368,6 +388,14 @@
             mirror.scrollLeft = input.scrollLeft;
         }, false);
         window.addEventListener('resize', function () { needSync = true; schedule(); }, false);
+        /* 浏览器缩放/双指缩放不一定触发 window resize，用 visualViewport 兜住 */
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', function () {
+                needSync = true; schedule();
+            }, false);
+        }
+        /* 重新聚焦时几何量可能已经变了（换页、窗口刚调整过），先对齐再输入 */
+        input.addEventListener('focus', function () { needSync = true; schedule(); }, false);
 
         /* 页面切换/显隐后重新对齐（只有尺寸可能变了才重读几何量） */
         if (window.ResizeObserver) {

@@ -74,7 +74,7 @@
   var PAGES = [
     { id: 'index',        file: 'index.html',        name: '我的大山' },
     { id: 'diary',        file: 'diary.html',        name: '日记本' },
-    { id: 'messages',     file: 'messages.html',     name: '山间聊天' },
+    { id: 'messages',     file: 'celeste-farewell-remembered-demo.html', name: '山间聊天' },
     { id: 'article',      file: 'article.html',      name: '文章' },
     { id: 'write',        file: 'write.html',        name: '写文章' },
     { id: 'archives',     file: 'archives.html',     name: '归档' },
@@ -710,9 +710,10 @@
     }
     requestAnimationFrame(run);
 
-    // 入账 berry 余额（仅当 api.js 已加载）；置 credited 防止中断后重复补账
-    if (typeof window.addBerries === 'function') {
-      try { window.addBerries(1); } catch (e) {}
+    // 领取草莓籽奖励（仅当 api.js 已加载）；奖励由服务端按 6 小时冷却发放，
+    // credited 仅用于防止中断后重复触发，最终由服务端冷却兜底
+    if (typeof window.claimSeedBerry === 'function') {
+      try { window.claimSeedBerry(); } catch (e) {}
     }
     var cs2 = loadState();
     cs2.credited = true;
@@ -752,10 +753,11 @@
     injectStyle();
     var s = loadState();
 
-    // 中断恢复：上次籽已全部收集（螺旋汇聚途中刷新/关页）且未入账 → 补一颗
+    // 中断恢复：上次籽已全部收集（螺旋汇聚途中刷新/关页）且未入账 → 重新领取
+    // 服务端 6 小时冷却兜底，重复触发不会重复发放
     if (s.seeds.length > 0 && s.seeds.every(function (x) { return x.collected; }) && !s.credited) {
-      if (typeof window.addBerries === 'function') {
-        try { window.addBerries(1); } catch (e) {}
+      if (typeof window.claimSeedBerry === 'function') {
+        try { window.claimSeedBerry(); } catch (e) {}
       }
       saveState({ lastRefresh: Date.now(), seeds: [], credited: false });
       s = loadState();

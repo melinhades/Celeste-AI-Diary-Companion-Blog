@@ -157,6 +157,7 @@ public class DiaryChatEmotionExtractor {
         public String emotionScoreDetail;   // v2 新增：完整 JSON
         public String confidence;           // v2 新增：high/medium/low
         public String faceEmotion;          // 日记页情绪池（7 选 1），由日记内容推出，而非关键词匹配
+        public double speakReadiness;       // 文字侧 LLM 判断：这段内容是否值得开口（0~1），0.6 以上视为「足够开口」
 
         public EmotionResult(String emotionType, BigDecimal score, BigDecimal textScore,
                              BigDecimal trajectoryScore, String emotionScoreDetail, String confidence) {
@@ -182,6 +183,8 @@ public class DiaryChatEmotionExtractor {
         public void setConfidence(String confidence) { this.confidence = confidence; }
         public String getFaceEmotion() { return faceEmotion; }
         public void setFaceEmotion(String faceEmotion) { this.faceEmotion = faceEmotion; }
+        public double getSpeakReadiness() { return speakReadiness; }
+        public void setSpeakReadiness(double speakReadiness) { this.speakReadiness = speakReadiness; }
     }
 
     // ────────────────────────────────────────────────────
@@ -349,6 +352,7 @@ public class DiaryChatEmotionExtractor {
                 detailJson,
                 confidence);
         result.faceEmotion = faceEmotion;
+        result.speakReadiness = textAnalysis.getDoubleValue("speakReadiness");
         return result;
     }
 
@@ -368,6 +372,7 @@ public class DiaryChatEmotionExtractor {
             result.put("plutchikSecondary", "trust");
             result.put("intensity", 1);
             result.put("valence", 1);
+            result.put("speakReadiness", 0.0);
             return result;
         }
 
@@ -379,6 +384,7 @@ public class DiaryChatEmotionExtractor {
                 "  \"intensity\": 1-5,\n" +
                 "  \"valence\": 1 或 -1,\n" +
                 "  \"raw_score\": 0.0-1.0,\n" +
+                "  \"speak_readiness\": 0.0-1.0,\n" +
                 "  \"anchor_start\": 触发该情绪的关键词在原文中的起始字符索引（-1 表示无法定位）,\n" +
                 "  \"anchor_end\": 结束字符索引\n" +
                 "}\n\n" +
@@ -387,6 +393,7 @@ public class DiaryChatEmotionExtractor {
                 "- sadness/disgust/fear/anger 的 valence=-1\n" +
                 "- surprise 视上下文：中性或 ± 皆可\n" +
                 "- intensity 5 = 极强，1 = 微弱\n" +
+                "- speak_readiness 表示「这段文字里有没有值得回应的东西」：有具体的人/事/物、明确情绪、提问或求助 → 0.6 以上；只有语气词、刚起头几个字、纯流水账还没写到事 → 0.3 以下\n" +
                 "- anchor 必须是原文中实际出现的字符索引（0-based）\n\n" +
                 "文本（截取 ≤ 800 字）：" + (text.length() > 800 ? text.substring(0, 800) + "…" : text);
 
@@ -406,6 +413,7 @@ public class DiaryChatEmotionExtractor {
                 result.put("anchorStart", obj.getIntValue("anchor_start"));
                 result.put("anchorEnd",   obj.getIntValue("anchor_end"));
                 double aiScore = obj.getDoubleValue("raw_score");
+                result.put("speakReadiness", obj.getDoubleValue("speak_readiness"));
 
                 // —— 规则加权：程度副词 × 否定前缀(可能翻转极性) × 转折 ——
                 double ruleFactor = computeRuleFactor(text);
@@ -493,6 +501,8 @@ public class DiaryChatEmotionExtractor {
         r.put("intensity", Math.max(1, Math.min(5, (int)(score * 5))));
         r.put("valence", valence);
         r.put("ruleFactor", 1.0);
+        // AI 不可用时的兜底开口判断：有关键词或正文够长才算「有东西可接」
+        r.put("speakReadiness", (n > 0 || p > 0) ? 0.65 : (text.length() >= 8 ? 0.35 : 0.2));
         r.put("fallback", true);
         return r;
     }

@@ -67,4 +67,10 @@ public interface DiaryService {
 
     /** 情绪统计：各情绪出现次数 + 按月趋势（仅普通日记） */
     Result emotionStats();
+
+    /** P3.3 新增：更新 Madeline 情绪状态 */
+    Result updateEmotion(String emotion, Integer intensity, String triggerDiaryId);
+
+    /** P3.3 新增：获取当前 Madeline 情绪状态 */
+    Result getCurrentEmotion();
 }

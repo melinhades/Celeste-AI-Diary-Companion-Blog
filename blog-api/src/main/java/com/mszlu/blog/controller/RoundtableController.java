@@ -1,11 +1,9 @@
 package com.mszlu.blog.controller;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.mszlu.blog.dao.mapper.RoundtableSessionMapper;
-import com.mszlu.blog.dao.pojo.RoundtableSessionEntity;
 import com.mszlu.blog.dao.pojo.SysUser;
 import com.mszlu.blog.service.TokenService;
 import com.mszlu.blog.service.ai.roundtable.RoundtableEngine;
+import com.mszlu.blog.service.ai.roundtable.RoundtableHistoryService;
 import com.mszlu.blog.service.ai.roundtable.RoundtableSession;
 import com.mszlu.blog.service.ai.roundtable.RoundtableTopicService;
 import com.mszlu.blog.service.ai.roundtable.RosterBuilder;
@@ -48,7 +46,7 @@ public class RoundtableController {
     @Autowired
     private RoundtableTopicService topicService;
     @Autowired
-    private RoundtableSessionMapper sessionMapper;
+    private RoundtableHistoryService historyService;
 
     /** 最多保留最近 100 场（含进行中），超出清理最旧已结束的 */
     private static final int MAX_SESSIONS = 100;
@@ -268,30 +266,7 @@ public class RoundtableController {
     public Result history(@RequestParam(value = "limit", required = false) Integer limit) {
         SysUser me = UserThreadLocal.get();
         if (me == null) return Result.fail(401, "未登录");
-        int size = (limit == null || limit <= 0) ? 20 : Math.min(limit, 50);
-        LambdaQueryWrapper<RoundtableSessionEntity> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(RoundtableSessionEntity::getUserId, String.valueOf(me.getId()));
-        wrapper.orderByDesc(RoundtableSessionEntity::getFinishDate);
-        wrapper.last("limit " + size);
-        List<Map<String, Object>> list = new java.util.ArrayList<>();
-        for (RoundtableSessionEntity e : sessionMapper.selectList(wrapper)) {
-            Map<String, Object> m = new java.util.LinkedHashMap<>();
-            m.put("id", e.getId());
-            m.put("topic", e.getTopic());
-            m.put("status", e.getStatus());
-            m.put("rounds", e.getRounds());
-            m.put("speechCount", e.getSpeechCount());
-            m.put("ts", e.getFinishDate());
-            try {
-                m.put("score", com.alibaba.fastjson.JSON.parseObject(e.getScore()));
-                m.put("transcript", com.alibaba.fastjson.JSON.parseArray(e.getTranscript()));
-            } catch (Exception ignore) {
-                m.put("score", null);
-                m.put("transcript", new java.util.ArrayList<>());
-            }
-            list.add(m);
-        }
-        return Result.success(list);
+        return historyService.listMine(String.valueOf(me.getId()), limit);
     }
 
     /** 删除本人一条历史会议 */
@@ -299,13 +274,7 @@ public class RoundtableController {
     public Result deleteHistory(@PathVariable("id") String id) {
         SysUser me = UserThreadLocal.get();
         if (me == null) return Result.fail(401, "未登录");
-        RoundtableSessionEntity e = sessionMapper.selectById(id);
-        if (e == null) return Result.success(null);
-        if (!e.getUserId().equals(String.valueOf(me.getId()))) {
-            return Result.fail(403, "只能删除自己的会议记录");
-        }
-        sessionMapper.deleteById(id);
-        return Result.success(null);
+        return historyService.deleteMine(String.valueOf(me.getId()), id);
     }
 
     /** 人类插话：只入队列，引擎在下一个发言间隙统一广播 */

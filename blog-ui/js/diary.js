@@ -589,6 +589,8 @@
             /** AI 内联情绪切换（位置基于剥离标记后的纯文本，由 MadelineMood.feeder 给出） */
             queueMoods(list) { if (list && list.length) moodQueue = moodQueue.concat(list); },
             finish() { finished = true; },
+            /** 中断/异常时立刻收口：不再打字，并让排队任务尽快结束，避免堵住后面要说的话 */
+            cancel() { finished = true; pending = ''; typedCount = 0; },
             done
         };
     }
@@ -1272,31 +1274,104 @@ function inferReplyEmotion(text) {
         isBubbling = false;
     }
 
-    async function proactiveBubble() {
-        if (chatOpen || companionState.isTyping || contentInput.value.trim()) {
-            scheduleNextBubble();
-            return;
+    // P3.1 新增：SSE 订阅主动消息推送（替代原轮询逻辑）
+    let proactiveEventSource = null;
+    const bubbleSaid = [];
+    
+    function subscribeProactiveStream() {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        
+        if (proactiveEventSource) {
+            proactiveEventSource.close();
         }
-        try {
-            const res = await api('/diary/bubble', 'GET');
-            if (res.success && res.data && res.data.message) {
-                const msg = res.data.message.trim();
+        
+        proactiveEventSource = new EventSource(BASE_URL + '/proactive/stream?token=' + encodeURIComponent(token));
+        
+        proactiveEventSource.addEventListener('bubble', async (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                const msg = data.message.trim();
                 if (bubbleSaid.indexOf(msg) === -1) {
                     bubbleSaid.push(msg);
                     if (bubbleSaid.length > 8) bubbleSaid.shift();
-                    await addMadelineMessage(msg, res.data.emotion || '默认');
+                    await addMadelineMessage(msg, data.emotion || '默认');
                 }
+            } catch (err) {
+                console.warn('主动消息处理失败:', err);
+            }
+        });
+        
+        proactiveEventSource.onerror = () => {
+            console.warn('主动消息流断开，5s 后重连');
+            if (proactiveEventSource) proactiveEventSource.close();
+            proactiveEventSource = null;
+            setTimeout(subscribeProactiveStream, 5000);
+        };
+    }
+    
+    // 页面加载时订阅
+    subscribeProactiveStream();
+
+    // P3.3 新增：页面加载时恢复 Madeline 情绪状态
+    (async function restoreEmotionState() {
+        try {
+            const res = await api('/diary/emotion/current', 'GET');
+            if (res.success && res.data && res.data.emotion) {
+                const emotion = res.data.emotion;
+                localStorage.setItem('madeline_emotion', emotion);
+                // 更新头像（如果有 updateHeaderAvatar 函数）
+                if (typeof updateHeaderAvatar === 'function') {
+                    updateHeaderAvatar(emotion);
+                }
+                console.log('Madeline 情绪状态已恢复:', emotion);
             }
         } catch (e) {
-            console.warn('主动对话失败:', e);
+            console.warn('恢复情绪状态失败:', e);
         }
-        scheduleNextBubble();
+    })();
+
+    // P3.4 中断/续接按钮逻辑
+    const interruptBtn = document.getElementById('interruptBtn');
+    const resumeBtn = document.getElementById('resumeBtn');
+    const companionControls = document.getElementById('companionControls');
+    
+    if (interruptBtn) {
+        interruptBtn.addEventListener('click', () => {
+            if (companionState.preRunAbort) {
+                companionState.preRunAbort.abort();
+                companionState.preRunAbort = null;
+                interruptBtn.style.display = 'none';
+                resumeBtn.style.display = 'inline-block';
+                console.log('已中断 Madeline 回复');
+            }
+        });
     }
-    const bubbleSaid = [];
-    function scheduleNextBubble() {
-        const delay = (150 + Math.random() * 120) * 1000;
-        bubbleTimer = setTimeout(proactiveBubble, delay);
+    
+    if (resumeBtn) {
+        resumeBtn.addEventListener('click', () => {
+            const lastDraft = contentInput.value.trim();
+            if (lastDraft) {
+                triggerAiAnalysis(lastDraft, 'resume');
+                resumeBtn.style.display = 'none';
+            }
+        });
     }
+    
+    // 监听 companionState.phase 变化，显示/隐藏中断按钮
+    function updateCompanionControls() {
+        if (companionState.phase === 'REPLYING' && companionState.preRunAbort) {
+            if (companionControls) companionControls.style.display = 'flex';
+            if (interruptBtn) interruptBtn.style.display = 'inline-block';
+            if (resumeBtn) resumeBtn.style.display = 'none';
+        } else {
+            if (companionControls) companionControls.style.display = 'none';
+        }
+    }
+    
+    // 在 companionState.phase 改变时调用（需在 triggerAiAnalysis 和 releaseReply 调用后）
+    setInterval(updateCompanionControls, 500);
+
 
     // ================================================================
     // ===== 实时日记伴侣引擎 v2 — Madeline 实时陪写系统 =====
@@ -1312,6 +1387,11 @@ function inferReplyEmotion(text) {
         JUDGE_LONG_TEXT_LEN: 80,
         PAUSE_TRIGGER_MS: 3000,           // v1 扩展：打字停顿 >3s 触发弱信号反应
         SILENCE_COOLDOWN: 4000,           // 她沉默后 4s 即可重新判断（原 8s 过于保守）
+        // 停顿触发：不再要求 20 字，也不再在前端掷概率。
+        // 停顿时长与打字轨迹权重交给后端：停顿越长、轨迹异常越明显，后端开口概率越高
+        PAUSE_MIN_LEN: 4,                 // 后端 <4 字直接沉默，低于这个不发起
+        SILENT_RETRY_MAX: 2,              // 一轮沉默后最多重读 2 次（6s、12s），停顿越长概率越高
+        SILENT_RETRY_STEP_MS: 6000,
         // v3 预跑：首次预跑阈值 + 中断重启阈值
         PRERUN_MIN_LEN: 30,               // 写到 30 字就起一次预跑（不等防抖）
         PRERUN_TAIL_MARKS: '，。！？!?…；,\n',  // 句末标点 → 立刻预跑
@@ -1339,6 +1419,9 @@ function inferReplyEmotion(text) {
     const companionState = {
         lastAnalyzedText: '',
         lastAnalyzedLen: 0,
+        // 已经真正开口回应过的稿本前缀：新一轮只把这段之后的新内容送给她读，
+        // 避免把回复过的旧段落反复重读、说出意思差不多的第二遍。
+        repliedText: '',
         currentEmotion: '默认',
         previousEmotion: '默认',
         emotionHistory: [],
@@ -1362,6 +1445,8 @@ function inferReplyEmotion(text) {
         modifyFreqCounter: 0,
         modifyFreqTimer: null,
         pauseTimer: null,
+        silentRetryTimer: null,
+        silentRetries: 0,       // 同一稿本的沉默重读次数（用户再输入时清零）
         // v3 预跑（边写边预跑）：首次触发后标记，fetch 存 AbortController 供中断重启
         preRunTriggered: false,
         preRunAbort: null,
@@ -1438,8 +1523,8 @@ function inferReplyEmotion(text) {
         if (!companionState.pendingCatchup) return;
         companionState.pendingCatchup = false;
         const t = contentInput.value.trim();
-        // 没有新增内容、或太短（沿用 pause 触发门槛），就不打扰她
-        if (t.length <= companionState.lastAnalyzedLen || t.length < 20) return;
+        // 没有新增内容、或低于后端可读门槛（<4 字）就不打扰她；不再要求 20 字
+        if (t.length <= companionState.lastAnalyzedLen || t.length < REALTIME_CONFIG.PAUSE_MIN_LEN) return;
         companionState.lastAnalyzedLen = t.length;
         companionState.lastJudgeTime = Date.now();
         setTimeout(() => { triggerAiAnalysis(t, 'catchup'); }, 600);
@@ -1459,6 +1544,12 @@ function inferReplyEmotion(text) {
         companionState.pendingCatchup = false;
         companionState.lastAnalyzedText = text;
         companionState.lastAnalyzedLen = text.length;
+        // 只送「她还没回应过的那一段」给后端：旧段落已经在会话记忆里了，不必重读。
+        // 编辑导致前缀对不上（中间删改）时退回整篇，保证内容不丢。
+        const replied = companionState.repliedText || '';
+        const delta = (replied && text.indexOf(replied) === 0)
+            ? text.slice(replied.length).trim()
+            : text.trim();
 
         const finishMeta = (userEmotion) => {
             updateThemeByEmotion(userEmotion);
@@ -1475,15 +1566,20 @@ function inferReplyEmotion(text) {
         };
 
         // —— 流式：POST + SSE（text/event-stream），按事件帧解析；情绪走 emotion 事件，正文走 delta ——
+        let streamer = null;
         try {
             const token = localStorage.getItem('token');
             // v1 扩展：组装会话 + 打字轨迹数据
             const payload = {
                 draft: text,
+                // 本轮新增、尚未回应过的部分（旧部分只留在会话记忆里）
+                delta: delta || undefined,
                 sessionId: companionState.sessionId || undefined,
                 triggerType: triggerType || 'save',
                 // v3 预跑重启：告诉后端「打断旧的 + 起新的」
                 interrupt: isPreRunRestart ? true : undefined,
+                // P3.4 续接：告诉后端恢复上一轮对话
+                resume: triggerType === 'resume' ? true : undefined,
                 // v2 扩展：按键级原始事件流 + 计算好的轨迹特征
                 typingSignal: JSON.stringify((() => {
                     const intervals = companionState.keyIntervals;
@@ -1542,7 +1638,6 @@ function inferReplyEmotion(text) {
             const reader = resp.body.getReader();
             const decoder = new TextDecoder('utf-8');
             let raw = '', emotion = '默认', firstSpoken = false, silent = false, busy = false;
-            let streamer = null;
             // AI 句内情绪标记剥离器：delta 进去，纯文本 + 切换点出来（跨分块安全）
             const moodFeeder = window.MadelineMood ? MadelineMood.feeder() : null;
             // SSE 帧解析：按 \n\n 切帧，每帧读 event: / data:（多行 data 按 \n 拼接，剥一个前导空格）
@@ -1579,6 +1674,15 @@ function inferReplyEmotion(text) {
                             if (doneData.sessionId) {
                                 companionState.sessionId = doneData.sessionId;
                                 localStorage.setItem('diaryChatSessionId', doneData.sessionId);
+                            // P3.3 新增：提取 emotion 并同步到后端
+                            if (doneData.emotion) {
+                                localStorage.setItem('madeline_emotion', doneData.emotion);
+                                api('/diary/emotion/update', 'POST', {
+                                    emotion: doneData.emotion,
+                                    intensity: 5,
+                                    triggerDiaryId: null
+                                }).catch(e => console.warn('情绪同步失败:', e));
+                            }
                             }
                         } catch (e) {}
                     } else if (event === 'delta') {
@@ -1615,13 +1719,14 @@ function inferReplyEmotion(text) {
                 releaseReply();
                 return;
             }
-            // 她选择沉默：正常结束，不走整段回退（8s 后内容再变可重新判断）
+            // 她选择沉默：正常结束，不走整段回退；停顿变长后按权重重试（最长 12s）
             if (silent) {
+                scheduleSilentRetry(text);
                 releaseReply();
                 return;
             }
             // 没收到任何 delta：当成失败走整段回退，而不是静默无反应
-            if (!raw.trim()) throw new Error('流式空响应');
+            if (!raw.trim()) { if (streamer) streamer.cancel(); throw new Error('流式空响应'); }
             // 流结束：吐出可能卡在分块边界的残余纯文本，再通知打字机打完
             if (streamer && moodFeeder) {
                 const tail = moodFeeder.flush();
@@ -1636,20 +1741,24 @@ function inferReplyEmotion(text) {
             if (fullText && !isRepeatedSpeech(fullText)) rememberSpeech(fullText);
             // 表情由 AI 在回复里用 [m:情绪] 指定（emotion 事件），不再用关键词扫描覆盖
             finishMeta(emotion || '默认');
+            // 这一轮已经回应过：记住稿本前缀，下一轮只送之后新写的内容
+            companionState.repliedText = text;
             releaseReply();
             return;
         } catch (e) {
             // v3 预跑中断：AbortController.abort() 是预期行为，跳过回退接口，等 finally 里 pendingPreRunRestart 重启
             if (e && (e.name === 'AbortError' || e.code === 20)) {
+                if (streamer) streamer.cancel();   // 旧这轮被中断：立刻收口，别让它继续打字或堵住后面的话
                 console.info('[v3 prerun] stream aborted, waiting restart');
                 return;
             }
+            if (streamer) streamer.cancel();
             console.warn('流式反馈失败，回退整段接口:', e);
         }
 
-        // —— 回退：原整段接口 ——
+        // —— 回退：原整段接口（同样只送未回应过的新内容） ——
         try {
-            const res = await api('/diary/companion', 'POST', { draft: text });
+            const res = await api('/diary/companion', 'POST', { draft: delta || text });
             let shown = false;
             if (res.success && res.data) {
                 const feedback = res.data.feedback || '';
@@ -1657,6 +1766,7 @@ function inferReplyEmotion(text) {
                 const userEmotion = res.data.userEmotion || emotion;
                 if (feedback && !isRepeatedSpeech(feedback)) { rememberSpeech(feedback); addMadelineMessage(feedback, emotion); shown = true; }
                 finishMeta(userEmotion);
+                if (shown) companionState.repliedText = text;
             }
             // AI 整条链路都没给出回应，而内容涉及痛苦：本地兜底一句，绝不能让人写进黑暗里没人应
             if (!shown) localComfort(text);
@@ -1700,6 +1810,38 @@ function inferReplyEmotion(text) {
 
     // ===== 核心：输入事件处理 =====
     let aiJudgeTimer = null;
+    // 停顿判定：有未读的新内容就送读，冷却期内顺延。
+    // 开口概率不再在前端掷，交给后端用「文字判断 + 停顿权重 + 轨迹权重」决定
+    function schedulePauseCheck() {
+        return setTimeout(() => {
+            if (companionState.isAiPending || companionState.phase === 'REPLYING') return;
+            const t = contentInput.value.trim();
+            if (t.length < REALTIME_CONFIG.PAUSE_MIN_LEN || t.length <= companionState.lastAnalyzedLen) return;
+            // 她刚判断过（多半刚沉默）：等冷却期过去再送，避免请求轰炸
+            if (Date.now() - companionState.lastJudgeTime <= REALTIME_CONFIG.SILENCE_COOLDOWN) {
+                companionState.pauseTimer = schedulePauseCheck();
+                return;
+            }
+            companionState.lastJudgeTime = Date.now();
+            triggerAiAnalysis(t, 'pause');
+        }, REALTIME_CONFIG.PAUSE_TRIGGER_MS);
+    }
+    // 沉默后重读：同一稿本在停顿 6s / 12s 时再送一次，
+    // 停顿越久，后端算出的开口权重越高，第二次/第三次更容易开口
+    function scheduleSilentRetry(text) {
+        if (companionState.silentRetries >= REALTIME_CONFIG.SILENT_RETRY_MAX) return;
+        if (contentInput.value.trim() !== text) return;   // 已有新内容，走正常判定，不重读旧稿
+        clearTimeout(companionState.silentRetryTimer);
+        const delay = REALTIME_CONFIG.SILENT_RETRY_STEP_MS * (companionState.silentRetries + 1);
+        companionState.silentRetryTimer = setTimeout(() => {
+            if (companionState.isAiPending || companionState.phase === 'REPLYING') return;
+            const t = contentInput.value.trim();
+            if (t !== text || t.length < REALTIME_CONFIG.PAUSE_MIN_LEN) return;
+            companionState.silentRetries++;
+            companionState.lastJudgeTime = Date.now();
+            triggerAiAnalysis(t, 'pause');
+        }, delay);
+    }
     // v2 辅助：计算 deleteRetypeRatio（delete 后 1s 内出现 insert 视为"重输"）
     let recentDeleteAt = 0;
     contentInput.addEventListener('input', (e) => {
@@ -1738,37 +1880,20 @@ function inferReplyEmotion(text) {
         companionState.modifyFreqTimer = setTimeout(() => { companionState.modifyFreqCounter = 0; }, 2000);
 
         // v1 扩展：停顿触发（>3s 无输入 → triggerType='pause'）
+        // 不再要求「必须停顿才回话」，也不再要求 20 字：停顿只影响后端开口权重
         clearTimeout(companionState.pauseTimer);
-        companionState.pauseTimer = setTimeout(() => {
-            const t = contentInput.value.trim();
-            if (t.length >= 20 && !companionState.isAiPending && Date.now() - companionState.lastJudgeTime > REALTIME_CONFIG.SILENCE_COOLDOWN) {
-                companionState.lastJudgeTime = Date.now();
-                triggerAiAnalysis(t, 'pause');
-            }
-        }, REALTIME_CONFIG.PAUSE_TRIGGER_MS);
+        clearTimeout(companionState.silentRetryTimer);
+        companionState.silentRetries = 0;
+        companionState.pauseTimer = schedulePauseCheck();
 
         lastUserInputTime = Date.now();
         const text = contentInput.value.trim();
 
-        // 决策锁：她已经开口 → 本轮回复只认已冻结的稿本，不再跟进新内容。
-        // 但如果是预跑期间（preRunAbort 存在），用户继续写且内容变化足够大 → 中断重启
+        // 决策锁：她已经开口 → 这一轮必须说完，用户继续打字也不再中断；新内容等她说完再补读一次
         if (companionState.phase === 'REPLYING') {
             clearTimeout(aiJudgeTimer);
             clearTimeout(companionState.pauseTimer);
             if (text.length > companionState.lastAnalyzedLen) companionState.pendingCatchup = true;
-
-            // v3 预跑重启：预跑期间用户多写了 20 字以上 或 出现句末标点 → 中断旧请求 + 立刻重启
-            if (companionState.preRunAbort) {
-                const delta = text.length - companionState.preRunDraftLenAtStart;
-                const tailMarked = REALTIME_CONFIG.PRERUN_TAIL_MARKS.indexOf(text.slice(-1)) !== -1;
-                if (delta >= REALTIME_CONFIG.PRERUN_RESTART_DELTA || tailMarked) {
-                    companionState.preRunAbort.abort();
-                    companionState.preRunAbort = null;
-                    // 后端会在 delta 回调里看到 isInterrupted 并 release 锁
-                    // 前端标记一下，等旧请求 finally 里释放 isAiPending 后立刻重启
-                    companionState.pendingPreRunRestart = true;
-                }
-            }
             return;
         }
 
@@ -1781,6 +1906,7 @@ function inferReplyEmotion(text) {
         if (text.length === 0) {
             clearTimeout(aiJudgeTimer);
             companionState.preRunTriggered = false; // 清空：下次输入可以重新预跑
+            companionState.repliedText = '';        // 清空：新的一篇，重新从零读
             return;
         }
 
@@ -1853,7 +1979,7 @@ function inferReplyEmotion(text) {
     // v1 扩展：Madeline 消息 append 后追加 👍👎 反馈按钮（动态创建，不新建 DOM 元素到 HTML）
     const origAddMadeline = addMadelineMessage;
     window.addMadelineMessage = function(text, emotion, forceGameDialog) {
-        origAddMadeline(text, emotion, forceGameDialog);
+        const spoken = origAddMadeline(text, emotion, forceGameDialog);   // 队列 Promise：必须返回，await 才等于「等这句说完」
         // 给最后一条 Madeline 消息追加反馈按钮（等 DOM 渲染完）
         setTimeout(() => {
             const rows = document.querySelectorAll('.madeline-message-row');
@@ -1878,6 +2004,7 @@ function inferReplyEmotion(text) {
             });
             lastRow.appendChild(feedbackDiv);
         }, 50);
+        return spoken;
     };
     // ===== 保存特效：帧动画出现在日记本右下角 =====
     const SAVE_FRAMES = [];
@@ -2056,17 +2183,28 @@ function inferReplyEmotion(text) {
                 companionState.emotionHistory = [];
                 updateThemeByEmotion('默认');
 
-                // 两个请求串行：先拿总结（必须先说），再流式 companion 反应（排在总结之后）
+                // 保存后只由 summary 负责开口，不再触发 companion 流式反应（避免同一篇日记被 Madeline 说两遍）
                 let summarySpoken = null;
+                let summaryEmotion = '默认';
                 try {
                     const sumRes = await api('/diary/summary', 'POST', { title: title, content: content });
                     if (sumRes && sumRes.success && sumRes.data && sumRes.data.message) {
-                        summarySpoken = addMadelineMessage(sumRes.data.message, sumRes.data.emotion || '默认');
+                        summaryEmotion = sumRes.data.emotion || '默认';
+                        summarySpoken = addMadelineMessage(sumRes.data.message, summaryEmotion);
                     }
                 } catch (e) {}
-                // v1 扩展：保存后 Madeline 流式反应（triggerType='save'），排在总结之后
                 if (summarySpoken) { try { await summarySpoken; } catch(e) {} }
-                triggerAiAnalysis(content, 'save');
+                // 坏情绪仍走金羽毛（原来挂在 companion 流式反应结束时，现在跟 summary 的情绪走）
+                if (window.featherTrigger && window.featherTrigger.isBadMood(summaryEmotion)) {
+                    window.featherTrigger.requestFromSave(summaryEmotion);
+                }
+
+                // 保存后立刻触发一次主动冒泡，让 Madeline 基于刚写的日记开口
+                setTimeout(() => {
+                    if (typeof proactiveBubble === 'function') {
+                        proactiveBubble();
+                    }
+                }, 2000);
 
                 showToast(editingDiaryId ? '更新成功！' : '保存成功！', 'success');
 
@@ -2084,7 +2222,7 @@ function inferReplyEmotion(text) {
                 if (!editingDiaryId) {
                     const saveCnt = parseInt(localStorage.getItem('diarySaveCount') || '0') + 1;
                     localStorage.setItem('diarySaveCount', String(saveCnt));
-                    addBerries(1);
+                    syncBerryBalance();
                     pmMilestone(saveCnt);
                     playBerrySound();
                     renderCoverStamps();
@@ -2888,7 +3026,6 @@ function inferReplyEmotion(text) {
         }
 
         showQuickInput(true);
-        scheduleNextBubble();
 
         const editId = new URLSearchParams(location.search).get('edit');
         if (editId) {

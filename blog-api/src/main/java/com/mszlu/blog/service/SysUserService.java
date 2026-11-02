@@ -22,8 +22,14 @@ public interface SysUserService {
     /** 查询当前登录用户的草莓余额 */
     Result berryBalance(String token);
 
-    /** 原子增减草莓余额（delta 正=获得，负=消费），余额不允许为负 */
+    /** 原子消费草莓（delta 必须为负，余额不允许为负）；正向变动只能由服务端业务发放 */
     Result adjustBerry(String token, Integer delta);
+
+    /** 新日记保存成功后的服务端权威奖励（+1 草莓，仅内部调用） */
+    void grantDiaryBerry(String userId);
+
+    /** 草莓籽收集奖励领取：服务端按 6 小时冷却发放 +1，客户端不能传金额 */
+    Result claimSeedBerry(String token);
 
     /** 更新当前登录用户的个性签名（null/空串=清空，最长 30 字） */
     Result updateSignature(String token, String signature);

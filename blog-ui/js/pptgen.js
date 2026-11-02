@@ -60,14 +60,14 @@
                 { slotId: 'p2_worst',  cls: 't-body', chars: true, stream: true, d: 6.4, x: 9.15, y: 50.5,  w: 25, max: 40 },
                 { slotId: 'p2_tail',   cls: 't-body', chars: true, stream: true, d: 8.2, x: 9.15, y: 58.0,  w: 25 },
                 { slotId: 'p2_impossible', cls: 't-big anim-rot',          d: 9.8, x: 53.06, y: 36.93, w: 46, max: 16 },
-                { slotId: 'p2_guy',    kind: 'img', cls: 'anim-bounce',       d: 10.5, x: 63.90, y: 38.47, w: 35.21, src: 'Atlases/WaveDashing/Guy Clip Art.png' }
+                { slotId: 'p2_guy',    kind: 'img', cls: 'anim-bounce',       d: 10.5, x: 64.14, y: 40.74, w: 35.86, src: 'Atlases/WaveDashing/Guy Clip Art.png' }
             ]
         },
         {
             bg: '#D9EAD3', tr: 'blocky', dur: 10000, name: 'p3_intro',
-            // 转场跟原作 WaveDashPage 的 Transition 一一对应：
-            //   p2 痛点 Rotate3D('cube') → p3 介绍 Blocky → p4 方法 FadeIn('fade')
-            //   → p5 麻烦 Spiral('spin') → p6 结尾 Rotate3D('cube')
+            // 转场跟原作 WaveDashPage 的 Transition 一一对应（Transition 属于「进入页」）：
+            //   进 p2 痛点 Rotate3D('cube') → 进 p3 介绍 Blocky → 进 p4 方法 FadeIn('fade')
+            //   → 进 p5 麻烦 Spiral('spin') → 进 p6 结尾 Rotate3D('cube')
             slots: [
                 { slotId: 'p3_title', cls: 't-head-en white', chars: true, stream: true, d: .5,  x: 5.36, y: 11.47, w: 90, max: 28 },
                 { slotId: 'p3_placeholder', kind: 'ph', cls: 'anim-rise', d: 2.5, x: 29.63, y: 21.27, w: 40.76, ratio: 10.87/6.11, t: '本月配图位' },
@@ -90,14 +90,14 @@
             bg: '#FFF2CC', tr: 'spin', dur: 8500, name: 'p5_trouble',
             slots: [
                 { slotId: 'p5_head',    cls: 't-head anim-pop', d: .25, x: 5.59, y: 11.13, w: 55, t: '天堂中的麻烦？' },
-                { slotId: 'p5_ph_a',    kind: 'ph', cls: 'anim-rise', d: .9, x: 17.93, y: 27.53, w: 17.48, ratio: 4.66/4.31, t: '配图位' },
-                { slotId: 'p5_warn_a',  cls: 't-warn anim-rise', d: 1.5, x: 17.93, y: 63.6, w: 18.5 },
-                { slotId: 'p5_ph_b',    kind: 'ph', cls: 'anim-rise', d: 1.3, x: 58.65, y: 27.53, w: 28.76, ratio: 7.67/4.31, t: '配图位' },
-                { slotId: 'p5_warn_b',  cls: 't-warn anim-rise', d: 1.9, x: 60.5, y: 63.6, w: 24 }
+                { slotId: 'p5_ph_a',    kind: 'ph', cls: 'anim-rise', d: .9, x: 19.26, y: 30.07, w: 17.48, ratio: 4.66/4.31, t: '配图位' },
+                { slotId: 'p5_warn_a',  cls: 't-warn anim-rise', d: 1.5, x: 19.26, y: 63.6, w: 17.48, center: true },
+                { slotId: 'p5_ph_b',    kind: 'ph', cls: 'anim-rise', d: 1.3, x: 57.62, y: 30.07, w: 28.76, ratio: 7.67/4.31, t: '配图位' },
+                { slotId: 'p5_warn_b',  cls: 't-warn anim-rise', d: 1.9, x: 57.62, y: 63.6, w: 28.76, center: true }
             ]
         },
         {
-            bg: '#DBD8ED', tr: 'cube', dur: null, name: 'p6_end',
+            bg: '#D9D2E9', tr: 'cube', dur: null, name: 'p6_end',
             slots: [
                 { slotId: 'p6_title', cls: 't-end', chars: true, d: .25, x: 2.5, y: 10.4, w: 95, max: 28 },
                 { slotId: 'p6_bird',  kind: 'img', cls: 'anim-zoom', d: 1.4, x: 30, y: 25, w: 40, src: 'Atlases/WaveDashing/Bird Clip Art.png' }

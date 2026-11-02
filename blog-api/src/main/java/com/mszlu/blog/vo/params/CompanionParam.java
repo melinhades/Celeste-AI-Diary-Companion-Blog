@@ -11,6 +11,12 @@ public class CompanionParam {
     /** 正在写的日记草稿片段（必填） */
     private String draft;
 
+    /**
+     * 本轮新增、尚未回应过的内容（可选）。
+     * 前端会把它单独送过来：已经回应过的段落留在会话记忆里，不重复读、不重复回应。
+     */
+    private String delta;
+
     /** 会话 ID（可选，不传则后端自动生成；同一用户多会话隔离） */
     private String sessionId;
 
@@ -24,5 +30,8 @@ public class CompanionParam {
     private Boolean interrupt;
 
     /** 羽毛触发标记：如果前端已确认本次保存触发羽毛，则传 true，后端在 prompt 中注入 */
+
+    /** P3.4 续接功能：为 true 时从上一轮中断点恢复对话（需配合 sessionId） */
+    private Boolean resume;
     private Boolean featherTriggered;
 }

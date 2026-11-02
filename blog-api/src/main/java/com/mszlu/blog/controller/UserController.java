@@ -24,11 +24,17 @@ public class UserController {
         return sysUserService.berryBalance(token);
     }
 
-    /** 草莓余额增减：delta 正=获得（写日记/草莓籽），负=消费（商店） */
+    /** 草莓消费（delta 必须为负，服务端校验余额） */
     @PostMapping("berry")
     public Result adjustBerry(@RequestHeader("Authorization") String token,
                               @RequestBody BerryParam param) {
         return sysUserService.adjustBerry(token, param == null ? null : param.getDelta());
+    }
+
+    /** 草莓籽收集奖励：服务端按 6 小时冷却发放，客户端不能传金额 */
+    @PostMapping("berry/seed-claim")
+    public Result claimSeedBerry(@RequestHeader("Authorization") String token) {
+        return sysUserService.claimSeedBerry(token);
     }
 
     /** 更新个性签名（空串/null 清空） */

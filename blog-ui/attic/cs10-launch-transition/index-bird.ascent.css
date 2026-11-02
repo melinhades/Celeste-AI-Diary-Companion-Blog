@@ -1,0 +1,89 @@
+/* ===== 【废案 · 已停用】css/index-bird.css — 头部 crow 的喊叫态 + #birdAscent 飞升过场覆盖层 =====
+   2026-11-01 起 index 的鸟按钮改为「nav 内 52×39 + 飞出 → 统一加载层」，
+   这份样式随 js/bird-ascent.js 一起移到 attic 留档，不再被任何页面引用。 */
+
+/* ---------- 头部那只鸟（.chat-crow 的基础样式在 css/common.css） ----------
+   common.css 把 .chat-crow-box 定死成 19×18 + overflow:hidden，img 又是 40×30 负 margin，
+   结果只露鸟头。这里放开裁切，img 保持改动前的 40×30 显示尺寸（整只鸟可见、大小不变）；
+   不动 common.css，避免影响别的头像位。 */
+.chat-crow .chat-crow-box {
+    width: auto;
+    height: auto;
+    overflow: visible;
+    align-items: center;
+    justify-content: center;
+}
+.chat-crow .chat-crow-box img {
+    width: 40px;
+    height: 30px;
+    margin: 0;
+    transition: filter .18s ease;
+}
+/* 悬停只加亮：鸟的「喊叫」由 js/index-bird.js 轮播 croak 帧（crow00..13）完成，
+   这里不再做上下位移/缩放，免得看着像在原地蹦跶 */
+.chat-crow:hover .chat-crow-box img,
+.chat-crow:focus-visible .chat-crow-box img {
+    filter: brightness(1.3) drop-shadow(0 0 10px rgba(185, 220, 255, .9));
+}
+
+/* ---------- 整屏过场 ---------- */
+#birdAscent {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;                 /* 压过 header 与左下角 neon 按钮（10） */
+    background: #070c1e;           /* 画布还没画第一帧时先铺底色，不闪白 */
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;          /* 点击跳过走 window 上的监听，这一层别抢事件 */
+    transition: opacity .38s ease;
+}
+#birdAscent.show { opacity: 1; visibility: visible; }
+/* demo 页接页时是「白→透明」：CS10 收场把画面推成全白，这里延续同一块白幕 */
+#birdAscent.white { background: #fff; }
+#birdAscent.done { opacity: 0; transition: opacity 1.4s ease; }
+#birdAscent canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+}
+
+/* 顶部章节字样：进爬升段才浮出来（角色已经飞离雪台，画面只剩星空） */
+.ba-caption {
+    position: absolute;
+    left: 50%;
+    top: 11%;
+    transform: translateX(-50%);
+    text-align: center;
+    white-space: nowrap;
+    color: #dbe8ff;
+    font: 300 13px/2.2 "Segoe UI", "Microsoft YaHei", sans-serif;
+    letter-spacing: .3em;
+    text-shadow: 0 2px 18px #04101f;
+    opacity: 0;
+    transition: opacity .9s ease;
+}
+.ba-caption b {
+    display: block;
+    font-weight: 400;
+    font-size: 10px;
+    color: #9fc0d8;
+    letter-spacing: .44em;
+}
+#birdAscent.climb .ba-caption { opacity: .92; }
+
+.ba-skip {
+    position: absolute;
+    right: 22px;
+    bottom: 18px;
+    font-size: 11px;
+    letter-spacing: .14em;
+    color: #8fa9c9;
+    opacity: 0;
+    transition: opacity .5s ease .4s;
+}
+#birdAscent.climb .ba-skip { opacity: .62; }
+
+/* 过场期间锁住页面滚动（书架长页面在下面，别让滚轮把背景拖出画面） */
+html.bird-ascending,
+html.bird-ascending body { overflow: hidden; }

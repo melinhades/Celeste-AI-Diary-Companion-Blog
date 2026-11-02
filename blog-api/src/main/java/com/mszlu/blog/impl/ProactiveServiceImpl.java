@@ -23,17 +23,20 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.util.Arrays;
-import java.util.List;
+import java.io.IOException;
+import java.util.*;
+import java.util.concurrent.*;
 
 @Service
 @Slf4j
 public class ProactiveServiceImpl implements ProactiveService {
 
     private static final long DAY_MILLIS = 24 * 60 * 60 * 1000L;
-    /** 只处理 48h 内登录过的用户，避免对僵尸用户白调 LLM */
     private static final long ACTIVE_WINDOW = 2 * DAY_MILLIS;
+    private static final long SSE_TIMEOUT_MS = 30 * 60 * 1000L;
+    private static final long HEARTBEAT_SECONDS = 25;
 
     @Autowired
     private SysUserMapper sysUserMapper;
@@ -48,11 +51,14 @@ public class ProactiveServiceImpl implements ProactiveService {
     @Autowired
     private AiClient aiClient;
 
+    /** SSE 订阅管理：userId -> List<SseEmitter> */
+    private final Map<String, List<SseEmitter>> subscribers = new ConcurrentHashMap<>();
+    private final Map<SseEmitter, ScheduledExecutorService> heartbeats = new ConcurrentHashMap<>();
+
     @Override
-    @Scheduled(cron = "0 30 9 * * ?")  // 每天 9:30
+    @Scheduled(cron = "0 30 9 * * ?")
     public void dailyReachOut() {
         long now = System.currentTimeMillis();
-
         LambdaQueryWrapper<SysUser> userWrapper = new LambdaQueryWrapper<>();
         userWrapper.gt(SysUser::getLastLogin, now - ACTIVE_WINDOW);
         List<SysUser> activeUsers = sysUserMapper.selectList(userWrapper);
@@ -62,7 +68,6 @@ public class ProactiveServiceImpl implements ProactiveService {
             try {
                 decideForUser(user, now);
             } catch (Exception e) {
-                // 单个用户失败不影响其他人
                 log.error("主动关怀决策失败, userId={}", user.getId(), e);
             }
         }
@@ -72,7 +77,6 @@ public class ProactiveServiceImpl implements ProactiveService {
         String userId = user.getId();
         Persona persona = personaService.getActive(userId);
 
-        // 1. 收集上下文
         LambdaQueryWrapper<Memory> memWrapper = new LambdaQueryWrapper<>();
         memWrapper.eq(Memory::getUserId, userId);
         memWrapper.eq(Memory::getStatus, "open");
@@ -80,16 +84,11 @@ public class ProactiveServiceImpl implements ProactiveService {
         memWrapper.last("limit 10");
         List<Memory> openMemories = memoryMapper.selectList(memWrapper);
 
-        // 沉默天数：用户最后一条 role=user 的消息距今天数
         long lastSpeakTime = lastUserSpeakTime(userId);
         long silentDays = lastSpeakTime == 0 ? 7 : (now - lastSpeakTime) / DAY_MILLIS;
-
-        // 语气档位由后端状态机决定，不让 LLM 自由发挥
         String mood = silentDays < 1 ? "casual" : (silentDays <= 3 ? "concerned" : "miss");
-
         boolean reachedOutYesterday = reachedOutWithin(userId, now - DAY_MILLIS);
 
-        // 最近情绪走向：open 的 emotion 记忆拼成一句话
         StringBuilder emotionSummary = new StringBuilder();
         for (Memory m : openMemories) {
             if ("emotion".equals(m.getType())) {
@@ -100,13 +99,11 @@ public class ProactiveServiceImpl implements ProactiveService {
             emotionSummary.append("无明显记录");
         }
 
-        // 2. LLM 决策
         String prompt = PromptBuilder.proactiveDecision(
                 persona, openMemories, emotionSummary.toString(),
                 silentDays, reachedOutYesterday, mood);
         String json = aiClient.chat(Arrays.asList(new AiMessage("user", prompt)), true);
 
-        // 3. 落库（包括"决定不说"，方便回看决策质量）
         ProactiveLog proactiveLog = new ProactiveLog();
         proactiveLog.setUserId(userId);
         proactiveLog.setMood(mood);
@@ -115,9 +112,16 @@ public class ProactiveServiceImpl implements ProactiveService {
 
         if (json != null) {
             JSONObject decision = JSON.parseObject(json);
-            proactiveLog.setShouldReachOut(decision.getBooleanValue("shouldReachOut") ? 1 : 0);
+            boolean shouldReach = decision.getBooleanValue("shouldReachOut");
+            proactiveLog.setShouldReachOut(shouldReach ? 1 : 0);
             proactiveLog.setDecisionReason(decision.getString("reason"));
-            proactiveLog.setMessage(decision.getString("message"));
+            String message = decision.getString("message");
+            proactiveLog.setMessage(message);
+            
+            // 新增：如果决定说话，立即推送给已订阅用户
+            if (shouldReach && message != null && !message.isEmpty()) {
+                pushToUser(userId, message, mood);
+            }
         } else {
             proactiveLog.setShouldReachOut(0);
             proactiveLog.setDecisionReason("AI 调用失败，默认沉默");
@@ -146,7 +150,6 @@ public class ProactiveServiceImpl implements ProactiveService {
         updateWrapper.eq(ProactiveLog::getId, log0.getId());
         proactiveLogMapper.update(update, updateWrapper);
 
-        // 同时写入聊天记录，让它出现在对话流里
         ChatMessage message = new ChatMessage();
         message.setUserId(user.getId());
         message.setRole("assistant");
@@ -155,6 +158,75 @@ public class ProactiveServiceImpl implements ProactiveService {
         chatMessageMapper.insert(message);
 
         return Result.success(log0.getMessage());
+    }
+
+    @Override
+    public SseEmitter subscribe(String userId) {
+        SseEmitter emitter = new SseEmitter(SSE_TIMEOUT_MS);
+        subscribers.computeIfAbsent(userId, k -> new CopyOnWriteArrayList<>()).add(emitter);
+
+        ScheduledExecutorService heartbeat = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "proactive-heartbeat-" + userId);
+            t.setDaemon(true);
+            return t;
+        });
+        heartbeats.put(emitter, heartbeat);
+
+        heartbeat.scheduleAtFixedRate(() -> {
+            try {
+                emitter.send(SseEmitter.event().comment("ping"));
+            } catch (Exception e) {
+                emitter.complete();
+            }
+        }, HEARTBEAT_SECONDS, HEARTBEAT_SECONDS, TimeUnit.SECONDS);
+
+        emitter.onCompletion(() -> removeSubscriber(userId, emitter));
+        emitter.onTimeout(() -> {
+            emitter.complete();
+            removeSubscriber(userId, emitter);
+        });
+        emitter.onError(e -> removeSubscriber(userId, emitter));
+
+        log.info("用户 {} 订阅主动消息推送", userId);
+        return emitter;
+    }
+
+    @Override
+    public void pushToUser(String userId, String message, String emotion) {
+        List<SseEmitter> emitters = subscribers.get(userId);
+        if (emitters == null || emitters.isEmpty()) {
+            log.debug("用户 {} 当前无订阅连接，消息未推送", userId);
+            return;
+        }
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("message", message);
+        payload.put("emotion", emotion != null ? emotion : "默认");
+        payload.put("ts", System.currentTimeMillis());
+
+        for (SseEmitter emitter : new ArrayList<>(emitters)) {
+            try {
+                emitter.send(SseEmitter.event().name("bubble").data(payload));
+                log.info("主动消息已推送给用户 {}", userId);
+            } catch (IOException e) {
+                log.warn("推送失败，移除连接: userId={}", userId);
+                removeSubscriber(userId, emitter);
+            }
+        }
+    }
+
+    private void removeSubscriber(String userId, SseEmitter emitter) {
+        List<SseEmitter> emitters = subscribers.get(userId);
+        if (emitters != null) {
+            emitters.remove(emitter);
+            if (emitters.isEmpty()) {
+                subscribers.remove(userId);
+            }
+        }
+        ScheduledExecutorService heartbeat = heartbeats.remove(emitter);
+        if (heartbeat != null) {
+            heartbeat.shutdownNow();
+        }
     }
 
     private long lastUserSpeakTime(String userId) {

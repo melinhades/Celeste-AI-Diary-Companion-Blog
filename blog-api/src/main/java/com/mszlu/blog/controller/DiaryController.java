@@ -156,4 +156,19 @@ public class DiaryController {
     public Result emotionStats() {
         return diaryService.emotionStats();
     }
+
+    /** P3.3 新增：更新用户的 Madeline 情绪状态 */
+    @PostMapping("emotion/update")
+    public Result updateEmotion(@RequestBody java.util.Map<String, Object> body) {
+        String emotion = (String) body.get("emotion");
+        Integer intensity = body.get("intensity") != null ? (Integer) body.get("intensity") : 5;
+        String triggerDiaryId = (String) body.get("triggerDiaryId");
+        return diaryService.updateEmotion(emotion, intensity, triggerDiaryId);
+    }
+
+    /** P3.3 新增：获取用户的 Madeline 当前情绪状态 */
+    @GetMapping("emotion/current")
+    public Result getCurrentEmotion() {
+        return diaryService.getCurrentEmotion();
+    }
 }

@@ -26,5 +26,11 @@ public interface ArticleService {
     /** 切换文章可见性：Article.VISIBILITY_PUBLIC / VISIBILITY_PRIVATE */
     Result updateVisibility(String articleId, int visibility);
 
+    /** 我的文章列表（含私密），数据隔离：只查自己的 */
+    Result myArticles(String authorId, int page, int pageSize);
+
+    /** 当前登录用户的文章数（数据隔离：只算自己的） */
+    Result myArticleCount(String authorId);
+
 }
 

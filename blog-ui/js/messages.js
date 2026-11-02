@@ -1,3 +1,6 @@
+    // 打开聊天室应停在最新消息：关掉浏览器的滚动位置恢复，
+    // 否则 load 时会把刚做的 scrollTo 冲回顶部（历史一多就"打开看到最早一条"）
+    try { history.scrollRestoration = 'manual'; } catch (e) {}
     initHeader();
 
     // ===== 实时聊天（SSE 订阅 + POST 发送，历史/消息均存服务端内存） =====
@@ -10,7 +13,14 @@
             bade: { dir: 'ghost', names: ['normal', 'angry', 'angryAlt', 'concerned', 'freakA', 'freakB', 'freakC', 'sad', 'scoff', 'serious', 'sigh', 'upset', 'worried', 'worriedAlt', 'yell'] },
             granny: { dir: 'granny', names: ['normal', 'creepA', 'creepB', 'laugh', 'mock'] },
             theo: { dir: 'theo', names: ['normal', 'excited', 'nailedit', 'serious', 'thinking', 'worried', 'wtf', 'yolo'] },
-            oshiro: { dir: 'oshiro', names: ['normal', 'nervous', 'serious', 'sidehappy', 'sideworried', 'sidesuspicious', 'drama', 'lostcontrol', 'worried'] }
+            oshiro: { dir: 'oshiro', names: ['normal', 'nervous', 'serious', 'sidehappy', 'sideworried', 'sidesuspicious', 'drama', 'lostcontrol', 'worried'] },
+            // 收集品：不是头像，走单独素材映射；[c:*] 标记触发场景互动
+            col: { dir: '', names: ['berry', 'jelly', 'feather'] }
+        };
+        const COLLECT_SRC = {
+            berry: 'celeste-collectables/strawberry.png',
+            jelly: 'Atlases/Gameplay/objects/glider/idle0.png',
+            feather: 'Atlases/Gameplay/objects/flyFeather/idle00.png'
         };
         // ===== 表情包帧动画引擎：循环播放同一情绪的所有帧，做成动图 =====
         // 帧数与 roundtable-portraits.js 一致（已按实际目录冻结）；
@@ -27,6 +37,8 @@
             const FRAME_MS = 110;
             const BASE = 'Atlases/Portraits/';
             const items = new Map();            // img -> state
+            const live = new Set();             // 视口内、正在轮播的 img（IntersectionObserver 驱动）
+            const watched = new WeakSet();      // 已交给 observer 的 img
             const blobCache = new Map();        // src -> blobURL（切帧零网络，避免 ERR_ABORTED 闪烁）
             const loading = new Set();
             let raf = 0;
@@ -57,16 +69,32 @@
             };
             const loop = now => {
                 raf = 0;
-                for (const [img, st] of items) {
-                    if (!img.isConnected) { items.delete(img); continue; }
+                for (const img of live) {
+                    if (!img.isConnected) { live.delete(img); items.delete(img); continue; }
+                    const st = items.get(img);
+                    if (!st) { live.delete(img); continue; }
                     if (now - st.last >= FRAME_MS) {
                         st.last = now;
                         st.idx = (st.idx + 1) % st.frames.length;
                         show(img, st);
                     }
                 }
-                if (items.size) raf = requestAnimationFrame(loop);
+                if (live.size) raf = requestAnimationFrame(loop);
             };
+            // 只轮播视口内的表情：历史里的表情图不再各自换 src 触发重解码/整页重绘，
+            // 也只在滚到可见时才预载整套帧（长历史 = 不再一次性发几百个请求）
+            const io = typeof IntersectionObserver === 'function' ? new IntersectionObserver(entries => {
+                for (let i = 0; i < entries.length; i++) {
+                    const en = entries[i], st = items.get(en.target);
+                    if (en.isIntersecting) {
+                        if (st) { warm(st.dir, st.emo); live.add(en.target); }
+                    } else {
+                        live.delete(en.target);
+                    }
+                }
+                if (!raf && live.size) raf = requestAnimationFrame(loop);
+            }, { rootMargin: '160px 0px' }) : null;
+
             return {
                 add(img, series, emo) {
                     const dir = SERIES_DIR[series];
@@ -76,13 +104,24 @@
                     // 若 dir/emo 未变则跳过，变了则覆盖旧状态→切到正确角色的帧
                     const prev = items.get(img);
                     if (prev && prev.dir === dir && prev.emo === emo) return;
-                    warm(dir, emo);
+                    if (!prev && items.size > 400) {   // 清掉被 v-html 重建后遗弃的元素
+                        for (const el of items.keys()) if (!el.isConnected) items.delete(el);
+                    }
                     const st = { dir, emo, frames, idx: 0, last: performance.now() };
                     items.set(img, st);
                     show(img, st);          // 若 00 帧已缓存则立刻换 blob URL
-                    if (!raf) raf = requestAnimationFrame(loop);
+                    if (!io) {              // 没有 IO：退回全量轮播
+                        warm(dir, emo); live.add(img);
+                        if (!raf) raf = requestAnimationFrame(loop);
+                    } else if (!watched.has(img)) {
+                        watched.add(img);
+                        io.observe(img);
+                    }
                 },
-                remove(img) { items.delete(img); }
+                remove(img) {
+                    items.delete(img); live.delete(img);
+                    if (io && watched.has(img)) io.unobserve(img);
+                }
             };
         })();
 
@@ -116,6 +155,10 @@
         // 渲染消息内容：先整体转义，再把白名单内的表情标记替换为图片（防 XSS）
         function renderChatContent(text) {
             let s = escHtml(text);
+            // 收集品：原始 emoji 先归一化成标记，再统一替换成 atlases 素材
+            s = s.replace(/🍓/g, '[c:berry]').replace(/🪼/g, '[c:jelly]').replace(/🪶/g, '[c:feather]');
+            s = s.replace(/\[c:(berry|jelly|feather)\]/g, (m, name) =>
+                `<img class="chat-emoji collect" loading="lazy" src="${COLLECT_SRC[name]}" alt="c:${name}" decoding="async">`);
             s = s.replace(/\[(mad|bade|granny|theo|oshiro):([a-zA-Z]+)\]/g, (m, series, name) => {
                 const pack = EMOJI_PACKS[series];
                 return (pack && pack.names.includes(name))
@@ -154,15 +197,80 @@
                 let lastTs = 0, lastSender = null;   // 时间分组 + 连续消息合并
                 let typingHideTimer = null;
 
-                // 消息流为页面级滚动（不再有独立滚动容器）
+                // 消息流滚动：优先用 #chatLog 内部滚动（居中卡片 / farewell 场景页），
+                // 旧 messages.html 仍是页面级滚动 → 交给 document 那套逻辑，保持原行为
+                function logScrollEl() {
+                    const el = document.getElementById('chatLog');
+                    if (!el) return null;
+                    const oy = getComputedStyle(el).overflowY;
+                    return (oy === 'auto' || oy === 'scroll') ? el : null;
+                }
                 function atBottom() {
+                    const el = logScrollEl();
+                    if (el) return el.scrollTop + el.clientHeight >= el.scrollHeight - 60;
                     return innerHeight + scrollY >= document.documentElement.scrollHeight - 90;
                 }
-                function scrollToBottom() { scrollTo(0, document.documentElement.scrollHeight); }
+                function scrollToBottom() {
+                    const el = logScrollEl();
+                    if (el) { el.scrollTop = el.scrollHeight; return; }
+                    scrollTo(0, document.documentElement.scrollHeight);
+                }
+
+                // ===== 聊天框隐藏 / 显现（仅在新聊天室页启用：存在 #chatToggle） =====
+                const chatHidden = ref(false);
+                // 就地 DOM 模板挂载：容器自身的 :class 不会被 patch，需手动同步
+                function syncChatHiddenClass() {
+                    const c = document.getElementById('chatContainer');
+                    if (c) c.classList.toggle('chat-hidden', chatHidden.value);
+                }
+                function focusChatInput() {
+                    const inp = document.getElementById('chatInput');
+                    if (inp) inp.focus();
+                }
+                function showChat(focus) {
+                    chatHidden.value = false;
+                    syncChatHiddenClass();
+                    if (focus) nextTick(focusChatInput);
+                }
+                function hideChat() {
+                    if (chatHidden.value) return;
+                    chatHidden.value = true;
+                    syncChatHiddenClass();
+                    emojiOpen.value = false;
+                    const inp = document.getElementById('chatInput');
+                    if (inp) inp.blur();
+                }
+                function toggleChat() {
+                    if (chatHidden.value) showChat(true);
+                    else hideChat();
+                }
 
                 function bindEmojis() {
                     document.querySelectorAll('#chatLog img.chat-emoji, #emojiGrid img').forEach(img => {
                         EmojiAnim.add(img, img.dataset.series, img.dataset.emo);
+                    });
+                }
+
+                // 合并刷新：一帧内到 N 条消息只做一次「绑定表情 + 回底」，
+                // 避免历史回放时每条消息都全量扫 DOM + 强制 layout（O(N²)）
+                // 长挂上限：只保留最近 500 条；只在用户停在底部时裁旧消息，避免看历史时视野跳动
+                const MAX_ITEMS = 500;
+                let flushRaf = 0, flushStick = false;
+                function scheduleFlush() {
+                    if (flushRaf) return;
+                    flushStick = atBottom();
+                    flushRaf = requestAnimationFrame(() => {
+                        flushRaf = 0;
+                        bindEmojis();
+                        if (flushStick) {
+                            if (items.value.length > MAX_ITEMS) {
+                                items.value.splice(0, items.value.length - MAX_ITEMS);
+                                nextTick(scrollToBottom);
+                            } else {
+                                scrollToBottom();
+                            }
+                        }
+                        flushStick = false;
                     });
                 }
 
@@ -174,10 +282,9 @@
                     if (stick) nextTick(scrollToBottom);
                 }
 
-                function pushMsg(m) {
+                function pushMsg(m, quiet) {
                     if (seenIds[m.id]) return;
                     seenIds[m.id] = true;
-                    const stick = atBottom();
                     const ts = Number(m.ts) || Date.now();
                     const mine = String(m.userId) === String(myUserId);
                     const sender = mine ? '__me__' : String(m.userId);
@@ -211,13 +318,12 @@
                         it.hue = hashHue(m.userId);
                     }
                     items.value.push(it);
-                    nextTick(() => { bindEmojis(); if (stick) scrollToBottom(); });
+                    if (!quiet) scheduleFlush();
                 }
 
                 function pushSys(text) {
-                    const stick = atBottom();
                     items.value.push({ t: 'sys', key: 's' + (++seq), text });
-                    if (stick) nextTick(scrollToBottom);
+                    scheduleFlush();
                 }
 
                 /* ===== birdAI：群聊吉祥物小鸟 =====
@@ -299,13 +405,16 @@
                         pushSys('发送失败，网络异常');
                     }).finally(() => {
                         sending.value = false;
-                        const inp = document.getElementById('chatInput');
-                        if (inp) inp.focus();
+                        if (!chatHidden.value) {
+                            const inp = document.getElementById('chatInput');
+                            if (inp) inp.focus();
+                        }
                     });
                 }
                 // 毛毡钢琴打字音效：Enter 发送 → 播 send 音
                 function onInputKey(e) {
-                    if (e.key === 'Enter') { e.preventDefault(); doSend(); }
+                    if (e.key === 'Enter') { e.preventDefault(); doSend(); return; }
+                    if (e.key === 'Escape') { e.preventDefault(); hideChat(); }
                 }
                 // 输入中上报：防抖 2s 一次，有内容才发
                 function onTypeInput() {
@@ -324,9 +433,17 @@
                     { key: 'bade', label: 'Badeline' },
                     { key: 'granny', label: 'Granny' },
                     { key: 'theo', label: 'Theo' },
-                    { key: 'oshiro', label: 'Oshiro' }
+                    { key: 'oshiro', label: 'Oshiro' },
+                    { key: 'col', label: '收集' }
                 ];
                 const currentEmojis = computed(() => {
+                    if (emojiSeries.value === 'col') {
+                        return EMOJI_PACKS.col.names.map(n => ({
+                            n,
+                            mark: '[c:' + n + ']',
+                            src: COLLECT_SRC[n]
+                        }));
+                    }
                     const pack = EMOJI_PACKS[emojiSeries.value];
                     return pack.names.map(n => ({
                         n,
@@ -358,6 +475,14 @@
                             const m = JSON.parse(e.data);
                             pushMsg(m);
                             maybeBird(m);
+                            // 场景互动只吃实时消息：历史回放不生成草莓/水母/羽毛
+                            if (window.ChatScene) {
+                                window.ChatScene.consume(m.content || '');
+                                // 仅真人消息把聊天框重新显现（bird 吉祥物不弹）
+                                if (String(m.userId) !== String(myUserId) && String(m.userId) !== BIRD_ID) {
+                                    window.ChatScene.revealChat();
+                                }
+                            }
                         } catch (err) {}
                     });
                     es.addEventListener('typing', e => {
@@ -432,7 +557,29 @@
                 }
                 function onBeforeUnload() { if (es) es.close(); }
 
+                // ===== 场景页专属：键盘显隐 + 他人消息自动显现（仅存在 #chatToggle 时启用）=====
+                function isTypingTarget(e) {
+                    const t = e.target;
+                    return !!(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable));
+                }
+                const SCENE_KEY_RE = /^(a|d|w|s|c|x|k|z|m|r|shift|arrow(left|right|up|down))$/;
+                function onSceneKeydown(e) {
+                    if (isTypingTarget(e)) return;            // 输入框内交给 onInputKey
+                    if (e.key === 'Enter') { e.preventDefault(); showChat(true); return; }
+                    if (e.key === 'Escape') { hideChat(); return; }
+                    const k = String(e.key).toLowerCase();
+                    if (e.code === 'Space' || SCENE_KEY_RE.test(k)) hideChat();   // 操作 Madeline 时让位
+                }
+                function onChatReveal() { showChat(false); }
+
                 onMounted(() => {
+                    // 场景页（居中聊天卡 + 底部胶囊）才接管键盘；旧 messages.html 无 #chatToggle
+                    const scenePage = !!document.getElementById('chatToggle');
+                    if (scenePage) {
+                        window.addEventListener('keydown', onSceneKeydown);
+                        window.addEventListener('chat:reveal', onChatReveal);
+                        syncChatHiddenClass();
+                    }
                     if (!loggedIn.value) return;
                     // 当前用户 id + 昵称（区分自己/他人气泡，渲染自己的头像与名字）
                     api('/users/currentUser', 'GET').then(res => {
@@ -450,11 +597,11 @@
                             if (res.data.length === 0) {
                                 logStatus.value = 'empty';
                             } else {
-                                res.data.forEach(pushMsg);
+                                // 批量入列：每条都量高度/回底会强制 N 次 layout
+                                res.data.forEach(m => pushMsg(m, true));
                                 logStatus.value = 'ok';
-                                scrollToBottom();
                             }
-                            nextTick(bindEmojis);
+                            nextTick(() => { scrollToBottom(); bindEmojis(); });
                         } else {
                             logStatus.value = 'error';
                         }
@@ -472,6 +619,8 @@
                 onUnmounted(() => {
                     if (es) es.close();
                     clearTimeout(typingHideTimer);
+                    window.removeEventListener('keydown', onSceneKeydown);
+                    window.removeEventListener('chat:reveal', onChatReveal);
                     document.removeEventListener('click', onDocClick);
                     window.removeEventListener('notify:unread', onNotifyUnread);
                     window.removeEventListener('beforeunload', onBeforeUnload);
@@ -479,6 +628,7 @@
 
                 return {
                     loggedIn, pane, unread, badgeText,
+                    chatHidden, toggleChat,
                     statusState, statusText,
                     logStatus, items, typingName,
                     draft, sending, doSend, onInputKey, onTypeInput,
@@ -496,13 +646,21 @@
         function resize() { cv.width = innerWidth; cv.height = innerHeight; }
         resize(); addEventListener('resize', resize);
         const fs = [];
-        for (let i = 0; i < 70; i++) fs.push({
-            x: Math.random() * innerWidth, y: Math.random() * innerHeight,
-            r: Math.random() * 3 + 1, sp: Math.random() * 1.5 + 0.5,
-            w: Math.random() * 0.5 - 0.25, o: Math.random() * 0.6 + 0.2,
-            sw: Math.random() * Math.PI * 2, sws: Math.random() * 0.02 + 0.01
-        });
-        (function loop() {
+        for (let i = 0; i < 70; i++) {
+            const o = Math.random() * 0.6 + 0.2;
+            fs.push({
+                x: Math.random() * innerWidth, y: Math.random() * innerHeight,
+                r: Math.random() * 3 + 1, sp: Math.random() * 1.5 + 0.5,
+                w: Math.random() * 0.5 - 0.25, o,
+                css: 'rgba(255,255,255,' + o + ')',   // 颜色不变，别每帧拼字符串
+                sw: Math.random() * Math.PI * 2, sws: Math.random() * 0.02 + 0.01
+            });
+        }
+        let lastDraw = -1e9;
+        (function loop(ts) {
+            // 雪花 30fps 足够（原来跟着 rAF 跑满 60fps），省下的合成时间给聊天滚动/输入
+            if (ts - lastDraw < 33) { requestAnimationFrame(loop); return; }
+            lastDraw = ts;
             c.clearRect(0, 0, cv.width, cv.height);
             for (const f of fs) {
                 f.y += f.sp; f.sw += f.sws;
@@ -511,7 +669,7 @@
                 if (f.x > cv.width + 10) f.x = -10;
                 if (f.x < -10) f.x = cv.width + 10;
                 c.beginPath(); c.arc(f.x, f.y, f.r, 0, Math.PI * 2);
-                c.fillStyle = 'rgba(255,255,255,' + f.o + ')'; c.fill();
+                c.fillStyle = f.css; c.fill();
             }
             requestAnimationFrame(loop);
         })();

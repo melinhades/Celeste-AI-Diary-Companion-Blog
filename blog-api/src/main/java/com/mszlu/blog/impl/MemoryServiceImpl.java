@@ -15,15 +15,18 @@ import com.mszlu.blog.service.ai.AiMessage;
 import com.mszlu.blog.service.ai.PromptBuilder;
 import com.mszlu.blog.utils.UserThreadLocal;
 import com.mszlu.blog.vo.ContextChunk;
+import com.mszlu.blog.vo.RagMetrics;
 import com.mszlu.blog.vo.Result;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.AbstractMap;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,18 +41,28 @@ public class MemoryServiceImpl implements MemoryService {
     /** 拼进 prompt 的记忆上限，防止 token 膨胀 */
     private static final int MAX_CONTEXT_MEMORIES = 15;
 
-    // ================= P1 新增：向量缓存 + 重排常量 =================
+    // ================= P1/P2：向量缓存 + 重排参数 =================
     /** 每个用户的向量缓存，key = 用户ID，value = (记录ID → 向量) */
     private final ConcurrentHashMap<String, ConcurrentHashMap<String, float[]>>
             VEC_CACHE = new ConcurrentHashMap<>();
     /** 缓存 TTL：10 分钟（超出则丢弃，下次查询时重新解析） */
     private static final long CACHE_TTL_MS = 10 * 60 * 1000L;
-    /** 时间衰减 τ：30 天（exp(-Δt/τDays)，τDays = 30×86400） */
-    private static final double DECAY_TAU_SEC = 30L * 86400;
-    /** 分源配额：memory 40% / diary 40% / lore 20% */
-    private static final double MEMORY_QUOTA = 0.4;
-    private static final double DIARY_QUOTA  = 0.4;
-    private static final double LORE_QUOTA   = 0.2;
+    
+    // P2：从配置读取，支持热调优
+    @Value("${rag.similarity-threshold:0.3}")
+    private double similarityThreshold;
+    
+    @Value("${rag.decay-tau-days:30}")
+    private int decayTauDays;
+    
+    @Value("${rag.quota.memory:0.4}")
+    private double memoryQuota;
+    
+    @Value("${rag.quota.diary:0.4}")
+    private double diaryQuota;
+    
+    @Value("${rag.quota.lore:0.2}")
+    private double loreQuota;
 
     @Autowired
     private MemoryMapper memoryMapper;
@@ -60,6 +73,7 @@ public class MemoryServiceImpl implements MemoryService {
 
     @Override
     public List<Memory> getRelevant(String userId, String userContent) {
+        long startMs = System.currentTimeMillis();
         // 用 LinkedHashMap 按插入顺序去重（key = memory id）
         Map<String, Memory> picked = new LinkedHashMap<>();
 
@@ -88,7 +102,7 @@ public class MemoryServiceImpl implements MemoryService {
                     float[] v = cachedVec(userId, m.getId(), m.getEmbedding());
                     if (v == null) continue;
                     double sim = cosine(queryVec, v);
-                    if (sim > 0) {
+                    if (sim > similarityThreshold) {
                         Long tRef = m.getLastMentionedTime() != null ? m.getLastMentionedTime() : m.getCreateDate();
                         double finalScore = sim * timeDecay(tRef) * importanceWeight(m.getImportance());
                         scored.add(new AbstractMap.SimpleEntry<>(m, finalScore));
@@ -128,6 +142,12 @@ public class MemoryServiceImpl implements MemoryService {
         }
 
         List<Memory> result = new ArrayList<>(picked.values());
+        
+        // P2：提取检索指标（召回数/耗时/向量命中），记日志供监控
+        RagMetrics metrics = extractMetrics(startMs, result.size(), vectorHit, userContent);
+        log.info("RAG检索完成: userId={}, recalled={}, elapsed={}ms, vectorHit={}", 
+                 userId, metrics.getTotalRecalled(), metrics.getElapsedMs(), metrics.isVectorHit());
+        
         return result.size() > MAX_CONTEXT_MEMORIES
                 ? result.subList(0, MAX_CONTEXT_MEMORIES) : result;
     }
@@ -185,7 +205,8 @@ public class MemoryServiceImpl implements MemoryService {
         if (timestampMs == null) return 1.0;
         double deltaSec = (System.currentTimeMillis() - timestampMs) / 1000.0;
         if (deltaSec <= 0) return 1.0;
-        return Math.exp(-deltaSec / DECAY_TAU_SEC);
+        double tauSec = decayTauDays * 86400.0;
+        return Math.exp(-deltaSec / tauSec);
     }
 
     /** 重要性融合因子：importance 1-10，权重 0.8 + 0.2·importance/10；null 兜底 5 → 1.0 */
@@ -199,8 +220,8 @@ public class MemoryServiceImpl implements MemoryService {
     private List<ContextChunk> reRank(List<Map.Entry<ContextChunk, Double>> scored, int limit) {
         if (scored == null || scored.isEmpty()) return new ArrayList<>();
 
-        double memQuota = Math.ceil(limit * MEMORY_QUOTA);
-        double diaQuota = Math.ceil(limit * DIARY_QUOTA);
+        double memQuota = Math.ceil(limit * memoryQuota);
+        double diaQuota = Math.ceil(limit * diaryQuota);
         double lorQuota = limit - memQuota - diaQuota;
 
         List<Map.Entry<ContextChunk, Double>> mem = new ArrayList<>();
@@ -426,7 +447,7 @@ public class MemoryServiceImpl implements MemoryService {
             float[] v = cachedVec(userId, mem.getId(), mem.getEmbedding());
             if (v == null) continue;
             double sim = cosine(qv, v);
-            if (sim <= 0.3) continue;
+            if (sim <= similarityThreshold) continue;
             // 时间衰减：lastMentionedTime 优先（最近被提及=更相关），null → createDate
             Long tRef = mem.getLastMentionedTime() != null ? mem.getLastMentionedTime() : mem.getCreateDate();
             double timeD = timeDecay(tRef);
@@ -446,7 +467,7 @@ public class MemoryServiceImpl implements MemoryService {
             float[] v = cachedVec(userId, c.getId(), c.getEmbedding());
             if (v == null) continue;
             double sim = cosine(qv, v);
-            if (sim <= 0.3) continue;
+            if (sim <= similarityThreshold) continue;
             double timeD = timeDecay(c.getCreateDate());
             double finalScore = sim * timeD;
             scored.add(new AbstractMap.SimpleEntry<>(
@@ -465,7 +486,7 @@ public class MemoryServiceImpl implements MemoryService {
             float[] v = cachedVec(null, c.getId(), c.getEmbedding());
             if (v == null) continue;
             double sim = cosine(qv, v);
-            if (sim <= 0.3) continue;
+            if (sim <= similarityThreshold) continue;
             scored.add(new AbstractMap.SimpleEntry<>(
                     new ContextChunk("lore", c.getContent(),
                             c.getTitle() != null ? "Celeste设定·" + c.getTitle() : "Celeste设定", sim), sim));
@@ -483,5 +504,28 @@ public class MemoryServiceImpl implements MemoryService {
             keywords.add(cleaned.substring(i, i + 2));
         }
         return keywords;
+    }
+
+    /**
+     * P2 新增：提取检索指标，用于监控和调优。
+     * @param startMs 检索开始时间戳
+     * @param recalledCount 召回记录数
+     * @param vectorHit 是否命中向量检索
+     * @param query 查询文本
+     */
+    private RagMetrics extractMetrics(long startMs, int recalledCount, boolean vectorHit, String query) {
+        RagMetrics m = new RagMetrics();
+        m.setTotalRecalled(recalledCount);
+        m.setElapsedMs(System.currentTimeMillis() - startMs);
+        m.setVectorHit(vectorHit);
+        
+        // 查询文本脱敏：只取前 20 字
+        if (query != null && !query.isEmpty()) {
+            m.setQuerySnippet(query.length() > 20 ? query.substring(0, 20) + "..." : query);
+        }
+        
+        // 源分布和相似度分位数留给 searchContext 实现（getRelevant 只返回 Memory 列表，无源信息）
+        m.setSourceDistribution(new HashMap<>());
+        return m;
     }
 }

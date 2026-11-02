@@ -10,16 +10,27 @@ import com.mszlu.blog.vo.LoginUserVo;
 import com.mszlu.blog.vo.Result;
 import com.mszlu.blog.vo.params.ErrorCode;
 import com.mszlu.blog.vo.params.UserVo;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.concurrent.TimeUnit;
+
 @Service
+@Slf4j
 public class SysUserServiceImpl implements SysUserService {
+
+    private static final String SEED_CLAIM_KEY_PREFIX = "berry_seed_claim_";
+    private static final long SEED_CLAIM_COOLDOWN_HOURS = 6;
+
     @Autowired
     private SysUserMapper sysUserMapper;
     @Autowired
     private TokenService tokenService;
+    @Autowired
+    private RedisTemplate<String, String> redisTemplate;
 
     @Override
     public UserVo findUserVoById(String id) {
@@ -107,21 +118,25 @@ public class SysUserServiceImpl implements SysUserService {
         if (loginUser == null) {
             return Result.fail(ErrorCode.TOKEN_ERROR.getCode(), ErrorCode.TOKEN_ERROR.getMsg());
         }
-        if (delta == null) {
+        if (delta == null || delta == 0) {
             return Result.fail(400, "delta 非法");
         }
-        int deltaVal = delta;
-        if (deltaVal == 0) {
-            return Result.fail(400, "delta 非法");
+        if (delta > 0) {
+            return Result.fail(403, "草莓只能通过服务端业务奖励获得");
         }
-        if (Math.abs(deltaVal) > 100000) {
+        if (delta < -100000) {
             return Result.fail(400, "delta 超出范围");
         }
-        // 数据库原子增减，GREATEST 兜底保证余额永不为负
+        int spend = -delta; // 已保证 delta >= -100000，不会溢出
+        // 数据库原子消费，带余额充足条件，保证余额永不为负
         LambdaUpdateWrapper<SysUser> uw = new LambdaUpdateWrapper<>();
         uw.eq(SysUser::getId, loginUser.getId());
-        uw.setSql("berry = GREATEST(COALESCE(berry, 0) + " + deltaVal + ", 0)");
-        sysUserMapper.update(null, uw);
+        uw.ge(SysUser::getBerry, spend);
+        uw.setSql("berry = COALESCE(berry, 0) - " + spend);
+        int rows = sysUserMapper.update(null, uw);
+        if (rows == 0) {
+            return Result.fail(400, "草莓余额不足");
+        }
 
         SysUser fresh = sysUserMapper.selectById(loginUser.getId());
         tokenService.refreshUserCache(token, fresh);
@@ -129,6 +144,69 @@ public class SysUserServiceImpl implements SysUserService {
         Integer berry = fresh.getBerry();
         data.put("berry", berry == null ? Integer.valueOf(0) : berry);
         return Result.success(data);
+    }
+
+    @Override
+    public void grantDiaryBerry(String userId) {
+        if (userId == null || userId.isEmpty()) {
+            return;
+        }
+        LambdaUpdateWrapper<SysUser> uw = new LambdaUpdateWrapper<>();
+        uw.eq(SysUser::getId, userId);
+        uw.setSql("berry = COALESCE(berry, 0) + 1");
+        sysUserMapper.update(null, uw);
+    }
+
+    @Override
+    public Result claimSeedBerry(String token) {
+        SysUser loginUser = tokenService.checkToken(token);
+        if (loginUser == null) {
+            return Result.fail(ErrorCode.TOKEN_ERROR.getCode(), ErrorCode.TOKEN_ERROR.getMsg());
+        }
+        String key = SEED_CLAIM_KEY_PREFIX + loginUser.getId();
+        Boolean firstClaim;
+        try {
+            firstClaim = redisTemplate.opsForValue()
+                    .setIfAbsent(key, "1", SEED_CLAIM_COOLDOWN_HOURS, TimeUnit.HOURS);
+        } catch (Exception e) {
+            // 冷却状态无法确认时拒绝发放，绝不 fail-open
+            log.warn("草莓籽领取冷却校验失败 userId={}", loginUser.getId(), e);
+            return Result.fail(503, "奖励暂不可用，请稍后再试");
+        }
+
+        boolean granted = Boolean.TRUE.equals(firstClaim);
+        if (granted) {
+            LambdaUpdateWrapper<SysUser> uw = new LambdaUpdateWrapper<>();
+            uw.eq(SysUser::getId, loginUser.getId());
+            uw.setSql("berry = COALESCE(berry, 0) + 1");
+            try {
+                int rows = sysUserMapper.update(null, uw);
+                if (rows == 0) {
+                    deleteSeedClaimKey(key);
+                    return Result.fail(400, "用户不存在");
+                }
+            } catch (Exception e) {
+                log.warn("草莓籽奖励发放失败 userId={}", loginUser.getId(), e);
+                deleteSeedClaimKey(key);
+                return Result.fail(500, "奖励发放失败，请稍后再试");
+            }
+        }
+
+        SysUser fresh = sysUserMapper.selectById(loginUser.getId());
+        java.util.Map<String, Object> data = new java.util.HashMap<>();
+        Integer berry = fresh == null ? null : fresh.getBerry();
+        data.put("berry", berry == null ? Integer.valueOf(0) : berry);
+        data.put("granted", granted);
+        return Result.success(data);
+    }
+
+    /** 发放失败时尽力回滚冷却标记，失败只记日志不抛出 */
+    private void deleteSeedClaimKey(String key) {
+        try {
+            redisTemplate.delete(key);
+        } catch (Exception e) {
+            log.warn("草莓籽冷却标记回滚失败 key={}", key, e);
+        }
     }
 
     @Override

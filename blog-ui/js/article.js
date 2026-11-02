@@ -125,13 +125,19 @@
             const plain = (a.body?.contentHtml || a.body?.content || '').replace(/<[^>]+>/g, '');
             readMin.value = Math.max(1, Math.ceil(plain.length / 400));
 
-            // 正文：优先用 marked 解析原始 Markdown（含 # 标题、** 加粗、``` 代码块等），兜底纯文本自动分段
-            let body = a.body?.content || a.body?.contentHtml || '';
-            // 去掉可能的 ```markdown 或 ``` 整体包裹
-            body = body.replace(/^```[a-z]*\s*/, '').replace(/```\s*$/, '');
-            if (body && !/<[a-z][^>]*>/i.test(body)) {
-                // 是 Markdown 内容，用 marked 渲染
+            // 正文：优先用原始 Markdown content 解析（代码块里的 <script setup> 会被 marked 转义，不再触发“含 HTML 就跳过”的危险分支）
+            const rawContent = a.body?.content;
+            let body = rawContent || a.body?.contentHtml || '';
+            if (rawContent) {
+                body = rawContent.replace(/^```[a-z]*\s*/, '').replace(/```\s*$/, '');
                 body = marked.parse(body);
+            }
+            // 最终交给 v-html 的 HTML 必须清洗；保留标题/列表/表格/代码块/图片/链接等正常 Markdown 排版
+            if (window.DOMPurify) {
+                body = window.DOMPurify.sanitize(body, { USE_PROFILES: { html: true } });
+            } else {
+                // 库未加载时 fail-closed：转义为纯文本，宁可丢排版也不执行注入 HTML
+                body = escHtml(body).replace(/'/g, '&#39;');
             }
             bodyHtml.value = `<div class="article-body">${body}</div>`;
             headerStatus.value = 'ok';

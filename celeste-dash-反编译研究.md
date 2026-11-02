@@ -1938,3 +1938,529 @@ Sprite.Scale.Y = Calc.Approach(Sprite.Scale.Y, 1f, 1.75f * dt);
 | D8 | 不可复现 | `Dust{Static,Track,Rotate}Spinner` 的 `P_Move` 拖尾粒子：`P_Move` 是静态字段，本机全库字段令牌扫描 **0 命中写入点**（`FieldDef` + `stsfld` 全扫），只能凭场景语义近似——商店页用 1.5 px 橙色小方点、`TTL 0.36 s`、`track/orbit 0.02 s`、`static 0.05 s` 的发射间隔，颜色取 `DustStyles[3].EdgeColors[0] = #f25a10` |
 | D9 | 有意近似 | spinner 的 `OnTrackEnd` / `OnSpin` 回调（原作里触发机关音效与地图事件）在商店页无对应系统，未接线 |
 
+
+---
+
+## 23. 第五轮：`CS10_FinalLaunch`（第九章进太空过场）取证与博客过场移植
+
+**用户命题**：「REA 复刻第九章开头进入太空的过场动画，作为点击头部鸟图标跳转新页面的过场；现在根本一点不像；另外鸟按钮容器太小，喊叫动作被裁」。
+
+**取证目标**：`Celeste.CS10_FinalLaunch` 及其协程 `<Cutscene>d__14`、`<BirdRoutine>d__17`、`<WaveCamera>d__16`，外加它依赖的 `BlackholeBG`、`AscendManager/Streaks`、`Ease`、`Player.SummitLaunch*`。dump 在 `.screenshots/.tmp/rea/`。
+
+### 23.1 逐成员 IL 证据
+
+| 成员 | IL 事实 |
+|---|---|
+| `CS10_FinalLaunch.OnBegin` | `Audio.SetMusic(null,1,1)`；`ScreenWipe.WipeColor = White`；遍历 Followers 找金草莓 → `hasGolden`；`Add(Cutscene())` |
+| `<Cutscene>d__14` | `TimeRate=1`；`boost.Active=false`；`yield 1`；对白 `CH9_LAST_BOOST` 或 `yield 0.152`；`cameraOffset=(0,-20)`；`boost.Active=true`；设 BlackholeBG：`Direction=-2.5`、`SnapStrength(2)`、`CenterOffset.Y=100`、`OffsetOffset.Y=-50`；加 `WaveCamera`、`BirdRoutine(0.8)`、`Streaks(level,null)`；`for p:0→1 (p+=dt/12)`：`fadeToWhite=p`、`streaks.Alpha=p`、`GetEach<Parallax>("blackhole").FadeAlphaMultiplier=1-p`；`while(bird!=null) yield`；`FadeWipe Duration=4`、`WipeColor=White`；`p=cameraOffset.Y; to=180; p5:0→1 (dt/2): cameraOffset.Y = p+(to-p)*Ease.BigBackIn(p5)`；`EndCutscene(true)` |
+| `CS10_FinalLaunch.Update` | `timer += dt`；鸟在：`bird.Position = Camera.Position + birdScreenPosition`，`X += sin(timer)*4`，`Y += sin(timer*0.1)*4 + sin(timer*0.25)*4`（每帧先重置，不累积）；`Level.CameraOffset = cameraOffset + cameraWaveOffset` |
+| `<WaveCamera>d__16` | `timer=0`；`cameraWaveOffset.X = sin(timer)*16`；`.Y = sin(timer*0.5)*16 + sin(timer*0.25)*8`；`timer += dt*2` |
+| `<BirdRoutine>d__17` | `yield 0.8` → `new BirdNPC(level, Zero, 6)`、`Play("flyupIdle")`；`screen=(160,90)`、`topCenter=(160,0)`、`from=(160,180)+(40,40)=(200,220)`、`to=(128,66)`；阶段1 `t+=dt/4`（4s）：`from+(to-from)*Ease.BackOut(t)`，**循环结束后**才 `Play("flyupRoll")`；阶段2 `t+=dt/2`（2s）：`to + (64,0)*Ease.CubeInOut(t)`（to 不更新）；阶段3 `t+=dt/4`（4s）：`to=(192,66)`、`from=topCenter+(-40,-100)=(120,-100)`，`t>=0.35` 时 `Play("flyupRoll")`，`birdScreenPosition = to+(from-to)*Ease.BigBackIn(t)`，再 `X += t*32`；结束 `bird.RemoveSelf()`（≈10.8s） |
+| `Ease` | `SineInOut=0.5-Cos(PI*t)/2`；`SineOut=Sin(t*1.570796)`；`CubeIn=t^3`；`CubeInOut` 分段；`BackOut=1-(1-t)^2*(1-2.70158*t)`；**`BigBackIn=33t^5-59t^4+32t^3-5t^2`** |
+| `AscendManager/Streaks` | `Alpha=1`；80 粒子；`MinSpeed=600/MaxSpeed=2000`；`manager==null||!Dark` → colors=`[White,#e69ecb]`；`Depth=20`；纹理 `scenery/launch/slice`（32×128，3 张）；每粒子：`x=160+Range(24,144)*Choose(-1,1)`、`y=NextFloat()*436`、`speed=ClampedMap(|x-160|,0,160,0.25,1)*Range(600,2000)`；`Update: Y += Speed*dt`；`Render: a=SineInOut(manager?fade:1 * Alpha)`，位置 `(Mod(x,320), -128+Mod(y,436)) + camera.Position`，scale=`(ClampedMap(speed,600,2000,1,0.25), ClampedMap(...,1,2))*ClampedMap(...,1,4)`，`DrawCentered`；左右 `Draw.Rect(cam.X-10, cam.Y-10, 26, 200)` 与 `cam.X+304` |
+| `BlackholeBG` | `BG_STEPS=20`、streams 30~50、particles 150~220、spirals 0~10（12 段）；`Direction=Scale=Alpha=StrengthMultiplier=1`；`bgColorInner=#000000`、`bgColorOuterMild=#512a8b`、`bgColorOuterWild=#bd2192`；mild=`[#6e3199,#851f91,#3026b0]*0.8`、wild=`[#ca4ca7,#b14cca,#ca4ca7]`；portal 贴图 240×240；粒子贴图 `bgs/10/blackhole/particle`（64×64） |
+| `Player.SummitLaunchBegin` | `Sprite.Play("launch")`；`Speed = -UnitY*240`；`summitLaunchParticleTimer=0.4` |
+
+### 23.2 移植落地（`blog-ui/js/bird-ascent.js` 整体重写）
+
+整段过场改成 **只依赖发射后名义时间 t 的确定性函数**（`t = 实耗秒 × TIME_SCALE`），跨页只传 `lt` 种子：
+
+| 层 | 实现 |
+|---|---|
+| 视口 | 固定 320×180 + `Z=max(W/320,H/180)` 的 cover 变换（与原作 play 分辨率一致） |
+| 背景 | 离屏 320×180 buffer：20 层 portal（`lt=(1-5t%1)*0.05+i/20`、`scale=ClampedMap(lt,0,1,0.1,4)`、`rot=2πlt`、`pos=center+offset*lt+shake*(1-lt)`）+ 40 streams + 200 particles；整层 `globalAlpha=1-p` |
+| 角色 | Madeline `y=-240t`（匀速上升，无落地），`madScreen=(160-camX, 90-camY)`、`camX/Y = cameraOffset+cameraWaveOffset`；姿态 `launch00..07`（`Sprites.xml` delay 0.06 循环），Origin (16,32)；`SpeedRing` 每 0.2s 一枚 |
+| 鸟 | 三段屏幕空间飞行 + 正弦抖动；`flyupIdle=FlyUp10..15@0.1`、`flyupRoll=flyup00..FlyUp15@0.1`（4.8s / 8.2s 两次触发） |
+| 速度线 | 80 条 slice，`Alpha=p`，`y(t)=y0+speed*t` 闭式；白 / `#e69ecb`；左右 26×200 边缘条 |
+| 白化 | `p=t/12`，最后一层整屏白 `alpha=p` |
+| 收场 | `finish()`：相机 `-20→180`（BigBackIn，0.5 名义秒）+ 白幕 1.2 实秒推满 + 0.2s hold → `onDone` 跳页；demo 页接一块白幕 1.4s 淡出 |
+
+### 23.3 偏差工单
+
+| ID | 原作行为（成员） | 本轮实现 | 类型 |
+|---|---|---|---|
+| X1 | 时间基准 `dt` / `TimeRate=1` | `TIME_SCALE=1.5`（曲线、常量不变，只整体播放速率 ×1.5；原版起飞到全白约 16s，作页面跳转过长） | 有意压缩 |
+| X2 | `spirals`（0~10 个，12 段弧形） | 未移植 | 缺口 |
+| X3 | streams 越界时重取 `Normal=AngleToVector(NextFloat()*2π,1)` | 闭式 `mod`，Normal 固定不重取 | 缺口 |
+| X4 | `FadeWipe Duration=4` 的独立白场擦除 | 由 `finish()` 的 1.2s 白幕推进合并 | 有意压缩 |
+| X5 | `Parallax("blackhole")` 前景视差层 | 本项目无该素材层，未移植 | 缺口 |
+| X6 | `Textbox.Say("CH9_LAST_BOOST")`、`granny_farewell` 音乐、金草莓分支 | 无对应资源/交互，未移植 | 缺口 |
+
+### 23.4 素材与尺寸（全部 `blog-ui/Atlases`）
+
+| 用途 | 路径 | 尺寸 |
+|---|---|---|
+| 鸟 flyup 帧 | `Gameplay/characters/bird/flyup00.png`、`FlyUp01..15.png` | 32×24，origin (16,24) |
+| 速度线 | `Gameplay/scenery/launch/slice00..02.png` | 32×128 |
+| 黑洞 portal | `Gameplay/objects/temple/portal/portal.png` | 240×240 |
+| Madeline 上升 | `Gameplay/characters/player/launch00..07.png`（`Sprites.xml <Loop id="launch" delay="0.06" frames="0-7"/>`） | 32×32，origin (16,32) |
+
+### 23.5 数值断言
+
+`node .screenshots/.tmp/birdascent/assert.js` → **22/22 passed**（鸟 5 个时刻坐标 ±1、`p=t/12`、WaveCamera 三条正弦、Streaks 80 条与 `y(t)` 闭式、`camDrop(0/0.5/1)`、flyupRoll/flyupIdle 帧窗）。
+浏览器（`test.js`）：图标 `disp=32x24 / overflow=visible`；关键帧 `t=0.72/3.17/6.44/9.54/10.82` 对应 `p=0.060/0.264/0.537/0.781/0.985`；跳页后白幕 `.white.show.done` → 移除；`errors: none`。
+
+### 23.6 训练记录
+
+| 项 | 结论 |
+|---|---|
+| 容器裁剪 | `common.css` 的 `.chat-crow-box` 是 19×18 + `overflow:hidden`，img 40×30 负 margin；只露鸟头。改为 `width/height:auto` + `overflow:visible` + img 32×24，喊叫 `translateY(-6px) scale(1.16)` 不再被裁 |
+| 鸟帧命名 | atlas 里是 `flyup00.png` + `FlyUp01..15.png`（大小写混杂）；`Glob flyup*` 只能命中 1 张，必须按 Sprites.xml 的 `flyup0-15` 逐一确认 |
+| 速度线观感 | `slice*` 平均 alpha 75/255、29% 像素 >100 → 80 条叠加在中段会接近全白；这是原作 `Alpha=p` 的真实结果，不是 bug |
+
+### 23.7 第六轮：用户问「是不是先跃起再落地」——按 IL 定案
+
+**用户命题**：「Madeline 进入太空的出场动画是不是先跃起再落地？用 REA 反编译复刻效果，过场也要用 REA 优化」。
+
+**定案：没有落地。** `SummitLaunch` 是**匀速直线上升**，整段没有落点/着地判定：
+
+| 成员 | IL 事实 |
+|---|---|
+| `Player.SummitLaunchBegin` | `wallBoostTimer=0`、`Sprite.Play("launch")`、`Speed=-UnitY*240`、`summitLaunchParticleTimer=0.4` |
+| `Player.SummitLaunchUpdate` | 每 0.03s `ParticlesFG.Emit(BadelineBoost.P_Move,...)`；`Facing=1`；`MoveTowardsX(targetX, 20*dt)`；**每帧强制 `Speed=-UnitY*240`**；每 0.2s `SpeedRing.Init(Center, 1.5707964, White)`；只有 `ShouldStopSummitLaunch()` 才 `StopSummitLaunch`（高度/剧情判定），无 `OnGround` 判定 |
+| `Content/Graphics/Sprites.xml` | `<player ...><Origin x="16" y="32"/><Loop id="launch" path="launch" delay="0.06" frames="0-7"/>` |
+| `SpeedRing.Update` | `lerp += 3*dt`（寿命 1/3s）、`Position += normal*10*dt`；`Normal=AngleToVector(π/2)= (0,1)` → 相对上升中的 Madeline 向下飘 |
+| `SpeedRing.DrawRing` | 半径 `Lerp(4,14,lerp)`；`GetVectorAtAngle` 里 `Lerp(maxR, maxR*0.5, |Dot(v,normal)|)` → 沿 normal 压扁一半（竖直半径减半的椭圆） |
+| `SpeedRing.Render` | `color * Lerp(0.6, 0, lerp)`；`SamplerState.PointClamp` |
+
+**为什么会看成「跃起又落地」**：不是动画本身，而是抖屏只作用在 Madeline 身上。`CS10_FinalLaunch.Update` 写的是 `Level.CameraOffset = cameraOffset + cameraWaveOffset` —— 这是**整台相机**位移（世界坐标整体反方向移动），背影片与 Madeline 一起抖；而鸟是 `bird.Position = Camera.Position + birdScreenPosition`、速度线是 `particle.Position + Camera.Position`，两者被相机反向抵消，在屏幕上**不动**。旧实现把 `-wave` 只加在 Madeline 的屏幕坐标上，背景与速度线纹丝不动 → 一个人上下摆 ±24px，读起来就是「跃起、落地」。
+
+**修复**：
+
+1. `bird-ascent.js` 的 `drawBG` 接收 `camX/camY`，涡流中心 `cx=160-camX`、`cy=190-camY`（portal/streams/particles 全部随之位移）；Madeline 用同一组 `camX/camY`。背景与角色一起抖 = 相机抖动。
+2. 姿态换成 `launch00..07`（去掉 `madeline-move.gif`）：`launchFrameIndex(t)=floor(t/0.06)%8`，`Origin (16,32)`，`drawImage(fr, px-16, py-32, 32, 32)`。
+3. 补 `SpeedRing`：`drawRings(t,px,py)` 按 `k0=floor(t/0.2)` 倒序，`age=t-k*0.2`、`l=age/(1/3)`、`a=0.6*(1-l)`、`r=4+10*l`、`ellipse(px, py+10*age, r, r*0.5)`。
+4. 补起飞瞬间：`launchFlash(t)=0.5*max(0,1-t/0.45)`（`Level.Flash(White*0.5,true)` 余辉，叠加到白幕 alpha）、`launchShake(t)`（`DirectionalShake(-UnitY,0.6)`，0.35s 内衰减）。
+
+**验证**：`assert.js` 22/22 仍全绿；`probe5.js`（`.screenshots/.tmp/birdascent/`）8 张 launch png 全部 200、`t=0.3/2.1/4.75/7.55` 四个取样点均无 console error，截图可见翻滚帧 + 脚下 SpeedRing 椭圆 + 涡流背景；`probe6.js` 交接 `→ celeste-farewell-remembered-demo.html?ascent=1`、`.white.show` → 淡出后 `__scene` 在跑、`errors: none`。
+
+---
+
+## 24. 第六轮：跟随者与金羽毛飞行（聊天室互动移植）
+
+**用户命题**：「草莓 emoji → 身后跟随草莓；水母 emoji → 身旁浮出水母；金羽毛 emoji → 场景随机刷新羽毛，Madeline 触碰后进入 StarFly 飞行」。
+
+**取证强度声明**：本轮**没有重新运行 REA 反编译**，也没有新的 IL dump。本章结论只有三个来源：(a) 项目内既有 REA 产物与移植注释（`blog-ui/js/shelf.js` L1928–1966、demo 内联脚本 L851–858 的「证据（Celeste.dll）」注释）；(b) 已落地实现代码（`celeste-farewell-remembered-demo.html` L851–1200、`shelf.js` L2504–2669）；(c) `.trae/specs/chat-scene-collectibles/spec.md` §9。此前章节已有的原文（第 9 节 `UpdateHair`、第 16.9 节 StarFly 行）直接复用；本轮新增数值一律标注「既有注释 / 移植代码」，**不补写 IL 行号**。
+
+### 24.1 移植范围与产品约束
+
+| 互动 | 触发 token | 上限 | 落点 | 行为 |
+|---|---|---|---|---|
+| 草莓跟随 | `🍓` / `[c:berry]` | 10 | `addBerry()` L938 → `stepFollowers()` L965 | 每颗草莓按 Leader 轨迹索引取跟随点，`DelayTimer` 0.3s 后才开始插值 |
+| 水母 | `🪼` / `[c:jelly]` | 4 | `addJelly()` L946 → `stepJellies()` L978 | 身侧交替（`i % 2` 取 ±1），正弦浮动 |
+| 金羽毛 + StarFly | `🪶` / `[c:feather]` | 6 | `spawnFeather()` L955 → `stepFeathers()` L988 → `startFly()` L999 | 相机可见区左右两侧随机刷新；与角色中心距离 `< 14` 即触碰 → 变形 0.42s → 2s 飞行 |
+
+两条产品约束：
+
+1. **历史消息不回放**：`ChatScene.consume()` 只在 SSE 实时消息回调里被调用，`quiet` 的历史回放路径不触发（L1109 注释「实时消息 → 场景物件（历史回放不调用）」）。
+2. **不结算**：草莓 / 水母 / 羽毛无碰撞、不计分、永不消失；`ChatScene.reset()` 是唯一清空入口（结算入口留给外层页面）。
+
+> 启动竞态（不是历史回放）：`window.ChatScene` 在场景脚本执行时即同步暴露，`ready=false` 期间的 `consume` 入队 `sceneQueue`，`main()` 完成后回放（L1176–1187）。目的是不丢「脚本未跑完就到达的实时消息」。
+
+### 24.2 Leader/Follower 算法证据
+
+| 事实 | 常数 / 公式 | 证据来源 | 取证强度 |
+|---|---|---|---|
+| `Celeste.Leader` 轨迹容量 | `MaxPastPoints = 350` → `FOLLOW.maxPoints` | demo L853 / L859 | 既有移植注释；本轮未重新反编译 |
+| 采样节拍 | `OnInterval(0.02)` → `FOLLOW.sample = 0.02` | demo L854 / L859 | 同上 |
+| 插点门限 | 与队首距离 `>= 3` 才 `Insert(0,pos)` → `FOLLOW.minDist = 3` | demo L933 | 同上 |
+| `Celeste.Follower` 取点 | `PastPoints[5*(i+1)]`，`num += 5` → `FOLLOW.stepIndex = 5` | demo L854 / L940 / L970 | 同上 |
+| `Celeste.Follower` 更新条件 | 只看 `DelayTimer`，到 0 才跟随 | demo L855 / L969 | 同上 |
+| `Celeste.Strawberry::Added` | `FollowDelay = 0.3` → `FOLLOW.delay = 0.3` | demo L855 / L942；spec §6.1 | 同上 |
+| 逼近公式 | `pos += (target - pos) * (1 - pow(0.01, dt))` | demo L856 / L880 | 同上 |
+
+```
+sample :  acc += dt; if (acc < 0.02) return; acc -= 0.02
+insert :  |pos - past[0]| >= 3 → past.unshift(pos)，长度夹到 350
+follower i: idx = min(5*(i+1), past.length - 1)，target = past[idx]
+            delayTimer -= dt；> 0 时本帧不移动
+            p += (target - p) * (1 - 0.01^dt)
+```
+
+- 采样点取 `{x: m.x, y: m.y - 10}`（脚底上方 10 像素）：这是**实现取点**，原作 `Leader` 采样的是被跟随实体的哪个字段本轮未核对（见 24.7 U2）。
+- `stepLeader` 用「加 `dt`、减 `0.02`」的累加器：60 fps 下平均 0.02s 采样一次；单帧 `dt > 0.02` 时该帧最多只插一个点，余额滞留在 `acc` 里（长帧会少采样，属实现近似，不是 `while` 循环）。
+
+### 24.3 帧序与时序
+
+| 素材 | 动画 | 帧序 | 单帧时长 | 一轮 | 来源 |
+|---|---|---|---|---|---|
+| 草莓 `strawberry/wings` | `flap` | `0-8,0-8,0-7,9`（27 帧） | 0.08s | 2.16s | `Sprites.xml` 注释（demo L870）+ `BERRY_SEQ`（L871） |
+| 水母 `glider` | `idle` | `0-9`（10 帧） | 0.1s | 1.0s | spec §3；demo L1135 |
+| 金羽毛 `flyFeather` | `loop`：`idle00-20` → `flash00-20` | 42 帧 | 0.06s | 2.52s | `Sprites.xml` 注释（`shelf.js` L1979–1983）；demo L1148 |
+| 变形 `startStarFly` | `startStarFly` | `00-03`（4 帧） | 0.08s | 0.32s | `Sprites.xml` 注释（`shelf.js` L1998）；demo L1164 |
+
+- 草莓是**把 10 张 `wings` 贴图按 `0-8,0-8,0-7,9` 展开成 27 帧播放**，不是「10 帧循环」：`berryFrame(t) = BERRY_SEQ[floor(t / 0.08) % 27]`（L1120）。两拍振翅 + 收翅的节奏来自帧序，单靠 10 帧循环复现不出来。
+- 水母对齐 `Justify(0.5,0.58)`：绘制左上角 = 目标点 `(-24Z, -27.8Z)`（48×48，`shelf.js` 的 0.58 → 27.84 取 27.8，L1142）。
+- 金羽毛对齐 `Justify(0.5,0.5)`：左上角 = 目标点 `(-16Z, -16Z)`，另加 `sin(t*2 + phase) * 3` 的上下浮动（L1148–1153）。
+- 鸟类待机不在本章范围（第 23 章已记 `flyup`）。
+
+### 24.4 StarFly 常量表（`STARFLY`，demo L861–867）
+
+| 字段 | 值 | 实现语义 | 落点 |
+|---|---|---|---|
+| `chargeAnim` | 0.32 | 变形动画时长：`startStarFly` 4 × 0.08 | L1026 / L1161 |
+| `chargeTotal` | 0.42 | 变形总时长（动画播完 + `Speed == Zero` + 0.1s） | L1023 / L1034 |
+| `speedStart` | 250 | 发射初速 | L1038 |
+| `accel` | 1000 | 速度逼近斜率（单位/s） | L1049 |
+| `turnRate` | 5.5850534 | `moveDir` 转向角速度（rad/s ≈ 320°/s） | L1046 |
+| `vIdle` | 91 | 无方向输入时的目标速率 | L884 |
+| `vTurn` | 140 | 掉头分支目标速率 | L885 |
+| `vFast` | 190 | 同向分支目标速率 | L885 |
+| `sameDot` | 0.45 | 同向 / 掉头判定点积阈值 | L885 |
+| `time` | 2.0 | 飞行计时初值（原作 2s；不采用 `shelf.js` 页面的 4s） | L1005 |
+| `warnTime` | 0.5 | 末段警告开始阈值 | L1080 |
+| `warnStep` | 0.05 | 警告闪切换间隔 | L1082 |
+| `wallDead` | 0.2 | 撞墙「快到点」阈值 | L1063 |
+| `wallRest` | 0.5 | 撞墙单轴反弹系数 | L1067 |
+| `exitX` | 140 | `StarFlyEnd` 水平速度夹取上限 | L1097 |
+| `exitUp` | 100 | `StarFlyEnd` 按住 ↑ 的竖向速度 | L1089 |
+
+常量 → `Player.StStarFly` 语义：
+
+| 常量 | 在 `Player.StStarFly` 里的语义 |
+|---|---|
+| `chargeAnim` 0.32 | `StarFlyCoroutine` 先等 `startStarFly` 播完（4 帧 × 0.08） |
+| `chargeTotal` 0.42 | 再等 `Speed == Zero`（1000/s 减速早已达成）+ `yield 0.1s` |
+| `speedStart` 250 | 协程尾部 `Speed = dir * 250f`，`dir` 取变形期按住的 `Input.Feather` 方向 |
+| `accel` 1000 | `Approach(\|Speed\|, target, 1000f * dt)` |
+| `turnRate` 5.5850534 | `moveDir = RotateTowards(moveDir, dir, 5.5850534f * dt)` |
+| `vIdle` 91 | 无 `Input.Feather` 输入时的目标速率 |
+| `vTurn` 140 | `Dot(moveDir, dir) < 0.45`（掉头）时的目标速率 |
+| `vFast` 190 | `Dot >= 0.45`（同向）时的目标速率，`lerp` 从 140 → 190 |
+| `sameDot` 0.45 | 两个速率分支的唯一分界 |
+| `time` 2.0 | `StarFlyBegin` 的 `starFlyTimer = 2f` |
+| `warnTime` 0.5 | `timer < 0.5` 起进入警告闪 |
+| `warnStep` 0.05 | 每 0.05s 在 `#ffd65c` ⇄ `#AC3232` 间翻转 |
+| `wallDead` 0.2 | `OnCollideH/V` 的 `StStarFly` 分支：`timer < 0.2` → 该轴 `Speed = 0` |
+| `wallRest` 0.5 | 否则该轴 `Speed *= -0.5` |
+| `exitX` 140 | `StarFlyEnd`：`\|Speed.X\| <= 140f` 夹取 |
+| `exitUp` 100 | `StarFlyEnd`：按住 ↑ → `Speed.Y = -100f` |
+
+**结束条件只有一个**：`timer <= 0` → `StarFlyEnd`（实现 L1084）。`Speed.Y > 0 → 0` 是收尾归一化，不是结束条件。`vTurn = 140` 与 `exitX = 140` 数值相同但语义无关（前者是飞行中的掉头目标速率，后者是结束后的水平速度夹取）——不可因同值把 `|len| <= 140` 写成结束条件（见 24.6 的 K1）。
+
+### 24.5 球体与变形锚点
+
+| 锚点 | 数值 / 公式 | 证据 |
+|---|---|---|
+| `starFly00` 贴图 | 32×32，`Origin (16,32)` | `shelf.js` L1950 注释；`Sprites.xml` `<player>` 的 Origin |
+| 球心 | 脚底 `(0,-6)` | spec §3；demo L1168 注释 |
+| 球体左上角 | 球心 `+ (-16,-26)`（等价于脚底 `(-16,-32)`） | demo L1172：`orb.x - 16Z, orb.y - 26Z` |
+| `startStarFly` 对齐 | `Justify(0.5,1)` → 左上角 = 脚底 `(-16,-32)` | demo L1162–1166 |
+| 变形缩放 | `sc = 1 - 0.4 * (t / 0.42)`（`1 → 0.6`） | demo L1163 |
+| 球体绘制 | 32×32 原尺寸，`#ffd65c` 乘法染色；末 0.5s 闪 `#AC3232` | demo L1169–1172 |
+| 层序 | `hair.draw` 先于球体（Player ctor `Add(Hair)` 早于 `Add(Sprite)`） | `shelf.js` L1943–1945；demo L1160 |
+| 变形期头发 | `HairCount = 4`、`setColor('normal')`、`HairOffset (0,-2)` | demo L1011–1013 / L1031 |
+| 飞行期头发 | `HairCount = 7`、`setColor('fly')`、`HairOffset (0,3)`（发根落在球心） | demo L1026–1029 / L1077 |
+
+- `drawFly` 以 `f.t < chargeAnim` 分流：前 0.32s 只画 `startStarFly` 帧、不画球体；0.32s 起画 `#ffd65c` 球体（L1167–1173）；`f.t >= chargeTotal` 才给 `speedStart` 初速并开始位移（L1034–1040）。
+- `(0,-2)` / `(0,3)` 是**世界像素偏移**（`shelf.js` L1958–1961 的 `Nodes[0] = Sprite.RenderPosition + (0,-9) + HairOffset` 化简）；飞行期 `(0,3)` 让发根正好落在球心 `(0,-6)`。
+
+### 24.6 偏差表（spec §9 的 D1–D8 + 本轮显式记录）
+
+| ID | 原作行为 | 本实现 | 判定 |
+|---|---|---|---|
+| D1 | 草莓跟随时仍参与地面碰撞 | 仅按 Leader 轨迹插值 | 刻意（关卡无草莓实体） |
+| D2 | `FollowDelay = 0.3` | 同值 | 无偏差 |
+| D3 | 非翼草莓播 `normal/idle`（18×16） | 统一播 `wings` 的 `flap`（40×24） | 刻意，跟随可读性 |
+| D4 | StarFly 2s | 2s（不采用 `shelf.js` 页面的 4s） | 无偏差 |
+| D5 | 撞墙 `timer < 0.2` 归零 / 否则 `-0.5` | `bodySolidFn` 预判下一步；单轴翻转 + `len *= 0.5` | 语义等价 |
+| D6 | 羽毛方向由关卡配置 | 触碰瞬间 `sign(feather.x - m.x)`，同 x 用 `m.facing` | 场景无方向羽毛 |
+| D7 | 飞行结束羽毛重生 | 不重生（无结算，需再发消息） | 按需求 |
+| D8 | 头发变形 4 → 飞行 7，`offY` `-2` / `3` | 同 | 无偏差 |
+
+**已知偏差（显式记录，本轮未修）**：
+
+| # | 项 | 原作 | 本实现 | 说明 |
+|---|---|---|---|---|
+| K1 | StarFly 结束条件 | `StarFlyUpdate` 里只有 `starFlyTimer <= 0` 走 `StarFlyEnd`；`\|Speed.X\| <= 140` 是 `StarFlyEnd` 的收尾夹取 | `stepFly` 只在 `if (f.timer <= 0) endFly(false)`；`exitX` 只在 `endFly` 里夹取 | **与 spec 早期文案不一致**：spec §6.3 早期写「`timer <= 0` 或 `\|len\| <= 140`」。实现按既有 IL 证据只保留 `timer <= 0`；140 是收尾夹取，不是结束条件 |
+| K2 | 草莓动画分支 | 非翼草莓是 `normal/idle`；`wings` 的 `flap` 只给「有翼」形态 | 统一播 `flap`（27 帧） | 可读性取舍（跟随中的草莓必须一眼看出在飞） |
+| K3 | 飞行发色与时点 | `UpdateHair`：`State == StStarFly → Hair.Color = Sprite.Color`，`Sprite.Color = starFlyColor #ffd65c`；`shelf.js` 注释记为 0.32–0.42s 帧已切 `starFly` 但仍为白，0.42s 才变色 + `HairCount = 7` | `setColor('fly') = #F2EB6D`，在 `chargeAnim = 0.32s` 即切 7 节 | 色值（`#F2EB6D` vs `#ffd65c`）与时点（0.32s vs 0.42s）各差一点；证据来自第 9 节原文 + `shelf.js` 注释，本轮未重新反编译 |
+
+### 24.7 未验证 / 未取证（诚实单列）
+
+| ID | 项 | 说明 |
+|---|---|---|
+| U1 | 本轮未跑 REA | 无新 dump、无新 IL 行号；所有 `Celeste.*` 成员结论均引自第 9 / 16.9 节原文或既有移植注释 |
+| U2 | `Leader` / `Follower` 数值未重新对照 IL | `MaxPastPoints=350`、`OnInterval(0.02)`、`>= 3`、`PastPoints[5*(i+1)]`、`FollowDelay=0.3` 全部引用既有注释；采样点 `(m.x, m.y-10)` 是实现取点，原作采样字段未核对 |
+| U3 | 多人并发未压测 | 未在真实双客户端下同时连续发草莓；轨迹短于 `5*(i+1)` 时 `idx` 夹到末尾，多颗草莓会落在同一点（代码行为，L970），真机队列观感未验证 |
+| U4 | 水母非原作实体 | 原作无「水母伴飞」机制，纯产品需求；`side`/`26 + i*16`/`sin(t*1.6 + i*1.1)*6` 全为页面参数，无 IL 依据 |
+| U5 | 羽毛生成区间无 IL 依据 | `f ∈ [0.06,0.30] ∪ [0.70,0.94]`、`y ∈ [0.18,0.45]`、上限 6、不重生，均为产品参数（`spawnFeather` L955–963） |
+| U6 | 视觉尺寸未重新实测 | 40×24 / 48×48 / 32×32 取自 spec §3 与既有核对记录，本轮未用 `System.Drawing` 复测像素 |
+
+### 24.8 素材清单
+
+本轮 glob 复核（`blog-ui/Atlases/Gameplay/`）实到情况：
+
+| 用途 | 路径 | 实到帧 | 尺寸 | 对齐 / 时序 |
+|---|---|---|---|---|
+| 草莓跟随 | `collectables/strawberry/wings00-09` | 10 | 40×24 | `flap` 27 帧 × 0.08s；绘制 40Z × 24Z 居中于跟随点 |
+| 水母 | `objects/glider/idle0-9` | 10 | 48×48 | `idle` 0.1s；`Justify(0.5,0.58)` → 左上 `(-24Z, -27.8Z)` |
+| 金羽毛 | `objects/flyFeather/idle00-20` + `flash00-20` | 42（另有 `outline.png`，本页未用） | 32×32 | `loop` 0.06s；绘制 32Z × 32Z，左上 = 目标点 `(-16Z,-16Z)` |
+| 星飞球体 | `characters/player/starFly00` | 1 | 32×32 | `Origin (16,32)`；球心 = 脚底 `(0,-6)`，左上 = 球心 `+ (-16,-26)` |
+| 变形帧 | `characters/player/startStarFly00-03` | 4（另有 `startStarFlyWhite00-03`，本页未用） | 32×32 | 0.08s/帧；`Justify(0.5,1)` → 左上 = 脚底 `(-16,-32)` |
+
+预载落点：`preload()` L321–330（`berry0-9` / `jelly0-9` / `feather0-41`（21 idle + 21 flash）/ `orb` / `morph0-3`）。
+
+## 25. 第七轮：水母 Glider 可持有物件（聊天室互动改造）
+
+**用户命题（修正上一轮）**：「水母不应该是背景版吧，它是 madeline 可以用的物品，像羽毛一样随机刷新在 madeline 周围，用 REA 实现 madeline 和水母的交互。」
+
+**结论**：第 24 节把水母当作「身侧伴飞的装饰物」是错的。原作 `Celeste.Glider` 是一个 `Holdable`：可抓取、可携带、缓降、可投掷/丢弃、未持有时有独立物理并与玩家碰撞销毁。本轮按原作语义重做：`🪼` 只负责在相机可见区随机刷新一只水母实体，之后完全由 Madeline 的抓取/持有/投掷驱动。
+
+### 25.1 语义变更与产品约束
+
+| 项 | 旧（第 24 节） | 新（本轮） |
+|---|---|---|
+| 触发 | `🪼` → 身侧水母 | `🪼` → 随机刷新一只 `Glider` 物品 |
+| 上限 | 4（装饰） | 4（场上同时存在的物品，含手持） |
+| 位置 | `m.x + side*(26+i*16)` 正弦浮动 | 相机可见区左右两侧随机（同羽毛的取点策略），避开实心块 |
+| 交互 | 无 | 按住抓取键拾取 → 持有；松开 / 下压投掷或丢弃 |
+| 缓降 | 无 | 持有期间 `maxFall` 目标 40（下压 120 / 上抬 24）、重力 ×0.5、空中 `maxRun` 108 |
+| 回收 | 永存 | 未持有撞到玩家 → 销毁动画 0.64s → 移除；掉出下边界 → 移除 |
+
+产品约束不变：**不结算**（无计分、无碰撞收集），历史消息不回放，`ChatScene.reset()` 是唯一清空入口。
+
+### 25.2 取证来源与程序集身份
+
+本轮**重新运行了 REA**（与第 24 节不同）。程序集与产物：
+
+| 项 | 值 |
+|---|---|
+| 程序集 | `C:\Users\28464\IdeaProjects\blog\.screenshots\.tmp\Celeste.dll` |
+| SHA-256 | `999024e23285acc0c7ac37b6ed33874e16a1f0f9af5fdeff66a64050b78f8e24` |
+| Module / MVID | `Celeste.exe` / `4a26f9de-d670-4c87-a2f4-7e66d2d85163` |
+| REA | 6.8.0，`inspect-managed-members --format json` |
+| 产物 | `%TEMP%\rea\glider.json`（15.4MB）、`glider_ctor.txt`、`glider_il.txt`、`holdable.json`、`holdable_il.txt`、`player3.json`（18.4MB）、`player_glider_il.txt`、`input_grab.txt`、`playersprite.json`、`playersprite_il.txt` |
+
+引用的方法（token 为元数据 MethodDef）：
+
+| 类型.成员 | token | IL 指令数 |
+|---|---|---|
+| `Glider.orig_ctor` | `0x060016f3` | 128 |
+| `Glider.Update` | `0x060016e5` | 748 |
+| `Glider.OnPickup` | `0x060016ed` | 50 |
+| `Glider.OnRelease` | `0x060016ee` | 43 |
+| `Glider.OnCollideH` / `OnCollideV` | `0x060016eb` / `0x060016ec` | 49 / 36 |
+| `Glider.PlayOpen` | `0x060016e6` | 56 |
+| `Holdable..ctor` / `Pickup` / `Carry` / `Release` | `0x06003281` / `85` / `86` / `87` | 11 / 40 / 13 / 89 |
+| `Holdable.get_ShouldHaveGravity` | `0x06003289` | 7 |
+| `Player.UpdateCarry` / `Throw` / `orig_Pickup` | `0x06003318` / `1b` / `33b4` | 26 / 50 / 17 |
+| `Player.NormalUpdate` | `0x0600332e` | 973 |
+| `Input.get_GrabCheck` | `0x0600308e` | 15 |
+| `PlayerSprite.get_CarryYOffset` | `0x060030cd` | 20 |
+
+> 下文 `IL xxxx` 指该方法体内的 IL 偏移，不是文档行号。
+
+### 25.3 Holdable 契约与输入顺序
+
+`Glider.orig_ctor`（IL 33–64 / 163–227 / 348–376）逐项：
+
+```text
+Collider        = Hitbox(8, 10, -4, -10)         // 8×10，中心偏上
+Depth           = -5
+Hold            = new Holdable(0.3)              // 参数 = cannotHoldDelay
+Hold.PickupCollider = Hitbox(20, 22, -10, -16)   // 抓取判定
+Hold.SlowFall   = true
+Hold.SlowRun    = false
+Hold.OnPickup   = Glider.OnPickup
+Hold.OnRelease  = Glider.OnRelease
+Sprite          = "glider"
+```
+
+`Glider.OnPickup`（IL 0–137）：`Speed = Zero`、加 `Tags.Persistent`、`highFrictionTimer = 0.5`、`AllowPushing = false`、`bubble = false`、`tutorial = false`、`wiggler.Start()`。bubble 粒子分支本场景无。
+
+`Glider.OnRelease`（IL 0–135）：
+
+```text
+if (dir.X == 0) 播放 glider_drop
+AllowPushing = true；移除 Tags.Persistent
+dir.Y *= 0.5
+if (dir.X != 0 && dir.Y == 0) dir.Y = -0.4
+Speed = dir * 100
+wiggler.Start()
+```
+
+`Holdable.Pickup`（IL 0–110）：`cannotHoldTimer > 0` 或实体不在场景 → `false`；否则记录 `idleDepth`、把实体 Depth 设为 `holder.Depth - 1`、`Visible = true`、`Holder = holder`、执行 `OnPickup`。
+
+`Holdable.Release`（IL 0–241）：
+
+```text
+若实体仍与实心块重叠：
+  dir.X != 0 → 沿 X 方向最多尝试 10 次“向外挪 1px”
+  否则       → 沿 UnitY 最多尝试 10 次“向上挪 1px”
+Depth = idleDepth；Holder = null
+gravityTimer = 0.1
+cannotHoldTimer = cannotHoldDelay   // Glider 为 0.3
+执行 OnRelease
+```
+
+`Holdable.get_ShouldHaveGravity`（IL 0–16）：`gravityTimer <= 0`。`Player.orig_Pickup`（IL 0–37）：`Pickup` 成功 → `Ducking = false`、`Holding = picked`、`minHoldTimer = 0.35`、返回 1。
+
+`Input.get_GrabCheck`（IL 0–54）：默认 `GrabMode` 分支返回 `Input.Grab.Check`（按住），不是切换。
+
+`Player.NormalUpdate` 的持有顺序（IL 75–204 / 823–1048）：
+
+1. IL 75：`Holding != null` → 跳 823，**整个抓墙/攀爬分支被跳过**。
+2. IL 85–307：未持有且 `GrabCheck && !IsTired && !Ducking` → 遍历 `Holdable`，`Holdable.Check` 命中即 `Pickup`，返回状态 8（`StClimb`）。
+3. IL 823–849：`!GrabCheck && minHoldTimer <= 0` → `Throw()`。
+4. IL 849–947：`!Ducking && onGround && MoveY == 1 && Speed.Y >= 0 && !holdCannotDuck` → `Drop()` + `Ducking = true` + scale(1.4, 0.6)。
+5. IL 949–1006：地面蹲下且 `Speed.Y >= 0` → `CanUnDuck` 决定起身或 `Drop()`。
+6. IL 1008–1043：`onGround && MoveY != 1 && holdCannotDuck` → `holdCannotDuck = false`（下一帧才允许下压丢弃）。
+
+`Player.Throw`（IL 0–137）：`MoveY == 1` → `Drop()`；否则 `Holding.Release(UnitX * Facing)`、`Speed.X += 80 * -Facing`、播放 `crystaltheo_throw` 与 `throw` 动画；最后 `Holding = null`。`Player.Drop` → `Release(Vector2.Zero)` + `Holding = null`。
+
+### 25.4 持有缓降（SlowFall）
+
+| 项 | 原作 IL | 语义 |
+|---|---|---|
+| `SlowRun` | `Glider.orig_ctor` IL 250 | `false`，地面 `maxRun` 仍 90 |
+| 空中 `maxRun` | `Player.NormalUpdate` IL 1223–1296 | `Holding.SlowFall && !onGround` → `maxRun = 108`，水平加速度乘 **0.5**（`mult`：空中原 0.65 → 0.325） |
+| `maxFall` 目标 | IL 1530–1713 | `GliderMoveY == 1` → **120**；`== -1` → **24**；否则 **40**；`windMovedUp` 的 `-32` / `0` 分支本场景无风 |
+| `maxFall` 过渡 | IL 1682–1708 | `Approach(maxFall, target, 300 * dt)` |
+| 重力 | IL 2418–2460 | `Holding.SlowFall && forceMoveXTimer <= 0` → 重力系数 **0.5**（900 → 450/s） |
+| 墙滑 | IL 2101 | 墙滑条件含 `Holding == null`，手持水母时不进入墙滑 |
+| `holdCannotDuck` | IL 1964–2010 | `Holding.SlowFall` → `holdCannotDuck = (MoveY == 1)` |
+
+实现（`celeste-character.js`）：
+
+```js
+// 水平：IL 1252-1296
+const maxRun = (this.holdSlowFall && !this.onGround) ? 108 : MAX_RUN;
+if (this.holdSlowFall && !this.onGround) mult *= 0.5;
+
+// maxFall：IL 1530-1713
+if (this.holdSlowFall) {
+    const slowMax = moveY === 1 ? 120 : moveY === -1 ? 24 : 40;
+    this.maxFall = approach(this.maxFall, slowMax, 300 * dt);
+}
+
+// 重力：IL 2419-2515
+this.vy = approach(this.vy, this.maxFall, GRAVITY * half * (this.holdSlowFall ? 0.5 : 1) * dt);
+
+// 墙滑：IL 2101
+const wallSliding = ... && !this.holdSlowFall;
+```
+
+> `SlowRun` 为 `false` 只影响地面分支；真正改变手感的是上表的空中 108 / 加速度 ×0.5。上一轮只移植了 `maxFall` 与重力，本轮补上这两项。
+
+### 25.5 未持有物理与销毁
+
+`Glider.Update` 未持有分支（IL 787–1980）：
+
+| 情形 | 行为 | IL |
+|---|---|---|
+| 高摩擦计时 | `highFrictionTimer > 0` → `-= dt` | 827–853 |
+| 地面 | 向前 3px 与向后 3px 做 `OnGround` 探测：前空 → 目标 `+20`，后空 → `-20`，都踩实 → `0`；`Approach(Speed.X, target, 800 * dt)` | 858–1000 |
+| 空中 | `Hold.ShouldHaveGravity` 为 false（`gravityTimer > 0`）→ **同时跳过横向摩擦与重力**；否则 `g = 200`（`Speed.Y < -30` 时 `g = 100`）；横向摩擦：`Speed.Y < 0 → 40`，否则 `highFrictionTimer > 0 → 10`，否则 `40`；重力：风向上时 `Approach(vy, 0, g*dt)`，否则 `Approach(vy, 30, g*dt)` | 1268–1553 |
+| 位移 | `MoveH(Speed.X*dt, OnCollideH)`、`MoveV(Speed.Y*dt, OnCollideV)` | 1553–1614 |
+| 左/右/上越界 | 夹回 `Bounds` 并以对应 `CollisionData` 调 `OnCollideH/V`；`Top > Bounds.Bottom + 16` → `RemoveSelf()` | 1615–1919 |
+| 撞玩家 | 遍历 `Player`，临时置其 `Collidable = true` 做 `CollideCheck`，命中 → `destroyed = true`、`Collidable = false`；若正被持有 → `holder.Drop()` 且 `Speed = holder.Speed * 0.333`；启动 `DestroyAnimationRoutine` | 548–720 |
+
+`OnCollideH`（IL 0–163）：`Speed.X *= -1`，`scale = (0.8, 1.2)`，播放左右撞墙音。
+`OnCollideV`（IL 0–121）：`|Speed.Y| > 8` → `scale = (1.2, 0.8)` 并播放落地音；`Speed.Y < 0` → `*= -0.5`，否则 `= 0`。
+
+实现对应：`gliderSolidAt()` 用 **8×10 @(-4,-10)**（与 `Glider.orig_ctor` 的实体 Collider 同盒），地面探测用 `gliderSolidAt(x, y+1)` 与 `±3`，空中用 `gravityTimer` 跳过摩擦+重力，碰撞反弹/夹取/下边界删除、与玩家碰撞 → `deathT = 0`。
+
+### 25.6 持有时表现（旋转 / 动画 / 锚点 / 层序）
+
+| 项 | 原作 | IL |
+|---|---|---|
+| 旋转目标 | `ClampedMap(holder.Speed.X, -300, 300, +0.6981317, -0.6981317)`（持有人在 `onGround`）或 `±1.0471976`（空中）；未持有目标 `0` | `Glider.Update` IL 82–216 |
+| 旋转过渡 | `Approach(rotation, target, PI * dt)` | IL 217–251 |
+| 持有时物理 | `IsHeld` → `prevLiftSpeed = 0`，跳过全部未持有物理 | IL 787–816 |
+| 动画 | `holder.Speed.Y > 20 || Wind.Y < 0` → `PlayOpen()`（`fall` → 等播完再 `fallLoop`）；否则 `held` 帧 | IL 1994–2375 |
+| 持有时缩放 | `GliderMoveY > 0` → 目标 `(0.7, 1.4)`；`< 0` → `(1.2, 0.8)`；`Approach(scale, target, 2 * dt)` | IL 2284–2443 |
+| 携带点 | `Holdable.Carry(Position + carryOffset + UnitY * Sprite.CarryYOffset)` | `Player.UpdateCarry` IL 0–83 |
+| carryOffset | `CarryOffsetTarget = (0, -12)`，实例 `carryOffset` 逐帧逼近该值 | `Player..cctor` |
+| Depth | `Pickup` 时 `Depth = holder.Depth - 1`（玩家 Depth 在前，水母 -6 左右），`Release` 恢复 `idleDepth = -5` | `Holdable.Pickup` / `Release` |
+
+`PlayerSprite.get_CarryYOffset`（IL 0–58）按当前动画帧元数据返回 `FrameMetadata.CarryYOffset * Scale.Y`；该元数据文件不在本仓库素材内，因此**总携带偏移 `-16` 是 `-12 + (-4)` 的推定**（见 25.8 D13 / 25.9 U7）。
+
+实现：持有分支每帧 `Carry` 到 `m.y + GLIDER.carryY`，旋转角速度 `PI * dt` 且空中幅度 1.047 / 地面 0.698，`fall`/`fallLoop` 由 `openT` 驱动（`fall` 3×0.08 播完再循环），`held` 单帧；绘制在人物之后（Depth 在前），Sprite origin `(24, 27.8)`。
+
+### 25.7 实现映射（`GLIDER` 常量与函数）
+
+常量（`celeste-farewell-remembered-demo.html` L889–900）：
+
+| 字段 | 值 | 来源 |
+|---|---|---|
+| `gravAir` / `gravAirUp` | 200 / 100 | `Glider.Update` IL 1284–1317 |
+| `frictionUp` / `frictionDown` | 40 / 10 | IL 1337–1373 |
+| `groundFriction` | 800 | IL 984 |
+| `groundSlide` | 20 | IL 905 / 949 |
+| `pickupDelay` | 0.35 | `Player.orig_Pickup` IL 24–29 |
+| `releaseGravity` | 0.1 | `Holdable.Release` IL 199–204 |
+| `regrabDelay` | 0.3 | `Glider.orig_ctor` IL 173–178（`new Holdable(0.3)`） |
+| `throwX` | 100 | `Glider.OnRelease` IL 109–114 |
+| `throwY` | -40 | 同上：`dir = (100, 0)` → `Y *= 0.5` 后 `(100, 0)` → `X≠0 && Y==0` → `Y = -0.4` → `Speed * 100` |
+| `recoil` | 80 | `Player.Throw` IL 80–94 |
+| `carryY` | -16 | `-12 + CarryYOffset` 推定（D13） |
+| `pickX` / `pickTop` / `pickBottom` | 10 / 16 / 6 | `PickupCollider(20,22,-10,-16)` |
+| `deathTime` | 0.64 | 8 帧 × 0.08 推定（D12） |
+| `idleStep` / `fallStep` | 0.1 / 0.08 | 素材动画 |
+| `originY` | 27.8 | `Justify(0.5, 0.58)` |
+
+函数：
+
+| 函数 | 对应原作 | 行为 |
+|---|---|---|
+| `spawnJelly()` | 关卡放置（本场景改为消息触发） | 相机左右两侧随机、8 次避实心重试、上限 4 |
+| `gliderSolidAt()` | `Glider.Collider 8×10 @(-4,-10)` | 实心块重叠检测 |
+| `inPickupRange()` | `Holdable.Check` + `PickupCollider` | 20×22 抓取盒与玩家 8×11 身体盒相交 |
+| `tryPickupJelly()` | `Player.orig_Pickup` + `Holdable.Pickup` | 拒绝已持有/蹲下/飞行/冷却中；最近一只；`minHoldTimer=.35`、`highFriction=.5`、速度清零、carry 到 `m.y-16` |
+| `releaseJelly()` | `Player.Throw` / `Drop` + `Holdable.Release` | `cannotHoldTimer=.3`、`gravityTimer=.1`、速度 `dir×100`（Y=0 且 X≠0 → -40）、高摩擦 .5、最多 10px 向上脱困 |
+| `throwJelly()` | `Player.Throw` / `Player.Drop` | 下压 → Drop（零速度）；否则 `Release(Facing)` + 后坐 -80 |
+| `stepJellies()` | `Glider.Update` | 持有 carry/旋转/动画；未持有高摩擦、地面侧滑、空中重力与摩擦、MoveH/V 反弹、越界、撞玩家销毁、冷却递减 |
+| `jellyImage()` | `Glider.Update` 动画分支 + `DestroyAnimationRoutine` | 死亡帧、`fall`→`fallLoop`→`held`、idle 10 帧 |
+| `drawJellies()` | `Glider.Render` | 旋转/缩放/拉伸，`drawImage(img, -24, -27.8, 48, 48)` |
+| `tick()` 持有段 | `Player.NormalUpdate` IL 823–947 | `minHoldTimer` 递减；松开抓取键 → Throw；地面下压 → Drop；未持有按住抓取键 → 拾取 |
+| `render()` | Depth 顺序 | 水母画在人物之后 |
+
+输入接线：`grabHeld = Shift / Z`（与原作 `Grab.Check` 同义），持有期间传给引擎的 `grabHeld` 强制为 `false`，等价于 `Holding != null` 跳过攀爬分支（`NormalUpdate` IL 75）。
+
+### 25.8 偏差表（D9–D17）
+
+| ID | 原作 | 本实现 | 判定 |
+|---|---|---|---|
+| D9 | 水母由关卡实体放置 | `🪼` 消息触发、相机可见区随机生成 | 产品需求；语义仍是 Holdable |
+| D10 | `Holdable.Check` 用完整碰撞盒 | 20×22 抓取盒与 8×11 身体盒手工相交 | 语义等价；避免引入完整物理盒 |
+| D11 | 抓取需要按住抓取键且未疲惫 | 只检查按住，不模拟 `IsTired` / `NoGrabbing` | 场景无体力消耗（本作有体力，但抓水母不耗） |
+| D12 | 死亡协程时长由 `DestroyAnimationRoutine` MoveNext 决定 | 固定 0.64s（8 帧 × 0.08） | 推定，见 U8 |
+| D13 | `carryOffset` 目标 `(0,-12)` + 每帧 `CarryYOffset` | 固定总偏移 `-16` | 推定，见 U7 |
+| D14 | 风场 `windMovedUp` / `WindMode` / `windY<0` 分支 | 未实现（场景无风） | 缺口，见 U9 |
+| D15 | 持有时缩放 `Approach(2*dt)` | 直接设为目标缩放 | 视觉差异极小；见 U12 |
+| D16 | `holdCannotDuck` 门控下压 Drop | 仅检查 `onGround && MoveY==1 && Speed.Y>=0` | 少一个边界：空中开伞落地后需先松 ↓ 才能丢弃；见 U10 |
+| D17 | `Throw` 播放 `throw` 精灵与音效 | 仅物理与后坐，无 throw 动画/音效 | 引擎无 `throw` 动画，场景静音 |
+
+### 25.9 未验证 / 未取证
+
+| ID | 项 | 说明 |
+|---|---|---|
+| U7 | `carryY = -16` | `CarryOffsetTarget=(0,-12)` 已取证；`CarryYOffset` 是逐动画元数据，仓库无该元数据，`-4` 是推定 |
+| U8 | 死亡 0.64s | `DestroyAnimationRoutine` 的 MoveNext 未 dump，帧数与单帧时长按素材命名/常规 0.08 推定 |
+| U9 | 风/气泡/弹簧/教程分支 | `bubble`、`WindMode`、`HitSpring`、`tutorial` 未在本场景启用，未逐条验证 |
+| U10 | `holdCannotDuck` | 未实现原作“空中按 ↓ 开伞后落地需先松开 ↓ 才能 Drop”的门控 |
+| U11 | `IsTired` / `NoGrabbing` | 拾取分支的疲惫与辅助选项未模拟 |
+| U12 | 持有缩放过渡 | 原作为 2/s 的 `Approach`，实现为直接赋值 |
+| U13 | 撞玩家判定 | 原作临时把玩家 Collidable 置真做 `CollideCheck`，实现用 8×11 身体盒距离判定 |
+| U14 | 双客户端 SSE | 后端未启动，真实多人连续发 `🪼` 未压测 |
+
+### 25.10 素材清单
+
+`blog-ui/Atlases/Gameplay/objects/glider/` 实到：
+
+| 用途 | 文件 | 帧数 | 尺寸 | 时序 |
+|---|---|---|---|---|
+| 待机 | `idle0..9.png` | 10 | 48×48 | 0.1s |
+| 持有 | `held0.png` | 1 | 48×48 | 单帧 |
+| 开伞 | `fall0..2.png` | 3 | 48×48 | 0.08s |
+| 开伞循环 | `fallLoop0..1.png` | 2 | 48×48 | 0.08s |
+| 死亡 | `death00..07.png` | 8 | 48×48 | 0.08s（推定） |
+
+Sprite origin `(24, 27.8)`（`Justify(0.5, 0.58)`），绘制为 `drawImage(img, -24, -27.8, 48, 48)`。
+
+### 25.11 验证
+
+- 无头 Chromium（1280×800）`?scenetest`：**49 pass / 0 fail / 0 exceptions**。
+- 水母专项断言：刷新避实心、`PickupCollider` 判定、抓取 carry(0,-16)、缓降 `maxFall=40/vy=40`、空中 `maxRun=108`、下压 `maxFall=120/vy=120`、投掷 `(100,-40)` + 后坐 `-80`、Drop 零速度、重新抓取冷却 0.3s、`tick` 抓取/松开投掷接线、撞玩家销毁、死亡动画后回收。
+- 缓存版本：`js/celeste-character.js?v=20261102b`（引擎新增 `holdSlowFall` 的 maxRun 分支）。

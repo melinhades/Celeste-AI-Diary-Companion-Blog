@@ -16,7 +16,82 @@
     <packaging>jar</packaging>
 
     <dependencies>
-        <!-- 继承父项目的所有依赖 -->
+        <!-- 公共依赖（web / mybatis-plus / mysql / lombok / actuator 等）由 blog-parent 统一提供，
+             这里只声明 blog-api 独有的依赖（版本由父 pom 的 dependencyManagement 或 Spring Boot BOM 锁定） -->
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
+        <!-- Lettuce 连接池底层依赖 commons-pool2：
+             application-prod.yml 配置了 spring.redis.lettuce.pool，缺它云端启动直接崩溃 -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-pool2</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>fastjson</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>commons-collections</groupId>
+            <artifactId>commons-collections</artifactId>
+        </dependency>
+
+        <!-- ArticleServiceImpl 归档日期格式化用 DateTime -->
+        <dependency>
+            <groupId>joda-time</groupId>
+            <artifactId>joda-time</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- CacheAspect 用 DigestUtils 生成缓存 key -->
+        <dependency>
+            <groupId>commons-codec</groupId>
+            <artifactId>commons-codec</artifactId>
+        </dependency>
+
+        <!-- BCrypt 密码加密：只引 crypto 库（不含 Spring Security 自动配置），供 LoginServiceImpl 使用。
+             切勿换成 spring-boot-starter-security，否则 Spring Security 会默认拦截所有接口，与现有 LoginIntercepter 鉴权冲突。 -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-crypto</artifactId>
+        </dependency>
+
+        <!-- 七牛云图片上传：QiniuUtils -->
+        <dependency>
+            <groupId>com.qiniu</groupId>
+            <artifactId>qiniu-java-sdk</artifactId>
+        </dependency>
+
+        <!-- 架构守护测试（ArchitectureTest）：包级循环依赖 + Controller 不得直连 Mapper -->
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

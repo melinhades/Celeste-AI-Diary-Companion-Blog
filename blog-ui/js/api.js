@@ -65,64 +65,56 @@ function syncBerryBalance() {
     });
 }
 /**
- * 草莓增减（n 正=获得，负=消费）。
+ * 草莓消费（只发送负向 delta）。
  * 已登录：先乐观更新本地 → POST 后端 → 用返回的权威值对账，失败回滚；
- * 未登录：只写本地（草莓籽动画等未登录场景仍可玩，登录后不同设备以服务端为准）。
+ * 未登录：只写本地（保留本地展示口径，不写服务端）。
  */
-function addBerries(n) {
-    n = parseInt(n) || 0;
-    if (!n) return;
+function spendBerries(n) {
+    n = Math.abs(Number(n) || 0);
+    if (!n) return Promise.resolve(false);
     const token = localStorage.getItem('token');
     const prev = berryBalance();
-    const optimistic = Math.max(prev + n, 0);
+    const optimistic = Math.max(prev - n, 0);
     localStorage.setItem('berryBalance', String(optimistic));
     emitBerriesChange(optimistic);
-    if (!token) {
-        // 未登录：记账 pending，登录后任意页面加载时自动补 POST
-        if (n > 0) {
-            const pending = parseInt(localStorage.getItem('berryPendingCredit') || '0');
-            localStorage.setItem('berryPendingCredit', String(pending + n));
-        }
-        return;
-    }
-    api('/users/berry', 'POST', { delta: n }).then(res => {
+    if (!token) return Promise.resolve(false);
+    return api('/users/berry', 'POST', { delta: -n }).then(res => {
         if (res.success && res.data && typeof res.data.berry === 'number') {
-            // 权威值与本地乐观值不一致时对账（他端变动/服务端兜底扣减等）
+            // 权威值与本地乐观值不一致时对账（他端变动/服务端扣减兜底等）
             if (res.data.berry !== berryBalance()) {
                 localStorage.setItem('berryBalance', String(res.data.berry));
                 emitBerriesChange(res.data.berry);
             }
-        } else {
-            // 后端写失败：回滚乐观更新，避免"本地加了但库里没加"的假成功
-            localStorage.setItem('berryBalance', String(prev));
-            emitBerriesChange(prev);
+            return true;
         }
+        // 后端写失败（含余额不足 success=false）：回滚乐观更新
+        localStorage.setItem('berryBalance', String(prev));
+        emitBerriesChange(prev);
+        return false;
     });
 }
-function spendBerries(n) { addBerries(-Math.abs(n)); }
 
 /**
- * 把未登录期间攒下的草莓补到服务端。
- * api.js 加载时即执行；登录后打开/刷新任意页面都会触发。
+ * 领取草莓籽奖励：服务端按 6 小时冷却发放。
+ * granted=false 表示冷却期内已领过，同样用返回的权威余额刷新本地，不报错。
  */
-function flushPendingBerries() {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-    const pending = parseInt(localStorage.getItem('berryPendingCredit') || '0');
-    if (pending <= 0) return;
-    localStorage.removeItem('berryPendingCredit');
-    api('/users/berry', 'POST', { delta: pending }).then(res => {
-        if (res.success && res.data && typeof res.data.berry === 'number') {
+function claimSeedBerry() {
+    if (!localStorage.getItem('token')) return Promise.resolve(false);
+    return api('/users/berry/seed-claim', 'POST').then(res => {
+        if (res && res.data && typeof res.data.berry === 'number') {
             localStorage.setItem('berryBalance', String(res.data.berry));
             emitBerriesChange(res.data.berry);
-        } else {
-            // 失败放回，下次再试
-            const back = parseInt(localStorage.getItem('berryPendingCredit') || '0');
-            localStorage.setItem('berryPendingCredit', String(back + pending));
         }
+        return !!(res && res.success && res.data && res.data.granted);
+    }).catch(e => {
+        console.warn('claimSeedBerry failed:', e);
+        return false;
     });
 }
-flushPendingBerries();
+window.claimSeedBerry = claimSeedBerry;
+
+// 安全修复：公开接口不再接受正向 delta，清理旧客户端攒下的待补账余额
+localStorage.removeItem('berryPendingCredit');
 
 // ===== 用户级本地状态隔离 =====
 // 这些 key 是「某个账号的」数据，存在全局 localStorage 里，换账号不清理就会出现

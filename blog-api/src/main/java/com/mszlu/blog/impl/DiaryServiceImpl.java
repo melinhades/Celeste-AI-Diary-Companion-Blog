@@ -3,11 +3,15 @@ package com.mszlu.blog.impl;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import com.mszlu.blog.dao.mapper.DiaryMapper;
+import com.mszlu.blog.dao.mapper.DiaryChatLogMapper;
 import com.mszlu.blog.dao.mapper.DiaryCompanionMapper;
+import com.mszlu.blog.dao.mapper.EmotionStateMapper;
 import com.mszlu.blog.dao.pojo.*;
 import com.mszlu.blog.service.DiaryService;
 import com.mszlu.blog.service.MemoryService;
 import com.mszlu.blog.service.PersonaService;
+import com.mszlu.blog.service.ProactiveService;
+import com.mszlu.blog.service.SysUserService;
 import com.mszlu.blog.service.ai.AiClient;
 import com.mszlu.blog.service.ai.AiMessage;
 import com.mszlu.blog.service.ai.PromptBuilder;
@@ -79,6 +83,9 @@ public class DiaryServiceImpl implements DiaryService {
     @Autowired
     private BadelineStageRules badelineStageRules;
 
+    @Autowired
+    private SysUserService sysUserService;
+
     // ===== v1 扩展组件（Madeline 日记多轮实时反应） =====
     @Autowired private DiaryChatInterruptManager interruptManager;
     @Autowired private DiaryChatMemory chatMemory;
@@ -86,6 +93,9 @@ public class DiaryServiceImpl implements DiaryService {
     @Autowired private DiaryChatPersonaChecker personaChecker;
     @Autowired private DiaryChatEmotionExtractor emotionExtractor;
     @Autowired private DiaryChatIntentClassifier intentClassifier;
+    @Autowired private ProactiveService proactiveService;
+    @Autowired private EmotionStateMapper emotionStateMapper;
+    @Autowired private DiaryChatLogMapper chatLogMapper;
 
     // ===== 前处理缓存（深度审计第二步） =====
     // 预跑重启时 draft 变化很小（多写 20 字），情绪/意图/RAG 结果大概率相同。
@@ -151,6 +161,11 @@ public class DiaryServiceImpl implements DiaryService {
         } else {
             // 新增
             diaryMapper.insert(diary);
+            try {
+                sysUserService.grantDiaryBerry(userId);
+            } catch (Exception e) {
+                log.warn("日记保存成功但草莓奖励失败 userId={} diaryId={}", userId, diary.getId(), e);
+            }
         }
 
         // 情绪分析：仅普通日记异步跑（结果落库供次日对话/周月汇总）；梦境不进白天情绪统计
@@ -402,12 +417,12 @@ public class DiaryServiceImpl implements DiaryService {
         String userId = user.getId();
         String userName = user.getNickname() != null ? user.getNickname() : user.getAccount();
 
-        long oneHourAgo = System.currentTimeMillis() - 60 * 60 * 1000L;
+        long oneDayAgo = System.currentTimeMillis() - 24 * 60 * 60 * 1000L;
         com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Diary> wrapper =
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
         wrapper.eq(Diary::getUserId, userId);
         wrapper.eq(Diary::getType, "day");
-        wrapper.ge(Diary::getCreateDate, new Date(oneHourAgo));
+        wrapper.ge(Diary::getCreateDate, new Date(oneDayAgo));
         wrapper.orderByDesc(Diary::getCreateDate);
         wrapper.last("limit 1");
         Diary recentDiary = diaryMapper.selectOne(wrapper);
@@ -417,19 +432,25 @@ public class DiaryServiceImpl implements DiaryService {
                 ? PromptBuilder.emotionNote(recentDiary)
                 : recentEmotionNote(userId);
         // prompt 统一收敛在 PromptBuilder，调人设只改一个文件
-        String snippet = context.isEmpty() ? "" : context.substring(0, Math.min(200, context.length()));
+        String snippet = context.isEmpty() ? "" : context.substring(0, Math.min(300, context.length()));
         String prompt = PromptBuilder.bubblePrompt(emotionNote, snippet);
 
         String reply = aiClient.chat(new java.util.ArrayList<>(java.util.Arrays.asList(
                 new AiMessage("user", prompt))));
-        if (reply == null || reply.isEmpty()) {
-            String[] defaults = {"在写什么呢？", "今天天气怎么样？", "想你了，冒个泡~", "嘿，我在呢。", "慢慢来，不着急。"};
-            reply = defaults[(int)(Math.random() * defaults.length)];
+        if (reply == null || reply.trim().isEmpty()) {
+            return Result.success(null);
         }
 
         java.util.Map<String, Object> data = new java.util.HashMap<>();
-        data.put("message", reply);
+        data.put("message", reply.trim());
         data.put("emotion", "默认");
+
+        // P3.1 新增：通过 SSE 推送给订阅用户
+        try {
+            proactiveService.pushToUser(userId, reply.trim(), "默认");
+        } catch (Exception e) {
+            log.warn("主动消息推送失败 userId={}", userId, e);
+        }
         return Result.success(data);
     }
 
@@ -447,7 +468,7 @@ public class DiaryServiceImpl implements DiaryService {
         String emotionNote = recentEmotionNote(userId);
 
         var messages = new ArrayList<AiMessage>();
-        messages.add(new AiMessage("system", PromptBuilder.diaryCompanion(persona, memories, draftSnippet, emotionNote)));
+        messages.add(new AiMessage("system", PromptBuilder.diaryCompanion(persona, memories, draftSnippet, emotionNote, false, null)));
 
         String reply = aiClient.chat(messages, true);
         if (reply == null) {
@@ -568,6 +589,26 @@ public class DiaryServiceImpl implements DiaryService {
         DiaryChatMemory.SessionBuffer buf = chatMemory.getOrCreate(userId, sessionId);
         int turnId = buf.turnCount + 1;
 
+        // P3.4 续接功能：从上一轮中断点恢复
+        String resumeContext = null;
+        if (Boolean.TRUE.equals(param.getResume()) && sessionId != null) {
+            com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<DiaryChatLog> wrapper =
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
+            wrapper.eq(DiaryChatLog::getUserId, userId);
+            wrapper.eq(DiaryChatLog::getSessionId, sessionId);
+            wrapper.isNotNull(DiaryChatLog::getFilteredResponse);
+            wrapper.orderByDesc(DiaryChatLog::getTurnId);
+            wrapper.last("limit 1");
+            DiaryChatLog lastLog = chatLogMapper.selectOne(wrapper);
+            if (lastLog != null && lastLog.getFilteredResponse() != null) {
+                String lastContent = lastLog.getFilteredResponse();
+                // 取最后 100 字作为断点上下文
+                int start = Math.max(0, lastContent.length() - 100);
+                resumeContext = lastContent.substring(start);
+                log.info("续接上一轮对话，sessionId={}, turnId={}, 断点: {}", sessionId, lastLog.getTurnId(), resumeContext);
+            }
+        }
+
         // —— 草稿太短（< 4 字）：不跑任何 AI，直接 silent ——
         if (draftSnippet.length() < 4) {
             response.setContentType("text/event-stream;charset=UTF-8");
@@ -582,19 +623,21 @@ public class DiaryServiceImpl implements DiaryService {
 
         // === 深度审计第一步：前处理并行化 + 第二步：缓存 ===
         // 情绪/意图/RAG 三者独立，并行跑；预跑重启时 draft 变化小，优先命中缓存跳过 AI。
-        final String finalDraft = draftSnippet;
+        // 本轮真正要读的只有「还没回应过的新内容」；已回应部分留在会话记忆里，不重复读
+        final String reactSnippet = (param.getDelta() != null && !param.getDelta().isBlank())
+                ? param.getDelta().trim() : draftSnippet;
         final String finalSummary = buf.summary;
         final String finalTypingSignal = param.getTypingSignal();
-        final String emoKey = cacheKey("emo", userId, finalDraft);
-        final String intentKey = cacheKey("int", userId, finalDraft);
-        final String ragKey = cacheKey("rag", userId, finalDraft);
+        final String emoKey = cacheKey("emo", userId, reactSnippet);
+        final String intentKey = cacheKey("int", userId, reactSnippet);
+        final String ragKey = cacheKey("rag", userId, reactSnippet);
 
         DiaryChatEmotionExtractor.EmotionResult cachedEmo = getCached(emoKey);
         CompletableFuture<DiaryChatEmotionExtractor.EmotionResult> emotionFuture = cachedEmo != null
                 ? CompletableFuture.completedFuture(cachedEmo)
                 : CompletableFuture.supplyAsync(() -> {
                     if (interruptManager.isInterrupted(sessionId)) throw new RuntimeException("interrupted");
-                    DiaryChatEmotionExtractor.EmotionResult r = emotionExtractor.extract(finalDraft, finalTypingSignal, userId);
+                    DiaryChatEmotionExtractor.EmotionResult r = emotionExtractor.extract(reactSnippet, finalTypingSignal, userId);
                     putCached(emoKey, r);
                     return r;
                 }, aiExecutor).exceptionally(ex -> {
@@ -611,7 +654,7 @@ public class DiaryServiceImpl implements DiaryService {
                 ? CompletableFuture.completedFuture(cachedIntent)
                 : CompletableFuture.supplyAsync(() -> {
                     if (interruptManager.isInterrupted(sessionId)) throw new RuntimeException("interrupted");
-                    String r = intentClassifier.classify(finalDraft, finalSummary);
+                    String r = intentClassifier.classify(reactSnippet, finalSummary);
                     putCached(intentKey, r);
                     return r;
                 }, aiExecutor).exceptionally(ex -> {
@@ -625,7 +668,7 @@ public class DiaryServiceImpl implements DiaryService {
                 ? CompletableFuture.completedFuture(cachedRag)
                 : CompletableFuture.supplyAsync(() -> {
                     if (interruptManager.isInterrupted(sessionId)) throw new RuntimeException("interrupted");
-                    List<Memory> r = memoryService.getRelevant(userId, finalDraft);
+                    List<Memory> r = memoryService.getRelevant(userId, reactSnippet);
                     putCached(ragKey, r);
                     return r;
                 }, aiExecutor).exceptionally(ex -> {
@@ -642,8 +685,21 @@ public class DiaryServiceImpl implements DiaryService {
 
         // 被打断：三个 future 里任意一个检测到中断后抛异常，join 会把异常传上来
         // （exceptionally 只兜底业务异常，不兜 RuntimeException("interrupted")）
-        // —— 情绪极平静：发 silent 直接返回 ——
-        if (emotion.getScore().doubleValue() < 0.15) {
+        // —— 开口决策：文字内容（LLM 判断）为主，停顿/打字轨迹只做加权 ——
+        // readiness ≥ 0.6：LLM 判定这段有具体可接的东西 → 必开口，不管用户是否还在打字；
+        // 否则按 readiness + 停顿权重 + 轨迹权重 掷概率，决定这一轮说不说。
+        double readiness = emotion.getSpeakReadiness();
+        double pauseWeight = 0.0;
+        try {
+            if (param.getTypingSignal() != null && !param.getTypingSignal().isBlank()) {
+                double pauseSec = JSON.parseObject(param.getTypingSignal()).getDoubleValue("pause");
+                pauseWeight = Math.min(0.35, Math.max(0, pauseSec) / 12.0 * 0.35);
+            }
+        } catch (Exception ignore) { /* 轨迹缺失不影响开口判断 */ }
+        double trajWeight = Math.min(0.35, emotion.getTrajectoryScore().doubleValue() * 0.35);
+        boolean mustSpeak = readiness >= 0.6;
+        double speakProb = Math.min(1.0, readiness + pauseWeight + trajWeight);
+        if (!mustSpeak && java.util.concurrent.ThreadLocalRandom.current().nextDouble() >= speakProb) {
             response.setContentType("text/event-stream;charset=UTF-8");
             response.setHeader("Cache-Control", "no-cache");
             response.setHeader("X-Accel-Buffering", "no");
@@ -660,7 +716,7 @@ public class DiaryServiceImpl implements DiaryService {
 
         // === v1 扩展：组装 system prompt（记忆 + 情绪 + 意图 + 羽毛/圆桌联动） ===
         StringBuilder systemPrompt = new StringBuilder();
-        systemPrompt.append(PromptBuilder.diaryCompanion(persona, memories, draftSnippet, emotionNote, true));
+        systemPrompt.append(PromptBuilder.diaryCompanion(persona, memories, reactSnippet, emotionNote, true, resumeContext));
 
         // 情绪意图注入 prompt
         systemPrompt.append("\n\n【本轮上下文（供你参考，直接响应）】\n")
@@ -671,6 +727,10 @@ public class DiaryServiceImpl implements DiaryService {
                 .append("- 用户意图：").append(intent).append("\n")
                 .append("- 反应策略参考：")
                 .append(intentStrategy(intent)).append("\n");
+        // 文字侧 LLM 已判定「有具体可接的东西」：这一轮必须开口，禁止沉默
+        if (mustSpeak) {
+            systemPrompt.append("\n【本轮硬性要求】这段内容里有具体可接的人/事/物或情绪，你必须开口回应，禁止输出 [沉默]。\n");
+        }
 
         // 羽毛：不再硬注入提示词（显得死板），改由知识库 source=lore 在需要时自然检索命中；此处只保留标记用于日志
         boolean featherTriggered = Boolean.TRUE.equals(param.getFeatherTriggered());
@@ -679,7 +739,7 @@ public class DiaryServiceImpl implements DiaryService {
         List<AiMessage> messages = chatMemory.buildMessages(
                 buf,
                 new AiMessage("system", systemPrompt.toString()),
-                new AiMessage("user", draftSnippet)
+                new AiMessage("user", reactSnippet)
         );
 
         // —— SSE 协议层（保留 v0 完整逻辑） ——
@@ -793,7 +853,7 @@ public class DiaryServiceImpl implements DiaryService {
 
         // === v1 扩展：人格一致性检查 ===
         DiaryChatPersonaChecker.CheckResult check = personaChecker.ensurePersona(
-                text, systemPrompt.toString(), draftSnippet, intent);
+                text, systemPrompt.toString(), reactSnippet, intent);
         String finalText = check.finalResponse;
         if (!check.pass) {
             log.warn("人格检查未过，兜底温柔回应 sessionId={}, 原因={}", sessionId, check.failReason);
@@ -807,10 +867,10 @@ public class DiaryServiceImpl implements DiaryService {
         companion.setCreateDate(System.currentTimeMillis());
         diaryCompanionMapper.insert(companion);
         memoryService.markMentioned(memories);
-        memoryService.extractAsync(userId, draftSnippet, finalText);
+        memoryService.extractAsync(userId, reactSnippet, finalText);
 
-        // === v1 扩展：会话记忆 appendTurn ===
-        chatMemory.appendTurn(buf, draftSnippet, finalText);
+        // === v1 扩展：会话记忆 appendTurn（只记本轮新内容，旧段落不再重复进入上下文） ===
+        chatMemory.appendTurn(buf, reactSnippet, finalText);
 
         // === v1 扩展：全链路日志 ===
         DiaryChatLog logEntity = new DiaryChatLog();
@@ -818,7 +878,8 @@ public class DiaryServiceImpl implements DiaryService {
         logEntity.setSessionId(sessionId);
         logEntity.setTurnId(turnId);
         logEntity.setTriggerType(param.getTriggerType() == null ? "save" : param.getTriggerType());
-        logEntity.setTriggerDetail(String.format("字数=%d,情绪得分=%.2f,意图=%s", draftSnippet.length(), emotion.getScore(), intent));
+        logEntity.setTriggerDetail(String.format("字数=%d,情绪得分=%.2f,意图=%s,开口意愿=%.2f,停顿权重=%.2f,轨迹权重=%.2f,必说=%s",
+                draftSnippet.length(), emotion.getScore(), intent, readiness, pauseWeight, trajWeight, mustSpeak));
         logEntity.setUserDraft(draftSnippet.length() > 2000 ? draftSnippet.substring(0, 2000) + "…" : draftSnippet);
         logEntity.setTypingSignal(param.getTypingSignal());
         logEntity.setSystemPrompt(systemPrompt.length() > 4000 ? systemPrompt.toString().substring(0, 4000) + "…" : systemPrompt.toString());
@@ -1428,5 +1489,66 @@ public class DiaryServiceImpl implements DiaryService {
         result.put("distribution", distribution);
         result.put("timeline", timeline);
         return Result.success(result);
+    }
+
+    // ===== P3.3 情绪持久化 =====
+    
+    @Override
+    public Result updateEmotion(String emotion, Integer intensity, String triggerDiaryId) {
+        SysUser user = UserThreadLocal.get();
+        if (user == null) return Result.fail(403, "未登录");
+        
+        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<EmotionState> wrapper =
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
+        wrapper.eq(EmotionState::getUserId, user.getId());
+        EmotionState existing = emotionStateMapper.selectOne(wrapper);
+        
+        if (existing == null) {
+            EmotionState state = new EmotionState();
+            state.setUserId(user.getId());
+            state.setEmotion(emotion != null ? emotion : "默认");
+            state.setIntensity(intensity != null ? intensity : 5);
+            state.setTriggerDiaryId(triggerDiaryId);
+            state.setUpdateTime(System.currentTimeMillis());
+            emotionStateMapper.insert(state);
+        } else {
+            EmotionState update = new EmotionState();
+            update.setEmotion(emotion != null ? emotion : existing.getEmotion());
+            update.setIntensity(intensity != null ? intensity : existing.getIntensity());
+            update.setTriggerDiaryId(triggerDiaryId);
+            update.setUpdateTime(System.currentTimeMillis());
+            com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<EmotionState> updateWrapper =
+                    new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<>();
+            updateWrapper.eq(EmotionState::getUserId, user.getId());
+            emotionStateMapper.update(update, updateWrapper);
+        }
+        
+        log.info("用户 {} 情绪状态已更新: {}", user.getId(), emotion);
+        return Result.success(null);
+    }
+    
+    @Override
+    public Result getCurrentEmotion() {
+        SysUser user = UserThreadLocal.get();
+        if (user == null) return Result.fail(403, "未登录");
+        
+        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<EmotionState> wrapper =
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
+        wrapper.eq(EmotionState::getUserId, user.getId());
+        EmotionState state = emotionStateMapper.selectOne(wrapper);
+        
+        if (state == null) {
+            java.util.Map<String, Object> data = new java.util.HashMap<>();
+            data.put("emotion", "默认");
+            data.put("intensity", 5);
+            return Result.success(data);
+        }
+        
+        java.util.Map<String, Object> data = new java.util.HashMap<>();
+        data.put("emotion", state.getEmotion());
+        data.put("intensity", state.getIntensity());
+        data.put("triggerDiaryId", state.getTriggerDiaryId());
+        data.put("updateTime", state.getUpdateTime());
+        return Result.success(data);
     }
 }

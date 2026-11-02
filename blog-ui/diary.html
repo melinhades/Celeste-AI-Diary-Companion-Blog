@@ -7,7 +7,7 @@
     <title>Madeline - 写日记</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Patrick+Hand&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/chat-widget.css?v=20261025a">
-    <link rel="stylesheet" href="css/diary.css?v=20261025b">
+    <link rel="stylesheet" href="css/diary.css?v=20261102b">
     <link rel="stylesheet" href="css/text-fx.css?v=20261004a">
     <link rel="stylesheet" href="css/diary-inline.css?v=20261015a">
     
@@ -28,6 +28,11 @@
         <div id="gameDialogBody">
             <div id="gameDialogName">Madeline</div>
             <div id="gameDialogText"></div>
+        </div>
+        <!-- P3.4 中断/续接按钮 -->
+        <div id="companionControls" style="position:absolute; bottom:12px; right:12px; z-index:10; display:flex; gap:8px;">
+            <button id="interruptBtn" style="padding:6px 12px; background:#e74c3c; color:#fff; border:none; border-radius:4px; cursor:pointer; font-family:'Renogare',sans-serif; font-size:12px;">⏸️ 打断她</button>
+            <button id="resumeBtn" style="display:none; padding:6px 12px; background:#3498db; color:#fff; border:none; border-radius:4px; cursor:pointer; font-family:'Renogare',sans-serif; font-size:12px;">💬 继续</button>
         </div>
     </div>
     <div id="featherApp" style="display:contents">
@@ -104,18 +109,18 @@
     </div>
 
     <script src="js/api.js?v=20261002"></script>
-    <script src="js/text-fx.js?v=20261025b"></script>
+    <script src="js/text-fx.js?v=20261102a"></script>
     <script src="js/feather-game.js"></script>
     <script src="js/feather-trigger.js"></script>
     <script src="js/madeline-core.js?v=20261002"></script>
     <script src="js/madeline-mood.js?v=20261009a"></script>
     <script src="js/snow-bgm.js"></script>
-    <script src="js/diary.js?v=20261025a"></script>
+    <script src="js/diary.js?v=20261102a"></script>
     <script src="js/detect.js"></script>
     <script src="js/diary-1.js?v=20261015a"></script>
     <script src="js/pptgen.js"></script>
 <script src="js/vue.global.prod.js?v=20261008a"></script>
 <script src="js/diary-2.js?v=20261015a"></script>
-<script src="js/seed.js?v=20261028b"></script>
+<script src="js/seed.js?v=20261101c"></script>
 </body>
 </html>

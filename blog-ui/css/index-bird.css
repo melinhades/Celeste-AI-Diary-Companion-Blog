@@ -1,0 +1,163 @@
+/* ===== css/index-bird.css — index 头部那只 crow（auth.js 注入的 .chat-crow）+ 统一加载层 =====
+   历史：CS10 飞升过场（js/bird-ascent.js + #birdAscent 覆盖层）已废案，
+   完整实现留在 attic/cs10-launch-transition/（AScent 引擎 + 原样式）。
+   现在这条链路只做三件事：
+     1. .chat-crow 由 js/index-bird.js 搬进 .nav，与 Home/Archives/… 同一水平线；
+     2. 悬停喊叫（croak 帧轮播），点击后按 fly00..03 帧从 nav 飞出去；
+     3. 飞出后铺 #pageLoadingOverlay（与 internet_cafe/article/login 同一套
+        夜空 + 雪花 + 十帧跑动 Madeline + LOADING…），再进纪念页。 */
+
+/* ---------- nav 里的鸟：和其它 nav-link 同排，显示尺寸放大 30%（40×30 → 52×39） ---------- */
+.nav .chat-crow {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    margin: 0 4px;
+    padding: 2px 6px;
+    border-radius: 6px;
+    transition: background .2s ease;
+}
+.nav .chat-crow:hover,
+.nav .chat-crow:focus-visible { background: rgba(138, 43, 226, .2); }
+/* common.css 把 .chat-crow-box 定死成 19×18 + overflow:hidden、img 用负 margin 裁出头像，
+   这里放开裁切，保持整只鸟可见 */
+.chat-crow .chat-crow-box {
+    width: auto;
+    height: auto;
+    overflow: visible;
+    align-items: center;
+    justify-content: center;
+}
+.chat-crow .chat-crow-box img {
+    width: 52px;
+    height: 39px;
+    margin: 0;
+    image-rendering: pixelated;
+    transition: filter .18s ease;
+}
+/* 悬停只加亮：喊叫由 js/index-bird.js 轮播 crow00..13 完成，不做位移/缩放 */
+.chat-crow:hover .chat-crow-box img,
+.chat-crow:focus-visible .chat-crow-box img {
+    filter: brightness(1.3) drop-shadow(0 0 10px rgba(185, 220, 255, .9));
+}
+
+/* ---------- 点击后飞出：保持 fly 帧的同时沿右上离开 ---------- */
+.chat-crow.flying-out { pointer-events: none; }
+.chat-crow.flying-out .chat-crow-box img {
+    animation: crowFlyOut .95s cubic-bezier(.35, 0, .75, .55) forwards;
+}
+@keyframes crowFlyOut {
+    0%   { transform: translate(0, 0) scale(1); opacity: 1; }
+    40%  { transform: translate(18vw, 3vh) scale(1.06) rotate(-5deg); opacity: 1; }
+    100% { transform: translate(48vw, 10vh) scale(.82) rotate(-12deg); opacity: 0; }
+}
+
+/* ---------- 统一加载层 ----------
+   与 internet_cafe.css 的 #pageLoadingOverlay 视觉同口径（月光晕 / 两层点阵星星 /
+   雪花画布 / 底部雪带 / 十帧跑动 Madeline / LOADING…）。
+   动画名加 ld 前缀，避免和 index-inline.css 的 snowDrift 等重名。
+   index 页由 js/page-loading.js 的 show() 在鸟飞走后唤醒；[data-standby] 时先隐藏。 */
+#pageLoadingOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background-color: #050514;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    opacity: 1;
+    transition: opacity .65s ease;
+}
+#pageLoadingOverlay[data-standby] { display: none; }
+#pageLoadingOverlay.done { opacity: 0; pointer-events: none; }
+#pageLoadingOverlay::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+        radial-gradient(circle at 78% 16%, rgba(180, 200, 255, .16), transparent 32%),
+        radial-gradient(circle at 18% 82%, rgba(90, 110, 180, .10), transparent 40%);
+}
+#pageLoadingOverlay .ld-stars,
+#pageLoadingOverlay .ld-stars2 {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    width: 1px;
+    height: 1px;
+    background: transparent;
+}
+#pageLoadingOverlay .ld-stars {
+    box-shadow: 12vw 8vh 0 1px rgba(255,255,255,.8), 34vw 22vh 0 rgba(255,255,255,.5), 58vw 6vh 0 1px rgba(255,255,255,.7),
+                82vw 18vh 0 rgba(255,255,255,.4), 46vw 12vh 0 rgba(255,255,255,.55), 90vw 40vh 0 1px rgba(255,255,255,.6),
+                8vw 34vh 0 rgba(255,255,255,.45), 68vw 30vh 0 rgba(255,255,255,.5), 24vw 46vh 0 1px rgba(255,255,255,.65),
+                94vw 8vh 0 rgba(255,255,255,.4), 52vw 40vh 0 rgba(255,255,255,.35), 16vw 16vh 0 rgba(255,255,255,.5);
+    animation: ldStarTwinkle 4.5s ease-in-out infinite;
+}
+#pageLoadingOverlay .ld-stars2 {
+    box-shadow: 20vw 12vh 0 rgba(255,255,255,.5), 42vw 5vh 0 1px rgba(255,255,255,.7), 72vw 22vh 0 rgba(255,255,255,.45),
+                6vw 26vh 0 rgba(255,255,255,.5), 60vw 34vh 0 rgba(255,255,255,.4), 86vw 12vh 0 1px rgba(255,255,255,.6),
+                30vw 38vh 0 rgba(255,255,255,.35), 96vw 30vh 0 rgba(255,255,255,.45), 48vw 24vh 0 rgba(255,255,255,.5),
+                14vw 42vh 0 rgba(255,255,255,.3), 64vw 10vh 0 rgba(255,255,255,.4), 38vw 48vh 0 rgba(255,255,255,.35);
+    animation: ldStarTwinkle 6s ease-in-out 1.6s infinite;
+}
+#pageLoadingOverlay #ldSnowCanvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+#pageLoadingOverlay .ld-snow-strip {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 80px;
+    background: url('../celeste-areas/snow-front.webp') repeat-x bottom/220px auto;
+    animation: ldSnowDrift 45s linear infinite;
+    opacity: .5;
+    pointer-events: none;
+}
+/* 跑动的 Madeline：十帧均分，00 同时放 0% 与 100%，循环首尾衔接无跳变 */
+#pageLoadingOverlay .loading-madeline {
+    width: 120px;
+    height: 120px;
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-position: center;
+    image-rendering: pixelated;
+    animation: ldLoadingRun .8s steps(10) infinite;
+    position: relative;
+    z-index: 1;
+}
+#pageLoadingOverlay .loading-text {
+    margin-top: 20px;
+    color: #ffe36d;
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    font-size: 18px;
+    letter-spacing: 3px;
+    text-shadow: 0 0 12px rgba(255, 227, 109, .4);
+    position: relative;
+    z-index: 1;
+}
+#pageLoadingOverlay .loading-dots::after { content: ''; animation: ldDots 1.5s steps(4, end) infinite; }
+
+@keyframes ldLoadingRun {
+    0%   { background-image: url('../celeste-gui/loading/00.png'); }
+    10%  { background-image: url('../celeste-gui/loading/01.png'); }
+    20%  { background-image: url('../celeste-gui/loading/02.png'); }
+    30%  { background-image: url('../celeste-gui/loading/03.png'); }
+    40%  { background-image: url('../celeste-gui/loading/04.png'); }
+    50%  { background-image: url('../celeste-gui/loading/05.png'); }
+    60%  { background-image: url('../celeste-gui/loading/06.png'); }
+    70%  { background-image: url('../celeste-gui/loading/07.png'); }
+    80%  { background-image: url('../celeste-gui/loading/08.png'); }
+    90%  { background-image: url('../celeste-gui/loading/09.png'); }
+    100% { background-image: url('../celeste-gui/loading/00.png'); }
+}
+@keyframes ldSnowDrift { from { background-position-x: 0; } to { background-position-x: -440px; } }
+@keyframes ldStarTwinkle { 0%, 100% { opacity: .25; } 50% { opacity: .9; } }
+@keyframes ldDots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }

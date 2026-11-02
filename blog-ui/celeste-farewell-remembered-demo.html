@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>第九章 · 铭记（Remembered）场景演示</title>
+  <title>铭记 · 山间聊天室</title>
   <style>
     :root { color-scheme: dark; }
     * { box-sizing: border-box; }
@@ -17,22 +17,6 @@
       position: fixed; inset: 0; pointer-events: none;
       background: radial-gradient(ellipse at 50% 55%, transparent 38%, rgba(3, 6, 18, .58) 100%);
     }
-    header {
-      position: fixed; left: clamp(20px, 4vw, 64px); top: clamp(20px, 5vh, 56px);
-      pointer-events: none; text-shadow: 0 2px 22px #04101f;
-    }
-    .eyebrow { font-size: 11px; letter-spacing: .34em; color: #9fc0d8; }
-    h1 {
-      margin: 10px 0 6px; font-size: clamp(34px, 5vw, 58px);
-      font-weight: 300; letter-spacing: .18em; color: #eaf6ff;
-    }
-    .sub { font-size: 12px; letter-spacing: .2em; color: #93b4cc; }
-    .src { margin-top: 8px; font-size: 10px; line-height: 1.6; letter-spacing: .1em; color: #7e93b4; opacity: .8; max-width: min(78vw, 560px); }
-    .hint {
-      position: fixed; left: clamp(20px, 4vw, 64px); bottom: 22px;
-      font-size: 11px; letter-spacing: .12em; color: #9cb6c9; opacity: .82;
-    }
-    .hint b { color: #d8c489; font-weight: 400; }
     .hud {
       position: fixed; right: clamp(20px, 4vw, 64px); bottom: 22px;
       font-size: 11px; letter-spacing: .16em; color: #a7c2d5;
@@ -53,29 +37,205 @@
       white-space: nowrap;
     }
     .toast.show { opacity: 1; }
-    /* 窄屏：底部一左一右会相撞，把 HUD 提到静音键下方，并给提示条留出右边界让它自然换行 */
+    /* 窄屏：给 HUD 换个位置，避免与右下 Toast 等元素挤压 */
     @media (max-width: 720px) {
-      .hint { right: clamp(20px, 4vw, 64px); font-size: 10px; letter-spacing: .06em; line-height: 2.1; }
       .hud { bottom: auto; top: clamp(72px, 12vh, 104px); font-size: 10px; }
+    }
+  </style>
+  <!-- 从 index 的鸟图标飞过来后接着显示同款加载层（视觉见 css/index-bird.css） -->
+  <link rel="stylesheet" href="css/index-bird.css?v=20261101f">
+  <!-- 复用原实时聊天室（messages.html）的玻璃聊天面板 -->
+  <link rel="stylesheet" href="css/messages.css?v=20261015a">
+  <style>
+    [v-cloak] { display: none !important; }
+    /* 关掉 messages.css 自带的雪山底图与压暗 scrim，场景画布要当主背景 */
+    body::after { display: none !important; }
+    #chatContainer::before { display: none !important; }
+    /* 聊天框：屏幕正中 */
+    #chatContainer {
+      position: fixed; inset: 0; z-index: 8; pointer-events: none;
+      display: flex; align-items: center; justify-content: center; padding: 24px;
+    }
+    .chat-wrap {
+      pointer-events: auto; display: flex; flex-direction: column;
+      width: min(900px, 94vw); height: min(82vh, 760px); max-width: none;
+      margin: 0; padding: 14px 16px 12px; box-sizing: border-box;
+      transition: opacity .32s ease, transform .32s ease;
+    }
+    .msg-layout { display: flex; gap: 18px; height: 100%; min-height: 0; }
+    .msg-side {
+      width: 210px; flex-shrink: 0; position: static; align-self: stretch;
+      max-height: 100%; overflow-y: auto; padding: 8px;
+    }
+    .msg-main { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; min-height: 0; }
+    #chatPane {
+      display: flex !important; flex-direction: column; flex: 1; min-height: 0;
+      background: rgba(6, 12, 24, .42); border: 1px solid rgba(160, 200, 230, .16);
+      border-radius: 20px; overflow: hidden;
+      backdrop-filter: blur(16px) saturate(1.25); -webkit-backdrop-filter: blur(16px) saturate(1.25);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, .38);
+    }
+    /* 性能：聊天卡是场景画布上面积最大的半透明层。背景模糊要对每帧都在变的
+       游戏画面重新采样，输入/滚动都会跟着卡；去掉实时模糊，改用更实的深色底。 */
+    #chatPane { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: rgba(6, 12, 24, .70); }
+    .chat-wrap .msg-side { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: rgba(255, 255, 255, .07); }
+    .chat-wrap .chat-input-row { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; background: rgba(12, 18, 34, .78); }
+    .chat-head { padding: 14px 16px 0; margin: 0 0 10px; flex-shrink: 0; }
+    #chatLog { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 16px 2px; }
+    .chat-input-row { flex-shrink: 0; margin: 10px 14px 14px; }
+    .chat-login-tip { pointer-events: auto; padding: 140px 20px; }
+    .chat-empty { padding: 46px 16px; }
+    /* 隐藏态：卡片淡出，只留底部胶囊与操作提示 */
+    #chatContainer.chat-hidden .chat-wrap {
+      opacity: 0; transform: translateY(16px) scale(.975); pointer-events: none;
+    }
+    .chat-toggle {
+      position: fixed; left: 50%; bottom: 26px; translate: -50% 0; z-index: 9;
+      display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px;
+      border-radius: 999px; border: 1px solid rgba(160, 200, 230, .35);
+      background: rgba(8, 16, 32, .62); color: #dff2ff; font-size: 13px; letter-spacing: .1em;
+      cursor: pointer; opacity: 0; pointer-events: none; transition: opacity .3s ease, transform .3s ease;
+      backdrop-filter: blur(10px);
+    }
+    .chat-toggle.show { opacity: 1; pointer-events: auto; }
+    .chat-toggle:hover { border-color: #a9d9db; background: rgba(18, 40, 58, .75); }
+    .scene-hint {
+      position: fixed; left: 50%; bottom: 76px; translate: -50% 0; z-index: 9;
+      font-size: 11px; letter-spacing: .14em; color: #a7c2d5;
+      opacity: 0; pointer-events: none; transition: opacity .3s ease; white-space: nowrap;
+    }
+    .scene-hint.show { opacity: 1; }
+    /* 场景 HUD / 静音 / toast 让位给居中聊天卡 */
+    #hud {
+      left: clamp(20px, 4vw, 64px); right: auto; top: clamp(20px, 5vh, 56px); bottom: auto;
+      display: flex; flex-direction: column; gap: 6px; z-index: 3;
+    }
+    #mute { left: auto; right: clamp(20px, 4vw, 64px); z-index: 4; }
+    .toast { left: clamp(20px, 4vw, 64px); transform: none; z-index: 4; }
+    @media (max-width: 820px) {
+      #chatContainer { padding: 0; align-items: flex-end; }
+      .chat-wrap { width: 100%; height: 62vh; padding: 8px 10px 10px; justify-content: flex-end; }
+      #chatPane { border-radius: 18px 18px 0 0; border-bottom: 0; }
+      .msg-side { display: none; }
+      .chat-head { padding: 12px 14px 0; }
+      #chatLog { padding: 4px 12px 0; }
+      .chat-input-row { margin: 8px 10px 10px; }
+      #hud { top: 16px; left: 16px; font-size: 10px; }
+      #mute { top: 16px; right: 16px; }
+      .toast { left: 16px; bottom: calc(62vh + 14px); }
+      .chat-toggle { bottom: 18px; }
+      .scene-hint { bottom: 64px; font-size: 10px; }
     }
   </style>
 </head>
 <body>
+  <!-- index 点鸟飞走后铺的就是这一层统一加载层（夜空 + 雪花 + 跑动 Madeline），
+       场景首帧提交后由 js/page-loading.js 加 .done 淡出 -->
+  <div id="pageLoadingOverlay">
+    <div class="ld-stars"></div>
+    <div class="ld-stars2"></div>
+    <canvas id="ldSnowCanvas"></canvas>
+    <div class="ld-snow-strip"></div>
+    <div class="loading-madeline"></div>
+    <div class="loading-text">LOADING<span class="loading-dots"></span></div>
+  </div>
   <canvas id="scene" aria-label="第九章铭记场景：明亮星海中的浮空跳板与月球生物"></canvas>
   <div class="vignette"></div>
-  <header>
-    <div class="eyebrow">CHAPTER IX &middot; FAREWELL</div>
-    <h1>铭记</h1>
-    <div class="sub">REMEMBERED &middot; 空无之室</div>
-    <div class="src">背景 11 层 + 前景 1 层 stylegrounds &middot; 关卡 lvl_e-00z &middot; 反编译自 Celeste.dll / LostLevels.bin</div>
-  </header>
-  <div class="hint"><b>&larr; &rarr;</b> 移动 &nbsp;&middot;&nbsp; <b>Space</b> 跳跃 &nbsp;&middot;&nbsp; <b>X</b> 冲刺 &nbsp;&middot;&nbsp; <b>Shift</b> 抓墙 &nbsp;&middot;&nbsp; <b>R</b> 重来 &nbsp;&middot;&nbsp; <b>M</b> 静音</div>
-  <div class="hud" id="hud">空无&nbsp; 0 / 1</div>
+  <div class="hud" id="hud"><span id="hudHeart">空无&nbsp; 0 / 1</span><span id="hudCollect">草莓 0/10 · 水母 0/4 · 羽毛 0/6</span></div>
   <button class="mute" id="mute" type="button" title="静音（M）">&#9835;</button>
   <div class="toast" id="toast">拾起「空无」</div>
+  <!-- messages.js 的雪花层：场景之上、聊天下方 -->
+  <canvas id="snowCanvas" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:2;opacity:.55;"></canvas>
+
+  <!-- ===== 实时聊天室（原 messages.html 的 UI，去掉左栏通知，只留山间聊天） ===== -->
+  <div id="chatContainer" v-cloak>
+    <button id="chatToggle" class="chat-toggle" :class="{show: chatHidden}" type="button" @click="toggleChat">山间聊天</button>
+    <div class="scene-hint" :class="{show: chatHidden}">A / D 移动 · Space 跳 · X 冲刺 · Enter 聊天</div>
+    <div class="chat-login-tip" v-if="!loggedIn">
+      请先<a href="login.html" style="color:#ffe36d">登录</a>，才能进入实时聊天。
+    </div>
+    <div class="chat-wrap" v-else>
+      <div class="msg-layout">
+        <aside class="msg-side">
+          <div class="msg-side-title">消息</div>
+          <div class="msg-side-item" :class="{active: pane === 'chat'}" @click="pane = 'chat'"><span class="rail-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18.5l6.2-9.5 3.3 5.2 2.3-3.2L21 18.5z"/><circle cx="16.4" cy="6" r="1.1" fill="currentColor" stroke="none"/></svg></span>山间聊天</div>
+        </aside>
+        <div class="msg-main">
+          <div id="chatPane" v-show="pane === 'chat'">
+            <div class="chat-head">
+              <div class="head-id">
+                <div class="group-av"><svg viewBox="0 0 24 24" fill="none" stroke="#8fc4ff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18.5l6.2-9.5 3.3 5.2 2.3-3.2L21 18.5z"/><circle cx="16.4" cy="6" r="1.1" fill="#fff3a3" stroke="none"/></svg></div>
+                <div class="chat-title">铭记 · 山间聊天</div>
+              </div>
+              <div class="chat-status" :class="statusState"><span class="dot"></span><span>{{ statusText }}</span></div>
+            </div>
+            <div id="chatLog">
+              <div v-if="logStatus === 'loading'" class="chat-empty">正在拉取聊天记录…</div>
+              <div v-else-if="logStatus === 'empty'" class="chat-empty">还没有人说话，发第一条消息试试～</div>
+              <div v-else-if="logStatus === 'error'" class="chat-empty">历史记录加载失败。</div>
+              <template v-else>
+                <template v-for="it in items" :key="it.key">
+                  <div v-if="it.t === 'time'" class="chat-time"><span>{{ it.label }}</span></div>
+                  <div v-else-if="it.t === 'sys'" class="chat-sys">{{ it.text }}</div>
+                  <div v-else-if="it.t === 'msg'" class="chat-msg" :class="it.mine ? 'me' : 'other'" :data-key="it.ik">
+                    <template v-if="it.mine">
+                      <div class="body">
+                        <div v-if="!it.chain" class="nm">{{ it.name }}</div>
+                        <div class="bubble" :title="it.title" v-html="it.html"></div>
+                      </div>
+                      <div v-if="it.chain" class="av placeholder"></div>
+                      <div v-else class="av" :style="{background: 'hsl(' + it.hue + ' 52% 55%)'}">{{ it.initial }}</div>
+                    </template>
+                    <template v-else>
+                      <div v-if="it.chain" class="av placeholder"></div>
+                      <div v-else-if="it.isBird" class="av bird"><img src="Atlases/WaveDashing/Bird%20Clip%20Art.png" alt="bird"></div>
+                      <div v-else class="av" :style="{background: 'hsl(' + it.hue + ' 52% 55%)'}">{{ it.initial }}</div>
+                      <div class="body">
+                        <div v-if="!it.chain" class="nm">{{ it.name }}</div>
+                        <div class="bubble" :title="it.title" v-html="it.html"></div>
+                      </div>
+                    </template>
+                  </div>
+                </template>
+                <div v-if="typingName" class="chat-msg other typing-row">
+                  <div class="av placeholder"></div>
+                  <div class="body"><div class="nm typing-name">{{ typingName }} 正在输入</div>
+                  <div class="bubble typing-bubble"><i></i><i></i><i></i></div></div>
+                </div>
+              </template>
+            </div>
+            <div class="chat-input-row" id="chatInputRow" v-show="pane === 'chat'">
+              <div class="emoji-wrap">
+                <button type="button" id="emojiBtn" class="emoji-btn" title="插入表情" aria-label="插入表情" @click.stop="emojiOpen = !emojiOpen">
+                  <img src="Atlases/Portraits/madeline/peaceful00.png" alt="表情" decoding="async">
+                </button>
+                <div id="emojiPanel" class="emoji-panel" :class="{open: emojiOpen}" @click.stop>
+                  <div class="emoji-tabs">
+                    <button type="button" class="emoji-tab" v-for="s in seriesList" :key="s.key"
+                      :class="{active: emojiSeries === s.key}" @click="emojiSeries = s.key">{{ s.label }}</button>
+                  </div>
+                  <div class="emoji-grid" id="emojiGrid">
+                    <button type="button" class="emoji-cell" v-for="e in currentEmojis" :key="e.n"
+                      :title="e.n" @click="insertEmoji(e.mark)">
+                      <img loading="lazy" :src="e.src" :alt="e.n" :data-series="emojiSeries" :data-emo="e.n" decoding="async">
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <input type="text" id="chatInput" maxlength="500" placeholder="说点什么…（Enter 发送）" autocomplete="off"
+                v-model="draft" @keydown="onInputKey" @input="onTypeInput">
+              <button id="chatSend" title="发送" aria-label="发送" :disabled="sending" @click="doSend">↑</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="js/celeste-hair.js"></script>
-  <script src="js/celeste-character.js"></script>
+  <script src="js/celeste-character.js?v=20261102b"></script>
+  <script src="js/bird-motion.js?v=20261031a"></script>
+  <script src="js/page-loading.js?v=20261101a"></script>
   <script>
   (async function () {
     'use strict';
@@ -87,12 +247,16 @@
     const cv = document.getElementById('scene');
     const ctx = cv.getContext('2d');
     const hudEl = document.getElementById('hud');
+    const hudHeartEl = document.getElementById('hudHeart');
+    const hudCollectEl = document.getElementById('hudCollect');
     const toastEl = document.getElementById('toast');
     const muteBtn = document.getElementById('mute');
     let W = 0, H = 0, dpr = 1;
 
     function resize() {
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      // 场景是像素材质（image-rendering:pixelated），按 1x CSS 像素渲染即可：
+      // 高 DPI 下原来按 dpr=2 渲染，每帧要填 4 倍像素，视差/粒子一多就掉帧。
+      dpr = 1;
       W = window.innerWidth; H = window.innerHeight;
       cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -161,6 +325,20 @@
       // jumpThru 的 texture 全是 'default' → 第九章 AreaData.Jumpthru = "wood"
       put('lost', BASE + 'tilesets/lostlevels.png');
       put('jt', BASE + 'objects/jumpthru/wood.png');
+      // 聊天互动素材：草莓 wings 10 帧（flap）· 水母 glider idle 10 / held 1 / fall 3 / fallLoop 2 / death 8
+      // · 金羽毛 idle/flash 各 21 帧 · 星飞球体 starFly00 · 变形 startStarFly 4 帧
+      for (let i = 0; i < 10; i++) put('berry' + i, BASE + 'collectables/strawberry/wings0' + i + '.png');
+      for (let i = 0; i < 10; i++) put('jelly' + i, BASE + 'objects/glider/idle' + i + '.png');
+      put('jellyHeld', BASE + 'objects/glider/held0.png');
+      for (let i = 0; i < 3; i++) put('jellyFall' + i, BASE + 'objects/glider/fall' + i + '.png');
+      for (let i = 0; i < 2; i++) put('jellyFallLoop' + i, BASE + 'objects/glider/fallLoop' + i + '.png');
+      for (let i = 0; i < 8; i++) put('jellyDeath' + i, BASE + 'objects/glider/death0' + i + '.png');
+      for (let i = 0; i < 21; i++) {
+        put('feather' + i, BASE + 'objects/flyFeather/idle' + String(i).padStart(2, '0') + '.png');
+        put('feather' + (21 + i), BASE + 'objects/flyFeather/flash' + String(i).padStart(2, '0') + '.png');
+      }
+      put('orb', BASE + 'characters/player/starFly00.png');
+      for (let i = 0; i < 4; i++) put('morph' + i, BASE + 'characters/player/startStarFly0' + i + '.png');
       return Promise.all(jobs);
     }
 
@@ -381,7 +559,13 @@
     // 键位照原作默认：跳跃 Space/C · 冲刺 X/K · 抓墙 Shift/Z
     const keys = Object.create(null);
     let jumpEdge = false, dashEdge = false;
+    // 在聊天输入框里打字时不操控 Madeline（否则 a/d/空格 会变成移动和跳跃）
+    const typingInChat = e => {
+      const t = e.target;
+      return !!(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable));
+    };
     window.addEventListener('keydown', e => {
+      if (typingInChat(e)) return;
       const k = e.key.toLowerCase();
       const first = !keys[k];
       keys[k] = true;
@@ -393,6 +577,7 @@
       startAudio();
     });
     window.addEventListener('keyup', e => {
+      if (typingInChat(e)) return;
       const k = e.key.toLowerCase();
       keys[k] = false;
       if (e.code === 'Space') keys[' '] = false;
@@ -674,6 +859,542 @@
       cam.y = Math.min(Math.max(cam.y, 0), b.y);
     }
 
+    // ===== 聊天互动：草莓跟随 / 水母 / 金羽毛 StarFly =====
+    // 证据（Celeste.dll）：
+    //   · Leader::Update → MaxPastPoints=350；OnInterval(0.02) 且位移 ≥3 才 Insert(0,pos)；
+    //     第 i 个 follower 取 PastPoints[5*(i+1)]，num 每次 +=5
+    //   · Follower::Update 只看 DelayTimer；Strawberry::Added 设 FollowDelay=0.3
+    //   · 逼近：Position += (target - Position) * (1 - pow(0.01, dt))
+    //   · Glider idle delay 0.1s（Sprites.xml）；FlyFeather idle/flash 各 21 帧 0.06s
+    //   · Player.StStarFly：StartStarFly → StarFlyCoroutine(0.42s) → StarFlyUpdate(timer 2s) → StarFlyEnd
+    const FOLLOW = { sample: 0.02, minDist: 3, maxPoints: 350, stepIndex: 5, delay: 0.3 };
+    const CAP = { berry: 10, jelly: 4, feather: 6 };
+    const STARFLY = {
+      chargeAnim: 0.32, chargeTotal: 0.42,
+      speedStart: 250, accel: 1000, turnRate: 5.5850534,
+      vIdle: 91, vTurn: 140, vFast: 190, sameDot: 0.45,
+      time: 2.0, warnTime: 0.5, warnStep: 0.05,
+      wallDead: 0.2, wallRest: 0.5, exitX: 140, exitUp: 100
+    };
+    const BOUND = { x0: -304, x1: 304, y0: -288, y1: 48 };
+    const COLLECT_R = 14;
+    // —— 水母 Glider（Holdable）—
+    // 证据（Celeste.dll）：
+    //   · Glider..ctor：Hold = Holdable(0.3)，PickupCollider 20×22 @(-10,-16)，SlowFall=true，SlowRun=false
+    //   · Player.NormalUpdate：Holding != null 时跳过攀爬；SlowFall 时 maxFall→120/24/40，重力 ×0.5
+    //   · Player.Throw：Release(UnitX*Facing) → Glider.OnRelease：Speed = dir × 100，Y=0 时 -0.4；玩家后坐 -80
+    //   · Holdable.Release：gravityTimer = 0.1；Player.orig_Pickup：minHoldTimer = 0.35
+    //   · Glider.Update 未持有：地面 800 摩擦 + 20 侧滑；空中 200/100 重力、10/40 摩擦；
+    //     Holdable.Release 的 gravityTimer=0.1 期间跳过重力与摩擦（ShouldHaveGravity）
+    const GLIDER = {
+      gravAir: 200, gravAirUp: 100,
+      frictionUp: 40, frictionDown: 10,
+      groundFriction: 800, groundSlide: 20,
+      pickupDelay: 0.35, releaseGravity: 0.1,
+      regrabDelay: 0.3,     // Holdable..ctor(0.3) → cannotHoldDelay；Release 后 0.3s 内不可再抓
+      throwX: 100, throwY: -40, recoil: 80,
+      carryY: -16,
+      pickX: 10, pickTop: 16, pickBottom: 6,
+      deathTime: 0.64,
+      idleStep: 0.1, fallStep: 0.08,
+      originY: 27.8
+    };
+    // Strawberry wings：Sprites.xml <Loop id="flap" delay=".08" frames="0-8,0-8,0-7,9"/>
+    const BERRY_SEQ = [0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 9];
+
+    const leader = { past: [], acc: 0 };
+    const berries = [], jellies = [], feathers = [];
+    let heldJelly = null;
+    let fly = null;
+    let sceneReady = false;
+    const sceneQueue = [];
+
+    const clampN = (v, a, b) => Math.min(Math.max(v, a), b);
+    function followerLerp(cur, target, dt) { return cur + (target - cur) * (1 - Math.pow(0.01, dt)); }
+    function clampCount(kind, n) { return clampN(Math.round(n), 0, CAP[kind] === undefined ? n : CAP[kind]); }
+    // dot = 输入方向与当前 moveDir 的点积；null = 无方向输入
+    function flyTargetSpeed(dot) {
+      if (dot == null) return STARFLY.vIdle;
+      return dot >= STARFLY.sameDot ? STARFLY.vFast : STARFLY.vTurn;
+    }
+    // StarFlyEnd：按住 ↑ 一律 -100；向下速度归零
+    function flyEndVy(up, vy) {
+      if (up) return -STARFLY.exitUp;
+      return vy > 0 ? 0 : vy;
+    }
+    function approachTo(v, target, step) {
+      return v < target ? Math.min(v + step, target) : Math.max(v - step, target);
+    }
+    function normV(x, y) {
+      const l = Math.sqrt(x * x + y * y);
+      return l > 0.0001 ? { x: x / l, y: y / l } : null;
+    }
+    function dotV(a, b) { return a.x * b.x + a.y * b.y; }
+    function rotateToward(from, to, step) {
+      const a0 = Math.atan2(from.y, from.x), a1 = Math.atan2(to.y, to.x);
+      let d = a1 - a0;
+      while (d > Math.PI) d -= Math.PI * 2;
+      while (d < -Math.PI) d += Math.PI * 2;
+      if (Math.abs(d) <= step) return { x: to.x, y: to.y };
+      const a = a0 + (d > 0 ? step : -step);
+      return { x: Math.cos(a), y: Math.sin(a) };
+    }
+    function inputDir() {
+      let x = 0, y = 0;
+      if (keys['a'] || keys['arrowleft']) x -= 1;
+      if (keys['d'] || keys['arrowright']) x += 1;
+      if (keys['w'] || keys['arrowup']) y -= 1;
+      if (keys['s'] || keys['arrowdown']) y += 1;
+      if (!x && !y) return null;
+      const l = Math.hypot(x, y);
+      return { x: x / l, y: y / l };
+    }
+
+    function updateHud() {
+      hudCollectEl.textContent = '草莓 ' + berries.length + '/' + CAP.berry +
+        ' · 水母 ' + jellies.length + '/' + CAP.jelly +
+        ' · 羽毛 ' + feathers.length + '/' + CAP.feather;
+    }
+
+    // Leader::Update：每 0.02s 采样一次，位移 ≥3 世界像素才插到队首，超出 350 丢队尾
+    function stepLeader(dt) {
+      leader.acc += dt;
+      if (leader.acc < FOLLOW.sample) return;
+      leader.acc -= FOLLOW.sample;
+      const p = { x: m.x, y: m.y - 10 };
+      const head = leader.past[0];
+      if (head && Math.hypot(p.x - head.x, p.y - head.y) < FOLLOW.minDist) return;
+      leader.past.unshift(p);
+      if (leader.past.length > FOLLOW.maxPoints) leader.past.length = FOLLOW.maxPoints;
+    }
+
+    function addBerry() {
+      if (berries.length >= CAP.berry) return;   // 超出的 token 直接忽略（不排队）
+      const idx = Math.min(FOLLOW.stepIndex * (berries.length + 1), leader.past.length - 1);
+      const p = (idx >= 0 && leader.past[idx]) || { x: m.x, y: m.y - 10 };
+      berries.push({ x: p.x, y: p.y, spawnT: 0, delay: FOLLOW.delay, phase: Math.random() * 2.4 });
+      updateHud();
+    }
+
+    // 水母：像金羽毛一样在相机可见区两侧随机刷新（最多 4 只），不再伴飞
+    // Glider.Update 会在未持有且与 Player 相撞时销毁，因此落点要避开实心块
+    function gliderSolidAt(x, y) {
+      const l = x - 4, r = x + 4, t = y - 10, b = y;
+      for (let i = 0; i < WALLS.length; i++) {
+        const q = WALLS[i];
+        if (q.x >= r || q.x + q.w <= l) continue;
+        if (q.y >= b || q.y + q.h <= t) continue;
+        return true;
+      }
+      return false;
+    }
+    function spawnJelly() {
+      if (jellies.length >= CAP.jelly) return;
+      const vw = W / Z, vh = H / Z;
+      let x = 0, y = 0, ok = false;
+      for (let a = 0; a < 8 && !ok; a++) {
+        const fx = Math.random() < 0.5 ? 0.06 + Math.random() * 0.24 : 0.70 + Math.random() * 0.24;
+        x = clampN(cam.x - SPAWN.x + fx * vw, BOUND.x0 + 8, BOUND.x1 - 8);
+        y = clampN(cam.y - SPAWN.y + vh * (0.18 + Math.random() * 0.27), -280, 34);
+        ok = !gliderSolidAt(x, y);
+      }
+      if (!ok) { x = clampN(m.x, BOUND.x0 + 8, BOUND.x1 - 8); y = -200; }
+      jellies.push({
+        x: x, y: y, vx: 0, vy: 0, spawnT: 0, phase: Math.random() * 6,
+        rot: 0, scaleX: 1, scaleY: 1,
+        highFrictionTimer: 0, gravityTimer: 0,
+        deathT: -1, minHoldTimer: 0, cannotHoldTimer: 0, animT: Math.random() * 1.2, openT: 0
+      });
+      updateHud();
+    }
+
+    // Holdable.PickupCollider 20×22 @(-10,-16)：与 Player 8×11 身体盒重叠即进入抓取范围
+    function inPickupRange(j) {
+      return Math.abs(m.x - j.x) < 4 + GLIDER.pickX &&
+        j.y - GLIDER.pickTop < m.y && j.y + GLIDER.pickBottom > m.y - 11;
+    }
+    // Player.orig_Pickup：Holding=Picked，Ducking=false，minHoldTimer=0.35
+    // Glider.OnPickup：Speed=Zero，highFrictionTimer=0.5
+    function tryPickupJelly() {
+      if (heldJelly || m.ducking || fly) return false;
+      let best = null, bestD = Infinity;
+      for (const j of jellies) {
+        if (j.deathT >= 0 || j.cannotHoldTimer > 0 || !inPickupRange(j)) continue;
+        const d = Math.abs(m.x - j.x) + Math.abs(j.y - (m.y - 5));
+        if (d < bestD) { bestD = d; best = j; }
+      }
+      if (!best) return false;
+      heldJelly = best;
+      best.minHoldTimer = GLIDER.pickupDelay;
+      best.highFrictionTimer = 0.5;
+      best.vx = 0; best.vy = 0;
+      best.gravityTimer = 0;
+      best.scaleX = 1; best.scaleY = 1;
+      best.x = m.x; best.y = m.y + GLIDER.carryY;
+      updateHud();
+      return true;
+    }
+    // Holdable.Release：gravityTimer=0.1；Glider.OnRelease：Speed = dir × 100（Y=0 → -0.4）
+    function releaseJelly(dirX, dirY) {
+      const j = heldJelly;
+      if (!j) return;
+      heldJelly = null;
+      j.minHoldTimer = 0;
+      j.cannotHoldTimer = GLIDER.regrabDelay;      // Holdable.Release: cannotHoldTimer = cannotHoldDelay
+      j.gravityTimer = GLIDER.releaseGravity;
+      j.vx = dirX * GLIDER.throwX;
+      j.vy = dirY !== 0 ? dirY * GLIDER.throwX : (dirX !== 0 ? GLIDER.throwY : 0);
+      j.highFrictionTimer = 0.5;
+      j.x = m.x; j.y = m.y + GLIDER.carryY;
+      let tries = 0;
+      while (gliderSolidAt(j.x, j.y) && tries++ < 10) j.y -= 1;   // Holdable.Release 的脱困上移
+      m.holdSlowFall = false;
+      updateHud();
+    }
+    // Player.Throw：Release(UnitX*Facing) + 后坐 80；下方向键则走 Player.Drop（零速度）
+    function throwJelly(drop) {
+      if (!heldJelly) return;
+      const dir = m.facing || 1;
+      releaseJelly(drop ? 0 : dir, 0);
+      if (!drop) m.vx += -GLIDER.recoil * dir;
+    }
+
+    // 水母未持有时的物理（Glider.Update IL 786-1553）
+    function stepJellies(dt) {
+      for (let i = jellies.length - 1; i >= 0; i--) {
+        const j = jellies[i];
+        if (j.spawnT < 1) j.spawnT = Math.min(1, j.spawnT + dt / 0.35);
+        if (j.deathT >= 0) {
+          j.deathT += dt;
+          if (j.deathT >= GLIDER.deathTime) jellies.splice(i, 1);
+          continue;
+        }
+        if (j === heldJelly) {
+          j.animT += dt;
+          // Glider.Update：holder.Speed.Y > 20（或风向上）→ PlayOpen(fall/fallLoop)
+          j.openT = m.vy > 20 ? j.openT + dt : 0;
+          // 持有：Carry 到 Player.Position + (0,-12) + CarryYOffset；旋转按 ClampedMap(Speed.X,-300,300,+34°/-34°)
+          const amp = m.onGround ? 0.6981317 : 1.0471976;
+          const tgt = -clampN(m.vx, -300, 300) * (amp / 300);
+          j.rot = approachTo(j.rot, tgt, Math.PI * dt);
+          j.x = m.x; j.y = m.y + GLIDER.carryY;
+          continue;
+        }
+
+        // 未持有：旋转回正（Glider.Update 未持有 → target 0），动画继续走时
+        j.animT += dt; j.openT = 0;
+        j.rot = approachTo(j.rot, 0, Math.PI * dt);
+
+        // 未持有：高摩擦计时 + 重新抓取冷却 + 地面侧滑
+        if (j.highFrictionTimer > 0) j.highFrictionTimer -= dt;
+        if (j.cannotHoldTimer > 0) j.cannotHoldTimer -= dt;
+        if (gliderSolidAt(j.x, j.y + 1)) {
+          let slide = 0;
+          if (!gliderSolidAt(j.x + 3, j.y + 1)) slide = GLIDER.groundSlide;
+          else if (!gliderSolidAt(j.x - 3, j.y + 1)) slide = -GLIDER.groundSlide;
+          j.vx = approachTo(j.vx, slide, GLIDER.groundFriction * dt);
+        } else {
+          if (j.gravityTimer > 0) j.gravityTimer -= dt;
+          else {
+            const g = j.vy < -30 ? GLIDER.gravAirUp : GLIDER.gravAir;
+            const fric = j.vy < 0 ? GLIDER.frictionUp : (j.highFrictionTimer > 0 ? GLIDER.frictionDown : GLIDER.frictionUp);
+            j.vx = approachTo(j.vx, 0, fric * dt);
+            j.vy = approachTo(j.vy, 30, g * dt);
+          }
+        }
+
+        // MoveH / MoveV：碰撞反弹（OnCollideH 速度取反，OnCollideV 向上 -0.5、向下归零）
+        const nx = j.x + j.vx * dt;
+        if (gliderSolidAt(nx, j.y)) {
+          j.vx = -j.vx;
+          j.scaleX = 0.8; j.scaleY = 1.2;
+        } else j.x = nx;
+        const ny = j.y + j.vy * dt;
+        if (gliderSolidAt(j.x, ny)) {
+          if (Math.abs(j.vy) > 8) { j.scaleX = 1.2; j.scaleY = 0.8; }
+          j.vy = j.vy < 0 ? -j.vy * 0.5 : 0;
+        } else j.y = ny;
+
+        // 越界：左右上夹取，掉出下边界 RemoveSelf
+        if (j.x < BOUND.x0 + 4) { j.x = BOUND.x0 + 4; j.vx = -j.vx; }
+        else if (j.x > BOUND.x1 - 4) { j.x = BOUND.x1 - 4; j.vx = -j.vx; }
+        if (j.y - 10 < BOUND.y0) { j.y = BOUND.y0 + 10; j.vy = -j.vy * 0.5; }
+        else if (j.y > BOUND.y1 + 16) { jellies.splice(i, 1); updateHud(); continue; }
+
+        // 未持有且与 Player 碰撞 → destroyed（Glider.Update IL 548-720）
+        if (Math.abs(m.x - j.x) < 8 && j.y > m.y - 11 && j.y < m.y + 10) {
+          j.deathT = 0; j.vx = 0; j.vy = 0;
+        }
+      }
+    }
+
+    // 羽毛：只在相机可见区左右两侧刷新（居中聊天卡不会整块压住），同时最多 6 颗
+    function spawnFeather() {
+      if (feathers.length >= CAP.feather) return;
+      const vw = W / Z, vh = H / Z;
+      const fx = Math.random() < 0.5 ? 0.06 + Math.random() * 0.24 : 0.70 + Math.random() * 0.24;
+      const x = clampN(cam.x - SPAWN.x + fx * vw, BOUND.x0, BOUND.x1);
+      const y = clampN(cam.y - SPAWN.y + vh * (0.18 + Math.random() * 0.27), -280, 40);
+      feathers.push({ x: x, y: y, phase: Math.random() * 6 });
+      updateHud();
+    }
+
+    function stepFollowers(dt) {
+      for (let i = 0; i < berries.length; i++) {
+        const b = berries[i];
+        if (b.spawnT < 1) b.spawnT = Math.min(1, b.spawnT + dt / 0.4);
+        if (b.delay > 0) { b.delay -= dt; continue; }   // Follower::Update 只看 DelayTimer
+        const idx = Math.min(FOLLOW.stepIndex * (i + 1), leader.past.length - 1);
+        const tgt = idx >= 0 ? leader.past[idx] : null;
+        if (!tgt) continue;
+        b.x = followerLerp(b.x, tgt.x, dt);
+        b.y = followerLerp(b.y, tgt.y, dt);
+      }
+    }
+
+    function stepFeathers() {
+      for (let i = feathers.length - 1; i >= 0; i--) {
+        const f = feathers[i];
+        if (Math.hypot(f.x - m.x, f.y - (m.y - 6)) >= COLLECT_R) continue;
+        feathers.splice(i, 1);
+        updateHud();
+        startFly(f);
+        return;
+      }
+    }
+
+    function startFly(f) {
+      if (fly) return;
+      if (heldJelly) releaseJelly(0, 0);   // 拾羽毛时松手（原作 StarFly 分支未取证，避免水母跟飞）
+      // D6：方向取 sign(羽毛 - Madeline)；同 x 时用当前朝向
+      const dx = Math.sign(f.x - m.x) || (m.facing || 1);
+      fly = {
+        t: 0, len: 0, mx: dx, my: 0, last: { x: dx, y: 0 },
+        timer: STARFLY.time, warnT: 0, flash: false
+      };
+      m.vx = 0; m.vy = 0;
+      m.setState(CelesteCharacter.ST.Normal);
+      m.sprite.play('idle');
+      // 变形期仍是 HairCount=4 / 普通发色；0.42s 才切 7 + 飞行色
+      m.hair.rigid = true;
+      m.hair.count = 4;
+      m.hair.setColor('normal');
+      m.hair.reset(m.x, m.y, m.facing);
+      toastEl.textContent = '拾起「金羽毛」';
+      toastEl.classList.add('show');
+      toastTimer = 2.6;
+    }
+
+    function stepFly(dt) {
+      const f = fly;
+      f.t += dt;
+      if (f.t < STARFLY.chargeTotal) {
+        // starFlyTransforming：Speed → 0；0.32s 切 startStarFly 之后的金色球体
+        f.len = Math.max(0, f.len - STARFLY.accel * dt);
+        if (f.t >= STARFLY.chargeAnim && m.hair.count !== 7) {
+          m.hair.count = 7;
+          m.hair.setColor('fly');
+          m.hair.reset(m.x, m.y - 6, m.facing);
+        }
+        m.hair.update(m.x, m.y, m.facing, 0, -2, dt, 1);
+        return;
+      }
+      if (f.t - dt < STARFLY.chargeTotal) {
+        // 协程尾部才读 Input.Feather：变形期按住的方向才是发射方向
+        const d0 = inputDir();
+        if (d0) { f.mx = d0.x; f.my = d0.y; f.last = d0; }
+        f.len = STARFLY.speedStart;
+        f.timer = STARFLY.time;
+      }
+
+      const dir = inputDir();
+      const idle = !dir;
+      const want = dir || f.last;
+      const cur = normV(f.mx, f.my);
+      const nd = cur ? rotateToward(cur, want, STARFLY.turnRate * dt) : want;
+      f.mx = nd.x; f.my = nd.y; f.last = { x: nd.x, y: nd.y };
+      const target = flyTargetSpeed(idle ? null : dotV(nd, want));
+      f.len = approachTo(f.len, target, STARFLY.accel * dt);
+
+      // 推进 + 分轴碰撞（Player.OnCollideH / OnCollideV 的 StStarFly 分支）
+      let nx = m.x + f.mx * f.len * dt;
+      let ny = m.y + f.my * f.len * dt;
+      let hx = false, hy = false;
+      if (nx < BOUND.x0) { nx = BOUND.x0; hx = true; }
+      else if (nx > BOUND.x1) { nx = BOUND.x1; hx = true; }
+      if (ny < BOUND.y0) { ny = BOUND.y0; hy = true; }
+      else if (ny > BOUND.y1) { ny = BOUND.y1; hy = true; }
+      if (!hx && bodySolidFn(nx, m.y)) { hx = true; nx = m.x; }
+      if (!hy && bodySolidFn(m.x, ny)) { hy = true; ny = m.y; }
+      if (hx || hy) {
+        let vx = f.mx * f.len, vy = f.my * f.len;
+        if (f.timer < STARFLY.wallDead) {          // 快结束贴墙：该轴速度归零，不反弹
+          if (hx) vx = 0;
+          if (hy) vy = 0;
+        } else {
+          if (hx) vx *= -STARFLY.wallRest;
+          if (hy) vy *= -STARFLY.wallRest;
+        }
+        f.len = Math.hypot(vx, vy);
+        if (f.len > 0.001) { f.mx = vx / f.len; f.my = vy / f.len; }
+        else { f.mx = 0; f.my = 0; }
+      }
+      m.x = nx; m.y = ny;
+      if (Math.abs(f.mx) > 0.01) m.facing = f.mx > 0 ? 1 : -1;
+
+      m.hair.update(m.x, m.y, m.facing, 0, 3, dt, 1);   // HairOffset (0,3) → 发根落在球心
+
+      f.timer -= dt;
+      if (f.timer < STARFLY.warnTime) {
+        f.warnT += dt;
+        if (f.warnT >= STARFLY.warnStep) { f.warnT -= STARFLY.warnStep; f.flash = !f.flash; }
+      }
+      if (f.timer <= 0) endFly(false);
+    }
+
+    // StarFlyEnd：|Speed.X| 夹 140；按住 ↑ → Speed.Y=-100；向下速度归零，交回普通状态
+    function endFly(silent) {
+      if (!fly) return;
+      const f = fly;
+      fly = null;
+      m.hair.count = 4;
+      m.hair.rigid = false;
+      m.hair.setColor('normal');
+      if (silent) { m.hair.reset(m.x, m.y, m.facing); return; }
+      const vx0 = f.mx * f.len, vy0 = f.my * f.len;
+      const vx = clampN(vx0, -STARFLY.exitX, STARFLY.exitX);
+      const vy = flyEndVy(!!(keys['w'] || keys['arrowup']), vy0);
+      if (Math.abs(vx) > 0) m.facing = vx > 0 ? 1 : -1;
+      m.vx = vx; m.vy = vy;
+      m.onGround = false;
+      m.maxFall = 160;
+      m.highestAirY = m.y;
+      feetPrev = m.y;
+      m.setState(CelesteCharacter.ST.Normal);
+      m.hair.reset(m.x, m.y, m.facing);
+    }
+
+    // 实时消息 → 场景物件（历史回放不调用）
+    function consumeText(text) {
+      const s = String(text || '');
+      const nb = (s.match(/🍓|\[c:berry\]/g) || []).length;
+      for (let i = 0; i < nb; i++) addBerry();
+      const nj = (s.match(/🪼|\[c:jelly\]/g) || []).length;
+      for (let i = 0; i < nj; i++) spawnJelly();
+      const nf = (s.match(/🪶|\[c:feather\]/g) || []).length;
+      for (let i = 0; i < nf; i++) spawnFeather();
+    }
+
+    function berryFrame(t) { return BERRY_SEQ[Math.floor(t / 0.08) % BERRY_SEQ.length]; }
+
+    function drawBerries() {
+      for (const b of berries) {
+        const img = IMG['berry' + berryFrame(time + b.phase)];
+        if (!img) continue;
+        const p = toScreen(b);
+        const sc = 0.4 + 0.6 * b.spawnT;
+        const w = 40 * Z * sc, h = 24 * Z * sc;
+        if (p.x < -w || p.x > W + w || p.y < -h || p.y > H + h) continue;
+        ctx.drawImage(img, Math.round(p.x - w / 2), Math.round(p.y - h / 2), Math.round(w), Math.round(h));
+      }
+    }
+
+    // 帧选择（Sprites.xml）：idle 10 帧 0.1s；fall 3 帧 0.08s → fallLoop 2 帧 0.08s 循环；
+    // death 8 帧 0.08s（DestroyAnimationRoutine）；held 单帧
+    function jellyImage(j) {
+      if (j.deathT >= 0) return IMG['jellyDeath' + Math.min(7, Math.floor(j.deathT / GLIDER.deathStep))];
+      if (j === heldJelly) {
+        if (m.vy > 20) {
+          const t = j.openT - 3 * GLIDER.fallStep;          // fall 播完再切 fallLoop
+          return t < 0 ? IMG['jellyFall' + Math.min(2, Math.floor(j.openT / GLIDER.fallStep))]
+            : IMG['jellyFallLoop' + (Math.floor(t / GLIDER.fallStep) % 2)];
+        }
+        return IMG['jellyHeld'];
+      }
+      return IMG['jelly' + (Math.floor(j.animT / GLIDER.idleStep) % 10)];
+    }
+    function drawJellies() {
+      for (const j of jellies) {
+        const img = jellyImage(j);
+        if (!img) continue;
+        const p = toScreen(j);
+        const spawn = 0.4 + 0.6 * j.spawnT;
+        const w = 48 * Z * spawn * Math.max(Math.abs(j.scaleX), Math.abs(j.scaleY));
+        if (p.x < -w || p.x > W + w || p.y < -w || p.y > H + w) continue;
+        // 持有且下落（Speed.Y > 20）时按 GliderMoveY 拉伸：↓(0.7,1.4) / ↑(1.2,0.8)
+        let sx = 1, sy = 1;
+        if (j === heldJelly && m.vy > 20) {
+          if (keys['s'] || keys['arrowdown']) { sx = 0.7; sy = 1.4; }
+          else if (keys['w'] || keys['arrowup']) { sx = 1.2; sy = 0.8; }
+        }
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(j.rot);
+        ctx.scale(Z * spawn * j.scaleX * sx, Z * spawn * j.scaleY * sy);
+        ctx.drawImage(img, -24, -GLIDER.originY, 48, 48);   // Sprite origin (24, 27.8)
+        ctx.restore();
+      }
+    }
+
+    function drawFeathers() {
+      for (const f of feathers) {
+        const img = IMG['feather' + (Math.floor((time + f.phase) / 0.06) % 42)];
+        if (!img) continue;
+        const p = toScreen({ x: f.x, y: f.y + Math.sin(time * 2 + f.phase) * 3 });
+        const w = 32 * Z;
+        if (p.x < -w || p.x > W + w || p.y < -w || p.y > H + w) continue;
+        ctx.drawImage(img, Math.round(p.x - w / 2), Math.round(p.y - w / 2), w, w);
+      }
+    }
+
+    function drawFly() {
+      const f = fly;
+      const feet = toScreen({ x: m.x, y: m.y });
+      m.hair.draw(ctx, toScreen, Z, 0, 1);      // 头发在精灵之下（Player 组件顺序：Hair 先 Add）
+      if (f.t < STARFLY.chargeAnim) {
+        // startStarFly 4 帧 × 0.08s，Justify(0.5,1) → 左上角 = 脚底 (-16,-32)
+        const sc = 1 - 0.4 * (f.t / STARFLY.chargeTotal);
+        const img = IMG['morph' + Math.min(3, Math.floor(f.t / 0.08))];
+        const w = Math.round(32 * Z * sc);
+        if (img) ctx.drawImage(img, Math.round(feet.x - 16 * Z * sc), Math.round(feet.y - 32 * Z * sc), w, w);
+      } else {
+        // 球心 = (m.x, m.y-6)，origin (16,32) ⇒ 左上角 = 球心 + (-16,-26)
+        const col = (f.timer < STARFLY.warnTime && f.flash) ? '#AC3232' : '#ffd65c';
+        const img = tinted('orb', col);
+        const orb = toScreen({ x: m.x, y: m.y - 6 });
+        if (img) ctx.drawImage(img, Math.round(orb.x - 16 * Z), Math.round(orb.y - 26 * Z), 32 * Z, 32 * Z);
+      }
+    }
+
+    // messages.js 在场景脚本之后才加载，但 SSE 可能早到：先同步暴露 → 未就绪入队 → main() 后回放
+    window.ChatScene = {
+      get ready() { return sceneReady; },
+      get flying() { return !!fly; },
+      get stats() {
+        return { berry: berries.length, jelly: jellies.length, feather: feathers.length, flying: !!fly, held: !!heldJelly };
+      },
+      consume(content) {
+        const t = String(content || '');
+        if (!sceneReady) { if (t) sceneQueue.push(t); return; }
+        consumeText(t);
+      },
+      revealChat() { window.dispatchEvent(new CustomEvent('chat:reveal')); },
+      reset() {
+        berries.length = 0; jellies.length = 0; feathers.length = 0;
+        heldJelly = null;
+        if (m) m.holdSlowFall = false;
+        leader.past.length = 0; leader.acc = 0;
+        endFly(true);
+        updateHud();
+      },
+      __test: {
+        FOLLOWER: FOLLOW, CAP: CAP, STARFLY: STARFLY, GLIDER: GLIDER,
+        followerLerp: followerLerp, flyTargetSpeed: flyTargetSpeed,
+        flyEndVy: flyEndVy, clampCount: clampCount,
+        get held() { return heldJelly; }
+      }
+    };
+
     // ===== 渲染 =====
     // 世界坐标（相对出生点）→ 屏幕像素；cam 存的是房间坐标，所以先补回 SPAWN
     function toScreen(n) {
@@ -845,7 +1566,11 @@
       drawHeart();
       drawDust();
       drawParticles();
-      m.draw(ctx, toScreen, Z);
+      // 聊天互动物件：羽毛/草莓在人物之下；水母 Depth -5 → 人物之上
+      drawFeathers();
+      drawBerries();
+      if (fly) drawFly(); else m.draw(ctx, toScreen, Z);
+      drawJellies();
       drawForegrounds();                             // purplesunset（additive .25）盖在关卡之上
       if (flash > 0) {
         ctx.globalAlpha = Math.min(1, flash);
@@ -867,7 +1592,7 @@
     function collectHeart() {
       heart.collected = true;
       flash = 0.85;
-      hudEl.textContent = '空无 1 / 1';
+      hudHeartEl.textContent = '空无 1 / 1';
       toastEl.textContent = '拾起「空无」· Empty Space';
       toastEl.classList.add('show');
       toastTimer = 2.6;
@@ -882,6 +1607,11 @@
     }
 
     function respawn() {
+      // 飞行中坠落/重来：静默收掉星飞并清空跟随轨迹（草莓/水母不结算、不清空）
+      endFly(true);
+      heldJelly = null;                        // 手上的水母留在原地（不结算、不回收）
+      m.holdSlowFall = false;
+      leader.past.length = 0; leader.acc = 0;
       m.x = 0; m.y = 0; m.vx = 0; m.vy = 0;
       feetPrev = 0;
       m.onGround = true; m.ducking = false; m.fastJump = false;
@@ -920,15 +1650,33 @@
       };
       jumpEdge = dashEdge = false;
 
+      // —— 水母持有（Player.NormalUpdate 的 Holding 分支，IL 74-1048）——
+      // 未持有：按住抓取键 + PickupCollider 相交 → Pickup（minHoldTimer=0.35）
+      // 持有：松开抓取键 → Throw；地面按下 → Drop（Throw 内 MoveY==1 也走 Drop）
+      if (heldJelly) {
+        if (heldJelly.minHoldTimer > 0) heldJelly.minHoldTimer -= dt;
+        if (!input.grabHeld && heldJelly.minHoldTimer <= 0) throwJelly(input.down);
+        else if (!m.ducking && m.onGround && input.down && m.vy >= 0) throwJelly(true);
+      } else if (input.grabHeld && !fly) tryPickupJelly();
+      m.holdSlowFall = !!heldJelly;
+
       feetPrev = m.y;
-      m.update(dt, input);
+      // 持有时原作跳过整个攀爬分支 → 向引擎屏蔽 grabHeld
+      const moveInput = heldJelly ? Object.assign({}, input, { grabHeld: false }) : input;
+      if (fly) stepFly(dt); else m.update(dt, moveInput);
       updateCam(dt);
 
-      // 拾起空无之心
-      if (!heart.collected && Math.abs(m.x - heart.x) < 24 && Math.abs(m.y - heart.y) < 30) collectHeart();
+      // 跟随队列 / 水母 / 羽毛（飞行期不吃新羽毛）
+      stepLeader(dt);
+      stepFollowers(dt);
+      stepJellies(dt);
+      if (!fly) stepFeathers();
 
-      // 掉出房间底部（世界 y 56 是地板线）
-      if (m.y > 96) respawn();
+      // 拾起空无之心（飞行中不判定）
+      if (!fly && !heart.collected && Math.abs(m.x - heart.x) < 24 && Math.abs(m.y - heart.y) < 30) collectHeart();
+
+      // 掉出房间底部（世界 y 56 是地板线）—— 飞行期不判定坠落
+      if (!fly && m.y > 96) respawn();
 
       // 粒子 / 尘土
       for (let i = particles.length - 1; i >= 0; i--) {
@@ -1116,6 +1864,113 @@
       log('moonCreature ×9 · moonBlade ×95', creatures.length === 9 && blades.length === 95,
         creatures.length + ' / ' + blades.length);
 
+      // ===== 聊天互动：草莓跟随 / 水母 / 金羽毛 StarFly =====
+      ChatScene.reset();
+      consumeText('🍓'.repeat(12));
+      log('草莓跟随上限 10', berries.length === CAP.berry, berries.length);
+      consumeText('🪼'.repeat(6));
+      log('水母上限 4', jellies.length === CAP.jelly, jellies.length);
+      consumeText('🪶'.repeat(8));
+      log('羽毛上限 6', feathers.length === CAP.feather, feathers.length);
+      log('羽毛落在边界内', feathers.every(f => f.x >= BOUND.x0 && f.x <= BOUND.x1 && f.y >= BOUND.y0 && f.y <= BOUND.y1),
+        feathers.map(f => f.x.toFixed(0) + ',' + f.y.toFixed(0)).join(' '));
+      log('HUD 同步收集数', hudCollectEl.textContent.indexOf('草莓 10/10') === 0
+        && hudCollectEl.textContent.indexOf('水母 4/4') > 0
+        && hudCollectEl.textContent.indexOf('羽毛 6/6') > 0, hudCollectEl.textContent);
+      log('水母刷新避开实心块', jellies.every(j => !gliderSolidAt(j.x, j.y)),
+        jellies.map(j => j.x.toFixed(0) + ',' + j.y.toFixed(0)).join(' '));
+
+      // ===== 水母：可持有物件（Glider / Holdable / Player HOLDING 分支）=====
+      const jellyAt = (x, y) => ({
+        x: x, y: y, vx: 0, vy: 0, spawnT: 1, phase: 0, rot: 0, scaleX: 1, scaleY: 1,
+        highFrictionTimer: 0, gravityTimer: 0,
+        deathT: -1, minHoldTimer: 0, cannotHoldTimer: 0, animT: 0, openT: 0
+      });
+      ChatScene.reset(); reset(0, 0);
+      const j1 = jellyAt(0, -16);
+      jellies.push(j1);
+      log('PickupCollider 20×22 判定', inPickupRange(j1) && !inPickupRange(jellyAt(0, -60)),
+        inPickupRange(j1) + ' / ' + inPickupRange(jellyAt(0, -60)));
+      log('抓取水母 → 持有并在 carry(0,-16)',
+        tryPickupJelly() && heldJelly === j1 && j1.x === 0 && j1.y === -16,
+        'held=' + (heldJelly === j1) + ' @' + j1.x + ',' + j1.y);
+
+      // Holding.SlowFall（Glider..ctor SlowFall=true）：maxFall→40（无方向）、重力 ×0.5
+      m.onGround = false; m.y = -200; m.vy = 160; m.maxFall = 160; m.holdSlowFall = true;
+      step(40, { grabHeld: false });
+      log('水母缓降 maxFall→40 / vy→40', m.maxFall === 40 && Math.abs(m.vy - 40) < 0.01,
+        'maxFall=' + m.maxFall + ' vy=' + m.vy.toFixed(2));
+      // IL 1252-1296：Holding.SlowFall && !onGround → maxRun 108、水平加速度 ×0.5
+      m.vx = 0;
+      step(40, { right: true });
+      log('水母空中 maxRun→108', Math.abs(m.vx - 108) < 0.01, 'vx=' + m.vx.toFixed(2));
+      // MoveY==1（下压张开）→ maxFall 目标 120
+      reset(0, 0); m.onGround = false; m.y = -200; m.maxFall = 160; m.vy = 160;
+      step(40, { down: true });
+      log('水母下压 maxFall→120', m.maxFall === 120 && Math.abs(m.vy - 120) < 0.01,
+        'maxFall=' + m.maxFall + ' vy=' + m.vy.toFixed(2));
+      m.holdSlowFall = false;
+
+      // Player.Throw：Release(UnitX*Facing) → Glider.OnRelease Speed=(100,-40)，玩家后坐 -80
+      ChatScene.reset(); reset(0, 0);
+      const j2 = jellyAt(0, -16); jellies.push(j2);
+      tryPickupJelly();
+      m.facing = 1; m.vx = 0;
+      throwJelly(false);
+      log('投掷水母 (100,-40) + 后坐', !heldJelly && j2.vx === 100 && j2.vy === -40 && m.vx === -80,
+        'v=' + j2.vx + ',' + j2.vy + ' playerVx=' + m.vx);
+      // Player.Drop（Throw 时 MoveY==1）：Release(Vector2.Zero) → 零速度
+      j2.deathT = -1; j2.cannotHoldTimer = 0; j2.x = m.x; j2.y = m.y + GLIDER.carryY;
+      tryPickupJelly();
+      m.facing = 1; m.vx = 0;
+      throwJelly(true);
+      log('Drop 水母零速度', !heldJelly && j2.vx === 0 && j2.vy === 0, 'v=' + j2.vx + ',' + j2.vy);
+      // Holdable..ctor(0.3) → cannotHoldDelay=0.3；Holdable.Pickup 拒绝 cannotHoldTimer > 0
+      j2.cannotHoldTimer = GLIDER.regrabDelay;
+      log('水母重新抓取冷却 0.3s', !tryPickupJelly(), 'cooldown=' + j2.cannotHoldTimer.toFixed(2));
+
+      // tick 接线：按住抓取键拾取（Holding=...），松开 → Throw
+      ChatScene.reset(); reset(0, 0); m.facing = 1;
+      const j3 = jellyAt(0, -16); jellies.push(j3);
+      keys['shift'] = true; tick(1 / 60);
+      const picked = heldJelly === j3 && m.holdSlowFall === true;
+      for (let i = 0; i < 24; i++) tick(1 / 60);   // minHoldTimer 0.35 走完
+      keys['shift'] = false; tick(1 / 60);
+      log('tick 抓取 / 松开投掷接线', picked && !heldJelly && j3.vx === 100 && m.holdSlowFall === false,
+        'picked=' + picked + ' vx=' + j3.vx + ' slow=' + m.holdSlowFall);
+
+      // Glider.Update 未持有且与 Player 碰撞 → destroyed + 0.64s 死亡帧后 RemoveSelf
+      ChatScene.reset();
+      jellies.push(jellyAt(m.x, m.y - 5));
+      stepJellies(1 / 60);
+      log('水母撞玩家销毁', jellies.length === 1 && jellies[0].deathT >= 0,
+        'deathT=' + (jellies[0] && jellies[0].deathT));
+      if (jellies.length) for (let i = 0; i < 40; i++) stepJellies(1 / 60);
+      log('死亡动画后回收', jellies.length === 0, jellies.length);
+      ChatScene.reset();
+
+      // Follower::Update 只看 DelayTimer（FollowDelay=0.3），延迟期内位置完全不动
+      ChatScene.reset();
+      addBerry(); addBerry(); addBerry();
+      const bx0 = berries[0].x, by0 = berries[0].y;
+      for (let i = 0; i < 18; i++) stepFollowers(1 / 60);
+      log('跟随延迟 0.3s 内不动', Math.abs(berries[0].x - bx0) < 1e-6 && Math.abs(berries[0].y - by0) < 1e-6,
+        berries[0].delay.toFixed(3));
+
+      // 触碰金羽毛 → 变形 0.42s + 飞行 2s 后自动结束
+      ChatScene.reset();
+      feathers.push({ x: m.x + 6, y: m.y - 6, phase: 0 });
+      stepFeathers();
+      log('触碰羽毛进入飞行', !!fly && feathers.length === 0, 'fly=' + !!fly);
+      if (fly) {
+        let frm = 0;
+        while (fly && frm < 200) { stepFly(1 / 60); frm++; }
+        log('StarFly 约 2s 结束', !fly && frm > 120 && frm <= 190, frm + ' 帧');
+        log('飞行后头发复原', m.hair.count === 4 && m.hair.colorIdx === 0 && m.hair.rigid === false,
+          m.hair.count + '/' + m.hair.colorIdx + '/' + m.hair.rigid);
+      }
+      ChatScene.reset();
+
       out.textContent = lines.join('\n') + '\n' + pass + ' pass / ' + fail + ' fail';
       window.__scene.testDone = true;
     }
@@ -1158,11 +2013,17 @@
         get collected() { return heart.collected; }
       };
 
+      // 场景就绪：回放 messages.js 早到的实时消息，之后 consume 直接生效
+      updateHud();
+      sceneReady = true;
+      while (sceneQueue.length) consumeText(sceneQueue.shift());
+
       if (TEST) {
         runSelfTest();
         // 自检跑完后把世界复位到展示状态，方便对画面做视觉核对
         heart.collected = false;
-        hudEl.textContent = '空无  0 / 1';
+        hudHeartEl.textContent = '空无  0 / 1';
+        updateHud();
         toastEl.classList.remove('show');
         toastEl.style.display = 'none';
         respawn();
@@ -1175,19 +2036,44 @@
           render();
         }, 40);
       } else {
-        let last = 0;
+        let last = 0, renderAcc = 0;
+        const chatEl = document.getElementById('chatContainer');
         (function frame(ts) {
           const dt = last ? Math.min((ts - last) / 1000, 0.05) : 1 / 60;
           last = ts;
           tick(dt);
-          render();
+          // 聊天卡展开时背景场景降到 30fps：仍会动，但把合成/滤镜的算力
+          // 让给输入与消息滚动；收起聊天后恢复满帧
+          const chatOpen = !!chatEl && !chatEl.classList.contains('chat-hidden');
+          renderAcc += dt * 1000;
+          if (!chatOpen || renderAcc >= 1000 / 30) {
+            renderAcc = 0;
+            render();
+          }
           requestAnimationFrame(frame);
         })(0);
       }
+      // 首帧已经画进 #scene 了，再等两帧让它提交，然后把统一加载层淡掉
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (window.PageLoading) window.PageLoading.ready();
+      }));
     }
 
     main();
   })();
+  </script>
+  <script src="js/api.js?v=20261002"></script>
+  <script src="js/auth.js?v=20261101c"></script>
+  <script src="js/felt-piano.js?v=20261003"></script>
+  <script src="js/vue.global.prod.js?v=20261008a"></script>
+  <script src="js/messages.js?v=20261102a"></script>
+  <script src="js/seed.js?v=20261101c"></script>
+  <script>
+    // v-cloak 兜底：Vue 挂载后由这里清掉，避免面板一直隐藏
+    setTimeout(function () {
+      var c = document.getElementById('chatContainer');
+      if (c) c.removeAttribute('v-cloak');
+    }, 0);
   </script>
 </body>
 </html>

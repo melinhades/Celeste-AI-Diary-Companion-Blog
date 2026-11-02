@@ -11,7 +11,7 @@ function initHeader() {
                     <div class="user-avatar"><img src="celeste-gui/user-avatar.webp" alt=""></div>
                     <span>${escHtml(nickname)}</span>
                 </a>
-                <a href="messages.html" class="chat-crow" title="Chat"><span class="chat-crow-box"><img src="Atlases/Gameplay/characters/bird/crow00.png" alt="Chat"></span><i id="bellBadge" style="display:none;position:absolute;top:-7px;right:-7px;background:#e6517c;color:#fff;font-style:normal;font-size:10px;min-width:16px;height:16px;line-height:16px;border-radius:8px;text-align:center;padding:0 3px;"></i></a>
+                <a href="celeste-farewell-remembered-demo.html" class="chat-crow" title="Chat"><span class="chat-crow-box"><img src="Atlases/Gameplay/characters/bird/crow00.png" alt="Chat"></span><i id="bellBadge" style="display:none;position:absolute;top:-7px;right:-7px;background:#e6517c;color:#fff;font-style:normal;font-size:10px;min-width:16px;height:16px;line-height:16px;border-radius:8px;text-align:center;padding:0 3px;"></i></a>
                 <a href="write.html" class="btn btn-primary btn-sm">写文章</a>
                 <button class="btn btn-outline btn-sm" onclick="doLogout()">退出</button>
             </div>`;
@@ -31,13 +31,15 @@ function doLogout() {
         s.volume = 0.8;
         s.play().catch(() => {});
     } catch (e) { /* 无声降级 */ }
+    if (token) {
+        // 必须在删除本地 token 前调用：api() 此时才能读到 Authorization
+        // api() 内部使用项目已有 BASE_URL，生产走 https://api.instapix.icu
+        api('/logout', 'GET').catch(() => {});
+    }
     localStorage.removeItem('token');
     localStorage.removeItem('nickname');
     // 明信片署名等展示缓存随登出作废，否则未登录/下个账号会看到上一个人的名字
     if (typeof clearSessionDisplayStorage === 'function') clearSessionDisplayStorage();
-    if (token) {
-        fetch('http://localhost:8888/logout', { headers: { 'Authorization': token } }).catch(() => {});
-    }
     initHeader();
 }
 

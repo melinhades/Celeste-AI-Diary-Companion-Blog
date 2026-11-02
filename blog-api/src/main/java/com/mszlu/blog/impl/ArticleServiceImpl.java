@@ -446,4 +446,24 @@ public class ArticleServiceImpl implements ArticleService {
         List<Archives> archivesList = articleMapper.listArchives();
         return Result.success(archivesList);
     }
+
+    @Override
+    public Result myArticles(String authorId, int page, int pageSize) {
+        LambdaQueryWrapper<Article> qw = new LambdaQueryWrapper<>();
+        qw.eq(Article::getAuthorId, authorId)
+          .orderByDesc(Article::getCreateDate);
+        Page<Article> p = new Page<>(page, pageSize);
+        Page<Article> result = articleMapper.selectPage(p, qw);
+        Map<String, Object> data = new HashMap<>();
+        data.put("records", result.getRecords());
+        data.put("total", result.getTotal());
+        return Result.success(data);
+    }
+
+    @Override
+    public Result myArticleCount(String authorId) {
+        LambdaQueryWrapper<Article> qw = new LambdaQueryWrapper<>();
+        qw.eq(Article::getAuthorId, authorId);
+        return Result.success(articleMapper.selectCount(qw));
+    }
 }

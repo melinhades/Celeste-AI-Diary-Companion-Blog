@@ -1,10 +1,8 @@
 package com.mszlu.blog.controller;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.mszlu.blog.common.aop.LogAnnotation;
+import com.mszlu.blog.common.cache.Cache;
 import com.mszlu.blog.utils.UserThreadLocal;
-import com.mszlu.blog.dao.mapper.ArticleMapper;
 import com.mszlu.blog.dao.pojo.Article;
 import com.mszlu.blog.dao.pojo.SysUser;
 import com.mszlu.blog.service.ArticleService;
@@ -20,27 +18,28 @@ public class ArticleController {
     @Autowired
     private ArticleService articleService;
 
-    @Autowired
-    private ArticleMapper articleMapper;
-
     @PostMapping
     //加上此注解 代表要对此接口记录日志
     @LogAnnotation(module="文章",operator="获取文章列表")
+    @Cache(name = "article", expire = 30_000)
     public Result listArticle(@RequestBody PageParams pageParams) {
         return articleService.listArticle(pageParams);
     }
 
     @PostMapping("hot")
+    @Cache(name = "article", expire = 30_000)
     public Result hotArticle() {
         int limit = 5;
         return articleService.hotArticle(limit);
     }
     @PostMapping("new")
+    @Cache(name = "article", expire = 30_000)
     public Result newArticles(){
      int limit = 5;
      return articleService.newArticles(limit);
     }
     @PostMapping("listArchives")
+    @Cache(name = "article", expire = 30_000)
     public Result listArchives(){
         return articleService.listArchives();
 
@@ -89,15 +88,7 @@ public class ArticleController {
                              @RequestParam(defaultValue = "10") int pageSize) {
         SysUser user = UserThreadLocal.get();
         if (user == null) return Result.fail(401, "未登录");
-        LambdaQueryWrapper<Article> qw = new LambdaQueryWrapper<>();
-        qw.eq(Article::getAuthorId, user.getId())
-          .orderByDesc(Article::getCreateDate);
-        Page<Article> p = new Page<>(page, pageSize);
-        Page<Article> result = articleMapper.selectPage(p, qw);
-        java.util.Map<String, Object> data = new java.util.HashMap<>();
-        data.put("records", result.getRecords());
-        data.put("total", result.getTotal());
-        return Result.success(data);
+        return articleService.myArticles(user.getId(), page, pageSize);
     }
 
     /** 当前登录用户的文章数（数据隔离：只算自己的） */
@@ -105,8 +96,6 @@ public class ArticleController {
     public Result myCount() {
         SysUser user = UserThreadLocal.get();
         if (user == null) return Result.fail(403, "未登录");
-        LambdaQueryWrapper<Article> qw = new LambdaQueryWrapper<>();
-        qw.eq(Article::getAuthorId, user.getId());
-        return Result.success(articleMapper.selectCount(qw));
+        return articleService.myArticleCount(user.getId());
     }
 }
