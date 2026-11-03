@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
@@ -7,7 +7,7 @@
 <link rel="icon" href="icon/OIP.webp" type="image/webp">
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/text-fx.css?v=20261004a">
-<link rel="stylesheet" href="css/shop.css?v=20261028e">
+<link rel="stylesheet" href="css/shop.css?v=20261103c">
 
 </head>
 <body>
@@ -29,20 +29,38 @@
 
 <audio id="bgmPlayer"></audio>
 
-<img id="pixelOshiro" src="celeste-gui/oshiro-appear.gif" alt="Oshiro" title="Oshiro" loading="lazy" decoding="async" style="display:none">
+<!-- 第三章 lvl_0x-a 大厅：后台 canvas 由 shop.js 按原版 tileset/贴花运行时绘制 -->
+<div id="sceneZoom">
+    <canvas id="hallCanvas" width="320" height="184"></canvas>
+    <canvas id="gameStage"></canvas>
+    <img id="pixelOshiro" src="Atlases/Gameplay/characters/oshiro/oshiro41.png" alt="Oshiro" title="Oshiro" loading="lazy" decoding="async" style="display:none">
+    <div id="introLight"></div>
+    <canvas id="introFx"></canvas>
+    <!-- lvl_0x-a 的 2 盏 resortLantern：holder 挂架 + lantern00..02 灯体，混合叠放 -->
+    <div class="resort-lantern" data-lantern="0">
+        <div class="lantern-glow"></div>
+        <img class="lantern-holder" src="Atlases/Gameplay/objects/resortLantern/holder.png" alt="" loading="lazy" decoding="async">
+        <img class="lantern-body" src="Atlases/Gameplay/objects/resortLantern/lantern00.png" alt="" loading="lazy" decoding="async">
+    </div>
+    <div class="resort-lantern" data-lantern="1">
+        <div class="lantern-glow"></div>
+        <img class="lantern-holder" src="Atlases/Gameplay/objects/resortLantern/holder.png" alt="" loading="lazy" decoding="async">
+        <img class="lantern-body" src="Atlases/Gameplay/objects/resortLantern/lantern00.png" alt="" loading="lazy" decoding="async">
+    </div>
+</div>
 
-<!-- 白色省略号互动按钮：中 = 召唤 Oshiro，右 = 开场动画 -->
-<button class="dot-bubble" id="dotMid" aria-label="召唤 Oshiro" title="召唤 Oshiro">
+<!-- 开场演出：点击任意处跳过（仅由前台服务铃按钮触发） -->
+<div id="introSkip"><span>点击跳过开场</span></div>
+
+<!-- 白色省略号互动按钮：中 = 前台服务铃（召唤 Oshiro），右 = 留言簿（备忘录） -->
+<button class="dot-bubble" id="dotMid" aria-label="摇铃召唤 Oshiro" title="摇铃召唤 Oshiro">
     <img class="dot-layer dot-idle" src="Atlases/Gui/hover/idle.png" alt="">
     <img class="dot-layer dot-hover" src="Atlases/Gui/hover/resort.png" alt="">
 </button>
-<button class="dot-bubble" id="dotRight" aria-label="开场动画" title="开场动画">
+<button class="dot-bubble" id="dotRight" aria-label="打开留言簿" title="打开留言簿">
     <img class="dot-layer dot-idle" src="Atlases/Gui/hover/idle.png" alt="">
     <img class="dot-layer dot-hover" src="Atlases/Gui/hover/highlight.png" alt="">
 </button>
-
-<!-- 两侧烟囱烟雾粒子层 -->
-<div id="chimneySmoke"></div>
 
 <div id="gameDialog">
     <img id="gameDialogOverlay" src="Atlases/Portraits/textbox/oshiro_overlay.png" alt="" loading="lazy" decoding="async">
@@ -75,17 +93,14 @@
     <div class="hg-poem-tip">点击继续</div>
 </div>
 
-<!-- 水晶之心游戏层：Madeline 漫游 + 冲刺收集（canvas，与房间背景 cover 对齐） -->
-<canvas id="gameStage"></canvas>
-
 <script src="js/api.js?v=20261002"></script>
 <script src="js/text-fx.js?v=20261005b"></script>
 <script src="js/vue.global.prod.js?v=20261008a"></script>
 <script src="js/celeste-hair.js?v=8"></script>
 <script src="js/celeste-character.js?v=8"></script>
-<script src="js/celeste-dust-bunny.js?v=20261030a"></script>
+<script src="js/celeste-dust-bunny.js?v=20261103b"></script>
 <script src="js/gapless-audio.js?v=20261028b"></script>
-<script src="js/shop.js?v=20261031b"></script>
+<script src="js/shop.js?v=20261103d"></script>
 <script src="js/seed.js?v=20261101c"></script>
 </body>
 </html>

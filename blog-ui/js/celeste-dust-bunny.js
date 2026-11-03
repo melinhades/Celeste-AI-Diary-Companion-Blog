@@ -433,29 +433,30 @@
     }
 
     // —— 轨迹 3：Credits.DustyRoutine（一行 26px/s 直线 + 每只 sin 摆动） ——
-    // 原作是一次性演出（跑出边界就结束）；常驻房间改成“列车绕环”：
-    // 环长 L = 可见弧(房间宽) + 隐藏弧(一格 24px)，每只 u 独立取模、间隔 24。
-    // 于是右墙走出一只的同时左墙恰好走进一只（回卷永远发生在 alpha=0），
-    // 既没有“整行回卷”造成的空窗，也不会穿墙瞬移。
+    // 原作是一次性演出；常驻房间改成无缝水平循环：
+    // 每只以房间可见段中点为轴做正弦往返，速度在两端为 0、在中心为 26px/s（同 IL 的 26），
+    // 因此不会出墙、不会瞬移，也不再需要两端 alpha 淡入淡出。
     function rowTraj(o) {
         var span = o.b - o.a;
-        var L = span + SPACING;                            // IL 间距 24 同时充当隐藏弧
-        var u0 = o.u0 == null ? 0 : o.u0;
-        var i0 = (o.i || 0) * SPACING;                     // IL：第 i 只 X = offset.X + i*24
+        var mid = (o.a + o.b) / 2;
+        var half = Math.max(10, span / 2);
+        var w = SPEED / half;                              // 中心线速度 ≈ SPEED
+        var base = (o.u0 == null ? 0 : o.u0) / Math.max(1, span) * Math.PI * 2;
+        var phase = base + (o.i || 0) * (SPACING / half);  // IL：第 i 只间隔 24px
         var t = {
-            fam: 'row', clock: 0, sink: SINK_DIST, x: o.a, y: o.lane, alpha: 0,
-            span: span, cycleLen: L,
-            target: { x: o.dir, y: 0 }
+            fam: 'row', clock: 0, sink: SINK_DIST, x: o.a, y: o.lane, alpha: 1,
+            span: span, cycleLen: span,
+            target: { x: 1, y: 0 }
         };
         t.step = function (dt) {
             t.clock += dt;
             t.sink = approach(t.sink, 0, dt * SINK_RATE);  // IL：Approach(Y, start.Y+16, dt*16)
-            var u = mod(u0 + i0 + o.dir * SPEED * t.clock, L);
-            var x = o.dir > 0 ? o.a + u : o.b - u;
-            t.x = x;
+            var ang = t.clock * w + phase;
+            t.x = mid + half * Math.sin(ang);
             t.y = o.lane + Math.sin(t.clock * BOB_FREQ + o.phase) * BOB_AMP - t.sink;
-            // 两端 14px 淡入淡出：回卷发生在 alpha=0 时，避免“穿墙瞬移”
-            t.alpha = Math.max(0, Math.min(1, (x - o.a) / 14, (o.b - x) / 14));
+            t.target.x = Math.cos(ang) >= 0 ? 1 : -1;      // 眼睛朝向运动方向
+            t.target.y = 0;
+            t.alpha = 1;
         };
         t.step(0);
         return t;

@@ -145,48 +145,103 @@
     });
     // ===== 像素 Oshiro 行为：默认四处游逛，害怕才坐 =====
     var pixelOshiro = document.getElementById('pixelOshiro');
+    // REA Sprites.xml<oshiro>: appear 0-30(.08) → idle；idle 31-41(.08)；move 42-52(.06)；
+    // fall 73-81 → idle_ground 82-86(.09)；side 87-93(.1)；recover 94-101 → idle；
+    // sweep 0-6 = sweeping，sweep 7-18 = putBroomAway
     var OS_SRC = {
-        appear: 'celeste-gui/oshiro-appear.gif',
-        idle: 'celeste-gui/oshiro-idle.gif',
-        idle_ground: 'celeste-gui/oshiro-idle_ground.gif',
-        move: 'celeste-gui/oshiro-move.gif',
-        sweeping: 'celeste-gui/oshiro-sweeping.gif',
-        putBroomAway: 'celeste-gui/oshiro-putBroomAway.gif',
-        fall: 'celeste-gui/oshiro-fall.gif',
-        recover: 'celeste-gui/oshiro-recover.gif',
-        side: 'celeste-gui/oshiro-side.gif'
+        appear: 'appear', idle: 'idle', idle_ground: 'idle_ground',
+        move: 'move', sweeping: 'sweeping', putBroomAway: 'putBroomAway',
+        fall: 'fall', recover: 'recover', side: 'side'
     };
+    var OS_DIR = 'Atlases/Gameplay/characters/oshiro/';
+    var OS_ANIMS = {
+        appear:       { p:'oshiro', from:0,  to:30,  delay:0.08, next:'idle' },
+        idle:         { p:'oshiro', from:31, to:41,  delay:0.08, loop:true },
+        move:         { p:'oshiro', from:42, to:52,  delay:0.06, loop:true },
+        fall:         { p:'oshiro', from:73, to:81,  delay:0.07, next:'idle_ground' },
+        idle_ground:  { p:'oshiro', from:82, to:86,  delay:0.09, loop:true },
+        side:         { p:'oshiro', from:87, to:93,  delay:0.10, loop:true },
+        recover:      { p:'oshiro', from:94, to:101, delay:0.08, next:'idle' },
+        sweeping:     { p:'sweep',  from:0,  to:6,   delay:0.08, loop:true },
+        putBroomAway: { p:'sweep',  from:7,  to:18,  delay:0.08, next:'idle' }
+    };
+    var osAnimName = '';
+    var osAnimIdx = 0;
+    var osAnimTimer = null;
+    var osPreloaded = {};
+    (function preloadOshiroFrames() {
+        function pre(p, i) {
+            var key = p + i;
+            if (osPreloaded[key]) return;
+            var im = new Image();
+            im.src = OS_DIR + p + (i < 10 ? '0' : '') + i + '.png';
+            osPreloaded[key] = im;
+        }
+        for (var i = 0; i <= 101; i++) pre('oshiro', i);
+        for (var j = 0; j <= 18; j++) pre('sweep', j);
+    })();
+    function osShowFrame(p, i) {
+        var src = OS_DIR + p + (i < 10 ? '0' : '') + i + '.png';
+        if (pixelOshiro.src.indexOf(src) === -1 || pixelOshiro.getAttribute('data-frame') !== (p + i)) {
+            pixelOshiro.setAttribute('data-frame', p + i);
+            pixelOshiro.src = src;
+        }
+    }
+    function osPlay(name) {
+        var a = OS_ANIMS[name] || OS_ANIMS.idle;
+        if (osAnimName === name && a.loop) return;
+        osAnimName = name;
+        osAnimIdx = 0;
+        if (osAnimTimer) { clearTimeout(osAnimTimer); osAnimTimer = null; }
+        osStep(name);
+    }
+    function osStep(name) {
+        var a = OS_ANIMS[name];
+        if (!a || osAnimName !== name) return;
+        var frame = a.from + osAnimIdx;
+        osShowFrame(a.p, frame);
+        osAnimTimer = setTimeout(function() {
+            if (osAnimName !== name) return;
+            osAnimIdx++;
+            if (osAnimIdx > a.to - a.from) {
+                if (a.loop) osAnimIdx = 0;
+                else if (a.next) { osPlay(a.next); return; }
+                else osAnimIdx = a.to - a.from;
+            }
+            osStep(name);
+        }, a.delay * 1000);
+    }
+    function osSetSrc(name) { if (OS_ANIMS[name]) osPlay(name); }
     var osMode = '';
     var osWanderTimer = null;
 
-    function osSetSrc(name) {
-        if (pixelOshiro.src.indexOf(name) === -1) pixelOshiro.src = name;
-    }
-    // ===== 房间约束：内部轮廓（图源 resort-room.png 2560×1600 的归一化坐标，顺时针） =====
-    var ROOM_POLY_N = [
-        [0.104,0.803], [0.104,0.700], [0.149,0.700], [0.149,0.500],
-        [0.235,0.500], [0.235,0.166], [0.352,0.166], [0.375,0.125],
-        [0.410,0.125], [0.410,0.097], [0.566,0.097], [0.605,0.125],
-        [0.633,0.125], [0.633,0.166], [0.742,0.166], [0.742,0.494],
-        [0.852,0.494], [0.852,0.631], [1.000,0.631], [1.000,0.803]
+    // ===== 房间边界：REA lvl_0x-a（3-CelestialResort.bin, 320×184, 40×23 tiles）空腔轮廓 =====
+    var HALL_W = 320, HALL_H = 184, ROOM_FLOOR_Y = 152;
+    var ROOM_POLY = [
+        [0,184], [0,112], [48,112], [48,88], [80,88], [80,24],
+        [120,24], [120,16], [136,16], [136,8], [184,8], [184,16],
+        [200,16], [200,24], [240,24], [240,88], [272,88], [272,112],
+        [320,112], [320,184]
     ];
-    var ROOM_FLOOR_NY = 0.803;
-    // cover 自然缩放（与 body 背景的 center/cover 一致）
-    var roomGeo = { scale:1, ox:0, oy:0 };
+    // cover 缩放：320×184 原生像素铺满视口（与旧截图的 center/cover 数学一致）
+    var roomGeo = { s:1, ox:0, oy:0, scale:1 };
     function recalcRoomGeo() {
         var vw = window.innerWidth, vh = window.innerHeight;
-        var s = Math.max(vw / 320, vh / 200);
-        roomGeo.scale = s / 8;   // 相对 2560x1600 图源
-        roomGeo.ox = (vw - s * 320) / 2;
-        roomGeo.oy = (vh - s * 200) / 2;
+        var s = Math.max(vw / HALL_W, vh / HALL_H);
+        roomGeo.s = s;
+        roomGeo.ox = (vw - s * HALL_W) / 2;
+        roomGeo.oy = (vh - s * HALL_H) / 2;
+        roomGeo.scale = s / 8;   // 兼容旧代码：8 * scale = s
+    }
+    function nXY(x, y) {
+        return { x: x * roomGeo.s + roomGeo.ox, y: y * roomGeo.s + roomGeo.oy };
     }
     function nToXY(nx, ny) {
-        return { x: nx * 2560 * roomGeo.scale + roomGeo.ox,
-                 y: ny * 1600 * roomGeo.scale + roomGeo.oy };
+        return nXY(nx * HALL_W, ny * HALL_H);
     }
     function roomScreenPoly() {
         recalcRoomGeo();
-        return ROOM_POLY_N.map(function (p) { return nToXY(p[0], p[1]); });
+        return ROOM_POLY.map(function (p) { return nXY(p[0], p[1]); });
     }
     function pointInPoly(x, y, poly) {
         var inside = false;
@@ -202,39 +257,298 @@
         return pointInPoly(x, y, poly) && pointInPoly(x + w, y, poly) &&
                pointInPoly(x, y + h, poly) && pointInPoly(x + w, y + h, poly);
     }
-    // 初始位置：房间中央地板
-    function osPlaceInside() {
-        var poly = roomScreenPoly();
-        var w = pixelOshiro.offsetWidth || 512, h = pixelOshiro.offsetHeight || 512;
-        var gy = osGroundY();
-        var x = Math.max(0, window.innerWidth / 2 - w / 2);
-        if (!boxInRoom(x, gy, w, h, poly)) { var p = nToXY(0.50, 0.55); x = p.x - w / 2; gy = p.y - h / 2; }
-        pixelOshiro.style.left = x + 'px';
-        pixelOshiro.style.top = gy + 'px';
+
+    // ===== lvl_0x-a 原始图层数据（REA 导出；bg=4→bgWood, solids=9→wood, autotile mask 顺序） =====
+    var HALL_TILESET = { bg: 'bgWood', fg: 'wood' };
+    var HALL_SETS = {
+        bg: [["x0x-111-x1x","0,0;1,0;2,0;3,0"],["x1x-111-x0x","0,1;1,1;2,1;3,1"],["x1x-011-x1x","0,2;1,2;2,2;3,2"],["x1x-110-x1x","0,3;1,3;2,3;3,3"],["x0x-111-x0x","0,4;1,4;2,4;3,4"],["x1x-010-x1x","0,5;1,5;2,5;3,5"],["x0x-010-x1x","0,6;1,6;2,6;3,6"],["x1x-010-x0x","0,7;1,7;2,7;3,7"],["x0x-011-x0x","0,8;1,8;2,8;3,8"],["x0x-110-x0x","0,9;1,9;2,9;3,9"],["x0x-010-x0x","0,10;1,10;2,10;3,10"],["x0x-011-x1x","0,11;1,11;2,11;3,11"],["x0x-110-x1x","0,12;1,12;2,12;3,12"],["x1x-011-x0x","0,13;1,13;2,13;3,13"],["x1x-110-x0x","0,14;1,14;2,14;3,14"],["111-111-110","4,0"],["110-111-111","4,1"],["111-111-011","4,2"],["011-111-111","4,3"],["110-111-110","4,4"],["010-111-111","4,5"],["011-111-011","4,6"],["111-111-010","4,7"],["010-111-110","4,8"],["010-111-011","4,9"],["011-111-010","4,10"],["110-111-010","4,11"],["010-111-010","4,12"],["110-111-011","4,13"],["011-111-110","4,14"],["000-111-011","4,9"],["000-111-110","4,8"],["011-111-000","4,10"],["110-111-000","4,11"],["010-110-110","4,8"],["010-011-011","4,9"],["110-110-010","4,10"],["011-011-010","4,11"],["111-011-010","4,10"],["111-110-010","4,11"],["010-011-111","4,9"],["010-110-111","4,8"]],
+        fg: [["x0x-111-x1x","0,0;1,0;2,0;3,0"],["x1x-111-x0x","0,1;1,1;2,1;3,1"],["x1x-011-x1x","0,2;1,2;2,2;3,2"],["x1x-110-x1x","0,3;1,3;2,3;3,3"],["x0x-111-x0x","0,4;1,4;2,4;3,4"],["x1x-010-x1x","0,5;1,5;2,5;3,5"],["x0x-010-x1x","0,6;1,6;2,6;3,6"],["x1x-010-x0x","0,7;1,7;2,7;3,7"],["x0x-011-x0x","0,8;1,8;2,8;3,8"],["x0x-110-x0x","0,9;1,9;2,9;3,9"],["x0x-010-x0x","0,10;1,10;2,10;3,10"],["x0x-011-x1x","0,11;1,11;2,11;3,11"],["x0x-110-x1x","0,12;1,12;2,12;3,12"],["x1x-011-x0x","0,13;1,13;2,13;3,13"],["x1x-110-x0x","0,14;1,14;2,14;3,14"],["111-111-110","4,0"],["110-111-111","4,1"],["111-111-011","4,2"],["011-111-111","4,3"],["110-111-110","4,4"],["010-111-111","4,5"],["011-111-011","4,6"],["111-111-010","4,7"],["010-111-110","4,8"],["010-111-011","4,9"],["011-111-010","4,10"],["110-111-010","4,11"],["010-111-010","4,12"],["110-111-011","4,13"],["011-111-110","4,14"]]
+    };
+    var HALL_CENTER = {
+        bg: '5,0;5,1;5,2;5,3;5,4;5,5;5,6;5,7;5,8;5,9;5,10;5,11;5,12;5,13;5,14',
+        fg: '5,0;5,1;5,2;5,3;5,4;5,5;5,6;5,7;5,8;5,9;5,10;5,11;5,12;5,13;5,14'
+    };
+    var HALL_ROOM = {
+        bg: ["0000000000000000000000000000000000000000","0000000000000000044444400000000000000000","0000000000000004444444444000000000000000","0000000000444404444444444044440000000000","0000000000444404444444444044440000000000","0000000000444404444444444044440000000000","0000000000440004444444444000440000000000","0000000000440004444444444000440000000000","0000000000440004444444444000440000000000","0000000000440004444444444000440000000000","0000000000440004444444444000440000000000","0000004444440004444444444000444444000000","0000004444440004444444444000444444000000","0000004444444444444444444444444444000000","4440004444444444444444444444444444000044","4440004444444444444444444444444444444444","4444444444444444444444444444444444444444","4444444444444444444444444444444444444444","4444444444444444444444444444444444444444","0000000000000000000000000000000000000000","0000000000000000000000000000000000000000","0000000000000000000000000000000000000000","0000000000000000000000000000000000000000"],
+        solids: ["9999999999999999999999999999999999999999","9999999999999999900000099999999999999999","9999999999999990000000000999999999999999","9999999999000090000000000900009999999999","9999999999000090000000000900009999999999","9999999999000090000000000900009999999999","9999999999000090000000000900009999999999","9999999999000000000000000000009999999999","9999999999000000000000000000009999999999","9999999999000000000000000000009999999999","9999999999000000000000000000009999999999","9999990000000000000000000000000000999999","9999990000000000000000000000000000999999","9999990000000000000000000000000000999999","0009990000000000000000000000000000999900","0009990000000000000000000000000000000000","0000000000000000000000000000000000000000","0000000000000000000000000000000000000000","0000000000000000000000000000000000000000","9999999999999999999999999999999999999999","9999999999999999999999999999999999999999","9999999999999999999999999999999999999999","9999999999999999999999999999999999999999"],
+        decals: [
+            {l:'bgdecals',t:'3-resort/desk.png',x:180,y:144,sx:1,sy:1,w:32,h:16},
+            {l:'bgdecals',t:'3-resort/bellhopcart_a.png',x:132,y:136,sx:1,sy:1,w:32,h:32},
+            {l:'bgdecals',t:'3-resort/keyrack.png',x:216,y:128,sx:1,sy:1,w:32,h:32},
+            {l:'bgdecals',t:'3-resort/painting_d.png',x:160,y:72,sx:1,sy:1,w:80,h:80},
+            {l:'bgdecals',t:'3-resort/window.png',x:104,y:96,sx:1,sy:1,w:16,h:16},
+            {l:'bgdecals',t:'3-resort/window.png',x:112,y:96,sx:1,sy:1,w:16,h:16},
+            {l:'bgdecals',t:'3-resort/window.png',x:112,y:76,sx:1,sy:1,w:16,h:16},
+            {l:'bgdecals',t:'3-resort/window.png',x:104,y:76,sx:1,sy:1,w:16,h:16},
+            {l:'bgdecals',t:'3-resort/window.png',x:112,y:56,sx:1,sy:1,w:16,h:16},
+            {l:'bgdecals',t:'3-resort/window.png',x:104,y:56,sx:1,sy:1,w:16,h:16},
+            {l:'bgdecals',t:'3-resort/window.png',x:104,y:64,sx:1,sy:1,w:16,h:16},
+            {l:'bgdecals',t:'3-resort/window.png',x:112,y:64,sx:1,sy:1,w:16,h:16},
+            {l:'bgdecals',t:'3-resort/window.png',x:104,y:84,sx:1,sy:1,w:16,h:16},
+            {l:'bgdecals',t:'3-resort/window.png',x:112,y:84,sx:1,sy:1,w:16,h:16},
+            {l:'bgdecals',t:'3-resort/window.png',x:216,y:84,sx:1,sy:1,w:16,h:16},
+            {l:'bgdecals',t:'3-resort/window.png',x:208,y:84,sx:1,sy:1,w:16,h:16},
+            {l:'bgdecals',t:'3-resort/window.png',x:216,y:64,sx:1,sy:1,w:16,h:16},
+            {l:'bgdecals',t:'3-resort/window.png',x:208,y:64,sx:1,sy:1,w:16,h:16},
+            {l:'bgdecals',t:'3-resort/window.png',x:208,y:56,sx:1,sy:1,w:16,h:16},
+            {l:'bgdecals',t:'3-resort/window.png',x:216,y:56,sx:1,sy:1,w:16,h:16},
+            {l:'bgdecals',t:'3-resort/window.png',x:208,y:76,sx:1,sy:1,w:16,h:16},
+            {l:'bgdecals',t:'3-resort/window.png',x:216,y:76,sx:1,sy:1,w:16,h:16},
+            {l:'bgdecals',t:'3-resort/window.png',x:216,y:96,sx:1,sy:1,w:16,h:16},
+            {l:'bgdecals',t:'3-resort/window.png',x:208,y:96,sx:1,sy:1,w:16,h:16},
+            {l:'bgdecals',t:'3-resort/curtain_side_c.png',x:136,y:24,sx:1,sy:1,w:32,h:32},
+            {l:'bgdecals',t:'3-resort/curtain_side_c.png',x:184,y:24,sx:-1,sy:1,w:32,h:32},
+            {l:'bgdecals',t:'3-resort/curtain_side_c.png',x:320,y:128,sx:-1,sy:1,w:32,h:32},
+            {l:'bgdecals',t:'3-resort/guestbook.png',x:244,y:144,sx:1,sy:1,w:16,h:16},
+            {l:'fgdecals',t:'3-resort/curtain_side_b.png',x:64,y:104,sx:1,sy:1,w:32,h:32},
+            {l:'fgdecals',t:'3-resort/curtain_side_c.png',x:256,y:104,sx:-1,sy:1,w:32,h:32},
+            {l:'fgdecals',t:'3-resort/curtain_side_b.png',x:96,y:40,sx:1,sy:1,w:32,h:32},
+            {l:'fgdecals',t:'3-resort/curtain_side_b.png',x:224,y:40,sx:-1,sy:1,w:32,h:32},
+            {l:'fgdecals',t:'3-resort/cobweb_b.png',x:16,y:120,sx:1,sy:1,w:16,h:16},
+            {l:'fgdecals',t:'3-resort/vent.png',x:256,y:68,sx:1,sy:1,w:16,h:16},
+            {l:'fgdecals',t:'3-resort/vent.png',x:64,y:68,sx:1,sy:1,w:16,h:16}
+        ]
+    };
+
+    // ===== lvl_0x-a 房间实体（REA EntityData + BinaryPacker nodes） =====
+    // cobweb 不是贴图，而是 Celeste.Cobweb 的骨骼线网：anchorA = 实体位置，node[0] = anchorB，
+    // 其余 node 作为 offshoot 从主曲线分支。节点的 x/y 是房间绝对坐标。
+    var HALL_ENTITIES = {
+        lanterns: [{ x: 128, y: 48 }, { x: 192, y: 48 }],
+        cobwebs: [
+            { a: { x: 120, y: 32 }, b: { x: 200, y: 16 }, off: [{ x: 200, y: 32 }, { x: 160, y: 8 }] },
+            { a: { x: 80, y: 80 }, b: { x: 112, y: 32 }, off: [{ x: 112, y: 32 }, { x: 112, y: 48 }, { x: 80, y: 64 }, { x: 80, y: 40 }] }
+        ],
+        door: { x: 272, y: 152 }
+    };
+    var HALL_ENTITY_IMG = {
+        door: 'objects/door/door04.png'
+    };
+    var WEB_COLOR = 'rgba(214,208,224,.5)';       // AreaData.CobwebColor 的浅灰紫
+    var WEB_EDGE = 'rgba(173,167,182,.5)';        // Color.Lerp(color, #0f0e17, 0.2)
+    var WEB_OFF_T = [0.36, 0.52, 0.44, 0.6];      // Calc.Random 0.3..0.7 的固定取样
+
+    // ===== 大厅绘制：bg autotile → bg 贴花 → solids autotile → fg 贴花（与原版深度顺序一致） =====
+    var hallCanvas = document.getElementById('hallCanvas');
+    var hallImgs = {};
+    var hallSeed = 0x5eed1234;
+    function hallRnd() {
+        hallSeed = (hallSeed * 1664525 + 1013904223) >>> 0;
+        return hallSeed / 4294967296;
     }
-    window.addEventListener('resize', function () { recalcRoomGeo(); });
+    function hallPickVariant(list) {
+        var arr = list.split(';');
+        return arr[Math.floor(hallRnd() * arr.length)] || arr[0];
+    }
+    function hallTileFlags(rows, x, y) {
+        var flags = [], cols = HALL_W / 8, nrows = HALL_H / 8;
+        for (var i = 0; i < 9; i++) {
+            var nx = x + (i % 3) - 1, ny = y + (i / 3 | 0) - 1;
+            if (nx < 0 || ny < 0 || nx >= cols || ny >= nrows) flags.push(1); // EdgesExtend
+            else flags.push(rows[ny].charAt(nx) === '0' ? 0 : 1);
+        }
+        return flags;
+    }
+    function hallMaskMatch(mask, flags) {
+        var k = 0;
+        for (var i = 0; i < mask.length; i++) {
+            var ch = mask.charAt(i), v;
+            if (ch === '0') v = 0; else if (ch === '1') v = 1;
+            else if (ch === 'x' || ch === 'X') v = 2; else continue;
+            if (v === 0 && flags[k] !== 0) return false;
+            if (v === 1 && flags[k] !== 1) return false;
+            k++;
+        }
+        return true;
+    }
+    function hallDrawLayer(ctx, rows, img, sets, center) {
+        if (!img) return;
+        for (var y = 0; y < HALL_H / 8; y++) {
+            for (var x = 0; x < HALL_W / 8; x++) {
+                if (rows[y].charAt(x) === '0') continue;
+                var flags = hallTileFlags(rows, x, y), coord = null;
+                var allSolid = true;
+                for (var f = 0; f < 9; f++) if (flags[f] === 0) { allSolid = false; break; }
+                if (allSolid) coord = hallPickVariant(center);
+                else {
+                    for (var s = 0; s < sets.length; s++) {
+                        if (hallMaskMatch(sets[s][0], flags)) { coord = hallPickVariant(sets[s][1]); break; }
+                    }
+                }
+                if (!coord) continue;
+                var p = coord.split(','), tx = +p[0], ty = +p[1];
+                ctx.drawImage(img, tx * 8, ty * 8, 8, 8, x * 8, y * 8, 8, 8);
+            }
+        }
+    }
+    function hallDrawDecals(ctx, layer) {
+        HALL_ROOM.decals.forEach(function (d) {
+            if (d.l !== layer) return;
+            var img = hallImgs[d.t];
+            if (!img) return;
+            ctx.save();
+            ctx.translate(d.x, d.y);
+            ctx.scale(d.sx, d.sy);
+            ctx.drawImage(img, -d.w / 2, -d.h / 2);
+            ctx.restore();
+        });
+    }
+    // Celeste.Cobweb.DrawCobweb：二次贝塞尔（中点下垂 8px + sin*4），12 段主线 + 4 段分支
+    // scale：大厅原生像素 → 屏幕像素的缩放（hallCanvas 画静态时传 1，gameStage 动态画时传 roomGeo.s）
+    function webCurvePoint(a, b, t, wave, scale) {
+        var s = scale || 1;
+        var cx = (a.x + b.x) / 2;
+        var cy = (a.y + b.y) / 2 + 8 * s + Math.sin(wave) * 4 * s;
+        var u = 1 - t;
+        return {
+            x: u * u * a.x + 2 * t * u * cx + t * t * b.x,
+            y: u * u * a.y + 2 * t * u * cy + t * t * b.y
+        };
+    }
+    function webDrawCurve(ctx, a, b, segs, wave, branches, scale) {
+        var s = scale || 1;
+        var p0 = webCurvePoint(a, b, 0, wave, s);
+        for (var i = 1; i <= segs; i++) {
+            var t = i / segs;
+            var p1 = webCurvePoint(a, b, t, wave, s);
+            ctx.strokeStyle = (i > 2 && i < segs - 1) ? WEB_COLOR : WEB_EDGE;
+            ctx.beginPath();
+            ctx.moveTo(p0.x, p0.y);
+            ctx.lineTo(p1.x, p1.y);
+            ctx.stroke();
+            p0 = p1;
+        }
+        if (!branches) return;
+        for (var k = 0; k < branches.length; k++) {
+            var f = WEB_OFF_T[k % WEB_OFF_T.length];
+            webDrawCurve(ctx, webCurvePoint(a, b, f, wave, s), branches[k], 4, wave, false, s);
+        }
+    }
+    // 门是静态贴图，保留在 hallCanvas 一次性绘制；
+    // 蛛网搬到 gameStage 由主循环驱动 waveTimer 摆动（±4px），见主循环 cobwebWave
+    function hallDrawEntities(ctx) {
+        var door = hallImgs[HALL_ENTITY_IMG.door];
+        if (door) ctx.drawImage(door, HALL_ENTITIES.door.x - 16, HALL_ENTITIES.door.y - 24);
+    }
+    function composeHall() {
+        var ctx = hallCanvas.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
+        ctx.clearRect(0, 0, HALL_W, HALL_H);
+        hallDrawLayer(ctx, HALL_ROOM.bg, hallImgs[HALL_TILESET.bg], HALL_SETS.bg, HALL_CENTER.bg);
+        hallDrawDecals(ctx, 'bgdecals');
+        hallDrawLayer(ctx, HALL_ROOM.solids, hallImgs[HALL_TILESET.fg], HALL_SETS.fg, HALL_CENTER.fg);
+        hallDrawDecals(ctx, 'fgdecals');
+        hallDrawEntities(ctx);
+    }
+    function loadHallAssets() {
+        var list = [
+            'Atlases/Gameplay/tilesets/' + HALL_TILESET.bg + '.png',
+            'Atlases/Gameplay/tilesets/' + HALL_TILESET.fg + '.png'
+        ];
+        HALL_ROOM.decals.forEach(function (d) {
+            var src = 'Atlases/Gameplay/decals/' + d.t;
+            if (list.indexOf(src) === -1) list.push(src);
+        });
+        Object.keys(HALL_ENTITY_IMG).forEach(function (k) {
+            var src = 'Atlases/Gameplay/' + HALL_ENTITY_IMG[k];
+            if (list.indexOf(src) === -1) list.push(src);
+        });
+        return Promise.all(list.map(function (src) {
+            return new Promise(function (resolve) {
+                var im = new Image();
+                im.onload = function () {
+                    var key;
+                    if (src.indexOf('tilesets/') >= 0) key = src.replace('Atlases/Gameplay/tilesets/', '').replace(/\.png$/, '');
+                    else if (src.indexOf('decals/') >= 0) key = src.replace('Atlases/Gameplay/decals/', '');
+                    else key = src.replace('Atlases/Gameplay/', '');
+                    hallImgs[key] = im;
+                    resolve();
+                };
+                im.onerror = function () { resolve(); };
+                im.src = src;
+            });
+        }));
+    }
+    // ===== resortLantern：DOM 层（holder 挂架 + 3 帧灯体），屏幕位置随 cover 缩放 =====
+    var LANTERN_FRAMES = [0, 1, 2, 1, 0];   // REA：Sprite.AddLoop("light", 0.3s, 5 frames)
+    var lanternIdx = 0;
+    function layoutLanterns() {
+        var s = roomGeo.s;
+        var els = document.querySelectorAll('.resort-lantern');
+        for (var i = 0; i < els.length; i++) {
+            var ent = HALL_ENTITIES.lanterns[i];
+            if (!ent) continue;
+            var p = nXY(ent.x - 8, ent.y - 24);   // 底边中心 (x,y) → 左上角
+            els[i].style.left = p.x + 'px';
+            els[i].style.top = p.y + 'px';
+            els[i].style.width = (16 * s) + 'px';
+            els[i].style.height = (24 * s) + 'px';
+        }
+    }
+    function startLanternAnim() {
+        setInterval(function () {
+            lanternIdx = (lanternIdx + 1) % LANTERN_FRAMES.length;
+            var frame = LANTERN_FRAMES[lanternIdx];
+            var bodies = document.querySelectorAll('.resort-lantern .lantern-body');
+            for (var i = 0; i < bodies.length; i++) {
+                if (bodies[i].getAttribute('data-frame') === String(frame)) continue;
+                bodies[i].setAttribute('data-frame', String(frame));
+                bodies[i].src = 'Atlases/Gameplay/objects/resortLantern/lantern0' + frame + '.png';
+            }
+        }, 300);
+    }
+    function layoutHall() {
+        recalcRoomGeo();
+        hallCanvas.style.width = (HALL_W * roomGeo.s) + 'px';
+        hallCanvas.style.height = (HALL_H * roomGeo.s) + 'px';
+        hallCanvas.style.left = roomGeo.ox + 'px';
+        hallCanvas.style.top = roomGeo.oy + 'px';
+        layoutOshiroSize();
+        layoutLanterns();
+    }
+    // ===== Oshiro 精灵：96×96 帧，origin (0.5, 0.667)，前台站位 (184,152) =====
+    var osAtDesk = false;
+    function layoutOshiroSize() {
+        var s = roomGeo.s;
+        pixelOshiro.style.width = (96 * s) + 'px';
+        pixelOshiro.style.height = (96 * s) + 'px';
+    }
+    function osShowAtDesk() {
+        layoutOshiroSize();
+        var p = nXY(184, ROOM_FLOOR_Y);
+        pixelOshiro.style.display = 'block';
+        pixelOshiro.style.left = (p.x - 48 * roomGeo.s) + 'px';
+        pixelOshiro.style.top = (p.y - 64 * roomGeo.s) + 'px';
+        osAtDesk = true;
+    }
+    // 初始位置：前台（仅开场演出/召唤后显示）
+    window.addEventListener('resize', function () {
+        layoutHall();
+        layoutDots();
+        if (osAtDesk) osShowAtDesk();
+    });
 
     // ===== 悬停提示按钮：跟随房间 cover 定位 =====
-    // anchor = 原省略号中心（320×200 原生空间）；每层 size=画布边长(原生px)，
+    // anchor = 新大厅（320×184 原生空间）里的位置；每层 size=画布边长(原生px)，
     // ox/oy = 该图锚点在画布中的比例（idle 黑点中心、resort 挂环中心）
     var IDLE_ANCHOR = { ox:63.5/128, oy:91.5/128 };
     var DOT_ZOOM = 0.6;   // 图标整体缩放（0.6 = 在原尺寸上缩小 40%）
     var DOTS_CFG = {
-        dotMid: { anchor:{ x:172, y:128.5 }, layers:[
+        dotMid: { anchor:{ x:170, y:132 }, layers:[      // 前台桌面服务铃 (desk x164..196, y136..152)
             { cls:'dot-idle',  size:36*DOT_ZOOM, ox:IDLE_ANCHOR.ox, oy:IDLE_ANCHOR.oy },
             { cls:'dot-hover', size:96*DOT_ZOOM, ox:0.5, oy:256/320 }
         ]},
-        dotRight: { anchor:{ x:243.5, y:136.5 }, layers:[
+        dotRight: { anchor:{ x:244, y:132 }, layers:[    // 留言簿 guestbook (244,144)，顶边 136
             { cls:'dot-idle',  size:36*DOT_ZOOM, ox:IDLE_ANCHOR.ox, oy:IDLE_ANCHOR.oy },
             { cls:'dot-hover', size:36*DOT_ZOOM, ox:IDLE_ANCHOR.ox, oy:IDLE_ANCHOR.oy }
         ]}
     };
     function layoutDots() {
         recalcRoomGeo();
-        var s = 8 * roomGeo.scale;   // 320x200 原生像素 → 屏幕像素
+        var s = 8 * roomGeo.scale;   // 320×184 原生像素 → 屏幕像素
         Object.keys(DOTS_CFG).forEach(function(id) {
             var cfg = DOTS_CFG[id], el = document.getElementById(id);
-            var a = nToXY(cfg.anchor.x / 320, cfg.anchor.y / 200);
+            var a = nToXY(cfg.anchor.x / HALL_W, cfg.anchor.y / HALL_H);
             var boxes = cfg.layers.map(function(L) {
                 var w = L.size * s;
                 return { L:L, w:w, l:a.x - w * L.ox, t:a.y - w * L.oy };
@@ -261,77 +575,6 @@
     document.getElementById('dotMid').addEventListener('click', summonOshiro);
     document.getElementById('dotRight').addEventListener('click', playOpeningMemo);
 
-    // ===== 两侧烟囱烟雾：规律间隔冒出 → 上升摆动变大 → 淡出消散 =====
-    var SMOKE_U = 'celeste-gui/smoke-puff.png';   // 11×12 浓白烟团
-    var SMOKE_W = 'celeste-gui/smoke-wisp.png';   // 18×9 横向散烟
-    // 发射源（320×200 原生空间）：火盆栏杆框内（L框 x58..80，R框 x239..262）
-    var SMOKE_VENTS = [ { nx:62/320, ny:79/200 }, { nx:250/320, ny:79/200 } ];
-    var SMOKE_INTERVAL = 950;   // 每侧发射间隔 ms
-    var smokeLayer = document.getElementById('chimneySmoke');
-    var smokeParts = [];        // 活动粒子
-    var smokePool = [];         // 空闲 img 节点
-    var smokeNext = [0, SMOKE_INTERVAL / 2];   // 两侧下次发射倒计时（错相半拍）
-
-    function smokeSpawn(vi) {
-        var kind = Math.random() < 0.4 ? 1 : 0;
-        var el = smokePool.pop();
-        if (!el) el = document.createElement('img');
-        el.src = kind ? SMOKE_W : SMOKE_U;
-        var v = SMOKE_VENTS[vi];
-        smokeParts.push({
-            el: el, w: kind ? 18 : 11, h: kind ? 9 : 12,
-            nx: v.nx + (Math.random() - 0.5) * 5 / 320,
-            ny: v.ny + Math.random() * 2 / 200,
-            age: 0, ttl: 2.4 + Math.random() * 0.5,
-            rise: (24 + Math.random() * 14) / 200,         // 上升高度（归一化）
-            sway: (2 + Math.random() * 1.5) / 320,         // 横向摆动幅度
-            swayPh: Math.random() * Math.PI * 2,
-            drift: -(vi === 0 ? 4 + Math.random() * 4
-                             : 6 + Math.random() * 5) / 320 // 烟整体向左飘散
-        });
-        smokeLayer.appendChild(el);
-    }
-
-    var smokeLast = performance.now();
-    function smokeTick(now) {
-        var dt = Math.min(0.05, (now - smokeLast) / 1000);
-        smokeLast = now;
-        recalcRoomGeo();
-        var s = 8 * roomGeo.scale;   // 原生像素 → 屏幕像素
-        for (var i = 0; i < 2; i++) {
-            smokeNext[i] -= dt * 1000;
-            if (smokeNext[i] <= 0) { smokeSpawn(i); smokeNext[i] = SMOKE_INTERVAL; }
-        }
-        for (var j = smokeParts.length - 1; j >= 0; j--) {
-            var p = smokeParts[j];
-            p.age += dt;
-            var t = p.age / p.ttl;
-            if (t >= 1) {   // 寿终回收
-                smokeLayer.removeChild(p.el);
-                smokePool.push(p.el);
-                smokeParts.splice(j, 1);
-                continue;
-            }
-            var up = 1 - Math.pow(1 - t, 3);   // easeOutCubic：初快后慢
-            var cnx = p.nx + p.drift * t + Math.sin(t * Math.PI * 2 + p.swayPh) * p.sway;
-            var cny = p.ny - p.rise * up;
-            var xy = nToXY(cnx, cny);
-            var sc = 0.7 + t * 1.15;            // 0.7 → 1.85 逐渐变大
-            // 前 12% 淡入，55% 后开始淡出
-            var al = t < 0.12 ? t / 0.12 * 0.75
-                 : t > 0.55 ? 0.75 * (1 - (t - 0.55) / 0.45) : 0.75;
-            var w = p.w * s, h = p.h * s;
-            p.el.style.width = w + 'px';
-            p.el.style.height = h + 'px';
-            p.el.style.left = (xy.x - w / 2) + 'px';
-            p.el.style.top = (xy.y - h / 2) + 'px';
-            p.el.style.opacity = al.toFixed(3);
-            p.el.style.transform = 'scale(' + sc.toFixed(3) + ')';
-        }
-        requestAnimationFrame(smokeTick);
-    }
-    requestAnimationFrame(smokeTick);
-
     // ===== 房间内二维游走：随机选点（必须在轮廓内）+ 避开弹框 =====
     function osCurXY() {
         return {
@@ -339,11 +582,11 @@
             y: parseFloat(pixelOshiro.style.top || '60')
         };
     }
-    // 地面线：房间地板表面（屏幕坐标），返回 sprite 顶边 y
+    // 地面线：lvl_0x-a 地板表面 y=152（帧原点 0.667 → 顶边 = 地面 - 64×s）
     function osGroundY() {
         recalcRoomGeo();
-        var floorScreen = ROOM_FLOOR_NY * 1600 * roomGeo.scale + roomGeo.oy;
-        return Math.max(0, floorScreen - (pixelOshiro.offsetHeight || 512) + 6);
+        var floorScreen = nXY(0, ROOM_FLOOR_Y).y;
+        return Math.max(0, floorScreen - 64 * roomGeo.s);
     }
     function osBlockedAt(tx, ty) {
         var zones = [];
@@ -498,22 +741,214 @@
         setTimeout(function() { if (osMode === 'greet') osMode = ''; }, 3000);
     }
 
-    // 召唤 Oshiro：由中间省略号按钮触发（原开场自动出现逻辑已改为点击触发）
+    // 召唤 Oshiro：由前台服务铃按钮触发（首次点击播放 CS03 登场，之后只问候）
     var osSummoned = false;
     function summonOshiro() {
-        if (osSummoned) return;
-        osSummoned = true;
-        pixelOshiro.style.display = 'block';
-        recalcRoomGeo();
-        osPlaceInside();
-        osSetSrc(OS_SRC.appear);
-        setTimeout(function() { osWander(); }, 2200);
-        setTimeout(function() {
-            var welcome = '欢迎来到 Celeste 山庄！我是 Oshiro，这里的每一间房都留着故事呢～想聊点什么吗？';
-            appendOchMsg('assistant', welcome);
-            showOshiroDialog(welcome, '可爱');
-        }, 2500);
+        if (introActive) return;
+        if (!osSummoned) {
+            playOshiroIntro();
+            return;
+        }
+        osSetSrc(OS_SRC.side);
+        showOshiroDialog('我就在这里呀～需要帮忙的话，随时招呼一声。', '可爱');
     }
+
+    // ===== CS03_OshiroLobby 开场复刻（REA：Locked→Shake→Lighting/VertexLight→ZoomTo((170,126),2,0.5)→
+    //       Shake→Sprite.Visible + Play("appear")→sparks→1.4s→UnsetSpotlight→ZoomBack→Textbox） =====
+    var sceneZoom = document.getElementById('sceneZoom');
+    var introLight = document.getElementById('introLight');
+    var introFx = document.getElementById('introFx');
+    var introSkip = document.getElementById('introSkip');
+    var fxctx = introFx.getContext('2d');
+    var introActive = false;
+    var introRun = 0;
+    var fxParts = [], fxRunning = false;
+    var cam = { k:1, fx:0, fy:0, sx:0, sy:0 };
+    function resizeFx() {
+        introFx.width = window.innerWidth;
+        introFx.height = window.innerHeight;
+        if (fxctx) fxctx.imageSmoothingEnabled = false;
+    }
+    window.addEventListener('resize', resizeFx);
+    resizeFx();
+    function applyCam() {
+        var cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+        sceneZoom.style.transformOrigin = cam.fx + 'px ' + cam.fy + 'px';
+        sceneZoom.style.transform = 'translate(' + (cx - cam.fx + cam.sx) + 'px,' +
+            (cy - cam.fy + cam.sy) + 'px) scale(' + cam.k + ')';
+    }
+    function resetCam() {
+        cam.k = 1; cam.sx = 0; cam.sy = 0;
+        cam.fx = window.innerWidth / 2; cam.fy = window.innerHeight / 2;
+        applyCam();
+    }
+    resetCam();
+    function introShake(amount) {
+        var t0 = performance.now(), dur = 300;
+        (function tick(now) {
+            var t = Math.min(1, (now - t0) / dur);
+            if (t >= 1) { cam.sx = 0; cam.sy = 0; applyCam(); return; }
+            var amp = amount * (1 - t) * 7;
+            cam.sx = (Math.random() * 2 - 1) * amp;
+            cam.sy = (Math.random() * 2 - 1) * amp;
+            applyCam();
+            requestAnimationFrame(tick);
+        })(t0);
+    }
+    function camTo(fx, fy, k, dur) {
+        return new Promise(function (resolve) {
+            var t0 = performance.now(), f0 = cam.fx, y0 = cam.fy, k0 = cam.k;
+            (function tick(now) {
+                var t = Math.min(1, (now - t0) / dur);
+                var e = 0.5 - 0.5 * Math.cos(Math.PI * t);
+                cam.fx = f0 + (fx - f0) * e;
+                cam.fy = y0 + (fy - y0) * e;
+                cam.k = k0 + (k - k0) * e;
+                applyCam();
+                if (t < 1) requestAnimationFrame(tick); else resolve();
+            })(t0);
+        });
+    }
+    function oshiroSpotXY() { return nXY(184, 136); }
+    function setSpot() {
+        var p = oshiroSpotXY(), r = Math.max(120, 52 * roomGeo.s);
+        introLight.style.background =
+            'radial-gradient(circle at ' + p.x + 'px ' + p.y + 'px,' +
+            'rgba(255,246,214,.16) 0px, rgba(255,238,190,.07) ' + (r * 0.55) + 'px,' +
+            'rgba(4,3,12,.84) ' + (r * 1.45) + 'px, rgba(3,2,9,.94) 100%)';
+    }
+    function spawnSparks() {
+        var p = oshiroSpotXY();
+        for (var i = 0; i < 28; i++) {
+            fxParts.push({
+                x: p.x, y: p.y,
+                vx: (Math.random() - 0.5) * 190,
+                vy: (Math.random() - 0.72) * 190,
+                age: 0, ttl: 0.32 + Math.random() * 0.3
+            });
+        }
+        if (!fxRunning) { fxRunning = true; requestAnimationFrame(fxLoop); }
+    }
+    function fxLoop(now) {
+        if (!introActive) {
+            fxRunning = false;
+            fxctx.clearRect(0, 0, introFx.width, introFx.height);
+            return;
+        }
+        fxctx.clearRect(0, 0, introFx.width, introFx.height);
+        var dt = 1 / 60;
+        for (var i = fxParts.length - 1; i >= 0; i--) {
+            var p = fxParts[i];
+            p.age += dt;
+            if (p.age >= p.ttl) { fxParts.splice(i, 1); continue; }
+            p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 26 * dt;
+            var size = 3 * roomGeo.s * (1 - p.age / p.ttl);
+            if (size < 1) size = 1;
+            fxctx.fillStyle = 'rgba(255,248,226,' + (1 - p.age / p.ttl).toFixed(3) + ')';
+            fxctx.fillRect(p.x - size / 2, p.y - size / 2, size, size);
+        }
+        requestAnimationFrame(fxLoop);
+    }
+    function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    // IL: CS03 在 UnsetSpotlight 后是 Textbox.Say(..., ZoomOut)——
+    // 对白期间镜头仍保持 2× 近景，玩家关闭文本框后才 ZoomBack。
+    function holdZoomUntilDialogClosed() {
+        var run = introRun, done = false;
+        var dlg = document.getElementById('gameDialog');
+        var obs = new MutationObserver(function () {
+            if (!dlg.classList.contains('show')) back();
+        });
+        var timer = setTimeout(back, 12000);
+        function back() {
+            if (done) return;
+            done = true;
+            obs.disconnect();
+            clearTimeout(timer);
+            if (introActive || run !== introRun) return;
+            document.body.classList.remove('intro');
+            camTo(window.innerWidth / 2, window.innerHeight / 2, 1, 520).then(function () {
+                if (!introActive && run === introRun) resetCam();
+            });
+        }
+        obs.observe(dlg, { attributes: true, attributeFilter: ['class'] });
+    }
+    function finishIntro(welcome) {
+        introRun++;
+        introActive = false;
+        introSkip.style.display = 'none';
+        introLight.style.opacity = '0';
+        fxParts.length = 0;
+        fxctx.clearRect(0, 0, introFx.width, introFx.height);
+        osShowAtDesk();
+        osSetSrc(OS_SRC.idle);
+        osSummoned = true;
+        if (welcome) {
+            showOshiroDialog('欢迎光临！有什么能为您效劳的吗？', '可爱');
+            holdZoomUntilDialogClosed();
+        } else {
+            document.body.classList.remove('intro');
+            resetCam();
+        }
+    }
+    function skipIntro() {
+        if (!introActive) return;
+        finishIntro(true);
+    }
+    introSkip.addEventListener('click', function (e) { e.stopPropagation(); skipIntro(); });
+    document.addEventListener('keydown', function (e) { if (introActive && e.key === 'Escape') skipIntro(); });
+    async function playOshiroIntro() {
+        if (introActive) return;
+        var id = ++introRun;
+        introActive = true;
+        document.body.classList.add('intro');
+        introSkip.style.display = 'flex';
+        document.getElementById('gameDialog').classList.remove('show');
+        document.getElementById('oshiroChatDialog').classList.remove('show');
+        pixelOshiro.style.display = 'none';
+        osSummoned = false;
+        osAtDesk = false;
+        resetCam();
+        setSpot();
+        introLight.style.opacity = '0';
+        fxParts.length = 0;
+        if (!fxRunning) { fxRunning = true; requestAnimationFrame(fxLoop); }
+
+        await wait(420); if (id !== introRun) return;   // 0.5s：玩家就位
+        introLight.style.opacity = '1';                 // VertexLight + Lighting.Alpha
+        introShake(0.22);
+        await wait(950); if (id !== introRun) return;   // 1.4s
+        introShake(0.3);
+
+        // ZoomTo((170,126), zoom 2, 0.5s)
+        await camTo(nXY(170, 126).x, nXY(170, 126).y, 2, 520);
+        if (id !== introRun) return;
+        await wait(620); if (id !== introRun) return;   // 0.6s
+        introShake(0.3);
+
+        // Sprite.Visible = true; Play("appear")（0-30 帧，约 2.48s）
+        osShowAtDesk();
+        osSetSrc(OS_SRC.appear);
+        await wait(650); if (id !== introRun) return;   // 0.6s
+        spawnSparks();
+        await wait(450); if (id !== introRun) return;   // sparks 0.4s
+        await wait(250); if (id !== introRun) return;   // 0.2s
+        introShake(0.3);
+        await wait(1400); if (id !== introRun) return;  // 1.4s
+
+        // UnsetSpotlight → Textbox.Say(..., ZoomOut)：先对白，关闭后再拉回镜头
+        introLight.style.opacity = '0';
+        await wait(220); if (id !== introRun) return;
+        finishIntro(true);
+    }
+    function startShopScene() {
+        layoutHall();
+        pixelOshiro.style.display = 'none';
+        osAtDesk = false;
+        osSummoned = false;
+        osSetSrc(OS_SRC.idle);
+    }
+    startLanternAnim();
+    loadHallAssets().then(function () { composeHall(); startShopScene(); });
 
     // ===== 点击 / 双击（参照 pixelMadeline） =====
     var osClickTimer = null;
@@ -634,11 +1069,11 @@
         }
         window.addEventListener('resize', resize); resize();
 
-        // ===== 世界坐标：1 单位 = 房间原生像素（320×200 空间），脚底 y=0 = 地板（0.803×200） =====
+        // ===== 世界坐标：1 单位 = 房间原生像素（320×184 空间），脚底 y=0 = 地板（lvl_0x-a y=152） =====
         var ROOM_W = 320;
-        var FLOOR_NATIVE_Y = ROOM_FLOOR_NY * 200;               // 160.6
-        var WALL_L = 0.104 * ROOM_W, WALL_R = ROOM_W;           // ROOM_POLY_N 左右边界
-        var CEIL_Y = -(FLOOR_NATIVE_Y - 0.097 * 200);           // 屋顶最低处 → 引擎 y 上限
+        var FLOOR_NATIVE_Y = ROOM_FLOOR_Y;                      // 152
+        var WALL_L = 1, WALL_R = ROOM_W - 1;                    // 底部开间左右边界
+        var CEIL_Y = -(FLOOR_NATIVE_Y - 8);                     // 屋顶最低处 → 引擎 y 上限
         var BODY_H = 30;
         var BLOCKS = [
             { x1: -1e4, x2: WALL_L, y1: -1e4, y2: 0 },
@@ -668,7 +1103,7 @@
             return best;
         }
         // 世界 → 屏幕（与 body 背景 center/cover 对齐，复用 nToXY）
-        function toScreen(p) { return nToXY(p.x / ROOM_W, (FLOOR_NATIVE_Y + p.y) / 200); }
+        function toScreen(p) { return nToXY(p.x / ROOM_W, (FLOOR_NATIVE_Y + p.y) / HALL_H); }
         function zoomNow() { return 8 * roomGeo.scale; }        // 每原生像素 → 屏幕像素
 
         // ===== 输入（聊天框/输入框聚焦时让位） =====
@@ -771,14 +1206,14 @@
         var dustScene = null;
         // 探针：把世界坐标（原生像素，脚底 y=0）映射回房间轮廓，保证轨道不出墙。
         // 四角各内缩 7px = 16×16 贴图的半尺寸，因此判定位本身已含贴图不越界。
-        // 轮廓直接在归一化坐标（ROOM_POLY_N）上判：nToXY 是同一个仿射变换，两域等价，
+        // 轮廓直接在 lvl_0x-a 空腔多边形上判：nToXY 是同一个仿射变换，两域等价，
         // 且不依赖 roomGeo 快照 → 窗口缩放后判定依然成立。
         function makeDustProbe() {
-            var npoly = ROOM_POLY_N.map(function (p) { return { x: p[0], y: p[1] }; });
-            var hw = 7 / ROOM_W, hh = 7 / 200;                 // 贴图半宽 / 半高
+            var npoly = ROOM_POLY.map(function (p) { return { x: p[0] / HALL_W, y: p[1] / HALL_H }; });
+            var hw = 7 / ROOM_W, hh = 7 / HALL_H;                // 贴图半宽 / 半高
             function inside(x, y) {
                 if (x < WALL_L || x > WALL_R || y > 2 || y < CEIL_Y) return false;
-                var nx = x / ROOM_W, ny = (FLOOR_NATIVE_Y + y) / 200;
+                var nx = x / ROOM_W, ny = (FLOOR_NATIVE_Y + y) / HALL_H;
                 return pointInPoly(nx - hw, ny - hh, npoly) &&
                        pointInPoly(nx + hw, ny - hh, npoly) &&
                        pointInPoly(nx - hw, ny + hh, npoly) &&
@@ -1509,9 +1944,11 @@
             requestAnimationFrame(frame);
         });
 
+        var cobwebWave = 0;                         // 蛛网摆动相位（Celeste.Cobweb 静态场景无 waveTimer，这里接 rdt 驱动）
         function frame(ts) {
             var rdt = last ? Math.min((ts - last) / 1000, 0.05) : 1 / 60;
             last = ts;
+            cobwebWave += rdt * 1.5;                // 1.5 rad/s ≈ 2.38 Hz，与原作摆动节奏一致
             if (freezeT > 0) freezeT -= rdt;
             if (ritual) tickRitual(rdt);
             updatePoem(rdt);
@@ -1684,6 +2121,18 @@
                 ctx.drawImage(sImg, -sw / 2, -shh / 2, sw, shh);
                 ctx.restore();
             });
+            // 蛛网（Celeste.Cobweb.DrawCobweb：二次贝塞尔 12 段 + 4 分支，wave 接 cobwebWave 摆动 ±4px）
+            // 深度 = 大厅层之上、灰尘兔之下（灰尘兔 Depth -50，蛛网贴背景 ≈ -200）
+            ctx.save();
+            ctx.lineWidth = 1;
+            var cwScale = roomGeo.s;
+            HALL_ENTITIES.cobwebs.forEach(function (cw) {
+                var sa = nXY(cw.a.x, cw.a.y);
+                var sb = nXY(cw.b.x, cw.b.y);
+                var soff = cw.off.map(function (o) { return nXY(o.x, o.y); });
+                webDrawCurve(ctx, sa, sb, 12, cobwebWave, soff, cwScale);
+            });
+            ctx.restore();
             // 灰尘兔（IL: Entity.Depth = -50 < 玩家 Depth 0 → 在 Madeline 之前画 = 下层）
             if (dustScene) dustScene.draw(ctx, toScreen, Z);
             // Madeline

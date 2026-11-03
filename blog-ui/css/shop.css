@@ -3,7 +3,7 @@
 * { box-sizing:border-box; margin:0; padding:0; }
 @font-face { font-family:'Renogare'; src:url('../celeste-font-en/Renogare-Regular.otf') format('opentype'); font-display:swap; }
 @font-face { font-family:'CelesteZH'; src:url('../fonts/NotoSansCJKsc-Medium.otf') format('opentype'); font-display:swap; }
-body { min-height:100vh; background:url('../celeste-gui/resort-room-native.png') center/cover no-repeat fixed; image-rendering:pixelated; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; overflow-x:hidden; }
+body { min-height:100vh; background:#07040e; image-rendering:pixelated; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; overflow-x:hidden; }
 .topbar { position:fixed; top:14px; left:16px; z-index:20; }
 .topbar a { display:inline-block; padding:8px 14px; background:rgba(22,34,60,.88); color:#ffe36d; border:2px solid #ffe36d; border-radius:6px; text-decoration:none; font-size:13px; box-shadow:0 0 10px rgba(255,230,109,.35); }
 /* 冰山返回主页按钮（同 diary 的 #homePosterBtn） */
@@ -70,17 +70,61 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 #gameDialogName { font-family:'Press Start 2P',monospace; color:#ffe36d; font-size:13px; margin-bottom:5px; }
 #gameDialogText { font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; color:#fff; font-size:14px; line-height:1.7; word-break:break-word; }
 
-/* ===== 像素 Oshiro ===== */
+/* ===== 大厅场景层：运行时绘制的 lvl_0x-a（320×184 原生像素，cover 缩放） ===== */
+#sceneZoom { position:fixed; inset:0; z-index:1; overflow:hidden; pointer-events:none; will-change:transform; }
+#hallCanvas { position:absolute; left:0; top:0; image-rendering:pixelated; pointer-events:none; }
+#gameStage { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; image-rendering:pixelated; z-index:2; }
+/* Oshiro 登场演出的聚光/暗场（VertexLight + Lighting.Alpha） */
+#introLight {
+    position:absolute; inset:0; z-index:6; pointer-events:none; opacity:0;
+    transition:opacity .45s ease;
+    background:radial-gradient(circle at 50% 50%, rgba(255,246,214,.10) 0, rgba(255,240,196,.05) 46%, rgba(4,3,12,.84) 78%, rgba(3,2,9,.94) 100%);
+}
+#introFx { position:absolute; inset:0; width:100%; height:100%; z-index:7; pointer-events:none; }
+/* 开场跳过层 */
+#introSkip {
+    position:fixed; inset:0; z-index:960; display:none;
+    align-items:flex-end; justify-content:center; padding-bottom:34px;
+    cursor:pointer; background:transparent;
+}
+#introSkip span { color:rgba(255,230,109,.62); font-size:12px; letter-spacing:3px; animation:skipPulse 1.8s ease-in-out infinite; }
+@keyframes skipPulse { 0%,100% { opacity:.42; } 50% { opacity:.9; } }
+/* 重播登场按钮已移除：登场只由前台服务铃触发 */
+body.intro .dot-bubble { opacity:0; pointer-events:none; }
+body.intro #sceneZoom #gameStage { opacity:0; }
+
+/* ===== resortLantern（REA：VertexLight Alpha=0.95+Sin(t)*0.05；Sprite.AddLoop 0.3s/5 帧） ===== */
+.resort-lantern {
+    position:absolute; z-index:6; pointer-events:none;
+}
+.lantern-holder, .lantern-body {
+    position:absolute; left:0; top:0; width:100%; height:100%;
+    image-rendering:pixelated; pointer-events:none;
+    user-select:none; -webkit-user-drag:none;
+}
+.lantern-glow {
+    position:absolute; left:50%; top:56%; width:320%; height:260%;
+    transform:translate(-50%,-50%); pointer-events:none;
+    background:radial-gradient(ellipse at center,
+        rgba(255,226,150,.42) 0%,
+        rgba(255,196,96,.16) 38%,
+        rgba(255,170,70,0) 72%);
+    animation:lanternFlicker 1.6s ease-in-out infinite;
+}
+@keyframes lanternFlicker { 0%,100% { opacity:.82; } 50% { opacity:1; } }
+
+/* ===== 像素 Oshiro（atlas 96×96 帧；缩放/锚点在 shop.js 中按 cover 比例设置） ===== */
 #pixelOshiro {
-    position: fixed;
-    top: 60px;
-    left: 40px;
-    width: 512px;
-    height: 512px;
+    position:absolute;
+    top: 0;
+    left: 0;
+    width: 96px;
+    height: 96px;
     object-fit: contain;
     object-position: center bottom;
     image-rendering: pixelated;
-    z-index: 945;
+    z-index: 5;
+    pointer-events: auto;
     cursor: pointer;
     filter: drop-shadow(0 2px 4px rgba(0,0,0,.5));
     user-select: none;
@@ -126,16 +170,6 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 #oshiroChatDialog .chat-input input::placeholder { color:rgba(43,58,82,.45); }
 #oshiroChatDialog .chat-input button { padding:8px 14px; border:none; border-radius:6px; background:#FFEB3B; color:#111; cursor:pointer; font-size:14px; letter-spacing:1px; font-family:'Renogare','CelesteZH',sans-serif; box-shadow:inset 0 -2px #111111; }
 #oshiroChatDialog .chat-input button:hover { background:#ffeb85; }
-
-/* ===== 两侧烟囱烟雾（环境层，位于一切交互元素之下） ===== */
-#chimneySmoke { position:fixed; inset:0; pointer-events:none; z-index:1; overflow:hidden; }
-#chimneySmoke img {
-    position:absolute; image-rendering:pixelated;
-    will-change: transform, opacity;
-}
-
-/* ===== 水晶之心游戏层：Madeline 漫游 + 心收集（canvas，与房间背景 cover 对齐） ===== */
-#gameStage { position:fixed; inset:0; z-index:5; pointer-events:none; image-rendering:pixelated; }
 
 /* ===== 水晶之心收集仪式：Poem —— IL: Poem 无背景（画出的是透明层），
    Alpha 1s Ease.CubeOut 淡入 / 0.5s Ease.CubeIn 淡出；FormationBackdrop 黑幕另起 z-index 1900 层 ===== */
