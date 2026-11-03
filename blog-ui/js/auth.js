@@ -12,12 +12,15 @@ function initHeader() {
                     <span>${escHtml(nickname)}</span>
                 </a>
                 <a href="celeste-farewell-remembered-demo.html" class="chat-crow" title="Chat"><span class="chat-crow-box"><img src="Atlases/Gameplay/characters/bird/crow00.png" alt="Chat"></span><i id="bellBadge" style="display:none;position:absolute;top:-7px;right:-7px;background:#e6517c;color:#fff;font-style:normal;font-size:10px;min-width:16px;height:16px;line-height:16px;border-radius:8px;text-align:center;padding:0 3px;"></i></a>
-                <button class="btn btn-outline btn-sm" onclick="openApiKeyModal()" title="AI 助手 API Key 设置" style="padding:4px 8px;font-size:12px;">🔑 AI</button>
+                <button class="btn btn-outline btn-sm api-key-btn" onclick="openApiKeyModal()" title="AI 助手 API Key 设置" style="padding:4px 6px;">
+                    <img src="Atlases/Gameplay/collectables/key/idle01.png" alt="🔑" class="api-key-icon" width="20" height="20">
+                </button>
                 <a href="write.html" class="btn btn-primary btn-sm">写文章</a>
                 <button class="btn btn-outline btn-sm" onclick="doLogout()">退出</button>
             </div>`;
         refreshBell();
         setInterval(refreshBell, 30000);
+        bindKeyButtonHover();
     } else {
         el.innerHTML = `
             <a href="login.html" class="btn btn-outline">登录</a>
@@ -74,6 +77,36 @@ function playNotifySound() {
         s.volume = 0.6;
         s.play().catch(() => {});
     } catch (e) {}
+}
+
+// ===== Key 按钮 hover 动画：idle00~13 共 14 帧 10fps =====
+function bindKeyButtonHover() {
+    const btn = document.querySelector('.api-key-btn');
+    if (!btn) return;
+    const img = btn.querySelector('.api-key-icon');
+    if (!img || img.__bound) return;
+    img.__bound = true;
+
+    const FRAMES = 14;                         // idle00.png ~ idle13.png
+    const BASE = 'Atlases/Gameplay/collectables/key/idle';
+    let idx = 0, tick = null;
+
+    function play() {
+        if (tick) return;
+        idx = 0;
+        tick = setInterval(() => {
+            idx = (idx + 1) % FRAMES;
+            img.src = BASE + String(idx).padStart(2, '0') + '.png';
+        }, 100);                              // 10fps，Celeste 原作 idle 节奏
+    }
+    function stop() {
+        if (tick) { clearInterval(tick); tick = null; }
+        img.src = BASE + '01.png';            // 静态回到 idle01（用户指定）
+    }
+    btn.addEventListener('mouseenter', play);
+    btn.addEventListener('mouseleave', stop);
+    btn.addEventListener('focus', play);
+    btn.addEventListener('blur', stop);
 }
 
 // ===== AI Key 设置 Modal（所有页面共享，auth.js 挂载后全站可用）=====
