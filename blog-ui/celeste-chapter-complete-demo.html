@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>章节完成过场 · LevelExit → AreaComplete</title>
+<style>
+  @font-face {
+    font-family: 'Renogare';
+    src: url('celeste-font-en/Renogare-Regular.otf') format('opentype');
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'CelesteZH';
+    src: url('fonts/celeste-zh-subset.woff2') format('woff2');
+    font-display: swap;
+  }
+
+  :root {
+    --bg: #0a0b0d;
+    --panel: #121419;
+    --line: #23262d;
+    --text: #e6e8ec;
+    --dim: #8a9099;
+    --snow: #9ad8ff;
+    --gold: #ffd166;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: radial-gradient(1200px 700px at 50% -10%, #171b22 0%, var(--bg) 55%);
+    color: var(--text);
+    font-family: 'CelesteZH', 'Microsoft YaHei', sans-serif;
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    width: min(1140px, calc(100% - 48px));
+    margin: 0 auto;
+    padding: 34px 0 56px;
+  }
+
+  header { margin-bottom: 20px; }
+
+  h1 {
+    margin: 0 0 8px;
+    font-family: 'Renogare', 'CelesteZH', sans-serif;
+    font-size: 22px;
+    font-weight: 400;
+    letter-spacing: 2px;
+  }
+
+  .sub {
+    margin: 0;
+    color: var(--dim);
+    font-size: 13px;
+    letter-spacing: .5px;
+  }
+
+  .sub b { color: var(--snow); font-weight: 400; }
+
+  .viewport {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, .6);
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .badge {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 6px 10px;
+    background: rgba(8, 10, 13, .72);
+    border: 1px solid rgba(154, 216, 255, .22);
+    border-radius: 3px;
+    font-family: 'Renogare', 'CelesteZH', sans-serif;
+    font-size: 11px;
+    letter-spacing: 1.6px;
+    color: var(--snow);
+    pointer-events: none;
+  }
+
+  .badge i {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--snow);
+    box-shadow: 0 0 10px var(--snow);
+  }
+
+  .readout {
+    position: absolute;
+    right: 14px;
+    bottom: 14px;
+    padding: 8px 10px;
+    min-width: 218px;
+    background: rgba(8, 10, 13, .72);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    font-family: 'Renogare', 'CelesteZH', sans-serif;
+    font-size: 11px;
+    line-height: 1.7;
+    letter-spacing: .6px;
+    color: var(--dim);
+    pointer-events: none;
+  }
+
+  .readout span { color: var(--text); }
+
+  .timeline {
+    margin-top: 16px;
+    padding: 14px 16px 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+  }
+
+  .track {
+    position: relative;
+    display: flex;
+    height: 8px;
+    border-radius: 2px;
+    overflow: hidden;
+    background: #05070a;
+  }
+
+  .seg { height: 100%; }
+  .seg.s1 { flex: 0.5; background: #39424f; }
+  .seg.s2 { flex: 2.8; background: #2a3340; }
+  .seg.s3 { flex: 1.0; background: #3a4a5c; }
+  .seg.s4 { flex: 1.5; background: #3f5f78; }
+  .seg.s5 { flex: 0.2; background: #5a7a92; }
+
+  .playhead {
+    position: absolute;
+    top: -3px;
+    left: 0;
+    width: 2px;
+    height: 14px;
+    background: var(--gold);
+    box-shadow: 0 0 8px rgba(255, 209, 102, .8);
+    transform: translateX(-1px);
+  }
+
+  .legend {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8px;
+    font-family: 'Renogare', 'CelesteZH', sans-serif;
+    font-size: 10px;
+    letter-spacing: .8px;
+    color: #6b737f;
+  }
+
+  .legend span:nth-child(1) { flex: 0.5; }
+  .legend span:nth-child(2) { flex: 2.8; }
+  .legend span:nth-child(3) { flex: 1.0; }
+  .legend span:nth-child(4) { flex: 1.5; }
+  .legend span:nth-child(5) { flex: 0.2; }
+
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+  }
+
+  button {
+    appearance: none;
+    padding: 9px 14px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: #171a20;
+    color: var(--text);
+    font-family: 'CelesteZH', 'Renogare', sans-serif;
+    font-size: 13px;
+    letter-spacing: .5px;
+    cursor: pointer;
+    transition: background .15s ease, border-color .15s ease;
+  }
+
+  button:hover { background: #1e222a; border-color: #3a414c; }
+  button.primary { border-color: rgba(154, 216, 255, .45); color: var(--snow); }
+  button.active { border-color: var(--gold); color: var(--gold); }
+
+  .status {
+    margin-left: auto;
+    font-family: 'Renogare', 'CelesteZH', sans-serif;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--dim);
+  }
+
+  .notes {
+    margin-top: 22px;
+    padding: 18px 20px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+  }
+
+  .notes h2 {
+    margin: 0 0 10px;
+    font-family: 'Renogare', 'CelesteZH', sans-serif;
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: 2px;
+    color: var(--snow);
+  }
+
+  .notes p {
+    margin: 0 0 8px;
+    color: #a8adb6;
+    font-size: 12.5px;
+    line-height: 1.85;
+  }
+
+  .notes code {
+    padding: 1px 5px;
+    border-radius: 2px;
+    background: #0c0e12;
+    border: 1px solid #20232a;
+    font-family: 'Renogare', Consolas, monospace;
+    font-size: 11.5px;
+    color: #cfd6df;
+  }
+
+  .notes .dim { color: #6b737f; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>CHAPTER COMPLETE · 过渡过场</h1>
+      <p class="sub">
+        取证自本地 <b>Celeste.dll</b>：<b>LevelExit</b>（黑场 + FadeWipe + HiresSnow 3.3s）
+        → <b>AreaComplete</b>（CompleteRenderer 延迟 1s 后 SineOut 滑入 1.5s）
+      </p>
+    </header>
+
+    <div class="viewport">
+      <canvas id="stage" width="1920" height="1080"></canvas>
+      <div class="badge"><i></i><span id="phaseTag">FADE IN</span></div>
+      <div class="readout">
+        <div>t <span id="vTime">0.00</span> s</div>
+        <div>Scroll.y <span id="vScroll">—</span></div>
+        <div>fadeAlpha <span id="vFade">—</span></div>
+        <div>snow α <span id="vSnow">1.00</span></div>
+      </div>
+    </div>
+
+    <div class="timeline">
+      <div class="track">
+        <div class="seg s1"></div>
+        <div class="seg s2"></div>
+        <div class="seg s3"></div>
+        <div class="seg s4"></div>
+        <div class="seg s5"></div>
+        <div class="playhead" id="playhead"></div>
+      </div>
+      <div class="legend">
+        <span>0.5 fade</span>
+        <span>2.8 hold</span>
+        <span>1.0 delay</span>
+        <span>1.5 slide</span>
+        <span>0.2</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="btnReplay" class="primary">重播</button>
+      <button id="btnSkip">跳到滑入</button>
+      <button id="btnSlow">0.5× 慢放</button>
+      <div class="status" id="statusText">FORSAKEN CITY · 1A</div>
+    </div>
+
+    <section class="notes">
+      <h2>WHY IT CAN BE ENCAPSULATED</h2>
+      <p>
+        原作把这段拆在三个类里：<code>LevelExit</code> 只管“黑场等 3.3s + 大雪”，
+        <code>AreaComplete</code> 只管“什么时候开始滑入”，
+        <code>CompleteRenderer</code> 只管“Scroll / fadeAlpha / 图层视差”。
+        三者没有互相引用内部字段，所以本 demo 可以直接按同样的边界复刻：
+        <code>ChapterCompleteSequence</code> 只负责接管时序，绘制细节留给
+        <code>CompleteRenderer</code>，雪交给 <code>HiresSnow</code>，黑幕交给 <code>FadeWipe</code>。
+      </p>
+      <p class="dim">
+        图层数据原样抄自 <code>Content/Graphics/CompleteScreens.xml·ForsakenCity</code>：
+        start(-10,2000) → center(-10,1200)，14 层 scroll 0–0.14。
+        UI 层（<code>&lt;ui scroll="0.62"/&gt;</code>）与音效 <code>SetMusicParam("end",1)</code> 未复刻，属明确缺口。
+      </p>
+    </section>
+  </div>
+
+  <script src="js/celeste-complete-transition.js?v=20261103a"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      var CC = window.CelesteComplete;
+      var CHAPTER = CC.FORSAKEN_CITY;
+      var VW = CC.VIRTUAL_WIDTH;
+
+      var canvas = document.getElementById('stage');
+      var ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+
+      var phaseTag = document.getElementById('phaseTag');
+      var vTime = document.getElementById('vTime');
+      var vScroll = document.getElementById('vScroll');
+      var vFade = document.getElementById('vFade');
+      var vSnow = document.getElementById('vSnow');
+      var playhead = document.getElementById('playhead');
+      var statusText = document.getElementById('statusText');
+      var btnSlow = document.getElementById('btnSlow');
+
+      var TOTAL = 6.0; // 0.5 + 2.8 + 1.0 + 1.5 + 0.2
+      var images = {};
+      var assets = {};
+      var seq = null;
+      var speed = 1;
+      var last = 0;
+      var raf = 0;
+
+      function loadImage(src) {
+        return new Promise(function (resolve, reject) {
+          var img = new Image();
+          img.onload = function () { resolve(img); };
+          img.onerror = function () { reject(new Error('load failed: ' + src)); };
+          img.src = src;
+        });
+      }
+
+      function assetPath(base, name) {
+        return 'Atlases/' + base + '/' + name + '.png';
+      }
+
+      function loadAssets() {
+        var names = [];
+        CHAPTER.layers.forEach(function (l) {
+          if (names.indexOf(l.img) < 0) names.push(l.img);
+        });
+        var jobs = names.map(function (name) {
+          return loadImage(assetPath(CHAPTER.atlas, name)).then(function (img) {
+            images[name] = img;
+          });
+        });
+        jobs.push(loadImage('Atlases/Overworld/snow.png').then(function (img) { assets.snow = img; }));
+        jobs.push(loadImage('Atlases/Overworld/overlay.png').then(function (img) { assets.overlay = img; }));
+        return Promise.all(jobs);
+      }
+
+      function reset() {
+        seq = new CC.ChapterCompleteSequence(CHAPTER, images, {});
+        last = performance.now();
+        if (!raf) raf = requestAnimationFrame(tick);
+      }
+
+      function tick(now) {
+        var dt = Math.min(0.05, (now - last) / 1000) * speed;
+        last = now;
+        seq.update(dt);
+        seq.render(ctx, assets);
+        paintHud();
+        raf = requestAnimationFrame(tick);
+      }
+
+      function paintHud() {
+        var t = seq.time;
+        var phase = seq.phase;
+        phaseTag.textContent = phase === 'fadeIn' ? 'FADE IN'
+          : phase === 'hold' ? 'HOLD · SNOW'
+          : phase === 'complete' ? 'AREA COMPLETE'
+          : 'DONE';
+
+        vTime.textContent = t.toFixed(2);
+        if (seq.complete) {
+          vScroll.textContent = seq.complete.scroll.y.toFixed(1);
+          vFade.textContent = seq.complete.fadeAlpha.toFixed(2);
+        } else {
+          vScroll.textContent = '—';
+          vFade.textContent = '—';
+        }
+        vSnow.textContent = seq.snow.alpha.toFixed(2);
+
+        var ratio = Math.min(1, t / TOTAL);
+        playhead.style.left = (ratio * 100) + '%';
+
+        if (seq.finished) {
+          statusText.textContent = 'DONE · 点击重播';
+        } else {
+          statusText.textContent = 'FORSAKEN CITY · 1A';
+        }
+      }
+
+      document.getElementById('btnReplay').addEventListener('click', reset);
+      document.getElementById('btnSkip').addEventListener('click', function () { if (seq) seq.skip(); });
+      btnSlow.addEventListener('click', function () {
+        speed = speed === 1 ? 0.5 : 1;
+        btnSlow.classList.toggle('active', speed === 0.5);
+        btnSlow.textContent = speed === 1 ? '0.5× 慢放' : '1× 播放';
+      });
+
+      loadAssets().then(function () {
+        reset();
+        statusText.textContent = 'FORSAKEN CITY · 1A';
+      }).catch(function (err) {
+        statusText.textContent = '素材加载失败：' + err.message;
+      });
+    })();
+  </script>
+</body>
+</html>

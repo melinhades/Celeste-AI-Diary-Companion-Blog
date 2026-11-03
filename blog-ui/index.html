@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="css/index.css">
     <link rel="stylesheet" href="css/theme.css">
     <link rel="stylesheet" href="css/index-inline.css?v=20261015a">
-    <link rel="stylesheet" href="css/index-bird.css?v=20261101f">
+    <link rel="stylesheet" href="css/index-bird.css?v=20261103a">
 </head>
 <body>
     <!-- 统一加载层：点鸟飞出后由 js/page-loading.js 的 show() 唤醒（data-standby 时先隐藏） -->
@@ -47,8 +47,8 @@
                 <img loading="lazy" src="Atlases/Gui/menu/play.png" alt="Shop" decoding="async">
             </a>
             <a href="roundtable.html" class="nav-link nav-chair" title="AI 圆桌会议">🪑</a>
-            <!-- 鸟的落点：auth.js 注入 .chat-crow 后由 js/index-bird.js 搬到这里，与其它入口同排 -->
-            <span class="nav-bird-slot" id="navBirdSlot"></span>
+            <!-- 鸟留在 auth.js 注入的 .user-info 原位（用户名和写文章之间），此 slot 预留不再使用 -->
+            <span class="nav-bird-slot" id="navBirdSlot" hidden></span>
         </nav>
         <div class="header-right" id="headerRight">
             <a href="login.html" class="btn btn-outline">Login</a>
@@ -147,7 +147,7 @@
 <script src="js/celeste-hair.js?v=20261031a"></script>
 <script src="js/bird-motion.js?v=20261031a"></script>
 <script src="js/page-loading.js?v=20261101a"></script>
-<script src="js/index-bird.js?v=20261101e"></script>
+<script src="js/index-bird.js?v=20261103a"></script>
 <script src="js/seed.js?v=20261101c"></script>
 </body>
 </html>

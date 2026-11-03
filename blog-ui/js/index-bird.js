@@ -1,9 +1,9 @@
 /* ===== js/index-bird.js — index 头部那只鸟（auth.js 注入的 .chat-crow）=====
    CS10 飞升过场已废案（见 attic/cs10-launch-transition/），现在这条链路只做三件事：
-     1. 把 .chat-crow 从 #headerRight 搬进 .nav（与 Home/Archives/… 同一水平线；
-        auth.js 每次登录/登出都会重渲染，所以用 MutationObserver 兜住）；
+     1. .chat-crow 留在 auth.js 注入的原位：.user-info 里用户名和写文章按钮之间
+        （不再搬到 nav，MutationObserver 保留但仅观察不搬运）；
      2. 悬停喊叫：img 按 croak 帧表（crow00..13 @0.08s）轮播 + bird_squawk；
-     3. 点击：换成 fly00..03 振翅帧并从 nav 飞出屏（CSS crowFlyOut .95s），
+     3. 点击：换成 FlyUp01..15 展翅帧向上翱翔飞出（CSS crowFlyOut .95s），
         然后唤醒统一加载层（js/page-loading.js：夜空 + 雪花 + 跑动 Madeline），
         最后进 celeste-farewell-remembered-demo.html。
    reduced-motion 时不飞，直接铺加载层再跳页，功能不丢。 */
@@ -11,7 +11,8 @@
     'use strict';
 
     var CROW_SRC = 'Atlases/Gameplay/characters/bird/crow';
-    var FLY_SRC = 'Atlases/Gameplay/characters/bird/fly';
+    var FLY_SRC = 'Atlases/Gameplay/characters/bird/FlyUp';   // 展翅向上翱翔：FlyUp01..15
+    var FLY_FRAMES = 15;
     var TARGET = 'celeste-farewell-remembered-demo.html';
     var SLOT_ID = 'navBirdSlot';
 
@@ -25,13 +26,9 @@
 
     function pad2(n) { return n < 10 ? '0' + n : '' + n; }
 
-    /* ---------- 把 auth.js 注入的鸟搬进 nav ---------- */
-    function placeCrow() {
-        var slot = document.getElementById(SLOT_ID);
-        var link = document.querySelector('.chat-crow');
-        if (!slot || !link || link.parentNode === slot) return;
-        slot.appendChild(link);
-    }
+    /* ---------- 鸟留在 header-right（用户名和写文章之间），不再搬到 nav ---------- */
+    // placeCrow 保留为空函数，MutationObserver 仍可观察 auth.js 的重渲染但不做 DOM 搬运
+    function placeCrow() { /* no-op：鸟的落点就是 auth.js 注入的 .user-info 原位 */ }
     placeCrow();
     var headerRight = document.getElementById('headerRight');
     if (headerRight && window.MutationObserver) {
@@ -98,11 +95,13 @@
         var img = link.querySelector('img');
         link.classList.add('flying-out');
         Sfx.play('bird_wingflap');
-        var f = 0;
+        var f = 1;
+        if (img) img.src = FLY_SRC + pad2(f) + '.png';
         flyTimer = setInterval(function () {
-            f = (f + 1) % 4;
+            if (f >= FLY_FRAMES) { clearInterval(flyTimer); flyTimer = 0; return; }
+            f++;
             if (img) img.src = FLY_SRC + pad2(f) + '.png';
-        }, 90);
+        }, 62);
 
         setTimeout(showLoading, FLY_MS);
         setTimeout(leave, FLY_MS + LOADING_HOLD_MS);

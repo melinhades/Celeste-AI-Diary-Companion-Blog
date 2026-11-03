@@ -2205,7 +2205,7 @@ follower i: idx = min(5*(i+1), past.length - 1)，target = past[idx]
 
 **用户命题（修正上一轮）**：「水母不应该是背景版吧，它是 madeline 可以用的物品，像羽毛一样随机刷新在 madeline 周围，用 REA 实现 madeline 和水母的交互。」
 
-**结论**：第 24 节把水母当作「身侧伴飞的装饰物」是错的。原作 `Celeste.Glider` 是一个 `Holdable`：可抓取、可携带、缓降、可投掷/丢弃、未持有时有独立物理并与玩家碰撞销毁。本轮按原作语义重做：`🪼` 只负责在相机可见区随机刷新一只水母实体，之后完全由 Madeline 的抓取/持有/投掷驱动。
+**结论**：第 24 节把水母当作「身侧伴飞的装饰物」是错的。原作 `Celeste.Glider` 是一个 `Holdable`：可抓取、可携带、缓降、可投掷/丢弃、未持有时有独立物理并与玩家碰撞销毁。本轮按原作语义重做：`🪼` 只负责在 Madeline 近身随机刷新一只水母实体（保证一跳可及），之后完全由 Madeline 的抓取/持有/投掷驱动。
 
 ### 25.1 语义变更与产品约束
 
@@ -2213,10 +2213,10 @@ follower i: idx = min(5*(i+1), past.length - 1)，target = past[idx]
 |---|---|---|
 | 触发 | `🪼` → 身侧水母 | `🪼` → 随机刷新一只 `Glider` 物品 |
 | 上限 | 4（装饰） | 4（场上同时存在的物品，含手持） |
-| 位置 | `m.x + side*(26+i*16)` 正弦浮动 | 相机可见区左右两侧随机（同羽毛的取点策略），避开实心块 |
-| 交互 | 无 | 按住抓取键拾取 → 持有；松开 / 下压投掷或丢弃 |
+| 位置 | `m.x + side*(26+i*16)` 正弦浮动 | Madeline 近身随机（左右 24–80px、上方 26–68px），避开实心块；未抓取前原地悬浮（bubble） |
+| 交互 | 无 | 按住抓取键拾取 → 持有；松开 / 下压投掷或丢弃；冲刺撞上瞬间抓取保留冲刺动量 |
 | 缓降 | 无 | 持有期间 `maxFall` 目标 40（下压 120 / 上抬 24）、重力 ×0.5、空中 `maxRun` 108 |
-| 回收 | 永存 | 未持有撞到玩家 → 销毁动画 0.64s → 移除；掉出下边界 → 移除 |
+| 回收 | 永存 | 掉出下边界 / 死亡动画 0.64s 后移除（撞玩家销毁的碰撞实体未取证，本轮不启用） |
 
 产品约束不变：**不结算**（无计分、无碰撞收集），历史消息不回放，`ChatScene.reset()` 是唯一清空入口。
 
@@ -2309,6 +2309,10 @@ cannotHoldTimer = cannotHoldDelay   // Glider 为 0.3
 
 `Player.Throw`（IL 0–137）：`MoveY == 1` → `Drop()`；否则 `Holding.Release(UnitX * Facing)`、`Speed.X += 80 * -Facing`、播放 `crystaltheo_throw` 与 `throw` 动画；最后 `Holding = null`。`Player.Drop` → `Release(Vector2.Zero)` + `Holding = null`。
 
+**抓取时不清零玩家速度**：`Player.orig_Pickup`（IL 0–37）只写 `Ducking`、`Holding`、`minHoldTimer`；`Holdable.Pickup` 只写 `Depth`、`Visible`、`Holder` 并回调 `OnPickup`；`Glider.OnPickup` 的 `Speed = Zero` 清的是**水母自身**速度。因此冲刺撞上水母再按抓取键时，Madeline 的 `Speed` 原样保留（原作 Dash-Grab 动量）。实现中 `tryPickupJelly()` 只清 `best.vx/vy`，不触碰 `m.vx/vy`。
+
+**抓取门槛**：`Player.NormalUpdate` IL 75–107 的拾取分支是 `Holding == null && GrabCheck && !IsTired && !Ducking`；`IsTired`（`get_IsTired` IL）为 `CheckStamina < 20`。实现补上 `m.checkStamina() < 20` 拒绝。
+
 ### 25.4 持有缓降（SlowFall）
 
 | 项 | 原作 IL | 语义 |
@@ -2349,17 +2353,20 @@ const wallSliding = ... && !this.holdSlowFall;
 
 | 情形 | 行为 | IL |
 |---|---|---|
+| 气泡悬浮 | `bubble`（构造参数，首次 `OnPickup` 置 0）→ `Position = startPos + UnitY * platformSine.Value`（`new SineWave(0.3, 0)`，±1px），跳过全部物理与碰撞 | 816–830 / 1933–1976 |
 | 高摩擦计时 | `highFrictionTimer > 0` → `-= dt` | 827–853 |
 | 地面 | 向前 3px 与向后 3px 做 `OnGround` 探测：前空 → 目标 `+20`，后空 → `-20`，都踩实 → `0`；`Approach(Speed.X, target, 800 * dt)` | 858–1000 |
 | 空中 | `Hold.ShouldHaveGravity` 为 false（`gravityTimer > 0`）→ **同时跳过横向摩擦与重力**；否则 `g = 200`（`Speed.Y < -30` 时 `g = 100`）；横向摩擦：`Speed.Y < 0 → 40`，否则 `highFrictionTimer > 0 → 10`，否则 `40`；重力：风向上时 `Approach(vy, 0, g*dt)`，否则 `Approach(vy, 30, g*dt)` | 1268–1553 |
 | 位移 | `MoveH(Speed.X*dt, OnCollideH)`、`MoveV(Speed.Y*dt, OnCollideV)` | 1553–1614 |
 | 左/右/上越界 | 夹回 `Bounds` 并以对应 `CollisionData` 调 `OnCollideH/V`；`Top > Bounds.Bottom + 16` → `RemoveSelf()` | 1615–1919 |
-| 撞玩家 | 遍历 `Player`，临时置其 `Collidable = true` 做 `CollideCheck`，命中 → `destroyed = true`、`Collidable = false`；若正被持有 → `holder.Drop()` 且 `Speed = holder.Speed * 0.333`；启动 `DestroyAnimationRoutine` | 548–720 |
+| 碰撞销毁 | 遍历 tracker 中的某实体类型（IL `castclass 0x020004ac`），临时置其 `Collidable = true` 做 `CollideCheck`，命中 → `destroyed = true`、`Collidable = false`；若正被持有 → `holder.Drop()` 且 `Speed = holder.Speed * 0.333`；启动 `DestroyAnimationRoutine` | 548–720 |
 
 `OnCollideH`（IL 0–163）：`Speed.X *= -1`，`scale = (0.8, 1.2)`，播放左右撞墙音。
 `OnCollideV`（IL 0–121）：`|Speed.Y| > 8` → `scale = (1.2, 0.8)` 并播放落地音；`Speed.Y < 0` → `*= -0.5`，否则 `= 0`。
 
-实现对应：`gliderSolidAt()` 用 **8×10 @(-4,-10)**（与 `Glider.orig_ctor` 的实体 Collider 同盒），地面探测用 `gliderSolidAt(x, y+1)` 与 `±3`，空中用 `gravityTimer` 跳过摩擦+重力，碰撞反弹/夹取/下边界删除、与玩家碰撞 → `deathT = 0`。
+实现对应：`gliderSolidAt()` 用 **8×10 @(-4,-10)**（与 `Glider.orig_ctor` 的实体 Collider 同盒），地面探测用 `gliderSolidAt(x, y+1)` 与 `±3`，空中用 `gravityTimer` 跳过摩擦+重力，碰撞反弹/夹取/下边界删除。`bubble` 水母在 `homeX/homeY` 处按 `sin((time+bobPhase)*0.3*2π)` 浮动 ±1px，抓取时清 `bubble`。
+
+> 碰撞销毁的实体类型无法从已取证产物解析（`0x020004ac` 不属于已抽查的 `Player`/`Spikes`/`Seeker`/`Puffer` 等类型；REA 没有 type-token 反查入口），故本实现**不启用“撞到某实体即销毁”**，只保留掉出边界与脚本化死亡动画（见 D18）。
 
 ### 25.6 持有时表现（旋转 / 动画 / 锚点 / 层序）
 
@@ -2397,40 +2404,44 @@ const wallSliding = ... && !this.holdSlowFall;
 | `carryY` | -16 | `-12 + CarryYOffset` 推定（D13） |
 | `pickX` / `pickTop` / `pickBottom` | 10 / 16 / 6 | `PickupCollider(20,22,-10,-16)` |
 | `deathTime` | 0.64 | 8 帧 × 0.08 推定（D12） |
-| `idleStep` / `fallStep` | 0.1 / 0.08 | 素材动画 |
+| `idleStep` / `fallStep` / `deathStep` | 0.1 / 0.08 / 0.08 | 素材动画 |
+| `bubbleFreq` / `bubbleAmp` | 0.3 / 1 | `Glider.orig_ctor`：`new SineWave(0.3, 0)`，振幅 1px |
 | `originY` | 27.8 | `Justify(0.5, 0.58)` |
 
 函数：
 
 | 函数 | 对应原作 | 行为 |
 |---|---|---|
-| `spawnJelly()` | 关卡放置（本场景改为消息触发） | 相机左右两侧随机、8 次避实心重试、上限 4 |
+| `spawnJelly()` | 关卡放置（本场景改为消息触发） | Madeline 近身随机（左右 24–80px、上方 26–68px）、8 次避实心重试、上限 4；保证一跳可及；`bubble=true`（未抓取前悬浮） |
 | `gliderSolidAt()` | `Glider.Collider 8×10 @(-4,-10)` | 实心块重叠检测 |
 | `inPickupRange()` | `Holdable.Check` + `PickupCollider` | 20×22 抓取盒与玩家 8×11 身体盒相交 |
-| `tryPickupJelly()` | `Player.orig_Pickup` + `Holdable.Pickup` | 拒绝已持有/蹲下/飞行/冷却中；最近一只；`minHoldTimer=.35`、`highFriction=.5`、速度清零、carry 到 `m.y-16` |
+| `tryPickupJelly()` | `Player.NormalUpdate` IL 75–107 + `orig_Pickup` + `Holdable.Pickup` | 拒绝已持有/蹲下/飞行/疲惫（`checkStamina<20`）/冷却中；最近一只；`minHoldTimer=.35`、`highFriction=.5`、**只清水母自身速度**、`bubble=false`、carry 到 `m.y-16` |
 | `releaseJelly()` | `Player.Throw` / `Drop` + `Holdable.Release` | `cannotHoldTimer=.3`、`gravityTimer=.1`、速度 `dir×100`（Y=0 且 X≠0 → -40）、高摩擦 .5、最多 10px 向上脱困 |
 | `throwJelly()` | `Player.Throw` / `Player.Drop` | 下压 → Drop（零速度）；否则 `Release(Facing)` + 后坐 -80 |
-| `stepJellies()` | `Glider.Update` | 持有 carry/旋转/动画；未持有高摩擦、地面侧滑、空中重力与摩擦、MoveH/V 反弹、越界、撞玩家销毁、冷却递减 |
+| `stepJellies()` | `Glider.Update` | 持有 carry/旋转/动画；`bubble` 原地 SineWave 悬浮；其余未持有高摩擦、地面侧滑、空中重力与摩擦、MoveH/V 反弹、越界删除、冷却递减 |
 | `jellyImage()` | `Glider.Update` 动画分支 + `DestroyAnimationRoutine` | 死亡帧、`fall`→`fallLoop`→`held`、idle 10 帧 |
 | `drawJellies()` | `Glider.Render` | 旋转/缩放/拉伸，`drawImage(img, -24, -27.8, 48, 48)` |
-| `tick()` 持有段 | `Player.NormalUpdate` IL 823–947 | `minHoldTimer` 递减；松开抓取键 → Throw；地面下压 → Drop；未持有按住抓取键 → 拾取 |
+| `tick()` 持有段 | `Player.NormalUpdate` IL 823–1048 | `minHoldTimer` 递减；松开抓取键 → Throw；地面下压且 `!holdCannotDuck` → Drop；未持有按住抓取键 → 拾取 |
 | `render()` | Depth 顺序 | 水母画在人物之后 |
 
 输入接线：`grabHeld = Shift / Z`（与原作 `Grab.Check` 同义），持有期间传给引擎的 `grabHeld` 强制为 `false`，等价于 `Holding != null` 跳过攀爬分支（`NormalUpdate` IL 75）。
 
-### 25.8 偏差表（D9–D17）
+### 25.8 偏差表（D9–D18）
 
 | ID | 原作 | 本实现 | 判定 |
 |---|---|---|---|
-| D9 | 水母由关卡实体放置 | `🪼` 消息触发、相机可见区随机生成 | 产品需求；语义仍是 Holdable |
+| D9 | 水母由关卡实体放置 | `🪼` 消息触发、在 Madeline 近身随机生成（保证可抓） | 产品需求；语义仍是 Holdable |
 | D10 | `Holdable.Check` 用完整碰撞盒 | 20×22 抓取盒与 8×11 身体盒手工相交 | 语义等价；避免引入完整物理盒 |
-| D11 | 抓取需要按住抓取键且未疲惫 | 只检查按住，不模拟 `IsTired` / `NoGrabbing` | 场景无体力消耗（本作有体力，但抓水母不耗） |
+| D11 | 抓取需要按住抓取键且 `!IsTired` | 检查 `GrabCheck && !Ducking && checkStamina()>=20`；不模拟辅助选项 `NoGrabbing` | 已对齐主分支；辅助选项不在场景范围 |
 | D12 | 死亡协程时长由 `DestroyAnimationRoutine` MoveNext 决定 | 固定 0.64s（8 帧 × 0.08） | 推定，见 U8 |
 | D13 | `carryOffset` 目标 `(0,-12)` + 每帧 `CarryYOffset` | 固定总偏移 `-16` | 推定，见 U7 |
 | D14 | 风场 `windMovedUp` / `WindMode` / `windY<0` 分支 | 未实现（场景无风） | 缺口，见 U9 |
 | D15 | 持有时缩放 `Approach(2*dt)` | 直接设为目标缩放 | 视觉差异极小；见 U12 |
-| D16 | `holdCannotDuck` 门控下压 Drop | 仅检查 `onGround && MoveY==1 && Speed.Y>=0` | 少一个边界：空中开伞落地后需先松 ↓ 才能丢弃；见 U10 |
+| D16 | `holdCannotDuck` 门控下压 Drop | **已实现**：引擎 `holdCannotDuck`（空中 ↓ 置位、着地且不按 ↓ 清除），tick 的 Drop 分支读取 | 与原作 IL 1971-2010 / 901 / 1008-1043 对齐 |
 | D17 | `Throw` 播放 `throw` 精灵与音效 | 仅物理与后坐，无 throw 动画/音效 | 引擎无 `throw` 动画，场景静音 |
+| D18 | 未持有撞到某实体（`0x020004ac`）→ 销毁、被持有时 Drop 且 `Speed×0.333` | 未启用；只保留掉出边界与脚本化死亡动画 | 实体类型未取证（见 U13），避免误伤玩家附近的悬浮水母 |
+
+另：**Dash-Grab 动量**已按原作对齐——`tryPickupJelly()` 只清水母自身速度，不触碰 `m.vx/vy`。
 
 ### 25.9 未验证 / 未取证
 
@@ -2438,11 +2449,11 @@ const wallSliding = ... && !this.holdSlowFall;
 |---|---|---|
 | U7 | `carryY = -16` | `CarryOffsetTarget=(0,-12)` 已取证；`CarryYOffset` 是逐动画元数据，仓库无该元数据，`-4` 是推定 |
 | U8 | 死亡 0.64s | `DestroyAnimationRoutine` 的 MoveNext 未 dump，帧数与单帧时长按素材命名/常规 0.08 推定 |
-| U9 | 风/气泡/弹簧/教程分支 | `bubble`、`WindMode`、`HitSpring`、`tutorial` 未在本场景启用，未逐条验证 |
-| U10 | `holdCannotDuck` | 未实现原作“空中按 ↓ 开伞后落地需先松开 ↓ 才能 Drop”的门控 |
-| U11 | `IsTired` / `NoGrabbing` | 拾取分支的疲惫与辅助选项未模拟 |
+| U9 | 风/弹簧/教程分支 | `WindMode`、`HitSpring`、`tutorial` 未在本场景启用，未逐条验证；`bubble` 已实现 |
+| U10 | `holdCannotDuck` | **已实现并断言**（空中 ↓ 置位 / 落地按住不丢 / 松开后清除 / 再次按下 Drop） |
+| U11 | `NoGrabbing` | `IsTired` 已实现；辅助选项 `NoGrabbing` 未模拟 |
 | U12 | 持有缩放过渡 | 原作为 2/s 的 `Approach`，实现为直接赋值 |
-| U13 | 撞玩家判定 | 原作临时把玩家 Collidable 置真做 `CollideCheck`，实现用 8×11 身体盒距离判定 |
+| U13 | 碰撞销毁实体 | IL `0x020004ac` 的类型名未能解析：已抽查 `Player`/`Spikes`/`Seeker`/`Puffer`/`FallingBlock`/`ZipMover` 等 token 均不匹配，REA 无 type-token 反查入口，因此 D18 不启用 |
 | U14 | 双客户端 SSE | 后端未启动，真实多人连续发 `🪼` 未压测 |
 
 ### 25.10 素材清单
@@ -2459,8 +2470,223 @@ const wallSliding = ... && !this.holdSlowFall;
 
 Sprite origin `(24, 27.8)`（`Justify(0.5, 0.58)`），绘制为 `drawImage(img, -24, -27.8, 48, 48)`。
 
-### 25.11 验证
+### 25.11 验证（第三轮补强后）
 
-- 无头 Chromium（1280×800）`?scenetest`：**49 pass / 0 fail / 0 exceptions**。
-- 水母专项断言：刷新避实心、`PickupCollider` 判定、抓取 carry(0,-16)、缓降 `maxFall=40/vy=40`、空中 `maxRun=108`、下压 `maxFall=120/vy=120`、投掷 `(100,-40)` + 后坐 `-80`、Drop 零速度、重新抓取冷却 0.3s、`tick` 抓取/松开投掷接线、撞玩家销毁、死亡动画后回收。
-- 缓存版本：`js/celeste-character.js?v=20261102b`（引擎新增 `holdSlowFall` 的 maxRun 分支）。
+- 无头 Chromium（1280×800）`?scenetest`：**55 pass / 0 fail / 0 exceptions**。
+- 真实键盘（普通页面，rAF + `Page.startScreencast` 强制出帧，页面内 `KeyboardEvent` 触发真实监听）：
+  - 按住 `Shift` → `held=true`、`carry(0,-16)`；
+  - 持有时按 `D` → 玩家 `vx=90`、水母 `x` 与玩家逐帧一致（`dx=0`）；
+  - 松开 `Shift` → 水母 `vx=100, vy=-40`、`held=false`。
+- 冲刺抓取（同页面真实键盘，10ms 采样）：`X` 冲刺撞向 `x=28` 的水母，进入 10px 抓取范围（`x=20.3`、`vx=240`）后按 `Shift` → 首个持有帧 `held=true`、**`vx=240` 保留**，验证 Dash-Grab 动量。
+- 气泡悬浮：实时 `🪼` 生成后 1.2s，水母仍 `bubble=true`，`y` 与 `homeY` 偏差 0.21–0.54px（两次采样，均在 ±1px SineWave 内）。
+- 水母专项断言（14 条）：刷新避实心、刷新在 Madeline 近身（≤110px）、`PickupCollider` 判定、抓取 carry(0,-16) 且 `bubble=false`、缓降 `maxFall=40/vy=40`、空中 `maxRun=108`、下压 `maxFall=120/vy=120`、未抓取原地悬浮、冲刺抓取保留玩家动量、投掷 `(100,-40)` + 后坐 `-80`、Drop 零速度、重新抓取冷却 0.3s、`tick` 抓取/松开投掷接线、`holdCannotDuck` 门控（4 条）、死亡动画后回收。
+- 缓存版本：`js/celeste-character.js?v=20261103a`（引擎新增 `holdSlowFall` maxRun 分支与 `holdCannotDuck`）。
+
+## 26. 章节完成过场（LevelExit → AreaComplete）取证与独立封装
+
+**用户命题**：「用 REA 反编译本地 celeste 文件看看章节完成时的那个出现章节结束图之前的那段过渡动画是如何实现的，把这个东西实现做成 demo 样品并写进反编译研究，毕竟这个过渡动画可以单独封装也可以体现代码的分类意识。」
+
+**结论**：这段过渡不是「一张图加淡入」，而是两个不同场景组件的接力：
+
+```
+LevelExit（黑场 + HiresSnow，3.3s，FadeWipe 0.5s 揭开）
+        ↓ Engine.Scene = new AreaComplete(...)
+AreaComplete（CompleteRenderer 先延迟 1.0s，再用 1.5s SineOut 接管 Scroll，
+             黑幕在前 0.75s 淡出，最后 0.2s 停顿）
+```
+
+原作把「等待」「接管时机」「绘制数学」分别放在 `LevelExit`、`AreaComplete`、`CompleteRenderer` 三个类里，彼此只通过公开字段/构造参数耦合，所以能被本 demo 按同样边界拆开复刻。
+
+- demo：`blog-ui/celeste-chapter-complete-demo.html`
+- 模块：`blog-ui/js/celeste-complete-transition.js`
+- 运行：`python -m http.server 8080`（根目录 `blog-ui`）→ `http://localhost:8080/celeste-chapter-complete-demo.html`
+
+### 26.1 取证来源与程序集身份
+
+| 项 | 值 |
+|---|---|
+| 程序集 | `C:\Program Files (x86)\Steam\steamapps\common\Celeste\Celeste.dll` |
+| SHA-256 | `999024e23285acc0c7ac37b6ed33874e16a1f0f9af5fdeff66a64050b78f8e24` |
+| Module / MVID | `Celeste.exe` / `4a26f9de-d670-4c87-a2f4-7e66d2d85163` |
+| REA | 6.8.0，`inspect-managed-members --format json`：类型、字段、方法签名与 token |
+| 方法体 | REA 当前机器的 managed 反编译 provider 未配置（Ghidra/Hopper/IDA 均未安装，`rea decompile` 对 managed 方法返回 provider 缺失），按 `reverse-engineer-anything` 的恢复路径改用 Celeste 自带的 `Mono.Cecil.dll` 读 IL；token 与 REA 清单一致 |
+
+引用的方法与 token：
+
+| 类型.成员 | 类型 token | MethodDef |
+|---|---|---|
+| `LevelExit.Begin` | `0x020004a4` | `0x06001e7f` |
+| `LevelExit/<Routine>d__14.MoveNext` | `0x020004a6` | `0x06001e87` |
+| `AreaComplete..ctor` | `0x0200067d` | `0x06002965` |
+| `AreaComplete.Update` | `0x0200067d` | `0x06002967` |
+| `CompleteRenderer..ctor` | `0x02000446` | `0x06001c4f` |
+| `CompleteRenderer.RenderContent` | `0x02000446` | `0x06001c53` |
+| `CompleteRenderer.SlideRoutine` | `0x02000446` | `0x06001c51` |
+| `CompleteRenderer/<SlideRoutine>d__23.MoveNext` | `0x0200044a` | `0x06001c63` |
+| `CompleteRenderer/Layer.GetScrollPosition` | `0x02000447` | `0x06001c59` |
+| `HiresSnow..ctor / Reset / Update / Render` | `0x0200044e` | `0x06001c6b` / `0x06001c6c` / `0x06001c6d` / `0x06001c6e` |
+| `HiresSnow/Particle.Reset` | `0x0200044f` | `0x06001c70` |
+| `FadeWipe.Render` | `0x02000679` | `0x0600295b` |
+| `ScreenWipe..ctor`（Duration 默认值） | `0x02000793` | `0x06003105` |
+
+内容侧数据：`Content/Graphics/CompleteScreens.xml`（本地安装内容包，非第三方 mod）。第 1 章 `ForsakenCity` 的 `start/center/layers` 原样抄录进 demo。
+
+### 26.2 时序总览（Completed 模式）
+
+| 阶段 | 时长 | 归属 | 证据 |
+|---|---:|---|---|
+| 黑幕揭开（FadeWipe，wipeIn） | 0.50s | `LevelExit` | `LevelExit.Begin`：`new FadeWipe(this, true, null)`；`ScreenWipe..ctor` 把 `Duration` 设 0.5 |
+| 黑场 + 大雪等待 | 2.80s（累计 3.30s） | `LevelExit` | `LevelExit/<Routine>d__14.MoveNext`：`timer < 3.3` 时 `yield return null` |
+| 切场景 / CompleteRenderer 延迟 | 1.00s | `AreaComplete` | `new CompleteRenderer(xml, atlas, 1f, onDone)` |
+| SineOut 滑入 | 1.50s | `CompleteRenderer` | `<SlideRoutine>d__23`：`p += dt / 1.5` |
+| 黑幕淡出（含在滑入前段） | 0.75s | `CompleteRenderer` | `fadeAlpha = LerpClamp(1, 0, p * 2)` |
+| 收尾停顿 | 0.20s | `CompleteRenderer` | `yield return 0.2f` |
+| 结束（`finishedSlide`） | — | `AreaComplete` | 滑入完成回调 |
+
+demo 总时长 6.00s；浏览器实测结束帧 `t 6.03s / Scroll.y 1200.0 / fadeAlpha 0.00 / snow α 0.00`。
+
+### 26.3 LevelExit：黑场与雪
+
+`Begin` 的 Completed 分支（`mode == 4`）实际顺序：
+
+1. `snow` 为空时 `new HiresSnow(0.45f)`；为空时会执行 `Reset()`。
+2. `snow.Direction = new Vector2(0f, 16f)`。
+3. 后台线程 `RunThread.Start(LoadCompleteThread, "COMPLETE_LEVEL", false)` 预载章节完成图。
+4. `Add(snow)`；若 `snow` 是本次新建的，则 `new FadeWipe(this, true, null)`——wipeIn 表示「从全黑揭开」。
+5. `Routine()` 等 `completeLoaded` 与存档；`timer >= 3.3` 后 `Audio.SetMusicParam("end", 1f)`，再 `Engine.Scene = new AreaComplete(session, completeXml, completeAtlas, snow, completeMeta)`。
+
+`LevelExit.Mode` 枚举顺序（IL 字段顺序）：`SaveAndQuit=0, GiveUp=1, Restart=2, GoldenBerryRestart=3, Completed=4, CompletedInterlude=5`。
+
+注意：`LevelExit` 场景本身只挂 HudRenderer 与雪，没有关卡渲染器，所以 3.3s 是真正的黑场，不是「关卡冻结」。
+
+### 26.4 AreaComplete：只负责交接
+
+`AreaComplete..ctor` 的顺序：
+
+1. 建 `AreaCompleteTitle`（位置 `(960, 200)`，最大宽度 1600，行数 3），`Add(title)`。
+2. `new CompleteRenderer(xml, atlas, 1f, <finishedSlide 回调>)`，`Add(complete)`。
+3. `Add(snow)`——雪在完成图之后加入，因此渲染在完成图之上。
+4. 若外面没传 `snow`，则自己建 `new HiresSnow(0.45f)` 并 `AttachAlphaTo = wipe`（另一条「第一次通关」分支，本轮未复刻）。
+
+`Update` 里与过场相关的两行（本 demo 已复刻）：
+
+| 行为 | IL 依据 |
+|---|---|
+| `snow.Alpha = Approach(snow.Alpha, 0f, 0.5f * dt)` | `AreaComplete.Update`：雪在完成画面期间按 0.5/s 衰减 |
+| `snow.Direction.Y = Approach(snow.Direction.Y, 24f, 24f * dt)` | 同上：风向由 16 提到 24 |
+
+`CompleteRenderer` 的 `fadeAlpha` 初值 1，所以延迟的 1.0s 内画面仍是全黑；雪绘制在黑幕之上，黑场与雪因此无缝衔接 `LevelExit`。
+
+### 26.5 CompleteRenderer：可独立复用的那一段
+
+构造与字段（`CompleteRenderer..ctor`）：
+
+- `fadeAlpha = 1`
+- `SlideDuration = 1.5`
+- `Scroll = StartScroll`（`Content/Graphics/CompleteScreens.xml` 的 `<start>`）
+- 图层：`Alpha` 缺省 1，`Scale` 缺省 1，`ScrollFactor` 取 `scroll` 属性，`FrameRate` 缺省 6。
+
+`Layer.GetScrollPosition(scroll)`：`Position + scroll * ScrollFactor`（两个分量各自 Lerp 到 `Position + scroll*factor`，展开后就是逐分量相加）。
+
+`RenderContent` 的关键一行：把 `-Scroll - controlScroll * controlMult` 作为 `scroll` 传下去，画完图层后再画 `Draw.Rect(-10, -10, Width + 20, Height + 20, Color.Black * fadeAlpha)`。
+
+`<SlideRoutine>d__23.MoveNext` 的原样伪代码：
+
+```
+yield return delay;                         // AreaComplete 传 1.0
+float p = 0;
+while (p < 1) {
+    Scroll = Vector2.Lerp(StartScroll, CenterScroll, Ease.SineOut(p));
+    fadeAlpha = Calc.LerpClamp(1f, 0f, p * 2f);   // p>=0.5 即 0
+    p += Engine.DeltaTime / SlideDuration;        // 1.5
+    yield return null;
+}
+Scroll = CenterScroll;
+fadeAlpha = 0f;
+yield return 0.2f;
+onDoneSlide?.Invoke();
+while (true) {
+    controlMult = Calc.Approach(controlMult, 1f, 5f * Engine.DeltaTime);
+    yield return null;
+}
+```
+
+demo 复刻了取样顺序：**先按当前 `p` 写 `Scroll/fadeAlpha`，再累加 `p`**，所以第一帧 `fadeAlpha` 仍是 1；这一点在断言里单独固定。
+
+### 26.6 ForsakenCity 的图层数据
+
+`Content/Graphics/CompleteScreens.xml` 第 1 章：
+
+```
+start  (-10, 2000)
+center (-10, 1200)
+scale  2
+layers 01..11 + 08a/08b + snow-back + snow-front，scroll 0 / 0.02 / 0.03 / 0.04 /
+       0.05 / 0.06 / 0.07 / 0.08 / 0.10 / 0.10 / 0.10 / 0.10 / 0.12 / 0.14
+```
+
+`Scroll` 从 2000 到 1200，`scroll = -Scroll`，所以带视差的层在屏幕上的净位移是 `800 * factor`（向下）：最大的一层 `0.14` 移动 112px，纯背景层 01 完全不动。视觉上不是整张图平移，而是「卡片固定、前景层缓慢下沉」的视差。
+
+素材全部取自项目库：
+
+- `blog-ui/Atlases/ForsakenCity/{01..11,08a,08b,snow-back,snow-front}.png`
+- `blog-ui/Atlases/Overworld/{snow,overlay}.png`
+
+### 26.7 HiresSnow 的参数与「拉丝」渲染
+
+`HiresSnow..ctor(float overlayAlpha)`：
+
+- 50 个粒子，`Alpha = 1`，`Direction` 默认 `(-1, 0)`，`overlayAlpha` = 构造参数。
+- `Particle.Reset`：`r^3` 映射到 `Scale ∈ [0.05, 0.8]`；`Speed = Scale * Rand(2500, 5000)`；按 `Direction` 分量选入场边（`y>0` 时 `(rand*W, -128)`）；`Sin/Rotation ∈ [0, 2π]`；`Color = Lerp(White, Transparent, s*0.8)`。
+- `Update`：`Position += Direction * Speed * dt`，再叠加 `sin(Sin)*100*dt` 的横向摆动；越界 ±128 重掷。
+- `Render`：`Additive` + `LinearWrap`。方向长度钳到 `[0,20]`；长度 >1 时旋转取方向角，粒子缩放为
+  `(x=长度, y=0.2 + (1 - 长度/20) * 0.8)`。`Direction=(0,16)` 时即 `(16, 0.36)`，做出一根竖向拖影——不是圆形雪花。
+- overlay：整屏 1920×1080 纹理按 `timer` 平移平铺（x 32px/s、y 20px/s），`White * Alpha * overlayAlpha`。
+
+demo 的 `HiresSnow.render()` 按上述公式实现，`globalCompositeOperation = 'lighter'` 对应 Additive。
+
+### 26.8 demo 的职责划分（分类意识）
+
+| 类 | 只负责 | 不知道 |
+|---|---|---|
+| `FadeWipe` | `Percent / Duration / wipeIn → alpha` | 雪、完成图、场景切换 |
+| `HiresSnow` | 粒子池、风、overlay | 当前是哪个场景 |
+| `CompleteRenderer` | `delay / slide / fadeAlpha / 图层视差` | 黑场等了多久、雪何时衰减 |
+| `ChapterCompleteSequence` | 阶段机（fadeIn → hold → complete → done） | 具体像素怎么画 |
+
+这也是原作的可复用点：`CompleteRenderer` 只依赖「一份 XML 布局 + atlas + delay + 回调」，任何想复用同一段滑入的页面，只要提供这四样即可。demo 中它没有任何 DOM/canvas 全局状态，`render(ctx)` 是纯函数式使用。
+
+模块对外 API：
+
+```js
+window.CelesteComplete = {
+    FadeWipe, HiresSnow, CompleteRenderer, ChapterCompleteSequence,
+    FORSAKEN_CITY, VIRTUAL_WIDTH, VIRTUAL_HEIGHT
+};
+```
+
+### 26.9 验收
+
+- 数值断言（Node vm 沙箱，非浏览器）：**23 / 23 pass**。覆盖 FadeWipe `1-p^3`、雪 50 粒与越界回收、CompleteRenderer 延迟 1.0s、首帧取样顺序（`p_before`）、`Scroll.y = lerp(2000,1200,SineOut(p_before))`、`fadeAlpha` 在 `p>=0.5` 归零、序列总时长 6.0s、四阶段齐全、`skip()` 直接进入 AreaComplete。
+- 浏览器（无头 Chromium，1920×1080 canvas）：
+  - 画面非纯黑：卡片像素 1,791,230，雪像素 247,474；
+  - console 无错误；
+  - 结束状态：`DONE`、`t 6.03s`、`Scroll.y 1200.0`、`fadeAlpha 0.00`、`snow α 0.00`。
+- 素材请求全部 200（`ForsakenCity` 14 张 + `Overworld/snow`、`overlay`）。
+
+### 26.10 缺口
+
+| ID | 未复刻项 | 原因 / 影响 |
+|---|---|---|
+| U1 | `controlScroll` / `controlMult`（鼠标在完成页上的微幅视差） | 需要真实 viewport 输入，demo 固定为 0；`Render` 里对应 `-controlScroll * controlMult` 一项 |
+| U2 | `<ui scroll="0.62"/>` 的标题与统计 UI、`AreaCompleteTitle` 字母入场 | 原作 UI 由 `RenderPostUI` 回调交给 XNA 绘制；demo 只画图像层，缺口明确 |
+| U3 | `Audio.SetMusicParam("end", 1f)` 的音频渐变 | demo 无 BGM |
+| U4 | `CompleteRenderer` 的 `speedx/speedy/frameRate`（动态图层/精灵表） | ForsakenCity 未使用这些属性；未实现 |
+| U5 | `AreaComplete` 的 `outSnow`（外部没传雪时自建雪 + `AttachAlphaTo`）分支 | 本流程雪由 `LevelExit` 传入，走不到该分支 |
+| U6 | 第一次通关的存档/统计读取顺序 | `RunThread` + `UserIO.Saving` 与过场视觉无关 |
+
+### 26.11 结论
+
+- 这段过场的「主体感」来自三件事：**0.5s 黑幕揭开**、**3.3s 黑场飞雪**、**1.5s SineOut + 0.75s 黑幕淡出**；而不是完成图自身的透明度动画。
+- 三个类各自的字段边界清晰：`LevelExit` 只碰「计时 + 雪 + wipe」，`AreaComplete` 只碰「交接 + 雪衰减」，`CompleteRenderer` 只碰「Scroll / fadeAlpha / 图层」。这正是可以独立封装的原因，也是本次 demo 的代码分类依据。
+- 与 `celeste-character.js` 的引擎改造一样，本轮没有引入第三方美术或在线源码；所有行为常量与帧数据都能回溯到上述 token。
