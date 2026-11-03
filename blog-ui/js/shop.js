@@ -497,6 +497,33 @@
             }
         }, 300);
     }
+    // ===== 灯笼 Wiggler（REA: ScaleWiggler(0.5s, 4Hz) + Rotation = value*mult*30°） =====
+    function lanternWiggle(el) {
+        if (el.__wiggleTimer) return;
+        el.classList.add('wiggling');
+        var DUR = 0.5, FREQ = 4;
+        var dir = (Math.random() < 0.5 ? -1 : 1);
+        var t0 = performance.now();
+        function tick(now) {
+            var t = (now - t0) / 1000;
+            if (t >= DUR) {
+                el.style.transform = '';
+                el.classList.remove('wiggling');
+                el.__wiggleTimer = null;
+                return;
+            }
+            // value 首帧 ±1 指数衰减，4Hz 正弦振荡
+            var value = 2 * Math.exp(-t / DUR * 3) * Math.sin(FREQ * Math.PI * t);
+            var scale = 1 + 0.15 * Math.abs(value);
+            var rot = dir * value * 30;
+            el.style.transform = 'scale(' + scale.toFixed(3) + ') rotate(' + rot.toFixed(1) + 'deg)';
+            el.__wiggleTimer = requestAnimationFrame(tick);
+        }
+        el.__wiggleTimer = requestAnimationFrame(tick);
+    }
+    document.querySelectorAll('.resort-lantern').forEach(function (l) {
+        l.addEventListener('click', function (e) { e.stopPropagation(); lanternWiggle(l); });
+    });
     function layoutHall() {
         recalcRoomGeo();
         hallCanvas.style.width = (HALL_W * roomGeo.s) + 'px';
@@ -536,7 +563,7 @@
     var DOTS_CFG = {
         dotMid: { anchor:{ x:170, y:132 }, layers:[      // 前台桌面服务铃 (desk x164..196, y136..152)
             { cls:'dot-idle',  size:36*DOT_ZOOM, ox:IDLE_ANCHOR.ox, oy:IDLE_ANCHOR.oy },
-            { cls:'dot-hover', size:96*DOT_ZOOM, ox:0.5, oy:256/320 }
+            { cls:'dot-hover', size:56*DOT_ZOOM, ox:0.5, oy:260/320 }   // resort.png 320×320，56 房间像素 = 1.56× idle 指针
         ]},
         dotRight: { anchor:{ x:244, y:132 }, layers:[    // 留言簿 guestbook (244,144)，顶边 136
             { cls:'dot-idle',  size:36*DOT_ZOOM, ox:IDLE_ANCHOR.ox, oy:IDLE_ANCHOR.oy },
@@ -2134,7 +2161,20 @@
             });
             ctx.restore();
             // 灰尘兔（IL: Entity.Depth = -50 < 玩家 Depth 0 → 在 Madeline 之前画 = 下层）
-            if (dustScene) dustScene.draw(ctx, toScreen, Z);
+            // 门遮挡：door04.png 32×24 底边中心(272,152)，游戏空间 x∈[256,288] y∈[-24,0]
+            if (dustScene) {
+                var DOOR_XL = 256, DOOR_XR = 288, DOOR_YT = -24, DOOR_YB = 0;
+                for (var di = 0; di < dustScene.bunnies.length; di++) {
+                    var b = dustScene.bunnies[di];
+                    b.__origAlpha = b.alpha;
+                    if (b.x > DOOR_XL && b.x < DOOR_XR && b.y > DOOR_YT && b.y < DOOR_YB) b.alpha = 0;
+                }
+                dustScene.draw(ctx, toScreen, Z);
+                for (var di2 = 0; di2 < dustScene.bunnies.length; di2++) {
+                    var b2 = dustScene.bunnies[di2];
+                    if (b2.__origAlpha != null) { b2.alpha = b2.__origAlpha; b2.__origAlpha = null; }
+                }
+            }
             // Madeline
             madeline.draw(ctx, toScreen, Z);
             ctx.restore();

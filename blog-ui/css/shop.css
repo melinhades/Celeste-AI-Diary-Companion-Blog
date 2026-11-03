@@ -95,8 +95,11 @@ body.intro #sceneZoom #gameStage { opacity:0; }
 
 /* ===== resortLantern（REA：VertexLight Alpha=0.95+Sin(t)*0.05；Sprite.AddLoop 0.3s/5 帧） ===== */
 .resort-lantern {
-    position:absolute; z-index:6; pointer-events:none;
+    position:absolute; z-index:6; pointer-events:auto; cursor:pointer;
+    transform-origin:50% 25%;                  /* 挂架顶部（holder.png 的挂点） */
+    transition:transform .06s linear;           /* 允许 wiggler rAF 驱动，同时不影响静态 */
 }
+.resort-lantern.wiggling { transition:none; } /* wiggler 期间去掉 transition，由 JS 直接驱动 */
 .lantern-holder, .lantern-body {
     position:absolute; left:0; top:0; width:100%; height:100%;
     image-rendering:pixelated; pointer-events:none;
