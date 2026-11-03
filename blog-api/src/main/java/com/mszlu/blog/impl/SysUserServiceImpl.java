@@ -230,4 +230,40 @@ public class SysUserServiceImpl implements SysUserService {
         data.put("signature", fresh.getSignature());
         return Result.success(data);
     }
+
+    /** 设置或清空用户自定义 AI API Key。空串/null → 清空回退系统默认 */
+    public Result updateApiKey(String token, String apiKey) {
+        SysUser loginUser = tokenService.checkToken(token);
+        if (loginUser == null) {
+            return Result.fail(ErrorCode.TOKEN_ERROR.getCode(), ErrorCode.TOKEN_ERROR.getMsg());
+        }
+        String val = apiKey == null ? null : apiKey.trim();
+        if (val != null && val.length() > 128) val = val.substring(0, 128);
+        // 128 上限：主流 AI 厂商 Key 都在 40~80 字符内，给 128 足够
+
+        LambdaUpdateWrapper<SysUser> uw = new LambdaUpdateWrapper<>();
+        uw.eq(SysUser::getId, loginUser.getId());
+        uw.set(SysUser::getApiKey, (val == null || val.isEmpty()) ? null : val);
+        sysUserMapper.update(null, uw);
+
+        SysUser fresh = sysUserMapper.selectById(loginUser.getId());
+        tokenService.refreshUserCache(token, fresh);
+
+        java.util.Map<String, Object> data = new java.util.HashMap<>();
+        data.put("hasApiKey", fresh.getApiKey() != null && !fresh.getApiKey().isEmpty());
+        return Result.success(data);
+    }
+
+    /** 查询当前用户 API Key 配置状态（只返回布尔，不返回明文） */
+    public Result apiKeyStatus(String token) {
+        SysUser loginUser = tokenService.checkToken(token);
+        if (loginUser == null) {
+            return Result.fail(ErrorCode.TOKEN_ERROR.getCode(), ErrorCode.TOKEN_ERROR.getMsg());
+        }
+        SysUser fresh = sysUserMapper.selectById(loginUser.getId());
+        boolean has = fresh.getApiKey() != null && !fresh.getApiKey().trim().isEmpty();
+        java.util.Map<String, Object> data = new java.util.HashMap<>();
+        data.put("hasApiKey", has);
+        return Result.success(data);
+    }
 }

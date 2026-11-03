@@ -33,4 +33,10 @@ public interface SysUserService {
 
     /** 更新当前登录用户的个性签名（null/空串=清空，最长 30 字） */
     Result updateSignature(String token, String signature);
+
+    /** 设置或清空当前用户自定义 AI API Key（空串=null→回退系统默认，最长 128） */
+    Result updateApiKey(String token, String apiKey);
+
+    /** 查询当前用户 API Key 配置状态（只返回 hasApiKey 布尔，不返回明文） */
+    Result apiKeyStatus(String token);
 }

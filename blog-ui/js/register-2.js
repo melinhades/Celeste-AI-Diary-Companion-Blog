@@ -159,11 +159,16 @@
                     loading.value = false;
                     if (res.success) {
                         playSfx('ui_main_assistmode_whistle_page3.wav');
+                        // 注册成功后后端自动发 token（LoginServiceImpl.register），前端存了直接进 api-key-setup
+                        if (res.data && res.data.token) {
+                            localStorage.setItem('token', res.data.token);
+                            if (res.data.nickname) localStorage.setItem('nickname', res.data.nickname);
+                        }
                         const box = document.querySelector('.register-box');
                         if (box) box.style.display = 'none';
                         const ov = document.getElementById('regLoadingOverlay');
                         if (ov) ov.classList.add('show');
-                        setTimeout(() => { location.href = 'login.html'; }, 1200);
+                        setTimeout(() => { location.href = 'api-key-setup.html'; }, 1200);
                     } else {
                         showErr(res.msg || 'Registration failed, account may already exist');
                     }

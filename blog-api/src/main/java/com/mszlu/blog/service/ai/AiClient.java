@@ -3,7 +3,11 @@ package com.mszlu.blog.service.ai;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.mszlu.blog.dao.pojo.SysUser;
+import com.mszlu.blog.utils.UserThreadLocal;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -25,6 +29,21 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * AI 客户端 —— 支持用户自定义 API Key 路由
+ *
+ * Key 选择优先级（resolveKey）：
+ *   1. UserThreadLocal 中的 SysUser.apiKey（零 DB 开销，主路径）
+ *   2. BaseMapper.selectById 查到的 SysUser.apiKey（异步/无 ThreadLocal 场景的 fallback）
+ *   3. application-prod.yml 中的 ai.api-key（系统默认）
+ *
+ * 熔断粒度：全局（consecutiveFailures / circuitState）。
+ *   —— 402（余额不足）按当前 key 区分提示：用户 key 提示"你的 API Key"，系统 key 提示"AI 服务"
+ *   —— 429（上游限流）仍全局熔断，因为与 key 无关
+ *
+ * 向后兼容：所有现有 chat() / streamChat() / embed() 签名保持不变，
+ *   内部自动从 UserThreadLocal 取 userId → resolveKey 选 key。
+ */
 @Component
 @Slf4j
 public class AiClient {
@@ -32,6 +51,7 @@ public class AiClient {
     @Value("${ai.base-url:https://api.siliconflow.cn/v1}")
     private String baseUrl;
 
+    /** 系统默认 Key（application-prod.yml）。用户 apiKey 为空时回退 */
     @Value("${ai.api-key:}")
     private String apiKey;
 
@@ -82,6 +102,64 @@ public class AiClient {
 
     private final AtomicLong lastRequestAt = new AtomicLong(0);
 
+    /** 系统 Key 是否可用（空/占位符 = 不可用） */
+    private volatile boolean configured = true;
+
+    /** 当前 resolveKey 解析的 Key 来源类型 —— 用于 402 区分提示文案 */
+    public enum KeySource { SYSTEM, USER }
+
+    /**
+     * 用户/系统 Key 选择
+     * @param explicitUserId 显式 userId（异步场景，ThreadLocal 取不到时用）
+     * @return 解析后的 API Key；系统 apiKey 未配置时返回 null
+     */
+    private String resolveKey(String explicitUserId) {
+        // 1. 优先从 UserThreadLocal 取当前登录用户的 apiKey（零 DB 开销）
+        SysUser u = UserThreadLocal.get();
+        if (u != null && isKeyValid(u.getApiKey())) return u.getApiKey().trim();
+
+        // 2. explicitUserId 有值但 ThreadLocal 没 → DB fallback（少数异步/无上下文场景）
+        if (explicitUserId != null && !explicitUserId.isEmpty() && userMapper != null) {
+            SysUser db = userMapper.selectById(explicitUserId);
+            if (db != null && isKeyValid(db.getApiKey())) return db.getApiKey().trim();
+        }
+
+        // 3. 回系统默认
+        return isKeyValid(apiKey) ? apiKey : null;
+    }
+
+    /** 判断 resolveKey 解析出的 Key 是用户的还是系统的 —— 用于 402 区分提示 */
+    private KeySource currentKeySource(String resolvedKey, String explicitUserId) {
+        SysUser u = UserThreadLocal.get();
+        if (u != null && isKeyValid(u.getApiKey()) && u.getApiKey().trim().equals(resolvedKey)) {
+            return KeySource.USER;
+        }
+        if (explicitUserId != null && !explicitUserId.isEmpty() && userMapper != null) {
+            SysUser db = userMapper.selectById(explicitUserId);
+            if (db != null && isKeyValid(db.getApiKey()) && db.getApiKey().trim().equals(resolvedKey)) {
+                return KeySource.USER;
+            }
+        }
+        return KeySource.SYSTEM;
+    }
+
+    private boolean isKeyValid(String k) { return k != null && !k.trim().isEmpty() && !k.trim().startsWith("your"); }
+
+    @Autowired(required = false)
+    private BaseMapper<SysUser> userMapper;
+
+    /**
+     * 对指定用户是否有可用 Key（用户自定义 or 系统默认）
+     */
+    public boolean isConfigured(String userId) {
+        return resolveKey(userId) != null;
+    }
+
+    /** 系统 Key 是否可用（向后兼容，不含用户 Key 检查） */
+    public boolean isConfigured() {
+        return configured || resolveKey(null) != null;
+    }
+
     /** 全局限速：保证任意两次请求间隔 >= minIntervalMs */
     private void throttle() {
         long now = System.currentTimeMillis();
@@ -103,6 +181,14 @@ public class AiClient {
         factory.setConnectTimeout(connectTimeout);
         factory.setReadTimeout(readTimeout);
         this.restTemplate = new RestTemplate(factory);
+
+        // 启动时校验系统密钥：缺省值/空值/粘贴带空白都会导致上游 401，这里提前暴露并跳过上游请求
+        String key = apiKey == null ? "" : apiKey.trim();
+        this.apiKey = key;
+        this.configured = !key.isEmpty() && !key.startsWith("your");
+        if (!configured) {
+            log.warn("系统 AI_API_KEY 未配置或仍为占位符；登录用户若在 sys_user.api_key 填入自定义 Key 仍可使用");
+        }
     }
 
     // ================= 简单熔断器（CLOSED / OPEN / HALF_OPEN） =================
@@ -162,12 +248,24 @@ public class AiClient {
         return circuitFailureThreshold;
     }
 
+    // ================= chat —— 公开签名不变，内部自动 resolveKey =================
+
     public String chat(List<AiMessage> messages, boolean jsonMode) {
         return chat(messages, jsonMode, this.model);
     }
 
     /** 带自定义模型的 chat：前处理（情绪/意图）用快模型，主回复用主模型 */
     public String chat(List<AiMessage> messages, boolean jsonMode, String model) {
+        return chat(messages, jsonMode, model, null);
+    }
+
+    /** 显式 userId 版本（异步场景 / ThreadLocal 拿不到时使用） */
+    public String chat(List<AiMessage> messages, boolean jsonMode, String model, String userId) {
+        String resolvedKey = resolveKey(userId);
+        if (resolvedKey == null) {
+            return "AI 服务未配置：请在账号设置中填入 API Key，或联系管理员启用系统默认 Key";
+        }
+        KeySource keySource = currentKeySource(resolvedKey, userId);
         throttle();
         if (!tryAcquire()) {
             log.warn("AI 熔断器打开中，本次请求快速失败");
@@ -183,13 +281,13 @@ public class AiClient {
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.setBearerAuth(apiKey);
+        headers.setBearerAuth(resolvedKey);
 
         String url = baseUrl + "/chat/completions";
         String bodyStr = body.toJSONString();
         if (log.isDebugEnabled()) {
-            log.debug("AI 请求 url={}, model={}, messages={}, body={}",
-                    url, model, messages.size(),
+            log.debug("AI 请求 url={}, model={}, messages={}, keySource={}, body={}",
+                    url, model, messages.size(), keySource,
                     bodyStr.substring(0, Math.min(500, bodyStr.length())));
         }
 
@@ -241,7 +339,9 @@ public class AiClient {
                 log.warn("AI 客户端错误 status={}, body={}", e.getStatusCode(), e.getResponseBodyAsString());
                 onFailure();
                 if (e.getStatusCode().value() == 402) {
-                    return "AI 服务余额不足，请联系管理员充值";
+                    return keySource == KeySource.USER
+                            ? "你的 AI API Key 余额不足，请在账号设置中更换或充值"
+                            : "AI 服务余额不足，请联系管理员充值";
                 }
                 if (e.getStatusCode().value() == 429) {
                     return "AI 服务限流中，请稍后再试";
@@ -263,12 +363,20 @@ public class AiClient {
         return chat(messages, false);
     }
 
+    // ================= streamChat —— 公开签名不变 =================
+
     /**
      * 流式对话：上游 stream=true，逐 delta 回调 onDelta（边生成边推给客户端）。
      * 返回完整文本；上游失败返回 null；客户端中途断开则中断流并返回 null（已收到的部分由调用方通过回调处理）。
      * 流式不做重试（无法重试到中间帧），只保留全局限速和熔断。
      */
     public String streamChat(List<AiMessage> messages, java.util.function.Consumer<String> onDelta) {
+        return streamChat(messages, onDelta, null);
+    }
+
+    public String streamChat(List<AiMessage> messages, java.util.function.Consumer<String> onDelta, String userId) {
+        String resolvedKey = resolveKey(userId);
+        if (resolvedKey == null) return null;
         throttle();
         if (!tryAcquire()) {
             log.warn("AI 熔断器打开中，流式请求快速失败");
@@ -286,7 +394,7 @@ public class AiClient {
                     .uri(URI.create(baseUrl + "/chat/completions"))
                     .timeout(Duration.ofMillis(Math.max(readTimeout * 2L, 60000L)))
                     .header("Content-Type", "application/json")
-                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Authorization", "Bearer " + resolvedKey)
                     .POST(HttpRequest.BodyPublishers.ofString(body.toJSONString()))
                     .build();
             HttpResponse<java.util.stream.Stream<String>> response = httpClient().send(
@@ -354,10 +462,18 @@ public class AiClient {
         return httpClient;
     }
 
+    // ================= embed —— 公开签名不变 =================
+
     /**
      * 文本向量化：调 SiliconFlow /embeddings，失败返回 null（调用方需降级处理）
      */
     public float[] embed(String text) {
+        return embed(text, null);
+    }
+
+    public float[] embed(String text, String userId) {
+        String resolvedKey = resolveKey(userId);
+        if (resolvedKey == null) return null;
         if (text == null || text.trim().isEmpty()) return null;
         JSONObject body = new JSONObject();
         body.put("model", embeddingModel);
@@ -365,7 +481,7 @@ public class AiClient {
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.setBearerAuth(apiKey);
+        headers.setBearerAuth(resolvedKey);
 
         try {
             ResponseEntity<String> response = restTemplate.postForEntity(

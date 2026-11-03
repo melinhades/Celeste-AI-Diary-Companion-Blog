@@ -174,7 +174,15 @@ public class LoginServiceImpl implements LoginService {
         sysUser.setStatus("");
         sysUser.setEmail("");
         this.sysUserService.save(sysUser);
-        return Result.success(null);
+
+        // 注册成功 → 自动发 JWT（直接进入 api-key-setup 流程）
+        String token = jwtUtils.createToken(sysUser.getId());
+        redisTemplate.opsForValue().set("Token_" + token,
+                com.alibaba.fastjson.JSON.toJSONString(sysUser), 30, java.util.concurrent.TimeUnit.DAYS);
+        java.util.Map<String, Object> data = new java.util.HashMap<>();
+        data.put("token", token);
+        data.put("nickname", sysUser.getNickname());
+        return Result.success(data);
 
     }
 }

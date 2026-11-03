@@ -43,4 +43,24 @@ public class UserController {
                                   @RequestBody SignatureParam param) {
         return sysUserService.updateSignature(token, param == null ? null : param.getSignature());
     }
+
+    /**
+     * 设置/清空用户自定义 AI API Key
+     * 空串 → 清空（回退系统默认 Key）；非空 → 写入；前后 trim
+     * 不校验 Key 格式（各家 AI 厂商 Key 前缀不同，服务端不做假设）；调用方传脏数据只会在真正请求上游时报 401/402
+     */
+    @PutMapping("api-key")
+    public Result updateApiKey(@RequestHeader("Authorization") String token,
+                               @RequestBody java.util.Map<String, String> body) {
+        String key = (body == null) ? null : body.get("apiKey");
+        return sysUserService.updateApiKey(token, key);
+    }
+
+    /**
+     * 查询当前用户的 API Key 配置状态（安全：只返回布尔，不返回明文）
+     */
+    @GetMapping("api-key")
+    public Result getApiKeyStatus(@RequestHeader("Authorization") String token) {
+        return sysUserService.apiKeyStatus(token);
+    }
 }

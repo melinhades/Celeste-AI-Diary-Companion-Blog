@@ -36,4 +36,7 @@ public class SysUser {
 
     /** 个性签名（me 页票根编辑） */
     private String signature;
+
+    /** 用户自定义 AI API Key，为空则使用系统默认 Key（AiClient 内部路由） */
+    private String apiKey;
 }
