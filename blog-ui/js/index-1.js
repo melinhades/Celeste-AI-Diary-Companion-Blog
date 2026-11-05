@@ -53,11 +53,14 @@
     function authorImg(a) {
         return isAnonymous(a) ? ANONYMOUS_AVATAR : DEFAULT_AVATAR;
     }
-    // 后端返回的相对路径/本机绝对路径统一补成 API 域名，避免图片在静态站点域名下 404
+    // 图片地址按实际归属改写：
+    // - /uploads/*：历史图片随前端部署在静态站点根目录，保持本站路径（指到 API 域名会 404）
+    // - /images/*：新图片存在数据库中，需要指向 API 域名
     function fixImageUrl(u) {
         if (!u) return u;
-        let url = String(u).replace(/http:\/\/(?:localhost|127\.0\.0\.1):8888/g, BASE_URL);
-        if (url.indexOf('/images/') === 0 || url.indexOf('/uploads/') === 0) url = BASE_URL + url;
+        let url = String(u).replace(/http:\/\/(?:localhost|127\.0\.0\.1):8888\/(uploads\/)/g, '/$1');
+        url = url.replace(/http:\/\/(?:localhost|127\.0\.0\.1):8888/g, BASE_URL);
+        if (url.indexOf('/images/') === 0) url = BASE_URL + url;
         return url;
     }
     function openArticle(id) { location.href = 'article.html?id=' + id; }

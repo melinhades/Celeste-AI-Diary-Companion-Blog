@@ -148,9 +148,11 @@
                 body = rawContent.replace(/^```[a-z]*\s*/, '').replace(/```\s*$/, '');
                 body = marked.parse(body);
             }
-            // 旧文章正文里可能保存了本机地址或相对路径，统一映射到 API 域名，避免在静态站点域名下 404
+            // 旧文章正文里可能保存了本机地址或相对路径，按图片的实际归属分别改写：
+            // - /uploads/*：历史图片文件随前端一起部署在静态站点根目录，改回本站相对路径（指到 API 域名会 404）
+            // - /images/*：新图片存在数据库中由后端提供，必须映射到 API 域名
+            body = body.replace(/(src|href)="http:\/\/(?:localhost|127\.0\.0\.1):8888\/(uploads\/[^"]+)"/g, (m, attr, p) => `${attr}="/${p}"`);
             body = body.replace(/http:\/\/(?:localhost|127\.0\.0\.1):8888/g, BASE_URL);
-            body = body.replace(/(src|href)="(\/uploads\/[^"]+)"/g, (m, attr, p) => `${attr}="${BASE_URL}${p}"`);
             body = body.replace(/(src|href)="(\/images\/[^"]+)"/g, (m, attr, p) => `${attr}="${BASE_URL}${p}"`);
             // 最终交给 v-html 的 HTML 必须清洗；保留标题/列表/表格/代码块/图片/链接等正常 Markdown 排版
             if (window.DOMPurify) {
