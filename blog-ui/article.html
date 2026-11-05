@@ -103,6 +103,9 @@
                                 <div class="emoji-grid" id="emojiGrid"></div>
                             </div>
                         </div>
+                        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#8b8ba0;cursor:pointer;">
+                            <input type="checkbox" id="commentAnonymousChk" v-model="commentAnonymous" style="accent-color:#a78bfa;"> 匿名评论
+                        </label>
                         <button class="btn btn-primary btn-sm" @click="submitComment">Post Comment</button>
                     </div>
                 </template>
@@ -177,7 +180,7 @@
 <script src="js/vue.global.prod.js?v=20261008a"></script>
 <script src="js/felt-piano.js?v=20261003"></script>
 <script src="js/snow-bgm.js"></script>
-<script src="js/article.js?v=20261105a"></script>
+<script src="js/article.js?v=20261105b"></script>
 <script src="js/seed.js?v=20261101c"></script>
 </body>
 </html>

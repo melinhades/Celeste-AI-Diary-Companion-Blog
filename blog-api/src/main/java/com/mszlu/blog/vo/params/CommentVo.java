@@ -21,4 +21,9 @@ public class CommentVo  {
     private Integer level;
 
     private UserVo toUser;
+
+    /**
+     * 1=匿名评论；匿名时 author 为 null，前端据此渲染「匿名」+ 匿名头像
+     */
+    private Integer anonymous;
 }

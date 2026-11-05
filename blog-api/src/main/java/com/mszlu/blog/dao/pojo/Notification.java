@@ -21,4 +21,9 @@ public class Notification {
     private Integer isRead;
 
     private Long createDate;
+
+    /**
+     * 1=发起者匿名（匿名评论产生的通知）；列表页不解析 fromUserId，只显「匿名」
+     */
+    private Integer anonymous;
 }

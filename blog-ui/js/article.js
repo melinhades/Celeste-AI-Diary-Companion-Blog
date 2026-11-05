@@ -75,6 +75,7 @@
     const comments = ref([]);
     const commentStatus = ref('loading'); // loading | ok | empty | error
     const commentText = ref('');
+    const commentAnonymous = ref(false);
     const replyTarget = ref(null);
     const replyName = ref('');
 
@@ -97,7 +98,7 @@
     function authorImg(a) {
         return isAnonymous(a) ? ANONYMOUS_AVATAR : DEFAULT_AVATAR;
     }
-    // 评论：非匿名统一默认头像；匿名评论（预留字段）用匿名头像
+    // 评论：非匿名统一默认头像；匿名评论由接口抹掉 author，这里按 anonymous 标记显「匿名」+ 匿名头像
     function commentAuthorName(c) {
         if (c && Number(c.anonymous) === 1) return '匿名';
         return (c && c.author && (c.author.nickname || c.author.username)) || 'Celeste';
@@ -277,11 +278,14 @@
         if (!requireLogin()) return;
         const content = commentText.value.trim();
         if (!content) { showToast('Please enter a comment', 'error'); return; }
-        const payload = { articleId, content };
+        const anonymous = commentAnonymous.value;
+        const payload = { articleId, content, anonymous };
         if (replyTarget.value) { payload.parent = replyTarget.value.parent; payload.toUserId = replyTarget.value.toUserId; }
         api('/comments/create/change', 'POST', payload).then(res => {
             if (res.success) {
                 commentText.value = '';
+                // 匿名是一次性决定，不沿用上次勾选，避免下一条无意中又匿了
+                commentAnonymous.value = false;
                 clearReply();
                 showToast('Comment posted', 'success');
                 FeltPiano.send();
@@ -371,7 +375,7 @@
             return {
                 headerStatus, article, bodyHtml, readMin, tocReady, related,
                 hotArticles, hotStatus, rankIcons: RANK_ICONS,
-                loggedIn, comments, commentStatus, commentText, replyTarget, replyName,
+                loggedIn, comments, commentStatus, commentText, commentAnonymous, replyTarget, replyName,
                 likeReady, likeCount, liked, likePop, likersText, canEdit,
                 authorName, authorImg, commentAuthorName, openTag, openArticle, editArticle, formatDate,
                 renderCommentContent, clearReply, submitComment, toggleLike

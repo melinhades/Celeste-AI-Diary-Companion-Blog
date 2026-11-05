@@ -11,4 +11,10 @@ public class CommentParam {
 
     private String parent;
 
-    private String toUserId;}
+    private String toUserId;
+
+    /**
+     * 是否匿名评论，与文章发表保持同一约定：不传/null 当非匿名
+     */
+    private Boolean anonymous;
+}

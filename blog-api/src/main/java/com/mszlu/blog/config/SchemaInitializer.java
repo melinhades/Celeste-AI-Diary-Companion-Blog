@@ -15,6 +15,7 @@ import java.sql.Statement;
 /**
  * 启动时做最小化的向前兼容建表/补列：
  * - ms_upload_image：图片持久化表（线上容器磁盘不可持久）
+ * - ms_notification：评论/点赞消息表（匿名评论需要靠它携带匿名标记）
  * - 实体新增但历史库里没有的列：MyBatis-Plus 的 selectById/selectList 会显式列出实体全部字段，
  *   少一列就是 "Unknown column" 异常，接口表现为「系统异常」，所以必须逐列补齐
  * 只用 CREATE TABLE IF NOT EXISTS + information_schema 判断，重复启动幂等；
@@ -32,6 +33,18 @@ public class SchemaInitializer implements ApplicationRunner {
             "PRIMARY KEY (id)" +
             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 
+    private static final String CREATE_NOTIFICATION = "CREATE TABLE IF NOT EXISTS ms_notification (" +
+            "id bigint NOT NULL AUTO_INCREMENT," +
+            "user_id varchar(64) NOT NULL," +
+            "from_user_id varchar(64) DEFAULT NULL," +
+            "article_id varchar(64) DEFAULT NULL," +
+            "type varchar(32) DEFAULT NULL," +
+            "is_read tinyint DEFAULT 0," +
+            "create_date bigint DEFAULT NULL," +
+            "PRIMARY KEY (id)," +
+            "KEY idx_user_read (user_id, is_read)" +
+            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+
     /** {表名, 列名, 列定义}；列定义与开发库保持一致，存量行按默认值回填 */
     private static final String[][] EXPECTED_COLUMNS = {
             {"ms_article", "anonymous", "TINYINT NOT NULL DEFAULT 0"},
@@ -44,6 +57,7 @@ public class SchemaInitializer implements ApplicationRunner {
             {"ms_sys_user", "api_key", "VARCHAR(128) DEFAULT NULL"},
             {"ms_sys_user", "api_provider", "VARCHAR(20) DEFAULT NULL"},
             {"ms_diary", "type", "VARCHAR(16) NOT NULL DEFAULT 'day'"},
+            {"ms_notification", "anonymous", "TINYINT NOT NULL DEFAULT 0"},
     };
 
     @Autowired
@@ -54,8 +68,9 @@ public class SchemaInitializer implements ApplicationRunner {
         try (Connection conn = dataSource.getConnection()) {
             try (Statement st = conn.createStatement()) {
                 st.execute(CREATE_UPLOAD_IMAGE);
+                st.execute(CREATE_NOTIFICATION);
             } catch (Exception e) {
-                log.error("图片表 ms_upload_image 初始化失败（上传的图片将读取不到，请手动建表）", e);
+                log.error("ms_upload_image / ms_notification 建表失败（图片读取与消息列表会受影响，请手动建表）", e);
             }
             for (String[] expected : EXPECTED_COLUMNS) {
                 ensureColumn(conn, expected[0], expected[1], expected[2]);

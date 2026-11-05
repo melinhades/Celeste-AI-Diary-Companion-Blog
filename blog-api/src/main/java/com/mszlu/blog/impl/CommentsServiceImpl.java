@@ -57,6 +57,9 @@ public class CommentsServiceImpl implements CommentsService {
         comment.setAuthorId(sysUser.getId());
         comment.setContent(commentParam.getContent());
         comment.setCreateDate(System.currentTimeMillis());
+        // 与文章发表一致：不传/null 当非匿名
+        boolean anonymous = Boolean.TRUE.equals(commentParam.getAnonymous());
+        comment.setAnonymous(anonymous ? 1 : 0);
         String parent = commentParam.getParent();
         if (parent == null || "0".equals(parent)) {
             comment.setLevel(1);
@@ -65,11 +68,15 @@ public class CommentsServiceImpl implements CommentsService {
         }
         comment.setParentId(parent == null ? "0" : parent);
         String toUserId = commentParam.getToUserId();
-        comment.setToUid(toUserId == null ? "0" : toUserId);
+        // 匿名评论不下发 author.id，前端回复他人时 toUserId 会是空串，一并归一成 "0"
+        if (toUserId == null || toUserId.isBlank()) {
+            toUserId = "0";
+        }
+        comment.setToUid(toUserId);
         this.commentsMapper.insert(comment);
 
         String receiverId;
-        if (comment.getLevel() == 2 && toUserId != null && !"0".equals(toUserId)) {
+        if (comment.getLevel() == 2 && !"0".equals(toUserId)) {
             receiverId = toUserId;
         } else {
             Article article = articleMapper.selectById(commentParam.getArticleId());
@@ -83,6 +90,8 @@ public class CommentsServiceImpl implements CommentsService {
             n.setType("comment");
             n.setIsRead(0);
             n.setCreateDate(System.currentTimeMillis());
+            // fromUserId 仍存真实 id（自用去重、后台统计要用），靠这个标记在列表页遮住昵称
+            n.setAnonymous(anonymous ? 1 : 0);
             notificationMapper.insert(n);
         }
         return Result.success(null);
@@ -99,10 +108,16 @@ public class CommentsServiceImpl implements CommentsService {
         CommentVo commentVo = new CommentVo();
         BeanUtils.copyProperties(comment,commentVo);
         commentVo.setId(comment.getId());
-        //作者信息
-        String authorId=comment.getAuthorId();
-        UserVo userVo = this.sysUserService.findUserVoById(authorId);
-        commentVo.setAuthor(userVo);
+        //历史评论没有该字段值时按非匿名处理
+        if (comment.getAnonymous() == null) {
+            commentVo.setAnonymous(0);
+        }
+        //作者信息：匿名评论不下发 author（昵称连同 id 一起藏在接口里会泄身份），也不费那次查库
+        boolean anonymous = comment.getAnonymous() != null && comment.getAnonymous() == 1;
+        if (!anonymous) {
+            UserVo userVo = this.sysUserService.findUserVoById(comment.getAuthorId());
+            commentVo.setAuthor(userVo);
+        }
         //子评论
         Integer level =comment.getLevel();
         if(1 == level) {
@@ -110,11 +125,13 @@ public class CommentsServiceImpl implements CommentsService {
             List<CommentVo> commentVoList = findCommentsByParentId(id);
             commentVo.setChildrens(commentVoList);
         }
-        //to User给谁评论
+        //to User给谁评论：匿名行的 author.id 从不对外下发，拿不到 id 就回不到匿名者身上，所以这里直接解析不会反过来泄露身份
         if(level>1){
             String toUid = comment.getToUid();
-            UserVo toUserVo = this.sysUserService.findUserVoById(toUid);
-            commentVo.setToUser(toUserVo);
+            if (toUid != null && !"0".equals(toUid)) {
+                UserVo toUserVo = this.sysUserService.findUserVoById(toUid);
+                commentVo.setToUser(toUserVo);
+            }
         }
         return commentVo;
     }

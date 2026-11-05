@@ -43,8 +43,17 @@ public class NotificationServiceImpl implements NotificationService {
             m.put("type", n.getType());
             m.put("isRead", n.getIsRead());
             m.put("createDate", n.getCreateDate());
-            SysUser from = sysUserService.findUserById(n.getFromUserId());
-            m.put("fromName", from != null ? from.getNickname() : "有人");
+            // 发起者匿名的通知不去解析 fromUserId，否则文章作者能从消息列表里认出评论者
+            String fromName = "有人";
+            if (n.getAnonymous() != null && n.getAnonymous() == 1) {
+                fromName = "匿名";
+            } else {
+                SysUser from = sysUserService.findUserById(n.getFromUserId());
+                if (from != null) {
+                    fromName = from.getNickname();
+                }
+            }
+            m.put("fromName", fromName);
             Article a = articleMapper.selectById(n.getArticleId());
             m.put("articleTitle", a != null ? a.getTitle() : "已删除的文章");
             out.add(m);
