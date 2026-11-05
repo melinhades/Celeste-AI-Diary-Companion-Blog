@@ -168,7 +168,13 @@
                         if (box) box.style.display = 'none';
                         const ov = document.getElementById('regLoadingOverlay');
                         if (ov) ov.classList.add('show');
-                        setTimeout(() => { location.href = 'api-key-setup.html'; }, 1200);
+                        setTimeout(() => {
+                            if (ov) ov.style.display = 'none';
+                            const iframe = document.createElement('iframe');
+                            iframe.src = 'api-key-setup-enhanced.html';
+                            iframe.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:none;z-index:10000;background:#05060a;';
+                            document.body.appendChild(iframe);
+                        }, 1200);
                     } else {
                         showErr(res.msg || 'Registration failed, account may already exist');
                     }

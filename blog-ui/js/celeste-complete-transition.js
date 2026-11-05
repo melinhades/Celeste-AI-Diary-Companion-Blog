@@ -299,9 +299,10 @@
             return;
         }
         if (this.phase === 'complete') {
-            // AreaComplete.Update：Alpha→0（0.5/s），Direction.Y→24（24/s）
+            // AreaComplete.Update：Alpha→0（0.5/s），Direction.Y→1（24/s）
+            // 长度降到 1 后 HiresSnow.Render 不再拉丝，速度也回到 Speed 本身 → 球形慢雪
             this.snow.alpha = approach(this.snow.alpha, 0, dt * 0.5);
-            this.snow.direction.y = approach(this.snow.direction.y, 24, dt * 24);
+            this.snow.direction.y = approach(this.snow.direction.y, 1, dt * 24);
             this.complete.update(dt);
             if (this.complete.finishedSlide) {
                 this.phase = 'done';

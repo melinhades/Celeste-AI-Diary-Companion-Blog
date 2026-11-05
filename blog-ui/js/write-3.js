@@ -18,7 +18,7 @@
     const categories = ref([]);
     const imgSrcs = computed(() => {
         const srcs = [];
-        const re = /<img[^ loading="lazy" decoding="async">]+src="([^"]+)"/g;
+        const re = /<img[^>]*src="([^"]+)"/g;
         let m;
         while ((m = re.exec(body.value)) !== null) srcs.push(m[1]);
         return srcs;
@@ -85,6 +85,7 @@
             setVal('tagsInput', (a.tags || []).map(t => t.tagName || t.name).join(','));
             // v-model 保留待选值，分类选项异步加载完会自动选中，无需轮询
             if (a.category && a.category.id) categoryId.value = String(a.category.id);
+            document.getElementById('anonymousChk').checked = Number(a.anonymous) === 1;
             document.getElementById('publishBtn').textContent = 'Save Changes';
         });
     }
@@ -126,7 +127,8 @@
         }
 
         const tags = tagsRaw ? tagsRaw.split(',').map(t => ({ tagName: t.trim() })).filter(t => t.tagName) : [];
-        const payload = { title, summary, body: { content: body }, tags, };
+        const anonymous = document.getElementById('anonymousChk').checked;
+        const payload = { title, summary, body: { content: body }, tags, anonymous };
         if (categoryId) payload.category = { id: categoryId };
         if (EDIT_ID) payload.id = EDIT_ID;
 

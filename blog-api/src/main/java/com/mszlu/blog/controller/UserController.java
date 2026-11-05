@@ -57,6 +57,18 @@ public class UserController {
     }
 
     /**
+     * 测试待安装的自定义 API Key 是否可用（不落库）
+     * 前端在“测试并安装”时先调用本接口，通过后才 PUT 保存并播放安装成功过场
+     */
+    @PostMapping("api-key/test")
+    public Result testApiKey(@RequestHeader("Authorization") String token,
+                             @RequestBody java.util.Map<String, String> body) {
+        String key = (body == null) ? null : body.get("apiKey");
+        String model = (body == null) ? null : body.get("model");
+        return sysUserService.testApiKey(token, key, model);
+    }
+
+    /**
      * 查询当前用户的 API Key 配置状态（安全：只返回布尔，不返回明文）
      */
     @GetMapping("api-key")

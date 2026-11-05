@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="icon/OIP.webp" type="image/webp">
     <title>Article - Celeste Blog</title>
-    <link rel="stylesheet" href="css/common.css?v=20261003f">
+    <link rel="stylesheet" href="css/common.css?v=20261104a">
     <link rel="stylesheet" href="css/theme.css?v=20261001b">
     <script src="js/marked.min.js"></script>
     <script src="js/purify.min.js?v=20261102"></script>
@@ -61,7 +61,7 @@
             <div v-else class="article-header">
                 <h1>{{ article.title }}</h1>
                 <div class="article-meta">
-                    <span class="meta-author"><img class="meta-author-img" src="celeste-portraits/madeline/normal00.png" alt="" loading="lazy" decoding="async">{{ authorName(article) }}</span>
+                    <span class="meta-author"><img class="meta-author-img" :src="authorImg(article)" alt="" loading="lazy" decoding="async">{{ authorName(article) }}</span>
                     <span class="meta-date"><img class="meta-icon" src="celeste-icons/cs_variantmode.png" alt="" loading="lazy" decoding="async">{{ formatDate(article.createDate) }}</span>
                     <span class="meta-views"><img class="meta-icon" src="celeste-icons/time.png" alt="" loading="lazy" decoding="async">{{ article.viewCounts || 0 }} Reads</span>
                     <span class="meta-views"><img class="meta-icon" src="celeste-icons/time.png" alt="" loading="lazy" decoding="async">~{{ readMin }} min read</span>
@@ -151,9 +151,9 @@
 <template id="commentNodeTpl">
     <div class="comment-item">
         <div class="comment-author">
-            <div class="comment-avatar"><img :src="'celeste-portraits/madeline/' + portraitFor(c)" alt="" loading="lazy" decoding="async"></div>
+            <div class="comment-avatar"><img :src="avatarOf(c)" alt="" loading="lazy" decoding="async"></div>
             <div>
-                <div class="comment-name">{{ (c.author && (c.author.nickname || c.author.username)) || 'Anonymous' }}</div>
+                <div class="comment-name">{{ nameOf(c) }}</div>
                 <div class="comment-date">{{ formatDate(c.createDate) }}</div>
             </div>
         </div>
@@ -173,11 +173,11 @@
 </footer>
 
 <script src="js/api.js?v=20261002"></script>
-<script src="js/auth.js?v=20261101c"></script>
+<script src="js/auth.js?v=20261104a"></script>
 <script src="js/vue.global.prod.js?v=20261008a"></script>
 <script src="js/felt-piano.js?v=20261003"></script>
 <script src="js/snow-bgm.js"></script>
-<script src="js/article.js?v=20261025a"></script>
+<script src="js/article.js?v=20261103a"></script>
 <script src="js/seed.js?v=20261101c"></script>
 </body>
 </html>

@@ -64,5 +64,10 @@ public class Article {
          * 来源 id（日记 id）
          */
         private String sourceId;
+
+        /**
+         * 是否匿名发布：1=匿名 0=非匿名
+         */
+        private Integer anonymous;
     }
 

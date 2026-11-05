@@ -6,6 +6,7 @@ import com.mszlu.blog.dao.mapper.SysUserMapper;
 import com.mszlu.blog.dao.pojo.SysUser;
 import com.mszlu.blog.service.SysUserService;
 import com.mszlu.blog.service.TokenService;
+import com.mszlu.blog.service.ai.AiClient;
 import com.mszlu.blog.vo.LoginUserVo;
 import com.mszlu.blog.vo.Result;
 import com.mszlu.blog.vo.params.ErrorCode;
@@ -31,6 +32,8 @@ public class SysUserServiceImpl implements SysUserService {
     private TokenService tokenService;
     @Autowired
     private RedisTemplate<String, String> redisTemplate;
+    @Autowired
+    private AiClient aiClient;
 
     @Override
     public UserVo findUserVoById(String id) {
@@ -241,9 +244,20 @@ public class SysUserServiceImpl implements SysUserService {
         if (val != null && val.length() > 128) val = val.substring(0, 128);
         // 128 上限：主流 AI 厂商 Key 都在 40~80 字符内，给 128 足够
 
+        // 保存时探测服务商：Key 与 provider 一起落库，全局调用据此选择端点/模型
+        String provider = null;
+        if (val != null && !val.isEmpty()) {
+            AiClient.KeyProbe probe = aiClient.probeKey(val);
+            if (probe.error != null) {
+                return Result.fail(ErrorCode.PARAMS_ERROR.getCode(), probe.error);
+            }
+            provider = probe.provider;
+        }
+
         LambdaUpdateWrapper<SysUser> uw = new LambdaUpdateWrapper<>();
         uw.eq(SysUser::getId, loginUser.getId());
         uw.set(SysUser::getApiKey, (val == null || val.isEmpty()) ? null : val);
+        uw.set(SysUser::getApiProvider, provider);
         sysUserMapper.update(null, uw);
 
         SysUser fresh = sysUserMapper.selectById(loginUser.getId());
@@ -251,6 +265,50 @@ public class SysUserServiceImpl implements SysUserService {
 
         java.util.Map<String, Object> data = new java.util.HashMap<>();
         data.put("hasApiKey", fresh.getApiKey() != null && !fresh.getApiKey().isEmpty());
+        return Result.success(data);
+    }
+
+    /** 用待安装的 Key 做一次上游探测，成功后前端才保存并播放安装动画；附带可用模型列表供挑选 */
+    @Override
+    public Result testApiKey(String token, String apiKey, String model) {
+        SysUser loginUser = tokenService.checkToken(token);
+        if (loginUser == null) {
+            return Result.fail(ErrorCode.TOKEN_ERROR.getCode(), ErrorCode.TOKEN_ERROR.getMsg());
+        }
+        String val = apiKey == null ? null : apiKey.trim();
+        if (val == null || val.isEmpty()) {
+            return Result.fail(ErrorCode.PARAMS_ERROR.getCode(), "请先填入 API Key");
+        }
+        if (val.length() > 128) {
+            return Result.fail(ErrorCode.PARAMS_ERROR.getCode(), "API Key 过长");
+        }
+        String m = model == null ? null : model.trim();
+        java.util.Map<String, Object> data = new java.util.HashMap<>();
+        if (m != null && !m.isEmpty()) {
+            // 指定模型探测：provider 取已落库的（Key 已保存），取不到再现场探测
+            SysUser fresh = sysUserMapper.selectById(loginUser.getId());
+            String provider = fresh == null ? null : fresh.getApiProvider();
+            if (provider == null || provider.isEmpty()) {
+                AiClient.KeyProbe probe = aiClient.probeKey(val);
+                if (probe.error != null) {
+                    return Result.fail(ErrorCode.PARAMS_ERROR.getCode(), probe.error);
+                }
+                provider = probe.provider;
+            }
+            String err = aiClient.testKeyModel(val, provider, m);
+            if (err != null) {
+                return Result.fail(ErrorCode.PARAMS_ERROR.getCode(), err);
+            }
+            data.put("hasApiKey", true);
+            return Result.success(data);
+        }
+        AiClient.KeyProbe probe = aiClient.probeKey(val);
+        if (probe.error != null) {
+            return Result.fail(ErrorCode.PARAMS_ERROR.getCode(), probe.error);
+        }
+        data.put("hasApiKey", true);
+        data.put("provider", probe.provider);
+        data.put("models", aiClient.listModels(val, probe.provider));
         return Result.success(data);
     }
 

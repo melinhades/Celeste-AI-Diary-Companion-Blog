@@ -1114,6 +1114,69 @@
         })();
         return dailyPostcardInFlight;
     }
+    // ===== 重要日期检测：从 RAG 记忆里找「今天」 =====
+    // 只认「明确日期 + 重大事件关键词」，避免普通提到「考试」的记忆被误当成今天。
+    const IMPORTANT_WORDS = ['考研', '考公', '国考', '省考', '公务员', '高考', '中考', '专升本', '四六级', '雅思', '托福', '面试', '复试', '笔试', '答辩', '开题', '体检', '政审', '入职', '报到', '签约', '毕业', '开学', '婚礼', '订婚', '纪念日', '生日', '手术', '复查', '住院', '开庭', '庭审', '签证', '搬家', '交房', '还贷', '截止', '比赛', '决赛', '演出'];
+
+    function sameMonthDay(d, today) {
+        return d && d.m === today.getMonth() + 1 && d.d === today.getDate() && (!d.y || d.y === today.getFullYear());
+    }
+    // 从一句话里找出所有可能的日期（含「还有 30 天」这类相对表达，以记忆创建时间为基准）
+    function datesInText(text, baseMs) {
+        const out = [];
+        const push = d => d && out.push(d);
+        let m = text.match(/(\d{4})\s*[年\/.\-]\s*(\d{1,2})\s*[月\/.\-]\s*(\d{1,2})\s*[日号]?/);
+        if (m) push({ y: +m[1], m: +m[2], d: +m[3] });
+        const cn = text.match(/(?:(\d{4})\s*年\s*)?(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]?/);
+        if (cn) push({ y: cn[1] ? +cn[1] : null, m: +cn[2], d: +cn[3] });
+        const md = text.match(/(?:^|\D)(\d{1,2})\s*[\/.\-]\s*(\d{1,2})(?:\D|$)/);
+        if (md) push({ y: null, m: +md[1], d: +md[2] });
+
+        const base = new Date(Number(baseMs) || Date.now());
+        const addDays = n => { const d = new Date(base); d.setDate(d.getDate() + n); return d; };
+        const rel = text.match(/(?:还有|剩|再过)?\s*(\d{1,3})\s*天(?:后|之后|以后)?/);
+        if (rel && /(还有|剩|再过|后|之后|以后)/.test(rel[0])) {
+            const d = addDays(+rel[1]);
+            push({ y: d.getFullYear(), m: d.getMonth() + 1, d: d.getDate() });
+        }
+        if (/明天/.test(text)) { const d = addDays(1); push({ y: d.getFullYear(), m: d.getMonth() + 1, d: d.getDate() }); }
+        if (/后天/.test(text)) { const d = addDays(2); push({ y: d.getFullYear(), m: d.getMonth() + 1, d: d.getDate() }); }
+        const nm = text.match(/下(?:个)?月\s*(\d{1,2})\s*[日号]?/);
+        if (nm) {
+            const d = new Date(base.getFullYear(), base.getMonth() + 1, +nm[1]);
+            push({ y: d.getFullYear(), m: d.getMonth() + 1, d: d.getDate() });
+        }
+        return out;
+    }
+    async function detectImportantDateToday() {
+        const today = new Date();
+        const key = 'importantDateToday';
+        try {
+            const c = JSON.parse(localStorage.getItem(key) || 'null');
+            if (c && c.date === today.toDateString()) return c.title || null;
+        } catch (e) {}
+        let title = null;
+        try {
+            const res = await api('/memory/list', 'GET', null, 4000);
+            const list = (res && res.success && Array.isArray(res.data)) ? res.data : [];
+            for (const m of list) {
+                const text = String((m && m.content) || '');
+                const word = IMPORTANT_WORDS.find(w => text.indexOf(w) !== -1);
+                if (!word) continue;
+                if (datesInText(text, m.createDate).some(d => sameMonthDay(d, today))) { title = word; break; }
+            }
+        } catch (e) {}
+        try { localStorage.setItem(key, JSON.stringify({ date: today.toDateString(), title: title || '' })); } catch (e) {}
+        return title;
+    }
+    // 页面一加载就预热，避免每日明信片为了等结果而延迟开场
+    let importantDatePromise = null;
+    function warmImportantDate() {
+        if (!importantDatePromise) importantDatePromise = detectImportantDateToday();
+        return importantDatePromise;
+    }
+    warmImportantDate();
+
     // ===== 每日明信片主流程 =====
     async function showDailyPostcard() {
         const overlay = document.getElementById('postcard-overlay');
@@ -1122,8 +1185,13 @@
         const msgEl = document.getElementById('postcard-message');
         const closeBtn = document.getElementById('postcard-close');
 
+        // ch6：今天是 RAG 记忆里的重大日期；ch1：第一次收到明信片；其余沿用 csides
+        const important = await warmImportantDate();
+        const firstEver = !localStorage.getItem('postcardDate');
+        const pair = important ? 'ch6' : (firstEver ? 'ch1' : 'csides');
+
         overlay.classList.add('show');
-        pcPlay('ui_main_postcard_csides_in.wav');
+        pcPlay('ui_main_postcard_' + pair + '_in.wav');
         startSnow();
 
         const pc = await getDailyPostcard();
@@ -1136,7 +1204,7 @@
         closeBtn.classList.add('show');
 
         closeBtn.onclick = () => {
-            pcPlay('ui_main_postcard_csides_out.wav');
+            pcPlay('ui_main_postcard_' + pair + '_out.wav');
             document.getElementById('bgmPlayer').play().catch(() => {});
             overlay.style.opacity = '0';
             overlay.style.transition = 'opacity 0.6s ease';

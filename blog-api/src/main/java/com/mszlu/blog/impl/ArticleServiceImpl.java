@@ -64,8 +64,10 @@ public class ArticleServiceImpl implements ArticleService {
         BeanUtils.copyProperties(article, articleVo);
         if (isAuthor) {
             SysUser sysUser = sysUserService.findUserById(article.getAuthorId());
-            articleVo.setAuthor(sysUser.getNickname());
+            articleVo.setAuthor(sysUser == null ? null : sysUser.getNickname());
         }
+        // 历史文章没有该字段值时按非匿名处理
+        articleVo.setAnonymous(article.getAnonymous() == null ? 0 : article.getAnonymous());
         articleVo.setCreateDate(new DateTime(article.getCreateDate()).toString("yyyy-MM-dd HH:mm"));
         if (isTags) {
             List<TagVo> tags = tagService.findTagsByArticleId(article.getId());
@@ -208,6 +210,7 @@ public class ArticleServiceImpl implements ArticleService {
         article.setTitle(articleParam.getTitle());
         article.setSummary(articleParam.getSummary());
         article.setCreateDate(System.currentTimeMillis());
+        article.setAnonymous(Boolean.TRUE.equals(articleParam.getAnonymous()) ? 1 : 0);
         // 处理分类，如果没有选择分类则设置为null
         if (articleParam.getCategory() != null && articleParam.getCategory().getId() != null) {
             article.setCategoryId(articleParam.getCategory().getId());
@@ -265,6 +268,9 @@ public class ArticleServiceImpl implements ArticleService {
         }
         article.setTitle(articleParam.getTitle());
         article.setSummary(articleParam.getSummary());
+        if (articleParam.getAnonymous() != null) {
+            article.setAnonymous(articleParam.getAnonymous() ? 1 : 0);
+        }
         if (articleParam.getCategory() != null && articleParam.getCategory().getId() != null) {
             article.setCategoryId(articleParam.getCategory().getId());
         } else {
@@ -348,6 +354,7 @@ public class ArticleServiceImpl implements ArticleService {
         article.setWeight(Article.Article_Common);
         article.setViewCounts(0);
         article.setCreateDate(System.currentTimeMillis());
+        article.setAnonymous(0);
         // 日记更私人：发布后先私密，由作者确认再切公开
         article.setVisibility(Article.VISIBILITY_PRIVATE);
         article.setSourceType("diary");

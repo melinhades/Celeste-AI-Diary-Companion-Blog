@@ -350,6 +350,9 @@
             // Glider / 水母：Holdable.SlowFall = true 时（NormalUpdate IL 1530-1713）
             // 每帧改走 120 / 24 / 40 的 maxFall 目标，且重力 ×0.5
             this.holdSlowFall = false;
+            // NormalUpdate IL 1971-2010 / 901 / 1008-1043：
+            // 持有 SlowFall 物件时按下方向下 → holdCannotDuck=true，阻止落地瞬间丢下物件并下蹲
+            this.holdCannotDuck = false;
             this.varJumpTimer = 0; this.varJumpSpeed = 0;
             this.jumpGraceTimer = 0; this.jumpBufferTimer = 0;
             this.fastJump = false;
@@ -1076,12 +1079,18 @@
 
         // ===== NormalUpdate（完整保留，加入 wallSlide → Climb 判定）=====
         normalUpdate(dt, input, moveX, moveY) {
+            // IL 1971-2010：Holding.SlowFall && MoveY==1 → holdCannotDuck=true（空中按下也生效）
+            if (this.holdSlowFall && moveY === 1) this.holdCannotDuck = true;
+            // IL 1008-1043：着地且未按下方向下 → holdCannotDuck 清除
+            if (this.onGround && moveY !== 1) this.holdCannotDuck = false;
+
             // —— 蹲下 / 起身 ——
+            // 持物时不可下蹲（Player.NormalUpdate 的 Drop+Duck 分支由场景在按下落地的首帧执行）
             if (this.ducking) {
                 if (this.onGround && moveY !== 1) {
                     this.ducking = false; this.scaleX = 0.8; this.scaleY = 1.2;
                 }
-            } else if (this.onGround && moveY === 1 && this.vy >= 0) {
+            } else if (this.onGround && moveY === 1 && this.vy >= 0 && !this.holdSlowFall) {
                 this.ducking = true; this.scaleX = 1.4; this.scaleY = 0.6;
             }
 

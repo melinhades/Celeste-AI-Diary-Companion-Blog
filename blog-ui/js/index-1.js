@@ -41,13 +41,24 @@
     const hotTags = ref([]);
     const tagStatus = ref('loading');
 
+    // 非匿名统一用默认头像；匿名文章显示「匿名」+ 匿名头像
+    const DEFAULT_AVATAR = 'celeste-gui/user-avatar.webp';
+    const ANONYMOUS_AVATAR = 'celeste-icons/beat.png';
+    function isAnonymous(a) { return !!(a && Number(a.anonymous) === 1); }
     function authorName(a) {
+        if (isAnonymous(a)) return '匿名';
         const n = typeof a.author === 'string' ? a.author : (a.author?.nickname || a.author?.username);
-        return n || '匿名';
+        return n || 'Celeste';
     }
     function authorImg(a) {
-        const n = typeof a.author === 'string' ? a.author : (a.author?.nickname || a.author?.username);
-        return n ? 'celeste-portraits/madeline/normal00.png' : 'celeste-icons/beat.png';
+        return isAnonymous(a) ? ANONYMOUS_AVATAR : DEFAULT_AVATAR;
+    }
+    // 后端返回的相对路径/本机绝对路径统一补成 API 域名，避免图片在静态站点域名下 404
+    function fixImageUrl(u) {
+        if (!u) return u;
+        let url = String(u).replace(/http:\/\/(?:localhost|127\.0\.0\.1):8888/g, BASE_URL);
+        if (url.indexOf('/images/') === 0 || url.indexOf('/uploads/') === 0) url = BASE_URL + url;
+        return url;
     }
     function openArticle(id) { location.href = 'article.html?id=' + id; }
 
@@ -77,7 +88,10 @@
         api('/articles', 'POST', body).then(res => {
             if (!res.success) { listStatus.value = 'error'; return; }
             const list = res.data.records || res.data || [];
-            articles.value = list;
+            articles.value = list.map(a => ({
+                ...a,
+                images: (a.images || []).map(fixImageUrl)
+            }));
             likeCounts.value = {};
             listStatus.value = list.length ? 'ok' : 'empty';
             loadLikeCounts(list);
@@ -89,7 +103,10 @@
         api('/articles/hot', 'POST').then(res => {
             hotStatus.value = 'ok';
             if (!res.success) return;
-            hotArticles.value = res.data || [];
+            hotArticles.value = (res.data || []).map(a => ({
+                ...a,
+                images: (a.images || []).map(fixImageUrl)
+            }));
         });
     }
 

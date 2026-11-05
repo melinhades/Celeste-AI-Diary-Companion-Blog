@@ -26,6 +26,11 @@ public class ArticleVo {
 
     private String author;
 
+    /**
+     * 是否匿名发布：1=匿名 0=非匿名
+     */
+    private Integer anonymous;
+
     private ArticleBodyVo body;
 
     private List<TagVo> tags;

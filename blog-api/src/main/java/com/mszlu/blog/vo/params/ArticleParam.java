@@ -18,4 +18,7 @@ public class ArticleParam {
     private List<TagVo> tags;
 
     private String title;
+
+    /** 是否匿名发布 */
+    private Boolean anonymous;
 }

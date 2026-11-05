@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="icon/OIP.webp" type="image/webp">
+    <title>AI Key Setup - Celeste Blog</title>
+    <link rel="stylesheet" href="css/common.css?v=20261104a">
+    <link rel="preload" href="celeste-font-en/Renogare-Regular.otf" as="font" type="font/otf" crossorigin>
+    <link rel="preload" href="fonts/NotoSansCJKsc-Medium.otf" as="font" type="font/otf" crossorigin>
+    <link rel="stylesheet" href="css/auth.css?v=20261025b">
+    <style>
+        html, body { background: #05060a; }
+        #app { position: relative; z-index: 1; }
+        .setup-box { max-width: 440px; }
+        .setup-box h2 { font-size: 1.6rem; }
+        .option-card {
+            border: 2px solid #3a3f4b; border-radius: 12px;
+            padding: 18px 20px; margin: 12px 0; cursor: pointer;
+            transition: border-color .15s, background .15s;
+            background: rgba(255,255,255,0.03);
+        }
+        .option-card:hover { border-color: #7c5cff; background: rgba(124,92,255,0.08); }
+        .option-card.selected { border-color: #7c5cff; background: rgba(124,92,255,0.12); }
+        .option-card .opt-title { font-weight: 600; font-size: 1rem; margin-bottom: 4px; }
+        .option-card .opt-desc { font-size: .85rem; opacity: .7; }
+        .option-card .opt-radio { float: right; color: #7c5cff; font-weight: 700; }
+        .key-input {
+            width: 100%; padding: 10px 12px; margin-top: 10px;
+            border-radius: 8px; border: 1px solid #3a3f4b;
+            background: rgba(0,0,0,0.3); color: #e8e8e8; font-family: inherit;
+            font-size: .9rem;
+        }
+        .key-input:focus { outline: none; border-color: #7c5cff; }
+        .key-input::placeholder { opacity: .5; }
+        .setup-box .cta-row { display: flex; gap: 10px; margin-top: 20px; }
+        .setup-box .cta-row button { flex: 1; }
+        .skip-hint { font-size: .75rem; opacity: .55; margin-top: 8px; }
+        .api-example { font-size: .72rem; opacity: .5; margin-top: 6px; font-family: monospace; }
+        .test-hint { font-size: .72rem; opacity: .55; margin-top: 8px; line-height: 1.5; }
+
+        /* ===== 安装成功过场：全屏覆盖，复用章节完成动画 ===== */
+        .install-overlay {
+            position: fixed; inset: 0; z-index: 9999;
+            background: #000; display: none;
+        }
+        .install-overlay.show { display: block; }
+        .install-overlay.ready { cursor: pointer; }
+        .install-overlay canvas {
+            display: block; width: 100%; height: 100%; object-fit: contain;
+        }
+
+        /* ===== 入场过场：黑屏 + 拉丝雪，淡出露出页面（Ascending 第一阶段） ===== */
+        .intro-overlay {
+            position: fixed; inset: 0; z-index: 10000;
+            background: #000;
+        }
+        .intro-overlay canvas { display: block; width: 100%; height: 100%; }
+
+        /* ===== Madeline 游戏对话框（移植自 diary.css #gameDialog） ===== */
+        @font-face {
+            font-family: 'CelesteZH';
+            src: url('fonts/NotoSansCJKsc-Medium.otf') format('opentype');
+            font-display: swap;
+        }
+        #gameDialog {
+            position: fixed;
+            left: 50%;
+            bottom: 26px;
+            transform: translateX(-50%) translateY(24px);
+            width: min(94vw, 900px);
+            min-height: 128px;
+            z-index: 950;
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            padding: 20px 30px;
+            background: url('celeste-portraits/textbox/madeline.webp') center / 100% 100% no-repeat;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .25s ease, transform .25s ease;
+        }
+        #gameDialog.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+        #gameDialogPortrait { width: 92px; height: 92px; flex-shrink: 0; border-radius: 6px; overflow: hidden; }
+        #gameDialogPortrait img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        #gameDialogBody { flex: 1; min-width: 0; }
+        #gameDialogName {
+            font-family: 'Renogare', sans-serif;
+            color: #FFEB3B;
+            font-size: 13px;
+            margin-bottom: 5px;
+        }
+        #gameDialogText {
+            font-family: 'Renogare', 'CelesteZH', 'Microsoft YaHei', sans-serif;
+            color: #fff;
+            font-size: 14px;
+            line-height: 1.7;
+            word-break: break-word;
+        }
+
+        /* ===== 模型选择列表 ===== */
+        .model-list { max-height: 260px; overflow-y: auto; margin-top: 4px; scrollbar-width: thin; }
+        .model-list .option-card { padding: 12px 16px; margin: 8px 0; }
+        .model-list .option-card .opt-title { font-family: monospace; font-size: .82rem; word-break: break-all; margin-bottom: 0; }
+        .model-group { margin: 16px 0 8px; font-size: .75rem; opacity: .6; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+        .model-recommend { display: inline-block; background: #7c5cff; color: #fff; font-size: .65rem; padding: 2px 6px; border-radius: 4px; margin-left: 8px; font-weight: 600; }
+        .test-progress { font-size: .8rem; opacity: .7; margin-top: 12px; text-align: center; }
+        .test-progress .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(124,92,255,.3); border-top-color: #7c5cff; border-radius: 50%; animation: spin .8s linear infinite; margin-right: 8px; vertical-align: middle; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="stars"></div>
+    <div class="stars2"></div>
+    <canvas id="snowCanvas" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;"></canvas>
+
+    <!-- ===== Vue App ===== -->
+    <div id="app">
+        <div class="setup-box">
+            <img class="register-madeline" src="celeste-portraits/madeline/peaceful00.png" alt="Madeline">
+            <h2>AI ASSISTANT SETUP</h2>
+            <p class="sub">Choose how Madeline powers her AI voice.</p>
+
+            <div v-show="stage === 'choose'">
+            <!-- ===== 选项 A：系统默认 ===== -->
+            <div class="option-card"
+                 :class="{ selected: choice === 'default' }"
+                 @click="pick('default')">
+                <span class="opt-radio" v-if="choice === 'default'">●</span>
+                <div class="opt-title">使用系统默认 AI Key</div>
+                <div class="opt-desc">由站长统一提供，开箱即用。可能有调用限流。</div>
+            </div>
+
+            <!-- ===== 选项 B：自己的 Key ===== -->
+            <div class="option-card"
+                 :class="{ selected: choice === 'custom' }"
+                 @click="pick('custom')">
+                <span class="opt-radio" v-if="choice === 'custom'">●</span>
+                <div class="opt-title">使用我自己的 API Key</div>
+                <div class="opt-desc">支持 SiliconFlow / 阿里云百炼 / DeepSeek / OpenAI 兼容端点</div>
+                <input v-if="choice === 'custom'"
+                       class="key-input" type="password"
+                       v-model="apiKey"
+                       placeholder="粘贴你的 API Key">
+                <div v-if="choice === 'custom'" class="api-example">sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxx</div>
+                <div v-if="choice === 'custom'" class="test-hint">
+                    「测试并安装」会先验证 Key 并拉出可用模型，选好模型后只做一次真实连接测试
+                </div>
+            </div>
+
+            <!-- ===== 按钮 ===== -->
+            <div class="cta-row">
+                <button class="btn-primary" :disabled="saving || testing" @click="save">
+                    {{ testing ? '验证 Key 中…' : saving ? '保存中…' : (choice === 'custom' ? '测试并安装' : '开始使用') }}
+                </button>
+                <button class="btn-secondary" :disabled="saving || testing" @click="skip" v-if="choice === 'custom' && !apiKey">
+                    跳过
+                </button>
+            </div>
+            <div class="skip-hint">
+              随时可以在「我的 → AI 设置」里更换 API Key 或切回系统默认
+            </div>
+            </div>
+
+            <!-- ===== 模型选择（自定义 Key 安装成功后由 Madeline 引出） ===== -->
+            <div v-if="stage === 'pick-model'">
+                <p class="sub" style="margin-top:14px;">KEY 装好了。挑一个对话模型：</p>
+                <div class="model-list">
+                    <div class="option-card" v-for="m in models" :key="m"
+                         :class="{ selected: pickedModel === m }"
+                         @click="pickModel(m)">
+                        <span class="opt-radio" v-if="pickedModel === m">●</span>
+                        <div class="opt-title">{{ m }}</div>
+                    </div>
+                </div>
+                <div class="skip-hint" style="cursor:pointer;" @click="saveAndGoIndex">跳过，用默认模型 →</div>
+            </div>
+
+            <div class="err-row" v-if="errMsg" :key="errKey">{{ errMsg }}</div>
+        </div>
+    </div>
+
+    <!-- ===== Madeline 游戏对话框（移植自 diary 页：立绘 + 打字机 + 语音 blip） ===== -->
+    <div id="gameDialog">
+        <div id="gameDialogPortrait"><img id="gameDialogPortraitImg" src="celeste-portraits/madeline/peaceful00.png" alt="Madeline"></div>
+        <div id="gameDialogBody">
+            <div id="gameDialogName">Madeline</div>
+            <div id="gameDialogText"></div>
+        </div>
+    </div>
+
+    <!-- ===== 安装成功过场（点击后进入日记） ===== -->
+    <div id="installOverlay" class="install-overlay">
+        <canvas id="installCanvas" width="1920" height="1080"></canvas>
+    </div>
+
+    <!-- ===== 入场过场：从暗到亮，播完即移除 ===== -->
+    <div id="introOverlay" class="intro-overlay">
+        <canvas id="introCanvas"></canvas>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.4.21/dist/vue.global.prod.js"></script>
+    <script src="js/celeste-complete-transition.js?v=20261103b"></script>
+    <script src="js/snow-effect.js?v=20261104a"></script>
+    <script src="js/madeline-mood.js?v=20261104a"></script>
+    <script>
+      // ===== 背景：Celeste 启动画面 HiresSnow 雪花（还原 celeste-snow-particle/index.html） =====
+      (function () {
+          var cv = document.getElementById('snowCanvas');
+          if (!cv || !window.CelesteSnow) return;
+          var ctx = cv.getContext('2d');
+          var ASSET = 'Atlases/Overworld/';
+          var W = 0, H = 0, snow = null;
+
+          function resize() {
+              W = window.innerWidth;
+              H = window.innerHeight;
+              cv.width = W;
+              cv.height = H;
+              if (snow) { snow.width = W; snow.height = H; }
+          }
+
+          function loadImage(src) {
+              return new Promise(function (resolve, reject) {
+                  var img = new Image();
+                  img.onload = function () { resolve(img); };
+                  img.onerror = function () { reject(new Error('素材加载失败: ' + src)); };
+                  img.src = src;
+              });
+          }
+
+          Promise.all([loadImage(ASSET + 'snow.png'), loadImage(ASSET + 'overlay.png')])
+              .then(function (imgs) {
+                  resize();
+                  window.addEventListener('resize', resize);
+
+                  var pattern = ctx.createPattern(imgs[1], 'repeat');
+                  snow = new CelesteSnow.HiresSnow({
+                      width: W, height: H,
+                      overlayAlpha: CelesteSnow.IL.DEFAULT_OVERLAY_ALPHA,
+                      snowImage: imgs[0],
+                      overlayImage: imgs[1]
+                  });
+
+                  var STEP = 1 / 60, acc = 0, last = performance.now();
+
+                  function frame(now) {
+                      var dt = Math.min((now - last) / 1000, 0.25);
+                      last = now;
+                      acc += dt;
+                      while (acc >= STEP) { snow.Update(STEP); acc -= STEP; }
+
+                      ctx.setTransform(1, 0, 0, 1, 0, 0);
+                      ctx.globalCompositeOperation = 'source-over';
+                      ctx.globalAlpha = 1;
+                      ctx.fillStyle = '#05060a';
+                      ctx.fillRect(0, 0, W, H);
+
+                      snow.Render(ctx, pattern);
+                      requestAnimationFrame(frame);
+                  }
+                  requestAnimationFrame(frame);
+              })
+              // 素材加载失败时保持透明，页面功能不受影响
+              .catch(function () {});
+      })();
+    </script>
+    <script>
+      // ===== 入场过场：Ascending 第一阶段「从暗到亮」 =====
+      // 黑屏 + 快速拉丝雪开场；1.5s 内 fadeAlpha 按 LerpClamp(1,0,p*2) 淡出，
+      // 雪的 Direction.X 从 -4 缓回 -1（拉丝变慢恢复常态），结尾与页面背景雪无缝衔接。
+      (function () {
+          var overlay = document.getElementById('introOverlay');
+          var cv = document.getElementById('introCanvas');
+          if (!overlay || !cv) return;
+          if (!window.CelesteSnow) { overlay.remove(); return; }
+
+          var ctx = cv.getContext('2d');
+          var ASSET = 'Atlases/Overworld/';
+          var DURATION = 1.5;          // 与 SlideDuration 一致
+          var W = window.innerWidth, H = window.innerHeight;
+          cv.width = W; cv.height = H;
+
+          function loadImage(src) {
+              return new Promise(function (resolve) {
+                  var img = new Image();
+                  img.onload = function () { resolve(img); };
+                  img.onerror = function () { resolve(null); };
+                  img.src = src;
+              });
+          }
+          function sineOut(p) { return Math.sin(p * Math.PI / 2); }
+
+          var snow = null, pattern = null;
+          var started = false, startAt = 0;
+
+          function begin() {
+              if (started) return;
+              started = true;
+              startAt = performance.now();
+              requestAnimationFrame(frame);
+          }
+
+          function frame(now) {
+              var p = Math.min((now - startAt) / 1000 / DURATION, 1);
+              var dt = 1 / 60;
+
+              if (snow) {
+                  // Direction.X: -4 → -1（SineOut），拉丝逐渐恢复常态慢雪
+                  snow.Direction.x = -4 + 3 * sineOut(p);
+                  snow.Update(dt);
+                  ctx.setTransform(1, 0, 0, 1, 0, 0);
+                  ctx.clearRect(0, 0, W, H);
+                  snow.Render(ctx, pattern);
+              }
+
+              // fadeAlpha = LerpClamp(1, 0, p*2)
+              overlay.style.opacity = Math.max(0, 1 - p * 2);
+
+              if (p < 1) {
+                  requestAnimationFrame(frame);
+              } else {
+                  overlay.remove();
+              }
+          }
+
+          // 素材就绪或 800ms 兜底后即开始，避免黑屏卡住
+          Promise.all([loadImage(ASSET + 'snow.png'), loadImage(ASSET + 'overlay.png')])
+              .then(function (imgs) {
+                  if (imgs[0] && imgs[1]) {
+                      pattern = ctx.createPattern(imgs[1], 'repeat');
+                      snow = new CelesteSnow.HiresSnow({
+                          width: W, height: H,
+                          overlayAlpha: CelesteSnow.IL.DEFAULT_OVERLAY_ALPHA,
+                          snowImage: imgs[0],
+                          overlayImage: imgs[1]
+                      });
+                      snow.Direction.x = -4;
+                  }
+                  begin();
+              });
+          setTimeout(begin, 800);
+      })();
+    </script>
+    <script>
+      // ===== api() 与 register/login 共享的 fetch 封装 =====
+      // 与 js/api.js 同一约定：本地 8888 / 线上 api.instapix.icu，均无 /api 前缀
+      const API_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+          ? 'http://localhost:8888'
+          : 'https://api.instapix.icu';
+      const api = (path, method, body, timeout) =>
+          new Promise((resolve, reject) => {
+              const token = localStorage.getItem('token') || '';
+              const ctrl = new AbortController();
+              const timer = setTimeout(() => ctrl.abort(), timeout || 10000);
+              fetch(API_BASE + path, {
+                  method: method || 'GET',
+                  headers: {
+                      'Content-Type': 'application/json',
+                      ...(token ? { Authorization: token } : {})
+                  },
+                  signal: ctrl.signal,
+                  body: body ? JSON.stringify(body) : null
+              }).then(r => r.json()).then(resolve)
+                  .catch(e => resolve({ success: false, msg: '网络错误' }))
+                  .finally(() => clearTimeout(timer));
+          });
+
+      // ===== 检测/安装过场：复用 Celeste 章节完成动画 + 对应章节完成音乐 =====
+      // 三组配对，每次检测随机抽一组：
+      //   Ascending(normal) → Normal   |   Ascending(normal) → Summit   |   Ascending B-Sides → B-Sides
+      const TRANSITION_AUDIO = 'transition/';
+      const INSTALL_PAIRS = [
+          {
+              test: TRANSITION_AUDIO + "Lena Raine - Celeste - Madeline's Grab Bag - 14 Chapter Complete - Ascending.flac",
+              success: TRANSITION_AUDIO + "Lena Raine - Celeste - Madeline's Grab Bag - 15 Chapter Complete - Normal.flac"
+          },
+          {
+              test: TRANSITION_AUDIO + "Lena Raine - Celeste - Madeline's Grab Bag - 14 Chapter Complete - Ascending.flac",
+              success: TRANSITION_AUDIO + "Lena Raine - Celeste - Madeline's Grab Bag - 16 Chapter Complete - Summit.flac"
+          },
+          {
+              test: TRANSITION_AUDIO + "Lena Raine - Celeste - Madeline's Grab Bag - 17 Chapter Complete - Ascending B-Sides.flac",
+              success: TRANSITION_AUDIO + "Lena Raine - Celeste - Madeline's Grab Bag - 18 Chapter Complete - B-Sides.flac"
+          }
+      ];
+
+      function pickInstallPair() {
+          return INSTALL_PAIRS[Math.floor(Math.random() * INSTALL_PAIRS.length)];
+      }
+
+      // 立即开始过场与检测音乐；检测期间显示「连接检测中」，成功后切成功音乐并显示「安装成功」
+      // onEnter：可选，点击完成画面时替代「直接跳日记页」（如进入模型选择）
+      function createInstallTransition(pair, onEnter) {
+          const CC = window.CelesteComplete;
+          const overlay = document.getElementById('installOverlay');
+          const canvas = document.getElementById('installCanvas');
+          const ctx = canvas.getContext('2d');
+          ctx.imageSmoothingEnabled = true;
+          overlay.classList.add('show');
+          overlay.classList.remove('ready');
+          overlay.dataset.state = 'detecting';
+
+          // 检测音乐循环播放，避免上游响应慢时出现长时间静音
+          const testAudio = new Audio(encodeURI(pair.test));
+          testAudio.loop = true;
+          testAudio.preload = 'auto';
+          testAudio.volume = 0.85;
+          testAudio.play().catch(() => {});
+          const successAudio = new Audio(encodeURI(pair.success));
+          successAudio.preload = 'auto';
+          successAudio.volume = 0.85;
+          successAudio.load();
+
+          let seq = null;
+          let rafId = 0;
+          let stopped = false;
+          let succeeded = false;
+          let doneAt = 0;
+          let succeededAt = 0;
+          let last = 0;
+
+          function stopAudio() {
+              testAudio.pause();
+              successAudio.pause();
+          }
+
+          function goToDiary() {
+              if (!(succeeded && seq && seq.finished)) return;
+              if (onEnter) { onEnter(); return; }
+              stopAudio();
+              location.href = 'diary.html';
+          }
+          overlay.addEventListener('click', goToDiary);
+
+          function loadImage(src) {
+              return new Promise((resolve, reject) => {
+                  const img = new Image();
+                  img.onload = () => resolve(img);
+                  img.onerror = () => reject(new Error('load failed: ' + src));
+                  img.src = src;
+              });
+          }
+
+          const chapter = CC.FORSAKEN_CITY;
+          const names = [];
+          chapter.layers.forEach(l => { if (names.indexOf(l.img) < 0) names.push(l.img); });
+          const images = {};
+          const jobs = names.map(name =>
+              loadImage('Atlases/' + chapter.atlas + '/' + name + '.png')
+                  .then(img => { images[name] = img; }));
+          const assets = { images: images };
+          jobs.push(loadImage('Atlases/Overworld/snow.png').then(img => { assets.snow = img; }));
+          jobs.push(loadImage('Atlases/Overworld/overlay.png').then(img => { assets.overlay = img; }));
+
+          const fonts = (document.fonts && document.fonts.load)
+              ? Promise.all([
+                  document.fonts.load('64px Renogare').catch(() => {}),
+                  document.fonts.load('64px CelesteZH', '安装成功').catch(() => {})
+                ])
+              : Promise.resolve();
+
+          function drawCaption(elapsed) {
+              const a = Math.min(1, elapsed / 400);
+              const title = succeeded ? '安装成功' : '连接检测中';
+              const subtitle = succeeded ? 'AI KEY 已接入 · 点击进入' : '正在验证 API KEY…';
+              ctx.save();
+              ctx.textAlign = 'center';
+              ctx.globalAlpha = a;
+              ctx.fillStyle = '#ffffff';
+              ctx.shadowColor = 'rgba(154,216,255,.85)';
+              ctx.shadowBlur = 28;
+              ctx.font = '64px Renogare, CelesteZH, sans-serif';
+              ctx.fillText(title, 960, 452);
+              ctx.shadowBlur = 0;
+              ctx.globalAlpha = a * Math.max(0, Math.min(1, (elapsed - 500) / 400));
+              ctx.fillStyle = 'rgba(230,235,242,.72)';
+              ctx.font = '20px Renogare, CelesteZH, sans-serif';
+              ctx.fillText(subtitle, 960, 512);
+              ctx.restore();
+          }
+
+          function tick(now) {
+              if (stopped) return;
+              const dt = Math.min(0.05, (now - last) / 1000);
+              last = now;
+              seq.update(dt);
+              seq.render(ctx, assets);
+              if (seq.finished) {
+                  if (!doneAt) doneAt = now;
+                  const captionStart = succeeded ? Math.max(doneAt, succeededAt) : doneAt;
+                  drawCaption(Math.max(0, now - captionStart));
+                  if (succeeded) overlay.classList.add('ready');
+              }
+              rafId = requestAnimationFrame(tick);
+          }
+
+          const ready = Promise.all([fonts, Promise.all(jobs)]).then(() => {
+              if (stopped) return;
+              // skipHold：跳过 LevelExit 的 3.3s 黑场等待，检测反馈约 3s 进入最后一幕
+              seq = new CC.ChapterCompleteSequence(chapter, images, { skipHold: true });
+              last = performance.now();
+              rafId = requestAnimationFrame(tick);
+          });
+
+          return {
+              ready: ready,
+              succeed: function () {
+                  if (stopped || succeeded) return;
+                  succeeded = true;
+                  succeededAt = performance.now();
+                  overlay.dataset.state = 'success';
+                  testAudio.pause();
+                  successAudio.currentTime = 0;
+                  successAudio.play().catch(() => {});
+              },
+              abort: function () {
+                  if (stopped) return;
+                  stopped = true;
+                  stopAudio();
+                  if (rafId) cancelAnimationFrame(rafId);
+                  overlay.removeEventListener('click', goToDiary);
+                  overlay.classList.remove('show');
+                  overlay.classList.remove('ready');
+                  delete overlay.dataset.state;
+              }
+          };
+      }
+
+      // ===== Madeline 游戏对话框：立绘动画 + 打字机 + 语音 blip（移植自 diary.js） =====
+      // blip 需要用户手势解锁音频：第一次点击页面时标记
+      document.addEventListener('pointerdown', function () { window.__audioGestured = true; }, { once: true });
+
+      const gameDialogEl = document.getElementById('gameDialog');
+      const gameDialogPortraitImg = document.getElementById('gameDialogPortraitImg');
+      const gameDialogTextEl = document.getElementById('gameDialogText');
+      // 说话“世代号”：用户点关闭时 +1，打字循环据此立即中止
+      let gdToken = 0;
+      const GD_SFX = {};
+      function playGdSfx(which) {
+          try {
+              const name = 'textbox/ui_game_textbox_madeline_' + which + '.wav';
+              if (!GD_SFX[name]) GD_SFX[name] = new Audio('celeste-sounds/' + name);
+              const a = GD_SFX[name];
+              a.currentTime = 0;
+              a.volume = 0.55;
+              a.play().catch(() => {});
+          } catch (e) { /* 无声降级 */ }
+      }
+      function openGameDialog(emotion) {
+          if (!gameDialogEl.classList.contains('show')) playGdSfx('in');
+          if (window.MadelineMood) window.MadelineMood.startPortrait(gameDialogPortraitImg, emotion || '默认');
+          gameDialogEl.classList.add('show');
+      }
+      function closeGameDialog() {
+          if (window.MadelineMood) window.MadelineMood.stopPortrait();
+          if (gameDialogEl.classList.contains('show')) playGdSfx('out');
+          gameDialogEl.classList.remove('show');
+      }
+      gameDialogEl.addEventListener('click', () => { gdToken++; closeGameDialog(); });
+      const gdSleep = ms => new Promise(r => setTimeout(r, ms));
+
+      /** 打字机说话：每 3 个有效字播一个语气 blip；返回 false 表示被用户点掉中断 */
+      async function speak(text, emotion) {
+          if (!window.MadelineMood) return true;
+          const my = ++gdToken;
+          openGameDialog(emotion);
+          gameDialogTextEl.textContent = '';
+          let speakCount = 0, ci = 0;
+          for (const ch of text) {
+              if (my !== gdToken) return false;
+              ci++;
+              gameDialogTextEl.textContent = text.slice(0, ci);
+              if (!/[\s…，,、；;：:（）()。！？!?*]/.test(ch)) {
+                  speakCount++;
+                  if (speakCount % 3 === 1) window.MadelineMood.blip(emotion || '默认');
+              }
+              await gdSleep(45 + Math.random() * 20);
+          }
+          gameDialogTextEl.textContent = text;
+          return true;
+      }
+
+      const { createApp, ref, onMounted } = Vue;
+      createApp({
+          setup() {
+              const choice = ref('default');
+              const apiKey = ref('');
+              const saving = ref(false);
+              const testing = ref(false);
+              const errMsg = ref('');
+              const errKey = ref(0);
+              // 阶段：choose（选 Key 方式）→ pick-model（安装成功后 Madeline 引用户挑模型）
+              const stage = ref('choose');
+              const models = ref([]);
+              const pickedModel = ref('');
+              let pendingKey = ''; // 已保存的自定义 Key，模型测试阶段还要用
+
+              function pick(c) {
+                  if (saving.value || testing.value) return;
+                  choice.value = c;
+                  errMsg.value = '';
+              }
+              function showErr(m) { errMsg.value = m; errKey.value++; }
+              function goDiary() { location.href = 'diary.html'; }
+
+              // 安装成功过场结束 → Madeline 报模型数，引用户挑选
+              async function beginModelPick() {
+                  stage.value = 'pick-model';
+                  await speak('目前有' + models.value.length + '个模型，你想选哪个？', '可爱');
+              }
+
+              // 选定模型 → Madeline 复读名字 → 用该模型跑一次真实连接测试
+              async function pickModel(m) {
+                  if (testing.value) return;
+                  pickedModel.value = m;
+                  testing.value = true;
+                  errMsg.value = '';
+                  const heard = await speak(m + ' 啊，让我们测试一下吧', '默认');
+                  if (!heard) { testing.value = false; pickedModel.value = ''; return; }
+                  const res = await api('/users/api-key/test', 'POST', { apiKey: pendingKey, model: m }, 35000);
+                  testing.value = false;
+                  if (res.success) {
+                      await speak('连上了！以后就用它陪你写日记啦。', '可爱');
+                      closeGameDialog();
+                      goDiary();
+                  } else {
+                      pickedModel.value = '';
+                      await speak('唔……' + (res.msg || '这个模型没连上') + '，要不换一个试试？', '不安');
+                  }
+              }
+
+              async function save() {
+                  if (choice.value === 'custom') return installCustom();
+
+                  saving.value = true;
+                  errMsg.value = '';
+                  const token = localStorage.getItem('token');
+                  if (!token) { showErr('登录态丢失，请重新注册或登录'); saving.value = false; return; }
+
+                  try {
+                      const res = await api('/users/api-key', 'PUT', { apiKey: '' }); // 空 → 回退系统默认
+                      saving.value = false;
+                      if (res.success) {
+                          location.href = 'diary.html'; // 保存成功 → 进日记主页
+                      } else {
+                          showErr(res.msg || '保存失败，请稍后重试');
+                      }
+                  } catch (e) {
+                      saving.value = false;
+                      showErr('网络错误');
+                  }
+              }
+
+              // 自定义 Key：检测期间就播过场与检测音乐 → 成功保存 → 切成功音乐并显示安装成功
+              async function installCustom() {
+                  const k = apiKey.value.trim();
+                  if (!k) { showErr('请填入 API Key 或选择"使用系统默认"'); return; }
+                  if (k.length < 10) { showErr('API Key 看起来太短，请检查'); return; }
+                  const token = localStorage.getItem('token');
+                  if (!token) { showErr('登录态丢失，请重新注册或登录'); return; }
+
+                  errMsg.value = '';
+                  testing.value = true;
+                  const box = document.querySelector('.setup-box');
+                  // 过场点击后：有模型列表 → 收起过场进入 Madeline 模型选择；没有 → 直接进日记
+                  const anim = createInstallTransition(pickInstallPair(), () => {
+                      if (models.value.length) {
+                          anim.abort(); // 收起过场（停音乐、移除监听、隐藏覆盖层）
+                          if (box) box.style.visibility = '';
+                          beginModelPick();
+                      } else {
+                          goDiary();
+                      }
+                  });
+                  if (box) box.style.visibility = 'hidden';
+
+                  try {
+                      await anim.ready; // 过场素材就绪后再发起检测，避免黑屏空等
+                      const test = await api('/users/api-key/test', 'POST', { apiKey: k }, 35000);
+                      if (!test.success) {
+                          anim.abort();
+                          if (box) box.style.visibility = '';
+                          showErr(test.msg || 'Key 测试未通过');
+                          return;
+                      }
+
+                      const saved = await api('/users/api-key', 'PUT', { apiKey: k });
+                      if (!saved.success) {
+                          anim.abort();
+                          if (box) box.style.visibility = '';
+                          showErr(saved.msg || '保存失败，请稍后重试');
+                          return;
+                      }
+
+                      // 测试响应里已附带该 Key 可用的对话模型列表
+                      models.value = (test.data && test.data.models) || [];
+                      pendingKey = k;
+                      anim.succeed(); // 切到配对成功音乐，最后一幕显示「安装成功」
+                  } catch (e) {
+                      anim.abort();
+                      if (box) box.style.visibility = '';
+                      showErr('安装过场素材加载失败，请重试');
+                  } finally {
+                      testing.value = false;
+                  }
+              }
+
+              async function skip() {
+                  // 跳过 = 系统默认（后端清空 api_key 字段）
+                  saving.value = true;
+                  const token = localStorage.getItem('token');
+                  if (!token) { location.href = 'login.html'; return; }
+                  try {
+                      await api('/users/api-key', 'PUT', { apiKey: '' });
+                  } finally {
+                      saving.value = false;
+                      location.href = 'diary.html';
+                  }
+              }
+
+              onMounted(() => {
+                  // 没有 token → 不是注册进来的，踢回登录页
+                  if (!localStorage.getItem('token')) {
+                      location.href = 'login.html';
+                  }
+              });
+
+              return { choice, apiKey, saving, testing, errMsg, errKey, pick, save, skip,
+                       stage, models, pickedModel, pickModel, goDiary };
+          }
+      }).mount('#app');
+
+    </script>
+</body>
+</html>

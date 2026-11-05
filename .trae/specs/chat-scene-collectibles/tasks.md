@@ -92,7 +92,7 @@
 
   * 完成条件：全部通过、无 console 错误。
 
-  * 验证：无头 Chromium 两套视口实测（详见 `checklist.md`）；`?scenetest` **49 pass / 0 fail**；无新增异常。后端 `localhost:8888` 未启动，真实双客户端 SSE 收发未跑（`chat:reveal` 用事件直投等价验证）。
+  * 验证：无头 Chromium 两套视口实测（详见 `checklist.md`）；`?scenetest` **55 pass / 0 fail**（含 T11/T12 追加的水母断言）；无新增异常。后端 `localhost:8888` 未启动，真实双客户端 SSE 收发未跑（`chat:reveal` 用事件直投等价验证）。
 
 * [x] T10 · 研究文档
 
@@ -102,15 +102,15 @@
 
   * 完成条件：每条结论标注 `Celeste.dll` 类型/成员；未决项单列。
 
-  * 验证：新增第 24 节（24.1–24.8，偏差 K1–K3 / 未验证 U1–U6）与第 25 节（25.1–25.11，偏差 D9–D17 / 未验证 U7–U14），含程序集 SHA-256 与方法 token。
+  * 验证：新增第 24 节（24.1–24.8，偏差 K1–K3 / 未验证 U1–U6）与第 25 节（25.1–25.11，偏差 D9–D18 / 未验证 U7–U14），含程序集 SHA-256 与方法 token；并记录本地程序集无 `Celeste.Jellyfish`、水母实体为 `Celeste.Glider`。
 
 * [x] T11 · 水母 Holdable 改造（第七轮）
 
   * 文件：`blog-ui/celeste-farewell-remembered-demo.html`（内联脚本）、`blog-ui/js/celeste-character.js`
 
-  * 内容：`GLIDER` 常量（`Holdable(0.3)`、`releaseGravity .1`、`throw (100,-40)`、`recoil -80`、`PickupCollider 20×22`、`carryY -16`）；`🪼` → `spawnJelly()`（相机可见区随机、避实心、上限 4）；`inPickupRange` / `tryPickupJelly` / `releaseJelly` / `throwJelly`；`stepJellies` 的持有/未持有物理、碰撞反弹、撞玩家销毁、死亡回收；`jellyImage` / `drawJellies`（idle / held / fall→fallLoop / death，图层在人物之后）；`tick` 持有段（按住拾取 / 松开 Throw / 地面 ↓ Drop）；引擎新增 `holdSlowFall`（maxFall 40/120/24、重力 ×0.5、空中 maxRun 108 + 加速度 ×0.5、屏蔽墙滑）。
+  * 内容：`GLIDER` 常量（`Holdable(0.3)`、`releaseGravity .1`、`throw (100,-40)`、`recoil -80`、`PickupCollider 20×22`、`carryY -16`、`bubbleFreq .3`、`deathStep .08`）；`🪼` → `spawnJelly()`（Madeline 近身随机、避实心、上限 4，保证一跳可及，生成 `homeX/homeY/bobPhase` 悬浮锚）；`inPickupRange` / `tryPickupJelly`（`checkStamina()<20` 拒绝、成功 `bubble=false`、只清水母速度）/ `releaseJelly` / `throwJelly`；`stepJellies` 的 `bubble` SineWave 悬浮、持有/未持有物理、碰撞反弹、掉出下边界与死亡动画回收；`jellyImage` / `drawJellies`（idle / held / fall→fallLoop / death，图层在人物之后）；`tick` 持有段（按住拾取 / 松开 Throw / 地面 ↓ 且 `!holdCannotDuck` Drop）；引擎新增 `holdSlowFall`（maxFall 40/120/24、重力 ×0.5、空中 maxRun 108 + 加速度 ×0.5、屏蔽墙滑）与 `holdCannotDuck`（空中按下置位、着地未按下清除）。
 
-  * 完成条件：水母随机刷新、可抓取持有缓降、投掷/丢弃、未持有独立物理、撞玩家销毁；不结算。
+  * 完成条件：水母近身随机刷新并气泡悬浮、可抓取持有缓降、冲刺抓取保留动量、投掷/丢弃、未持有独立物理、`holdCannotDuck` 不误丢；不结算；碰撞销毁按 D18 不启用。
 
   * 验证：`?scenetest` 水母专项全 PASS（详见 T12）。
 
@@ -118,11 +118,11 @@
 
   * 文件：临时 CDP 脚本（不入库）
 
-  * 内容：`spec.md §10.2` 的 4 / 4a / 4b / 4c；刷新避实心、`PickupCollider`、carry、缓降、投掷/后坐、Drop、冷却、撞玩家销毁、死亡回收。
+  * 内容：`spec.md §10.2` 的 4 / 4a / 4b / 4c / 4d；水母近身刷新、`PickupCollider`、carry、缓降、投掷/后坐、Drop、冷却、气泡悬浮、冲刺抓取保留动量、`holdCannotDuck` 门控、死亡回收；另用真实键盘（页面内 `KeyboardEvent` 触发真实监听）验证抓取→移动→投掷与 Dash-Grab。
 
   * 完成条件：全部通过、无 console 异常。
 
-  * 验证：无头 Chromium（1280×800）`?scenetest` **49 pass / 0 fail / 0 exceptions**；缓存 `celeste-character.js?v=20261102b`。
+  * 验证：无头 Chromium（1280×800）`?scenetest` **55 pass / 0 fail / 0 exceptions**（水母专项 14 条）；真实键盘：`Shift` → `held=true`、`carry(0,-16)`；持有时按 `D` → 玩家 `vx=90`、水母逐帧跟随（`dx=0`）；松开 → 水母 `vx=100/vy=-40`、`held=false`；`X` 冲刺撞向 `x=28` 的水母按 `Shift` → `held=true` 且 `vx=240` 保留。缓存 `celeste-character.js?v=20261103a`。
 
 # Task Dependencies
 

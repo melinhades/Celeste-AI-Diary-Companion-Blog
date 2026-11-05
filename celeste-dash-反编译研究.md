@@ -2573,7 +2573,7 @@ demo 总时长 6.00s；浏览器实测结束帧 `t 6.03s / Scroll.y 1200.0 / fad
 | 行为 | IL 依据 |
 |---|---|
 | `snow.Alpha = Approach(snow.Alpha, 0f, 0.5f * dt)` | `AreaComplete.Update`：雪在完成画面期间按 0.5/s 衰减 |
-| `snow.Direction.Y = Approach(snow.Direction.Y, 24f, 24f * dt)` | 同上：风向由 16 提到 24 |
+| `snow.Direction.Y = Approach(snow.Direction.Y, 1f, 24f * dt)` | 同上：风向长度由 16 在约 0.625s 内降到 1；长度 ≤1 后 `Render` 取消拉丝、速度回到 `Speed` 本身，即「快速拖影 → 球形慢雪」 |
 
 `CompleteRenderer` 的 `fadeAlpha` 初值 1，所以延迟的 1.0s 内画面仍是全黑；雪绘制在黑幕之上，黑场与雪因此无缝衔接 `LevelExit`。
 
@@ -2641,6 +2641,8 @@ layers 01..11 + 08a/08b + snow-back + snow-front，scroll 0 / 0.02 / 0.03 / 0.04
 - `Update`：`Position += Direction * Speed * dt`，再叠加 `sin(Sin)*100*dt` 的横向摆动；越界 ±128 重掷。
 - `Render`：`Additive` + `LinearWrap`。方向长度钳到 `[0,20]`；长度 >1 时旋转取方向角，粒子缩放为
   `(x=长度, y=0.2 + (1 - 长度/20) * 0.8)`。`Direction=(0,16)` 时即 `(16, 0.36)`，做出一根竖向拖影——不是圆形雪花。
+  进入 `AreaComplete` 后 `Direction.Y` 以 24/s 收到 1，长度 ≤1 时 `Render` 改用 `Vector2.One` + 粒子自身 `Rotation`，
+  于是雪花从拖影变回圆形，同时 `Position += Direction * Speed * dt` 的速度也降到 `Speed` 本身。
 - overlay：整屏 1920×1080 纹理按 `timer` 平移平铺（x 32px/s、y 20px/s），`White * Alpha * overlayAlpha`。
 
 demo 的 `HiresSnow.render()` 按上述公式实现，`globalCompositeOperation = 'lighter'` 对应 Additive。

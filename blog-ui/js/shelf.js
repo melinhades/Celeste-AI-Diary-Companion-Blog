@@ -571,6 +571,61 @@ function stopPeSnow() {
             }
             return best;
         }
+        // 周度快照：从本周日记里挑 3-5 条原话（不重复，优先带情绪关键词的句子）
+        function extractQuotes(entries, max) {
+            const sents = [];
+            for (const e of entries) {
+                const parts = String(e.content || '').split(/(?<=[。！？!?])|[\n]/);
+                for (const p of parts) {
+                    const s = p.trim();
+                    if (s.length >= 6 && s.length <= 46 && sents.indexOf(s) === -1) sents.push(s);
+                }
+            }
+            if (!sents.length) return '';
+            const scored = sents.map(s => {
+                let score = 0;
+                for (const emo in EMOTION_DICT) {
+                    if (EMOTION_DICT[emo].some(kw => s.indexOf(kw) !== -1)) score += 2;
+                }
+                score += Math.min(s.length, 30) / 15;
+                return { s: s, score: score };
+            }).sort((a, b) => b.score - a.score);
+            return scored.slice(0, max || 5).map(o => '“' + o.s + '”').join('\n');
+        }
+        // 周度快照：按时间顺序看每篇日记的 valence / intensity，给出一句趋势描述
+        function emotionTrend(entries) {
+            const pts = [];
+            for (const d of entries) {
+                if (!d.emotionDetail) continue;
+                let det;
+                try { det = JSON.parse(d.emotionDetail); } catch (e) { continue; }
+                const t = new Date(d.updateDate || d.createDate).getTime();
+                if (isNaN(t)) continue;
+                pts.push({
+                    t: t,
+                    v: det.valence === 'positive' ? 1 : det.valence === 'negative' ? -1 : 0,
+                    i: det.intensity || 3
+                });
+            }
+            if (pts.length < 2) return '样本不足，只按这周的整体情绪与占比来写。';
+            pts.sort((a, b) => a.t - b.t);
+            const avg = arr => arr.reduce((s, p) => s + p.v, 0) / arr.length;
+            const n = Math.max(1, Math.floor(pts.length / 2));
+            const first = avg(pts.slice(0, n));
+            const last = avg(pts.slice(-n));
+            const delta = last - first;
+            const overall = avg(pts);
+            const vs = pts.map(p => p.v);
+            const vol = Math.max.apply(null, vs) - Math.min.apply(null, vs);
+            let dir = Math.abs(delta) < 0.25 ? '整体平稳' : (delta > 0 ? '后半段略微回升' : '后半段更往下');
+            if (vol >= 1.5) dir = '来回波动很大';
+            const lo = Math.min.apply(null, pts.map(p => p.i));
+            const hi = Math.max.apply(null, pts.map(p => p.i));
+            return '整体偏向：' + (overall < -0.2 ? '偏负面' : overall > 0.2 ? '偏正面' : '中性')
+                + '；走势：' + dir
+                + '；波动幅度：' + (vol >= 1.5 ? '高' : vol >= 0.8 ? '中' : '低')
+                + '（情绪强度 ' + lo + '-' + hi + '/5）';
+        }
         function getSnaps() {
             // 脏数据（非数组 / 解析失败）一律当空书架，与改造前 try/catch 返回 [] 的口径一致
             const arr = Store.getJson(Store.KEYS.DIARY_SNAPSHOTS, []);
@@ -663,7 +718,13 @@ function stopPeSnow() {
                     } catch (e) {}
                 }
                 try {
-                    const res = await DiaryApi.snapReflect(joined, emotionSummaryText(emotionData));
+                    const res = await DiaryApi.snapReflect(
+                        joined,
+                        emotionSummaryText(emotionData),
+                        extractQuotes(list, 5),
+                        emotionTrend(list),
+                        type
+                    );
                     if (res.success && res.data && res.data.message) reflect = res.data.message;
                 } catch (e) {}
                 return {
@@ -3769,6 +3830,8 @@ function stopPeSnow() {
             door.style.opacity = '0';
             // 启动 CollectRoutine 状态机（Freeze → slow → Poem）
             startRitual();
+            // 四心齐、Badeline 解锁：章节明信片音效（一次性，门开过后不再播）
+            pcPlay('ui_main_postcard_ch2_in.wav');
             // Poem 淡出结束 → 自动 panRight（hook poem phase='out' → !poem）
             var hook = setInterval(function () {
                 if (!poem) {
@@ -3777,6 +3840,7 @@ function stopPeSnow() {
                     // 恢复门可见（镜之房间侧仍保留 split 态）
                     door.classList.add('split');
                     door.style.opacity = ''; door.style.transition = '';
+                    pcPlay('ui_main_postcard_ch2_out.wav');
                     panRight();
                 }
             }, 40);

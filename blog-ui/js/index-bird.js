@@ -16,8 +16,8 @@
     var TARGET = 'celeste-farewell-remembered-demo.html';
     var SLOT_ID = 'navBirdSlot';
 
-    var FLY_MS = 950;          // 与 css crowFlyOut .95s 对齐
-    var LOADING_HOLD_MS = 1100; // 加载层铺上来后再留一会儿，让「跑动的 Madeline」被看见
+    var FLY_MS = 1200;         // 与 css crowFlyOut 1.2s 对齐
+    var FLYUP_FRAME_MS = 80;   // 15 帧 × 80ms = 1.2s，接近 Celeste 原版 FlyUp delay 0.10s
 
     var bgm = document.getElementById('bgmPlayer');
     var Sfx = (window.BirdMotion && window.BirdMotion.Sfx) || { play: function () {} };
@@ -101,10 +101,12 @@
             if (f >= FLY_FRAMES) { clearInterval(flyTimer); flyTimer = 0; return; }
             f++;
             if (img) img.src = FLY_SRC + pad2(f) + '.png';
-        }, 62);
+        }, FLYUP_FRAME_MS);
 
-        setTimeout(showLoading, FLY_MS);
-        setTimeout(leave, FLY_MS + LOADING_HOLD_MS);
+        // 鸟竖直飞 1.2s 期间，飞了 400ms（FlyUp 05/06 帧、还在视口内）后铺加载层盖住 header
+        // 加载层底下鸟继续飞，飞完 1.2s → leave() 跳目标页
+        setTimeout(showLoading, 400);
+        setTimeout(leave, FLY_MS);
     }
 
     function reset() {

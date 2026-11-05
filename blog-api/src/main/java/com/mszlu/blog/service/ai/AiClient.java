@@ -145,6 +145,39 @@ public class AiClient {
 
     private boolean isKeyValid(String k) { return k != null && !k.trim().isEmpty() && !k.trim().startsWith("your"); }
 
+    /** 取当前上下文用户（ThreadLocal 优先，异步场景回退 DB） */
+    private SysUser userOf(String explicitUserId) {
+        SysUser u = UserThreadLocal.get();
+        if (u != null) return u;
+        if (explicitUserId != null && !explicitUserId.isEmpty() && userMapper != null) {
+            return userMapper.selectById(explicitUserId);
+        }
+        return null;
+    }
+
+    /**
+     * 当前解析出的 Key 是否是「DeepSeek 服务商的用户自定义 Key」。
+     * 是 → 本次请求改走 DeepSeek 官方端点与 deepseek-chat 模型。
+     */
+    private boolean isDeepseekUser(String resolvedKey, String explicitUserId) {
+        if (resolvedKey == null) return false;
+        SysUser u = userOf(explicitUserId);
+        return u != null
+                && isKeyValid(u.getApiKey())
+                && u.getApiKey().trim().equals(resolvedKey)
+                && "deepseek".equalsIgnoreCase(u.getApiProvider());
+    }
+
+    /** 按用户服务商选择 chat 端点 */
+    private String chatBaseOf(String resolvedKey, String explicitUserId) {
+        return isDeepseekUser(resolvedKey, explicitUserId) ? DEEPSEEK_BASE_URL : baseUrl;
+    }
+
+    /** 按用户服务商选择 chat 模型（DeepSeek 只有一个对话模型，忽略入参） */
+    private String chatModelOf(String resolvedKey, String explicitUserId, String requested) {
+        return isDeepseekUser(resolvedKey, explicitUserId) ? DEEPSEEK_MODEL : requested;
+    }
+
     @Autowired(required = false)
     private BaseMapper<SysUser> userMapper;
 
@@ -158,6 +191,146 @@ public class AiClient {
     /** 系统 Key 是否可用（向后兼容，不含用户 Key 检查） */
     public boolean isConfigured() {
         return configured || resolveKey(null) != null;
+    }
+
+    /** DeepSeek 官方端点：Key 在默认端点（SiliconFlow）无效时，测试接口兜底再试一次 */
+    private static final String DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1";
+    private static final String DEEPSEEK_MODEL = "deepseek-chat";
+
+    /** Key 探测结果：provider 为通过验证的服务商（siliconflow/deepseek），error 为面向用户的失败原因 */
+    public static class KeyProbe {
+        public final String provider;
+        public final String error;
+        KeyProbe(String provider, String error) { this.provider = provider; this.error = error; }
+    }
+
+    /**
+     * 探测 Key 属于哪个服务商：先试默认端点（SiliconFlow），无效/不匹配再试 DeepSeek。
+     * 安装与保存自定义 Key 时共用，探测出的 provider 会随 Key 一起落库。
+     */
+    public KeyProbe probeKey(String key) {
+        String k = key == null ? "" : key.trim();
+        if (!isKeyValid(k)) return new KeyProbe(null, "请填入有效的 API Key");
+
+        String err = tryKey(baseUrl, model, k);
+        if (err == null) return new KeyProbe("siliconflow", null);
+        if (err.contains("无效或无权限") || err.contains("是否匹配")) {
+            String err2 = tryKey(DEEPSEEK_BASE_URL, DEEPSEEK_MODEL, k);
+            if (err2 == null) return new KeyProbe("deepseek", null);
+            return new KeyProbe(null, err2);
+        }
+        return new KeyProbe(null, err);
+    }
+
+    /**
+     * 用调用方提供的 Key 做一次最小化 chat 探测（不落库、不计入熔断、不占全局限速）。
+     * 供「安装自定义 Key」页面的“测试连接”使用。
+     *
+     * @param key 待验证的 Key
+     * @return null 表示连通；否则返回可直接展示给用户的错误原因
+     */
+    public String testKey(String key) {
+        return probeKey(key).error;
+    }
+
+    /** 用指定模型对 Key 做最小 chat 探测（安装成功后“测试所选模型”用），返回 null = 通过 */
+    public String testKeyModel(String key, String provider, String model) {
+        String k = key == null ? "" : key.trim();
+        if (!isKeyValid(k)) return "请填入有效的 API Key";
+        String m = model == null ? "" : model.trim();
+        if (m.isEmpty()) return "请先选择模型";
+        String base = "deepseek".equalsIgnoreCase(provider) ? DEEPSEEK_BASE_URL : baseUrl;
+        return tryKey(base, m, k);
+    }
+
+    /** 非对话类模型的 id 特征（SiliconFlow /models 返回全量，需剔除） */
+    private static final List<String> NON_CHAT_HINTS = java.util.Arrays.asList(
+            "embed", "bge", "rerank", "whisper", "tts", "speech", "audio",
+            "clip", "flux", "stable", "image", "video", "moderation", "dall");
+
+    /**
+     * 列出该 Key 在对应服务商可用的对话模型（安装成功后让用户挑选）。
+     * SiliconFlow 走 ?type=text&sub_type=chat 过滤；DeepSeek 只有对话模型，全量返回。
+     * 失败返回空列表（调用方降级：跳过选择直接进主页）。
+     */
+    public List<String> listModels(String key, String provider) {
+        List<String> out = new java.util.ArrayList<>();
+        if (!isKeyValid(key)) return out;
+        boolean deepseek = "deepseek".equalsIgnoreCase(provider);
+        String url = (deepseek ? DEEPSEEK_BASE_URL : baseUrl) + "/models";
+        if (!deepseek) url += "?type=text&sub_type=chat";
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(key.trim());
+        try {
+            ResponseEntity<String> resp = restTemplate.exchange(
+                    url, org.springframework.http.HttpMethod.GET, new HttpEntity<>(headers), String.class);
+            JSONObject json = JSON.parseObject(resp.getBody());
+            JSONArray data = json == null ? null : json.getJSONArray("data");
+            if (data == null) return out;
+            for (int i = 0; i < data.size() && out.size() < 60; i++) {
+                String id = data.getJSONObject(i).getString("id");
+                if (id == null || id.isEmpty()) continue;
+                if (!deepseek && looksNonChat(id)) continue;
+                out.add(id);
+            }
+        } catch (Exception e) {
+            log.warn("拉取模型列表失败: {}", e.getMessage());
+        }
+        return out;
+    }
+
+    private boolean looksNonChat(String id) {
+        String s = id.toLowerCase();
+        for (String h : NON_CHAT_HINTS) {
+            if (s.contains(h)) return true;
+        }
+        return false;
+    }
+
+    /** 对指定端点发一次最小 chat 请求；返回 null = 通过，否则为可直接展示的中文错误 */
+    private String tryKey(String base, String testModel, String k) {
+        JSONObject body = new JSONObject();
+        body.put("model", testModel);
+        JSONArray messages = new JSONArray();
+        JSONObject message = new JSONObject();
+        message.put("role", "user");
+        message.put("content", "ping");
+        messages.add(message);
+        body.put("messages", messages);
+        body.put("max_tokens", 1);
+        body.put("temperature", 0);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(k);
+
+        try {
+            ResponseEntity<String> response = restTemplate.postForEntity(
+                    base + "/chat/completions",
+                    new HttpEntity<>(body.toJSONString(), headers),
+                    String.class);
+            JSONObject json = JSON.parseObject(response.getBody());
+            JSONArray choices = json == null ? null : json.getJSONArray("choices");
+            if (choices == null || choices.isEmpty()) {
+                return "AI 服务返回异常响应";
+            }
+            return null;
+        } catch (HttpClientErrorException e) {
+            int status = e.getStatusCode().value();
+            if (status == 401 || status == 403) return "API Key 无效或无权限";
+            if (status == 402) return "API Key 余额不足";
+            if (status == 404) return "当前服务商不支持模型 " + testModel;
+            if (status == 429) return "上游限流，请稍后重试";
+            if (status == 400) return "请求被拒绝，请确认 Key 与服务商是否匹配";
+            return "AI 服务调用失败（HTTP " + status + "）";
+        } catch (HttpServerErrorException e) {
+            return "AI 服务暂时不可用（HTTP " + e.getStatusCode().value() + "）";
+        } catch (ResourceAccessException e) {
+            return "无法连接 AI 服务，请检查网络或服务地址";
+        } catch (Exception e) {
+            log.warn("API Key 测试失败: {}", e.getMessage());
+            return "测试失败，请稍后重试";
+        }
     }
 
     /** 全局限速：保证任意两次请求间隔 >= minIntervalMs */
@@ -271,8 +444,9 @@ public class AiClient {
             log.warn("AI 熔断器打开中，本次请求快速失败");
             return null;
         }
+        String effModel = chatModelOf(resolvedKey, userId, model);
         JSONObject body = new JSONObject();
-        body.put("model", model);
+        body.put("model", effModel);
         body.put("messages", JSON.parseArray(JSON.toJSONString(messages)));
         body.put("temperature", 0.8);
         if (jsonMode) {
@@ -283,11 +457,11 @@ public class AiClient {
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(resolvedKey);
 
-        String url = baseUrl + "/chat/completions";
+        String url = chatBaseOf(resolvedKey, userId) + "/chat/completions";
         String bodyStr = body.toJSONString();
         if (log.isDebugEnabled()) {
             log.debug("AI 请求 url={}, model={}, messages={}, keySource={}, body={}",
-                    url, model, messages.size(), keySource,
+                    url, effModel, messages.size(), keySource,
                     bodyStr.substring(0, Math.min(500, bodyStr.length())));
         }
 
@@ -383,7 +557,7 @@ public class AiClient {
             return null;
         }
         JSONObject body = new JSONObject();
-        body.put("model", model);
+        body.put("model", chatModelOf(resolvedKey, userId, model));
         body.put("messages", JSON.parseArray(JSON.toJSONString(messages)));
         body.put("temperature", 0.8);
         body.put("stream", true);
@@ -391,7 +565,7 @@ public class AiClient {
         StringBuilder full = new StringBuilder();
         try {
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(baseUrl + "/chat/completions"))
+                    .uri(URI.create(chatBaseOf(resolvedKey, userId) + "/chat/completions"))
                     .timeout(Duration.ofMillis(Math.max(readTimeout * 2L, 60000L)))
                     .header("Content-Type", "application/json")
                     .header("Authorization", "Bearer " + resolvedKey)
@@ -475,13 +649,19 @@ public class AiClient {
         String resolvedKey = resolveKey(userId);
         if (resolvedKey == null) return null;
         if (text == null || text.trim().isEmpty()) return null;
+        // DeepSeek 没有 embeddings 接口：DeepSeek 用户的向量检索改用系统 Key（SiliconFlow）
+        String embedKey = resolvedKey;
+        if (isDeepseekUser(resolvedKey, userId)) {
+            if (!isKeyValid(apiKey)) return null;
+            embedKey = apiKey;
+        }
         JSONObject body = new JSONObject();
         body.put("model", embeddingModel);
         body.put("input", text.length() > 1500 ? text.substring(0, 1500) : text);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.setBearerAuth(resolvedKey);
+        headers.setBearerAuth(embedKey);
 
         try {
             ResponseEntity<String> response = restTemplate.postForEntity(

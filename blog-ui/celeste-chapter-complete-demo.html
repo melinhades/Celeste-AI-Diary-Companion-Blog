@@ -263,6 +263,7 @@
         <div>Scroll.y <span id="vScroll">—</span></div>
         <div>fadeAlpha <span id="vFade">—</span></div>
         <div>snow α <span id="vSnow">1.00</span></div>
+        <div>snow 风长 <span id="vWind">16.0 · 拉丝</span></div>
       </div>
     </div>
 
@@ -327,6 +328,7 @@
       var vScroll = document.getElementById('vScroll');
       var vFade = document.getElementById('vFade');
       var vSnow = document.getElementById('vSnow');
+      var vWind = document.getElementById('vWind');
       var playhead = document.getElementById('playhead');
       var statusText = document.getElementById('statusText');
       var btnSlow = document.getElementById('btnSlow');
@@ -399,6 +401,9 @@
           vFade.textContent = '—';
         }
         vSnow.textContent = seq.snow.alpha.toFixed(2);
+        var wind = Math.sqrt(seq.snow.direction.x * seq.snow.direction.x +
+          seq.snow.direction.y * seq.snow.direction.y);
+        vWind.textContent = wind.toFixed(1) + (wind > 1 ? ' · 拉丝' : ' · 球形');
 
         var ratio = Math.min(1, t / TOTAL);
         playhead.style.left = (ratio * 100) + '%';

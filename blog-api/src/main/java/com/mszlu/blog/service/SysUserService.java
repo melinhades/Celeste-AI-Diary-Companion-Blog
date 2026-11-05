@@ -37,6 +37,12 @@ public interface SysUserService {
     /** 设置或清空当前用户自定义 AI API Key（空串=null→回退系统默认，最长 128） */
     Result updateApiKey(String token, String apiKey);
 
+    /**
+     * 用待安装的 Key 做一次上游连通性测试（不落库）。
+     * model 为空 → 探测服务商并附带可用对话模型列表；model 非空 → 用该模型做最小 chat 探测
+     */
+    Result testApiKey(String token, String apiKey, String model);
+
     /** 查询当前用户 API Key 配置状态（只返回 hasApiKey 布尔，不返回明文） */
     Result apiKeyStatus(String token);
 }

@@ -1016,15 +1016,22 @@ public class DiaryServiceImpl implements DiaryService {
         if (user == null) return Result.fail(403, "未登录");
         String content = param.getContent() == null ? "" : param.getContent();
         if (content.isEmpty()) return Result.fail(400, "内容为空");
-        String snippet = content.substring(0, Math.min(1200, content.length()));
-        String emotionCtx = (param.getEmotion() == null || param.getEmotion().isEmpty())
-                ? "" : "【这段时间已统计好的情绪数据】\n" + param.getEmotion() + "\n\n";
-        String prompt = "你是 Madeline，Celeste 的爬山女孩。你温暖、真诚、细腻。\n"
-                + emotionCtx
-                + "这是用户这段时间写下的日记合集：\n———\n" + snippet + "\n———\n\n"
-                + "请以 Madeline 的身份，回望这段日子，写一段简短温柔的感言（2-3 句）：先说说这些日记里最让你留意的东西，再给一句暖心的话。\n"
-                + "不要说教，不要罗列，像写在明信片背面的几行字。\n"
-                + "直接输出文字，不要 JSON，不要引号。";
+        String prompt;
+        if ("week".equals(param.getSnapType())) {
+            // 周度快照：只喂情绪占比、原话片段、趋势，不喂日记全文，避免写成总结
+            prompt = PromptBuilder.weeklySnapReflect(
+                    param.getEmotion(), param.getKeySentences(), param.getTrend());
+        } else {
+            String snippet = content.substring(0, Math.min(1200, content.length()));
+            String emotionCtx = (param.getEmotion() == null || param.getEmotion().isEmpty())
+                    ? "" : "【这段时间已统计好的情绪数据】\n" + param.getEmotion() + "\n\n";
+            prompt = "你是 Madeline，Celeste 的爬山女孩。你温暖、真诚、细腻。\n"
+                    + emotionCtx
+                    + "这是用户这段时间写下的日记合集：\n———\n" + snippet + "\n———\n\n"
+                    + "请以 Madeline 的身份，回望这段日子，写一段简短温柔的感言（2-3 句）：先说说这些日记里最让你留意的东西，再给一句暖心的话。\n"
+                    + "不要说教，不要罗列，像写在明信片背面的几行字。\n"
+                    + "直接输出文字，不要 JSON，不要引号。";
+        }
         String reply = aiClient.chat(new java.util.ArrayList<>(java.util.Arrays.asList(
                 new AiMessage("user", prompt))));
         if (reply == null || reply.isEmpty()) {

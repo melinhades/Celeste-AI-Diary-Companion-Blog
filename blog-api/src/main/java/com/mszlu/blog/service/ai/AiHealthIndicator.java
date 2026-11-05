@@ -24,6 +24,12 @@ public class AiHealthIndicator implements HealthIndicator {
 
     @Override
     public Health health() {
+        if (!aiClient.isConfigured()) {
+            return Health.down()
+                    .withDetail("configured", false)
+                    .withDetail("reason", "AI_API_KEY 未配置或仍为占位符")
+                    .build();
+        }
         String state = aiClient.circuitState();
         int failures = aiClient.consecutiveFailures();
         int threshold = aiClient.circuitFailureThreshold();

@@ -43,7 +43,7 @@
     }
   </style>
   <!-- 从 index 的鸟图标飞过来后接着显示同款加载层（视觉见 css/index-bird.css） -->
-  <link rel="stylesheet" href="css/index-bird.css?v=20261101f">
+  <link rel="stylesheet" href="css/index-bird.css?v=20261104a">
   <!-- 复用原实时聊天室（messages.html）的玻璃聊天面板 -->
   <link rel="stylesheet" href="css/messages.css?v=20261015a">
   <style>
@@ -83,6 +83,14 @@
     .chat-head { padding: 14px 16px 0; margin: 0 0 10px; flex-shrink: 0; }
     #chatLog { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 16px 2px; }
     .chat-input-row { flex-shrink: 0; margin: 10px 14px 14px; }
+    /* 表情按钮：Madeline 头像直接铺满整个圆形按钮，不再露出方形图底 */
+    .chat-input-row .emoji-btn { padding: 0; overflow: hidden; }
+    .chat-input-row .emoji-btn img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      border-radius: 50%;
+      display: block;
+    }
     .chat-login-tip { pointer-events: auto; padding: 140px 20px; }
     .chat-empty { padding: 46px 16px; }
     /* 隐藏态：卡片淡出，只留底部胶囊与操作提示 */
@@ -150,7 +158,7 @@
   <!-- ===== 实时聊天室（原 messages.html 的 UI，去掉左栏通知，只留山间聊天） ===== -->
   <div id="chatContainer" v-cloak>
     <button id="chatToggle" class="chat-toggle" :class="{show: chatHidden}" type="button" @click="toggleChat">山间聊天</button>
-    <div class="scene-hint" :class="{show: chatHidden}">A / D 移动 · Space 跳 · X 冲刺 · Enter 聊天</div>
+    <div class="scene-hint" :class="{show: chatHidden}">A / D 移动 · Space 跳 · X 冲刺 · Shift/Z 抓水母 · Enter 聊天</div>
     <div class="chat-login-tip" v-if="!loggedIn">
       请先<a href="login.html" style="color:#ffe36d">登录</a>，才能进入实时聊天。
     </div>
@@ -233,7 +241,7 @@
   </div>
 
   <script src="js/celeste-hair.js"></script>
-  <script src="js/celeste-character.js?v=20261102b"></script>
+  <script src="js/celeste-character.js?v=20261103a"></script>
   <script src="js/bird-motion.js?v=20261031a"></script>
   <script src="js/page-loading.js?v=20261101a"></script>
   <script>
@@ -895,8 +903,9 @@
       throwX: 100, throwY: -40, recoil: 80,
       carryY: -16,
       pickX: 10, pickTop: 16, pickBottom: 6,
-      deathTime: 0.64,
+      deathTime: 0.64, deathStep: 0.08,
       idleStep: 0.1, fallStep: 0.08,
+      bubbleFreq: 0.3, bubbleAmp: 1,   // Glider..ctor：new SineWave(0.3, 0)；未抓取前悬浮 ±1px 缓慢起伏
       originY: 27.8
     };
     // Strawberry wings：Sprites.xml <Loop id="flap" delay=".08" frames="0-8,0-8,0-7,9"/>
@@ -990,17 +999,20 @@
     }
     function spawnJelly() {
       if (jellies.length >= CAP.jelly) return;
-      const vw = W / Z, vh = H / Z;
-      let x = 0, y = 0, ok = false;
+      // 在 Madeline 近身随机刷新（左右 24–80px、上方 26–68px），
+      // 保证一次跳跃/冲刺就能抓到；落点避开实心块与玩家碰撞盒
+      let x = m.x, y = m.y - 40, ok = false;
       for (let a = 0; a < 8 && !ok; a++) {
-        const fx = Math.random() < 0.5 ? 0.06 + Math.random() * 0.24 : 0.70 + Math.random() * 0.24;
-        x = clampN(cam.x - SPAWN.x + fx * vw, BOUND.x0 + 8, BOUND.x1 - 8);
-        y = clampN(cam.y - SPAWN.y + vh * (0.18 + Math.random() * 0.27), -280, 34);
+        const side = Math.random() < 0.5 ? -1 : 1;
+        x = clampN(m.x + side * (24 + Math.random() * 56), BOUND.x0 + 8, BOUND.x1 - 8);
+        y = clampN(m.y - (26 + Math.random() * 42), BOUND.y0 + 10, 40);
         ok = !gliderSolidAt(x, y);
       }
-      if (!ok) { x = clampN(m.x, BOUND.x0 + 8, BOUND.x1 - 8); y = -200; }
+      if (!ok) { x = clampN(m.x + 40, BOUND.x0 + 8, BOUND.x1 - 8); y = m.y - 24; }
       jellies.push({
         x: x, y: y, vx: 0, vy: 0, spawnT: 0, phase: Math.random() * 6,
+        // Glider..ctor(bubble=true)：未抓取前锚在 startPos + SineWave(0.3) 起伏，抓取时 bubble=false
+        bubble: true, homeX: x, homeY: y, bobPhase: Math.random() * 6.283,
         rot: 0, scaleX: 1, scaleY: 1,
         highFrictionTimer: 0, gravityTimer: 0,
         deathT: -1, minHoldTimer: 0, cannotHoldTimer: 0, animT: Math.random() * 1.2, openT: 0
@@ -1016,7 +1028,8 @@
     // Player.orig_Pickup：Holding=Picked，Ducking=false，minHoldTimer=0.35
     // Glider.OnPickup：Speed=Zero，highFrictionTimer=0.5
     function tryPickupJelly() {
-      if (heldJelly || m.ducking || fly) return false;
+      // NormalUpdate IL 74-107：!Ducking && GrabCheck && !IsTired（CheckStamina < 20）
+      if (heldJelly || m.ducking || fly || m.checkStamina() < 20) return false;
       let best = null, bestD = Infinity;
       for (const j of jellies) {
         if (j.deathT >= 0 || j.cannotHoldTimer > 0 || !inPickupRange(j)) continue;
@@ -1029,6 +1042,7 @@
       best.highFrictionTimer = 0.5;
       best.vx = 0; best.vy = 0;
       best.gravityTimer = 0;
+      best.bubble = false;                 // Glider.OnPickup：bubble = 0（此后按物理物件处理）
       best.scaleX = 1; best.scaleY = 1;
       best.x = m.x; best.y = m.y + GLIDER.carryY;
       updateHud();
@@ -1081,6 +1095,16 @@
           continue;
         }
 
+        // 未持有且 bubble：锚在 startPos + UnitY * SineWave(0.3).Value
+        // Glider.Update IL 816-830 / 1933-1976：悬浮物体在首次被抓住前原地缓慢起伏
+        if (j.bubble) {
+          j.animT += dt; j.openT = 0;
+          j.rot = approachTo(j.rot, 0, Math.PI * dt);
+          j.x = j.homeX;
+          j.y = j.homeY + Math.sin((time + j.bobPhase) * GLIDER.bubbleFreq * Math.PI * 2) * GLIDER.bubbleAmp;
+          continue;
+        }
+
         // 未持有：旋转回正（Glider.Update 未持有 → target 0），动画继续走时
         j.animT += dt; j.openT = 0;
         j.rot = approachTo(j.rot, 0, Math.PI * dt);
@@ -1121,10 +1145,6 @@
         if (j.y - 10 < BOUND.y0) { j.y = BOUND.y0 + 10; j.vy = -j.vy * 0.5; }
         else if (j.y > BOUND.y1 + 16) { jellies.splice(i, 1); updateHud(); continue; }
 
-        // 未持有且与 Player 碰撞 → destroyed（Glider.Update IL 548-720）
-        if (Math.abs(m.x - j.x) < 8 && j.y > m.y - 11 && j.y < m.y + 10) {
-          j.deathT = 0; j.vx = 0; j.vy = 0;
-        }
       }
     }
 
@@ -1382,7 +1402,7 @@
       reset() {
         berries.length = 0; jellies.length = 0; feathers.length = 0;
         heldJelly = null;
-        if (m) m.holdSlowFall = false;
+        if (m) { m.holdSlowFall = false; m.holdCannotDuck = false; }
         leader.past.length = 0; leader.acc = 0;
         endFly(true);
         updateHud();
@@ -1391,7 +1411,9 @@
         FOLLOWER: FOLLOW, CAP: CAP, STARFLY: STARFLY, GLIDER: GLIDER,
         followerLerp: followerLerp, flyTargetSpeed: flyTargetSpeed,
         flyEndVy: flyEndVy, clampCount: clampCount,
-        get held() { return heldJelly; }
+        get held() { return heldJelly; },
+        get jellies() { return jellies; },
+        get player() { return m; }
       }
     };
 
@@ -1610,7 +1632,7 @@
       // 飞行中坠落/重来：静默收掉星飞并清空跟随轨迹（草莓/水母不结算、不清空）
       endFly(true);
       heldJelly = null;                        // 手上的水母留在原地（不结算、不回收）
-      m.holdSlowFall = false;
+      m.holdSlowFall = false; m.holdCannotDuck = false;
       leader.past.length = 0; leader.acc = 0;
       m.x = 0; m.y = 0; m.vx = 0; m.vy = 0;
       feetPrev = 0;
@@ -1655,8 +1677,10 @@
       // 持有：松开抓取键 → Throw；地面按下 → Drop（Throw 内 MoveY==1 也走 Drop）
       if (heldJelly) {
         if (heldJelly.minHoldTimer > 0) heldJelly.minHoldTimer -= dt;
+        // Player.Throw：!GrabCheck && minHoldTimer<=0 → Throw；Throw 内 MoveY==1 → Drop
         if (!input.grabHeld && heldJelly.minHoldTimer <= 0) throwJelly(input.down);
-        else if (!m.ducking && m.onGround && input.down && m.vy >= 0) throwJelly(true);
+        // IL 901-1048：!Ducking && onGround && MoveY==1 && Speed.Y>=0 && !holdCannotDuck → Drop + Duck
+        else if (!m.ducking && m.onGround && input.down && m.vy >= 0 && !m.holdCannotDuck) throwJelly(true);
       } else if (input.grabHeld && !fly) tryPickupJelly();
       m.holdSlowFall = !!heldJelly;
 
@@ -1718,6 +1742,7 @@
         m.jumpGraceTimer = 0; m.jumpBufferTimer = 0; m.sprite.play('idle');
         // 角色引擎自己的状态（冲刺/爬墙）也要回位，否则连跑测试会互相污染
         m.setState(CelesteCharacter.ST.Normal);
+        m.holdSlowFall = false; m.holdCannotDuck = false;
         m.dashes = m.maxDashes; m.stamina = 110; m.freezeTimer = 0;
         m.dashTime = 0; m.dashCooldownTimer = 0; m.dashRefillCooldownTimer = 0;
         m.dashTrail.length = 0;
@@ -1879,10 +1904,13 @@
         && hudCollectEl.textContent.indexOf('羽毛 6/6') > 0, hudCollectEl.textContent);
       log('水母刷新避开实心块', jellies.every(j => !gliderSolidAt(j.x, j.y)),
         jellies.map(j => j.x.toFixed(0) + ',' + j.y.toFixed(0)).join(' '));
+      log('水母刷新在 Madeline 近身', jellies.every(j => Math.hypot(j.x - m.x, j.y - m.y) <= 110),
+        jellies.map(j => (j.x - m.x).toFixed(0) + ',' + (j.y - m.y).toFixed(0)).join(' '));
 
       // ===== 水母：可持有物件（Glider / Holdable / Player HOLDING 分支）=====
       const jellyAt = (x, y) => ({
         x: x, y: y, vx: 0, vy: 0, spawnT: 1, phase: 0, rot: 0, scaleX: 1, scaleY: 1,
+        bubble: false, homeX: x, homeY: y, bobPhase: 0,
         highFrictionTimer: 0, gravityTimer: 0,
         deathT: -1, minHoldTimer: 0, cannotHoldTimer: 0, animT: 0, openT: 0
       });
@@ -1891,9 +1919,9 @@
       jellies.push(j1);
       log('PickupCollider 20×22 判定', inPickupRange(j1) && !inPickupRange(jellyAt(0, -60)),
         inPickupRange(j1) + ' / ' + inPickupRange(jellyAt(0, -60)));
-      log('抓取水母 → 持有并在 carry(0,-16)',
-        tryPickupJelly() && heldJelly === j1 && j1.x === 0 && j1.y === -16,
-        'held=' + (heldJelly === j1) + ' @' + j1.x + ',' + j1.y);
+      log('抓取水母 → 持有并在 carry(0,-16) / bubble 结束',
+        tryPickupJelly() && heldJelly === j1 && j1.x === 0 && j1.y === -16 && j1.bubble === false,
+        'held=' + (heldJelly === j1) + ' @' + j1.x + ',' + j1.y + ' bubble=' + j1.bubble);
 
       // Holding.SlowFall（Glider..ctor SlowFall=true）：maxFall→40（无方向）、重力 ×0.5
       m.onGround = false; m.y = -200; m.vy = 160; m.maxFall = 160; m.holdSlowFall = true;
@@ -1904,12 +1932,27 @@
       m.vx = 0;
       step(40, { right: true });
       log('水母空中 maxRun→108', Math.abs(m.vx - 108) < 0.01, 'vx=' + m.vx.toFixed(2));
-      // MoveY==1（下压张开）→ maxFall 目标 120
-      reset(0, 0); m.onGround = false; m.y = -200; m.maxFall = 160; m.vy = 160;
+      // MoveY==1（下压张开）→ maxFall 目标 120（reset 会清 holdSlowFall，这里按持有态重设）
+      reset(0, 0); m.onGround = false; m.y = -200; m.maxFall = 160; m.vy = 160; m.holdSlowFall = true;
       step(40, { down: true });
       log('水母下压 maxFall→120', m.maxFall === 120 && Math.abs(m.vy - 120) < 0.01,
         'maxFall=' + m.maxFall + ' vy=' + m.vy.toFixed(2));
       m.holdSlowFall = false;
+
+      // Glider..ctor(bubble=true) + Update IL 816-830：未抓取前锚在 startPos 起伏（首次抓取后 bubble=false）
+      ChatScene.reset(); reset(0, 0);
+      const jb = jellyAt(0, -40); jb.bubble = true; jellies.push(jb);
+      stepJellies(1 / 60);
+      log('未抓取水母原地悬浮（bubble）',
+        jb.bubble === true && jb.x === 0 && Math.abs(jb.y - -40) <= GLIDER.bubbleAmp + 0.01 && jb.vy === 0,
+        'bubble=' + jb.bubble + ' @' + jb.x + ',' + jb.y.toFixed(2) + ' vy=' + jb.vy);
+
+      // 冲刺/高速撞上水母时抓取：Holdable.Pickup / Glider.OnPickup 都不清零 Player.Speed
+      ChatScene.reset(); reset(0, 0);
+      const jm = jellyAt(0, -16); jellies.push(jm);
+      m.onGround = false; m.vx = 240; m.vy = -120;
+      log('冲刺抓取保留玩家动量', tryPickupJelly() && m.vx === 240 && m.vy === -120,
+        'playerV=' + m.vx.toFixed(2) + ',' + m.vy.toFixed(2));
 
       // Player.Throw：Release(UnitX*Facing) → Glider.OnRelease Speed=(100,-40)，玩家后坐 -80
       ChatScene.reset(); reset(0, 0);
@@ -1939,12 +1982,29 @@
       log('tick 抓取 / 松开投掷接线', picked && !heldJelly && j3.vx === 100 && m.holdSlowFall === false,
         'picked=' + picked + ' vx=' + j3.vx + ' slow=' + m.holdSlowFall);
 
-      // Glider.Update 未持有且与 Player 碰撞 → destroyed + 0.64s 死亡帧后 RemoveSelf
+      // holdCannotDuck：NormalUpdate IL 1971-2010 / 901 / 1008-1043
+      // 空中按住下再落地 → 不丢水母、不下蹲；落地松开后再按 → Drop
+      ChatScene.reset(); reset(0, 0);
+      const j5 = jellyAt(0, -16); jellies.push(j5);
+      keys['shift'] = true; tick(1 / 60);
+      m.onGround = false; m.y = -100; m.vy = 40; m.holdSlowFall = true;
+      keys['s'] = true; tick(1 / 60);
+      const guarded = m.holdCannotDuck === true;
+      m.y = 0; m.vy = 0; m.onGround = true; tick(1 / 60);
+      log('空中下压 holdCannotDuck', guarded && m.holdCannotDuck === true && m.ducking === false,
+        'holdCannotDuck=' + m.holdCannotDuck + ' ducking=' + m.ducking);
+      log('落地按住下不丢水母', heldJelly === j5, 'held=' + (heldJelly === j5));
+      keys['s'] = false; tick(1 / 60);
+      log('落地松开清除 holdCannotDuck', m.holdCannotDuck === false, 'holdCannotDuck=' + m.holdCannotDuck);
+      keys['s'] = true; tick(1 / 60);
+      log('地面再次按下 → Drop 水母', !heldJelly && j5.vx === 0 && j5.vy === 0,
+        'held=' + (heldJelly === j5) + ' v=' + j5.vx + ',' + j5.vy);
+      keys['s'] = false; keys['shift'] = false;
+      reset(0, 0);   // Drop 后 m.ducking = true，复位后再测销毁动画
+
+      // Glider 销毁动画 8 帧 ×0.08s = 0.64s 后 RemoveSelf
       ChatScene.reset();
-      jellies.push(jellyAt(m.x, m.y - 5));
-      stepJellies(1 / 60);
-      log('水母撞玩家销毁', jellies.length === 1 && jellies[0].deathT >= 0,
-        'deathT=' + (jellies[0] && jellies[0].deathT));
+      const jd = jellyAt(0, -40); jellies.push(jd); jd.deathT = 0;
       if (jellies.length) for (let i = 0; i < 40; i++) stepJellies(1 / 60);
       log('死亡动画后回收', jellies.length === 0, jellies.length);
       ChatScene.reset();
@@ -2063,7 +2123,7 @@
   })();
   </script>
   <script src="js/api.js?v=20261002"></script>
-  <script src="js/auth.js?v=20261101c"></script>
+  <script src="js/auth.js?v=20261104a"></script>
   <script src="js/felt-piano.js?v=20261003"></script>
   <script src="js/vue.global.prod.js?v=20261008a"></script>
   <script src="js/messages.js?v=20261102a"></script>

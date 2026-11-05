@@ -1,14 +1,16 @@
 package com.mszlu.blog.controller;
 
+import com.mszlu.blog.dao.mapper.UploadImageMapper;
+import com.mszlu.blog.dao.pojo.UploadImage;
 import com.mszlu.blog.vo.Result;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
@@ -18,6 +20,9 @@ import java.util.UUID;
 @RestController
 @RequestMapping("upload")
 public class UploadController {
+
+    @Autowired
+    private UploadImageMapper uploadImageMapper;
 
     private static final List<String> ALLOWED_EXTENSIONS = Arrays.asList("png", "jpg", "jpeg", "gif", "webp");
     private static final List<String> ALLOWED_MIME_TYPES = Arrays.asList(
@@ -58,13 +63,16 @@ public class UploadController {
         }
 
         try {
-            File dir = new File(System.getProperty("user.dir"), "uploads");
-            if (!dir.exists() && !dir.mkdirs()) {
-                return Result.fail(20001, "上传失败");
-            }
-            String fileName = UUID.randomUUID().toString().replace("-", "") + "." + ext;
-            file.transferTo(new File(dir, fileName));
-            return Result.success("/uploads/" + fileName);
+            // 存数据库而不是容器磁盘：线上磁盘是临时的，重启/重新部署后文件会丢失导致 404
+            byte[] bytes = file.getBytes();
+            String id = UUID.randomUUID().toString().replace("-", "");
+            UploadImage image = new UploadImage();
+            image.setId(id);
+            image.setContentType(contentType.toLowerCase());
+            image.setData(bytes);
+            image.setCreateDate(System.currentTimeMillis());
+            uploadImageMapper.insert(image);
+            return Result.success("/images/" + id);
         } catch (Exception e) {
             return Result.fail(20001, "上传失败");
         }

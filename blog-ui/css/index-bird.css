@@ -37,6 +37,10 @@
     overflow: visible;
     align-items: center;
     justify-content: center;
+    position: relative;
+    /* crow 素材 32×24 画布，鸟身只在下半部（y≈11..23，中心≈17），
+       按渲染高度 28px 折算需上移 ~6px 视觉才居中；FlyUp 帧本身居中，飞出不受影响 */
+    top: -6px;
 }
 .chat-crow .chat-crow-box img {
     height: 28px;            /* 与 .btn-sm 按钮高度对齐，保持 4:3 像素比 */
@@ -52,15 +56,17 @@
     filter: brightness(1.3) drop-shadow(0 0 10px rgba(185, 220, 255, .9));
 }
 
-/* ---------- 点击后飞出：展翅向上翱翔，直冲画面顶端 ---------- */
+/* ---------- 点击后飞出：按 BirdPath FlyUp 动作纯竖直向上飞 ----------
+   飞行时间 1.2s（Celeste 原版 FlyUp15 帧×0.10s=1.5s，稍快一点但够看清），
+   路径纯 Y 轴，不带水平偏移（用户说"竖直向上飞不是按那个曲线路线"）。 */
 .chat-crow.flying-out { pointer-events: none; }
 .chat-crow.flying-out .chat-crow-box img {
-    animation: crowFlyOut .95s cubic-bezier(.22, .61, .36, 1) forwards;
+    animation: crowFlyOut 1.2s ease-in forwards;
 }
 @keyframes crowFlyOut {
     0%   { transform: translate(0, 0) scale(1); opacity: 1; }
-    35%  { transform: translate(-3vw, -30vh) scale(1.12) rotate(-3deg); opacity: 1; }
-    100% { transform: translate(-6vw, -70vh) scale(1.32) rotate(-6deg); opacity: 0; }
+    60%  { transform: translate(0, -55vh) scale(1.15); opacity: 1; }
+    100% { transform: translate(0, -85vh) scale(1.35); opacity: 0; }
 }
 
 /* ---------- 统一加载层 ----------

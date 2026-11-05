@@ -9,7 +9,7 @@
 3. 新增三种聊天触发互动：草莓跟随（上限 **10**）、水母可持有物件（上限 **4**，`Celeste.Glider` 的 `Holdable` 语义）、金羽毛 + StarFly（同时最多 **6** 颗）。
 4. 入口切换：`js/auth.js` 顶部聊天鸟链接与 `js/seed.js` 页面注册表由 `messages.html` 指向新页面；旧 `messages.html` **保留不删**，其布局与行为不变。
 
-非目标：不做草莓/水母结算（结算入口留给 `ChatScene.reset()`）；**notify（通知）面板本次不加**（用户明确说之后再加）；不改后端 `RealtimeChatController`；`celeste-character.js` 仅围绕持有缓降扩展（`holdSlowFall` 驱动 maxFall / 重力 / 空中 maxRun / 墙滑），不改其余状态机；不改 `shelf.js`。
+非目标：不做草莓/水母结算（结算入口留给 `ChatScene.reset()`）；**notify（通知）面板本次不加**（用户明确说之后再加）；不改后端 `RealtimeChatController`；`celeste-character.js` 仅围绕持有缓降扩展（`holdSlowFall` 驱动 maxFall / 重力 / 空中 maxRun / 墙滑，`holdCannotDuck` 复刻落地前下压门控），不改其余状态机；不改 `shelf.js`。
 
 ## 2. 载体现状（已核对）
 
@@ -89,17 +89,21 @@
 
 ### 6.2 水母（移植 `Celeste.Glider` 的 `Holdable` 语义）
 
-证据见研究文档 §25：`Glider.orig_ctor`（`Holdable(0.3)`、`PickupCollider 20×22 @(-10,-16)`、`SlowFall=true`、`SlowRun=false`）、`Glider.OnRelease`（`dir*100`，`Y*=0.5`，X≠0 且 Y==0 → Y=-0.4）、`Player.NormalUpdate` 持有分支（IL 75/85-307/823-947）。
+> 取证边界：本地 `Celeste.dll` **不存在 `Celeste.Jellyfish`**（`--type Celeste.Jellyfish` 返回 0 匹配，`unmatched_type_names: ["Celeste.Jellyfish"]`）。水母实体实际是 `Celeste.Glider`（`Holdable`，第九章 `game_10_glider_*`，素材 `Gameplay/objects/glider`），以下全部按 `Glider` 取证。
 
-**刷新**：`🪼` token → 在相机可见区左右两侧随机生成 1 只，同时最多 **4** 只（含手持）；取点策略与羽毛相同（`f ∈ [0.06,0.30] ∪ [0.70,0.94]`，`worldY` 取可见区上中部），8 次重试避开实心块。不在历史回放中生成。
+证据见研究文档 §25：`Glider.orig_ctor`（`Holdable(0.3)`、`PickupCollider 20×22 @(-10,-16)`、`SlowFall=true`、`SlowRun=false`、`bubble=true`、`platformSine = SineWave(0.3, 0)`）、`Glider.OnPickup`（`Speed=Zero`、`highFrictionTimer=0.5`、`bubble=0`）、`Glider.OnRelease`（`dir*100`，`Y*=0.5`，X≠0 且 Y==0 → Y=-0.4）、`Player.NormalUpdate` 持有分支（IL 74-107 / 823-947）、`Player.orig_Pickup`（不清玩家 `Speed`）。
 
-**抓取**：玩家未持有、未蹲下、未飞行、水母不在冷却（`cannotHoldTimer > 0`）时，按住 `Shift/Z`（`GrabCheck` 为按住式）→ 取最近的相交水母；成功则 `minHoldTimer=0.35`、`highFrictionTimer=0.5`、速度清零、`cannotHoldTimer` 保留、携带到 `m.y-16`。
+**刷新**：`🪼` token → 在 Madeline 近身随机生成 1 只（左右 24–80px、上方 26–68px，8 次重试避开实心块，保证一次跳跃可及），同时最多 **4** 只（含手持）；不在历史回放中生成。生成时记录悬浮锚 `homeX/homeY/bobPhase`，`bubble=true`。
 
-**持有**：`holdSlowFall=true` → `maxFall` 目标 40（`MoveY==1` → 120，`==-1` → 24，`Approach(300*dt)`）、重力 ×0.5、空中 `maxRun=108` 且水平加速度 ×0.5、不进入墙滑、跳过攀爬；持有期间不向引擎传 `grabHeld`（等价 `Holding != null` 跳过抓墙分支）；旋转 `ClampedMap(m.vx,-300,300,±0.698)` / 空中 `±1.047`，角速度 `PI*dt`；动画 `held` / `fall→fallLoop`（`m.vy>20`）；缩放 `MoveY>0 → (0.7,1.4)`、`<0 → (1.2,0.8)`。
+**气泡悬浮（未抓取）**：`bubble` 期每帧 `x=homeX`、`y=homeY + sin(time*0.3*2π + bobPhase)*1`，旋转回正、不播开伞帧；抓取成功即 `bubble=false`（`Glider.OnPickup`）。
 
-**投掷 / 丢弃**：松开抓取键且 `minHoldTimer<=0` → `Throw`：`Release(Facing)` 速度 `(100,-40)`、玩家后坐 `vx += -80*facing`；地面按 ↓（`vy>=0`）→ `Drop`：零速度。`Release` 置 `gravityTimer=0.1`、`cannotHoldTimer=0.3`，若仍与实心块重叠沿 X（或向上）最多挪 10px 脱困。
+**抓取**：玩家未持有、未蹲下、未飞行、未疲惫（`checkStamina() < 20` 即 `IsTired`，拒绝抓取）、水母不在冷却（`cannotHoldTimer <= 0`）时，按住 `Shift/Z`（`GrabCheck` 为按住式）→ 取最近的相交水母；成功则 `minHoldTimer=0.35`、水母自身速度清零、`bubble=false`、`cannotHoldTimer` 保留、携带到 `m.y-16`。**不清零玩家速度**（`Player.orig_Pickup` / `Holdable.Pickup` 均不清 `Speed`）→ 冲刺撞上瞬间抓取保留 `vx=240`。
 
-**未持有物理**：`gravityTimer>0` 时同时跳过摩擦与重力；否则空中重力 200（`vy<-30` 时 100）、横向摩擦 40/10、地面 `Approach(vx, ±20 侧滑, 800*dt)`；`MoveH/V` 命中实心 → `vx*=-1` / `vy=-vy*0.5`（向下则 0）；越界夹回、掉出下边界移除；撞玩家 → 进入销毁（8 帧 0.64s 后移除）。
+**持有**：`holdSlowFall=true` → `maxFall` 目标 40（`MoveY==1` → 120，`==-1` → 24，`Approach(300*dt)`）、重力 ×0.5、空中 `maxRun=108` 且水平加速度 ×0.5、不进入墙滑、跳过攀爬；`Holding.SlowFall && MoveY==1` → `holdCannotDuck=true`（空中按下也置位），着地且未按下 ↓ 才清除，因此落地不会自动蹲下、不会误丢水母；持有期间不向引擎传 `grabHeld`（等价 `Holding != null` 跳过抓墙分支）；旋转 `ClampedMap(m.vx,-300,300,±0.698)` / 空中 `±1.047`，角速度 `PI*dt`；动画 `held` / `fall→fallLoop`（`m.vy>20`）；缩放 `MoveY>0 → (0.7,1.4)`、`<0 → (1.2,0.8)`。
+
+**投掷 / 丢弃**：松开抓取键且 `minHoldTimer<=0` → `Throw`：`Release(Facing)` 速度 `(100,-40)`、玩家后坐 `vx += -80*facing`；地面按 ↓（`vy>=0` 且 `!holdCannotDuck`）→ `Drop`：零速度。`Release` 置 `gravityTimer=0.1`、`cannotHoldTimer=0.3`，若仍与实心块重叠沿 X（或向上）最多挪 10px 脱困。
+
+**未持有物理**：`bubble` 时走上式悬浮；否则 `gravityTimer>0` 时同时跳过摩擦与重力；空中重力 200（`vy<-30` 时 100）、横向摩擦 40/10、地面 `Approach(vx, ±20 侧滑, 800*dt)`；`MoveH/V` 命中实心 → `vx*=-1` / `vy=-vy*0.5`（向下则 0）；越界夹回、掉出下边界移除；死亡动画 0.64s 后移除。（原作 `OnCollide` 碰撞销毁的实体 token `0x020004ac` 未能解析，本轮不启用，见 D18。）
 
 **表现**：图层在人物之后（`Depth = player.Depth - 1`）；Sprite origin `(24, 27.8)`，绘制 48×48；不结算、不计 HUD 收集数（HUD 只显示场上只数）。
 
@@ -159,8 +163,8 @@
 **内联场景脚本**
 11. `preload()` 追加：`berry0..9`（wings）、`jelly0..9` + `jellyHeld` + `jellyFall0..2` + `jellyFallLoop0..1` + `jellyDeath0..7`、`feather0..41`（21 idle + 21 flash）、`orb`（starFly00）、`morph0..3`（startStarFly）。
 12. 新增状态：`leader = { past:[], acc:0 }`、`berries=[]`、`jellies=[]`、`heldJelly=null`、`feathers=[]`、`fly=null`、`collectCounts={berry,jelly,feather}`，以及 `GLIDER` 常量表（§6.2 数值与 `celeste-dash-反编译研究.md` §25.7）。
-13. 新增函数：`toScreen` 复用；`stepLeader(dt)`、`addBerry(n)`、`spawnJelly()`、`gliderSolidAt()`、`inPickupRange()`、`tryPickupJelly()`、`releaseJelly(dirX,dirY)`、`throwJelly(drop)`、`stepFollowers(dt)`、`stepJellies(dt)`、`jellyImage(j)`、`stepFeathers(dt)`、`startFly()`、`stepFly(dt)`、`endFly()`、`drawBerries()`、`drawJellies()`、`drawFeathers()`、`drawFly()`、`updateHud()`、`consume(content)`。
-14. `tick(dt)`：**持有水母段**在 `m.update` 之前：`minHoldTimer` 递减；`!grabHeld && minHoldTimer<=0` → `throwJelly(input.down)`；地面按 ↓且 `vy>=0` → `throwJelly(true)`；未持有时按住抓取键 → `tryPickupJelly()`；随后 `m.holdSlowFall = !!heldJelly`，并把传给引擎的 `grabHeld` 强制为 `false`（等价 `Holding != null` 跳过攀爬）。之后 `if (fly) stepFly(dt); else m.update(...)`；再 `updateCam`；再 `stepLeader/stepFollowers/stepJellies/stepFeathers`；空无与坠落判定在飞行时跳过。
+13. 新增函数：`toScreen` 复用；`stepLeader(dt)`、`addBerry(n)`、`spawnJelly()`（生成悬浮锚 `homeX/homeY/bobPhase`，`bubble=true`）、`gliderSolidAt()`、`inPickupRange()`、`tryPickupJelly()`（`checkStamina()<20` 拒绝、成功后 `bubble=false`、只清水母自身速度）、`releaseJelly(dirX,dirY)`、`throwJelly(drop)`、`stepFollowers(dt)`、`stepJellies(dt)`（含 `bubble` 的 SineWave 悬浮分支）、`jellyImage(j)`、`stepFeathers(dt)`、`startFly()`、`stepFly(dt)`、`endFly()`、`drawBerries()`、`drawJellies()`、`drawFeathers()`、`drawFly()`、`updateHud()`、`consume(content)`。
+14. `tick(dt)`：**持有水母段**在 `m.update` 之前：`minHoldTimer` 递减；`!grabHeld && minHoldTimer<=0` → `throwJelly(input.down)`；地面按 ↓且 `vy>=0` 且 `!m.holdCannotDuck` → `throwJelly(true)`；未持有时按住抓取键 → `tryPickupJelly()`；随后 `m.holdSlowFall = !!heldJelly`，并把传给引擎的 `grabHeld` 强制为 `false`（等价 `Holding != null` 跳过攀爬）。之后 `if (fly) stepFly(dt); else m.update(...)`；再 `updateCam`；再 `stepLeader/stepFollowers/stepJellies/stepFeathers`；空无与坠落判定在飞行时跳过。`reset()` / `respawn()` 同时清 `holdSlowFall` 与 `holdCannotDuck`。
 15. `render()`：`m.draw` 之前插入 `drawFeathers(); drawBerries();`；`m.draw` **之后**插入 `drawJellies()`（水母 `Depth = player.Depth - 1`，盖在人物之上）；飞行时用 `drawFly()` 替代 `m.draw`。
 16. 同步暴露 `window.ChatScene = { consume, revealChat, reset, stats, ready:false, __test }`（在 IIFE 顶部定义，`main()` 完成后 `ready=true`；未就绪时 `consume` 入队，就绪后回放队列）；`stats` 含 `held` 布尔。
 17. `respawn()` / `reset()` 中追加 `endFly(true)`、清空 `fly` 与 `heldJelly`（手上的水母留在原地，不结算）；`reset()` 清空草莓/水母/羽毛并归零 HUD。
@@ -197,15 +201,16 @@
 | D6 | 羽毛方向由关卡配置 | 触碰瞬间取 `sign(feather.x - m.x)`，同 x 用 `m.facing` | 场景无方向羽毛 |
 | D7 | 飞行结束羽毛重生 | 不重生（无结算，需再发消息） | 按需求 |
 | D8 | 头发变形 4 → 飞行 7，`offY` `-2` / `3` | 同 | 无偏差 |
-| D9 | 水母由关卡实体放置 | `🪼` 消息触发、相机可见区随机生成 | 产品需求；语义仍是 Holdable |
+| D9 | 水母由关卡实体放置 | `🪼` 消息触发、在 Madeline 近身随机生成（保证可抓） | 产品需求；语义仍是 Holdable |
 | D10 | `Holdable.Check` 用完整碰撞盒 | 20×22 抓取盒与 8×11 身体盒手工相交 | 语义等价 |
-| D11 | 抓取需要按住抓取键且未疲惫 | 只检查按住，不模拟 `IsTired` / `NoGrabbing` | 场景无体力消耗 |
+| D11 | 抓取需要按住抓取键且未疲惫（`CheckStamina < 20`）且无 `NoGrabbing` | 已按 `checkStamina() < 20` 拒绝抓取；`NoGrabbing` 未实现（场景无敌方抓取禁用） | 主分支已对齐，仅剩 U11 |
 | D12 | 死亡协程时长由 `DestroyAnimationRoutine` 决定 | 固定 0.64s（8 帧 × 0.08） | 推定（U8） |
 | D13 | `carryOffset` 逐帧逼近 `(0,-12)` + `CarryYOffset` | 固定总偏移 `-16` | 推定（U7） |
 | D14 | 风场 `windMovedUp` / `WindMode` 分支 | 未实现（场景无风） | 缺口（U9） |
 | D15 | 持有时缩放 `Approach(2*dt)` | 直接设为目标缩放 | 视觉差异极小（U12） |
-| D16 | `holdCannotDuck` 门控下压 Drop | 仅检查 `onGround && MoveY==1 && Speed.Y>=0` | 少一个边界（U10） |
+| D16 | `holdCannotDuck` 门控下压 Drop | 已实现：空中按 ↓ 置位、落地未按 ↓ 清除、再按才 Drop（4 条断言） | 已对齐（U10） |
 | D17 | `Throw` 播放 `throw` 精灵与音效 | 仅物理与后坐 | 引擎无 throw 动画，场景静音 |
+| D18 | 未持有的水母与玩家碰撞会销毁（`OnCollide` → `castclass 0x020004ac`） | 未启用 | 类型名未能解析，且会误伤悬浮水母（U13） |
 
 ## 10. 验证
 
@@ -226,10 +231,11 @@
 1. 加载层正常淡出；场景、月亮生物、空无之心、BGM 均在；无 console 错误。
 2. 聊天卡在屏幕正中，左侧 rail 显示「山间聊天」，`#chatLog` 内部滚动并停在底部。
 3. 发 `🍓`×3 → 3 颗草莓跟随；再累计到 11 颗 → 停在 10；HUD 同步。
-4. 发 `🪼` → 相机可见区随机出现 1 只水母（避开实心块）；累计到 5 → 停在 4；再发不新增。
-4a. 走到水母旁按住 `Shift/Z` → 抓取并携带在 `m.y-16`；持有时下落明显变慢（`maxFall` 40），空中水平速度上限 108。
-4b. 松开 `Shift/Z` → 水母以 `(±100,-40)` 飞出、玩家后坐 `-80`；地面按 ↓ → 零速度丢弃；0.3s 内不能立刻重抓。
-4c. 未持有的水母撞到 Madeline → 播放死亡帧后 0.64s 移除；掉出下边界同样移除。
+4. 发 `🪼` → Madeline 近身随机出现 1 只水母（左右 24–80px、上方 26–68px，避开实心块），生成后原地气泡悬浮（`y` 围绕锚点 ±1px）；累计到 5 → 停在 4；再发不新增。
+4a. 走到水母旁按住 `Shift/Z` → 抓取并携带在 `m.y-16`；持有时下落明显变慢（`maxFall` 40），空中水平速度上限 108；气泡悬浮停止。
+4b. 松开 `Shift/Z` → 水母以 `(±100,-40)` 飞出、玩家后坐 `-80`；地面按 ↓ → 零速度丢弃；0.3s 内不能立刻重抓；空中按下 ↓ 后再落地不会误丢（`holdCannotDuck`），松开 ↓ 再按才 Drop。
+4c. 冲刺 `X` 撞向水母时按 `Shift` → 抓取成功且玩家 `vx=240` 保留；体力 `< 20` 时抓取被拒绝。
+4d. 未持有的水母有独立物理（`gravityTimer` / 摩擦 / 反弹）；掉出下边界移除；撞玩家不销毁（D18）。
 5. 发 `🪶` → 视野两侧随机出现羽毛；触碰 → 变形 0.42s → 球体飞行（7 段飞行色头发）→ 2s 后落地；羽毛不重生。
 6. 按 `A` → 聊天卡淡出、胶囊出现；`Enter` → 淡入并聚焦；`Esc` → 隐藏。
 7. 第二个账号发消息 → 自动显现且不抢焦点；bird 消息不触发显现。
@@ -239,7 +245,7 @@
 
 ### 10.3 缓存版本
 
-`auth.js?v=20261101c`（所有引用页）、`messages.js?v=20261101c`、`seed.js?v=20261101c`；demo 内联无需 bump；引擎脚本 `js/celeste-character.js?v=20261102b`（本轮新增 `holdSlowFall` 的空中 `maxRun=108` 分支）。
+`auth.js?v=20261101c`（所有引用页）、`messages.js?v=20261101c`、`seed.js?v=20261101c`；demo 内联无需 bump；引擎脚本 `js/celeste-character.js?v=20261103a`（本轮新增 `holdSlowFall` 的空中 `maxRun=108` 分支与 `holdCannotDuck`）。
 
 ## 11. 已确认决策
 
@@ -250,4 +256,4 @@
 5. demo 原有场景内容全部保留（空无之心、月亮生物、音乐、加载层）。
 6. notify 面板本次不做。
 7. StarFly 时长 2s（原作）。
-8. 水母按原作 `Celeste.Glider`（`Holdable`）实现：抓取 / 持有缓降 / 投掷 / 丢弃 / 未持有物理 / 撞玩家销毁，不结算。
+8. 水母按原作 `Celeste.Glider`（`Holdable`）实现：气泡悬浮 / 抓取 / 持有缓降 / 投掷 / 丢弃 / 未持有物理，不结算；抓取不清玩家速度（保留 Dash-Grab 动量）；碰撞销毁未启用（D18）。

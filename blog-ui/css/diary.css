@@ -90,32 +90,16 @@ html,body {
   overflow-x:hidden;
   scrollbar-width:none;
 }
-/* 固定背景放在 html 上：body 有 padding + height:100%，挂在 body 上会被裁到
-   padding box，底部 8px 只剩底色；分数像素（缩放/系统 DPI）下更容易出现接缝。
-   html 是根元素，背景铺满整个视口。 */
-html {
-    background:
-            linear-gradient(rgba(15,23,42,.16), rgba(15,23,42,.28)),
-            url('../celeste-gui/diary-bg.webp') center / cover no-repeat fixed;
-}
 body {
     display:flex;
     flex-direction:column;
-    min-height:100%;
     padding:10px 16px 8px;
     position:relative;
     z-index:0;
-    background:none;            /* 情绪色仍由 body.emotion-* 的 background-color 叠加 */
+    background:
+            linear-gradient(rgba(15,23,42,.16), rgba(15,23,42,.28)),
+            url('../celeste-gui/diary-bg.webp') center / cover no-repeat fixed;
     transition: background-color 1.2s ease;
-}
-/* 视口最底部 4px 兜底：不论固定背景/分数像素怎么接缝，都不让白色透出来。
-   层级在书页(z5)与前景雪(z3)之下，不遮挡日记内容。 */
-body::after {
-    content:"";
-    position:fixed; left:0; right:0; bottom:0; height:4px;
-    background:var(--c-bg-night);
-    pointer-events:none;
-    z-index:2;
 }
 body::-webkit-scrollbar { display:none; }
 
@@ -721,10 +705,13 @@ body::before {
         drop-shadow(0 0 10px rgba(200,235,255,1)) drop-shadow(0 0 24px rgba(120,190,255,.8));
 }
 /* ===== Celeste 日记本 ===== */
+/* 书页贴底，但底部 48px 淡出到背景：既不留纸边硬白线，也不在书页下方露缝 */
 #journalStage { position:fixed; left:0; right:0; bottom:0; width:100%; margin:0; z-index:5; display:flex; justify-content:center; pointer-events:none; }
 #journalBook { position:relative; perspective:1800px; pointer-events:auto; margin-left:80px; }
 .book-page {
     position:relative; width:100%;
+    -webkit-mask-image:linear-gradient(to bottom, #000 calc(100% - 48px), transparent 100%);
+    mask-image:linear-gradient(to bottom, #000 calc(100% - 48px), transparent 100%);
     transition:transform .55s cubic-bezier(.3,.7,.25,1), opacity .5s ease;
     will-change:transform, opacity;
 }

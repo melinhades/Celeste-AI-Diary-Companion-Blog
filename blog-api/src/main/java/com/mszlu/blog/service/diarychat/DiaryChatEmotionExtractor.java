@@ -134,16 +134,21 @@ public class DiaryChatEmotionExtractor {
     // ⑥ Plutchik 原型句 embedding 缓存（懒初始化，避免每次 8 次 API 调用）
     // ────────────────────────────────────────────────────
     private volatile float[][] prototypeVectors;
+    /** 全部失败后的冷却截止时间：避免上游异常时每条消息都重试 8 次 embed（每次都触发全局限速） */
+    private volatile long prototypeRetryAfter = 0;
     private synchronized void ensurePrototypeVectors() {
         if (prototypeVectors != null) return;
+        long now = System.currentTimeMillis();
+        if (now < prototypeRetryAfter) return;
         float[][] vecs = new float[PLUTCHIK_PROTOTYPES.length][];
         int validCount = 0;
         for (int i = 0; i < PLUTCHIK_PROTOTYPES.length; i++) {
             float[] v = aiClient.embed(PLUTCHIK_PROTOTYPES[i]);
             if (v != null && v.length > 0) { vecs[i] = v; validCount++; }
         }
-        // 全部失败时：保持 null，调用方降级
+        // 全部失败时：保持 null，调用方降级，并冷却 60s 再重试
         if (validCount > 0) prototypeVectors = vecs;
+        else prototypeRetryAfter = now + 60_000;
     }
 
     // ────────────────────────────────────────────────────

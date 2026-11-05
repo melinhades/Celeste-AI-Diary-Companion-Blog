@@ -154,6 +154,15 @@ a { text-decoration: none; color: inherit; }
     box-shadow: 0 0 15px rgba(138, 43, 226, 0.3);
 }
 .btn-sm { padding: 5px 12px; font-size: 13px; }
+/* 头部 API Key 钥匙按钮：四周框全透明，只留钥匙素材（悬停播放 idle 帧动画，见 auth.js） */
+.api-key-btn,
+.api-key-btn:hover,
+.api-key-btn:focus,
+.api-key-btn:active {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+}
 .btn-danger {
     background: rgba(231, 76, 60, 0.1);
     color: #ff6b6b;

@@ -85,9 +85,25 @@
     const likersText = ref('');
     const canEdit = ref(false);
 
+    // 非匿名统一用默认头像；匿名文章显示「匿名」+ 匿名头像
+    const DEFAULT_AVATAR = 'celeste-gui/user-avatar.webp';
+    const ANONYMOUS_AVATAR = 'celeste-icons/beat.png';
+    function isAnonymous(a) { return !!(a && Number(a.anonymous) === 1); }
     function authorName(a) {
+        if (isAnonymous(a)) return '匿名';
         const n = typeof a.author === 'string' ? a.author : (a.author?.nickname || a.author?.username);
-        return n || 'Anonymous';
+        return n || 'Celeste';
+    }
+    function authorImg(a) {
+        return isAnonymous(a) ? ANONYMOUS_AVATAR : DEFAULT_AVATAR;
+    }
+    // 评论：非匿名统一默认头像；匿名评论（预留字段）用匿名头像
+    function commentAuthorName(c) {
+        if (c && Number(c.anonymous) === 1) return '匿名';
+        return (c && c.author && (c.author.nickname || c.author.username)) || 'Celeste';
+    }
+    function commentAvatar(c) {
+        return (c && Number(c.anonymous) === 1) ? ANONYMOUS_AVATAR : DEFAULT_AVATAR;
     }
     function openTag(id) { location.href = 'index.html?tag=' + id; }
     function openArticle(id) { location.href = 'article.html?id=' + id; }
@@ -132,6 +148,10 @@
                 body = rawContent.replace(/^```[a-z]*\s*/, '').replace(/```\s*$/, '');
                 body = marked.parse(body);
             }
+            // 旧文章正文里可能保存了本机地址或相对路径，统一映射到 API 域名，避免在静态站点域名下 404
+            body = body.replace(/http:\/\/(?:localhost|127\.0\.0\.1):8888/g, BASE_URL);
+            body = body.replace(/(src|href)="(\/uploads\/[^"]+)"/g, (m, attr, p) => `${attr}="${BASE_URL}${p}"`);
+            body = body.replace(/(src|href)="(\/images\/[^"]+)"/g, (m, attr, p) => `${attr}="${BASE_URL}${p}"`);
             // 最终交给 v-html 的 HTML 必须清洗；保留标题/列表/表格/代码块/图片/链接等正常 Markdown 排版
             if (window.DOMPurify) {
                 body = window.DOMPurify.sanitize(body, { USE_PROFILES: { html: true } });
@@ -153,8 +173,6 @@
             loadLikeState();
         });
     }
-
-    const MAD_PORTRAITS = ['normal00.png', 'peaceful00.png', 'determined00.png', 'distracted00.png'];
 
     // ===== 评论表情包：五系列（Atlases/Portraits 各情绪 00 帧；暗面琳素材目录为 ghost） =====
     const EMOJI_PACKS = {
@@ -248,10 +266,6 @@
             if (!res.success) { commentStatus.value = 'error'; return; }
             const list = res.data || [];
             if (list.length === 0) { commentStatus.value = 'empty'; return; }
-            // 按深度优先顺序分配头像序号，复刻原 avIdx 全局递增效果
-            let i = 0;
-            const walk = c => { c._portrait = i++; (c.childrens || []).forEach(walk); };
-            list.forEach(walk);
             comments.value = list;
             commentStatus.value = 'ok';
         });
@@ -334,13 +348,13 @@
         template: '#commentNodeTpl',
         props: { c: { type: Object, required: true }, topId: { default: '' }, isChild: { type: Boolean, default: false } },
         methods: {
-            portraitFor(c) { return MAD_PORTRAITS[(c._portrait || 0) % MAD_PORTRAITS.length]; },
+            avatarOf(c) { return commentAvatar(c); },
+            nameOf(c) { return commentAuthorName(c); },
             onReply() {
                 const c = this.c;
                 const parent = this.isChild ? this.topId : c.id;
                 const uid = (c.author && c.author.id) || '';
-                const name = (c.author && (c.author.nickname || c.author.username)) || 'Anonymous';
-                setReply(parent, uid, name);
+                setReply(parent, uid, commentAuthorName(c));
             }
         }
     };
@@ -357,7 +371,7 @@
                 hotArticles, hotStatus, rankIcons: RANK_ICONS,
                 loggedIn, comments, commentStatus, commentText, replyTarget, replyName,
                 likeReady, likeCount, liked, likePop, likersText, canEdit,
-                authorName, openTag, openArticle, editArticle, formatDate,
+                authorName, authorImg, commentAuthorName, openTag, openArticle, editArticle, formatDate,
                 renderCommentContent, clearReply, submitComment, toggleLike
             };
         }

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="icon/OIP.webp" type="image/webp">
     <title>Write - Celeste Blog</title>
-    <link rel="stylesheet" href="css/common.css?v=20261003f">
+    <link rel="stylesheet" href="css/common.css?v=20261104a">
     <link rel="stylesheet" href="css/text-fx.css?v=20261004a">
     <link rel="stylesheet" href="css/chat-widget.css?v=20261025a">
     <link rel="stylesheet" href="css/write.css?v=20261025a">
@@ -69,6 +69,9 @@
     </div>
 
     <div class="write-footer">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#8b8ba0;cursor:pointer;margin-right:auto;">
+            <input type="checkbox" id="anonymousChk" style="accent-color:#a78bfa;"> 匿名发布
+        </label>
         <button class="btn btn-outline" onclick="history.back()">Cancel</button>
         <button class="btn btn-primary" onclick="publishArticle()" id="publishBtn">Publish</button>
     </div>
@@ -103,7 +106,7 @@
 <script src="js/api.js?v=20261002"></script>
 <script src="js/text-fx.js?v=20261005b"></script>
 <script src="js/vue.global.prod.js?v=20261008a"></script>
-<script src="js/auth.js?v=20261101c"></script>
+<script src="js/auth.js?v=20261104a"></script>
 <script src="js/madeline-core.js?v=20261002"></script>
 <script src="js/snow-bgm.js"></script>
 <script src="js/write-madeline.js?v=20261025a"></script>

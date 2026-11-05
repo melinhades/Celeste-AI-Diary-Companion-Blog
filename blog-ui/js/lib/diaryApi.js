@@ -69,11 +69,14 @@ window.DiaryApi = (function () {
         emotionAnalyze: function (content) {
             return call('/diary/emotion-analyze', 'POST', { content: clamp(content, EMOTION_TEXT_MAX) });
         },
-        /** 快照寄语（正文上限 1200 字 + 情绪摘要） */
-        snapReflect: function (content, emotionSummary) {
+        /** 快照寄语（weekly 需要额外带重要语句与情绪趋势） */
+        snapReflect: function (content, emotionSummary, keySentences, trend, snapType) {
             return call('/diary/snap-reflect', 'POST', {
                 content: clamp(content, REFLECT_TEXT_MAX),
-                emotion: emotionSummary
+                emotion: emotionSummary,
+                keySentences: keySentences || '',
+                trend: trend || '',
+                snapType: snapType || ''
             });
         },
         /** Badeline 对话（hearts 为心光谱载荷，由调用方按本地水晶心算好） */

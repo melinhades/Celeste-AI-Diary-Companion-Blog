@@ -39,4 +39,7 @@ public class SysUser {
 
     /** 用户自定义 AI API Key，为空则使用系统默认 Key（AiClient 内部路由） */
     private String apiKey;
+
+    /** 自定义 Key 所属服务商：siliconflow（默认/空）| deepseek；保存 Key 时由探测结果写入 */
+    private String apiProvider;
 }
