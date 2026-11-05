@@ -6,6 +6,8 @@ import org.springframework.boot.actuate.health.Status;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class AiHealthIndicatorTest {
@@ -15,6 +17,7 @@ class AiHealthIndicatorTest {
 
     @Test
     void 熔断器关闭时健康状态为UP() {
+        when(aiClient.isConfigured()).thenReturn(true);
         when(aiClient.circuitState()).thenReturn("CLOSED");
         when(aiClient.consecutiveFailures()).thenReturn(0);
         when(aiClient.circuitFailureThreshold()).thenReturn(5);
@@ -29,6 +32,7 @@ class AiHealthIndicatorTest {
 
     @Test
     void 熔断器打开时健康状态为DOWN() {
+        when(aiClient.isConfigured()).thenReturn(true);
         when(aiClient.circuitState()).thenReturn("OPEN");
         when(aiClient.consecutiveFailures()).thenReturn(5);
         when(aiClient.circuitFailureThreshold()).thenReturn(5);
@@ -42,6 +46,7 @@ class AiHealthIndicatorTest {
 
     @Test
     void 熔断器半开时健康状态为UP_试探恢复中() {
+        when(aiClient.isConfigured()).thenReturn(true);
         when(aiClient.circuitState()).thenReturn("HALF_OPEN");
         when(aiClient.consecutiveFailures()).thenReturn(5);
         when(aiClient.circuitFailureThreshold()).thenReturn(5);
@@ -50,5 +55,17 @@ class AiHealthIndicatorTest {
 
         assertThat(health.getStatus()).isEqualTo(Status.UP);
         assertThat(health.getDetails()).containsEntry("circuit", "HALF_OPEN");
+    }
+
+    @Test
+    void 未配置密钥时健康状态为DOWN_不读取熔断器状态() {
+        when(aiClient.isConfigured()).thenReturn(false);
+
+        Health health = indicator.health();
+
+        assertThat(health.getStatus()).isEqualTo(Status.DOWN);
+        assertThat(health.getDetails()).containsEntry("configured", false);
+        assertThat(health.getDetails()).doesNotContainKey("circuit");
+        verify(aiClient, never()).circuitState();
     }
 }

@@ -67,7 +67,9 @@ public class ArticleServiceImpl implements ArticleService {
             articleVo.setAuthor(sysUser == null ? null : sysUser.getNickname());
         }
         // 历史文章没有该字段值时按非匿名处理
-        articleVo.setAnonymous(article.getAnonymous() == null ? 0 : article.getAnonymous());
+        if (article.getAnonymous() == null) {
+            articleVo.setAnonymous(0);
+        }
         articleVo.setCreateDate(new DateTime(article.getCreateDate()).toString("yyyy-MM-dd HH:mm"));
         if (isTags) {
             List<TagVo> tags = tagService.findTagsByArticleId(article.getId());

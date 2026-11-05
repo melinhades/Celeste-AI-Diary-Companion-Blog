@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
  * <ul>
  *   <li>CLOSED / HALF_OPEN → UP（正常或试探恢复中）</li>
  *   <li>OPEN → DOWN（连续失败达阈值，正在快速失败）</li>
+ *   <li>系统 Key 与用户 Key 都不可用 → DOWN（configured=false，不再读熔断器状态）</li>
  * </ul>
  * 不主动探测 AI 端点（避免消耗配额与增加延迟），以熔断器实时状态为准。
  * 出现在 /actuator/health 的 components.ai 节点。

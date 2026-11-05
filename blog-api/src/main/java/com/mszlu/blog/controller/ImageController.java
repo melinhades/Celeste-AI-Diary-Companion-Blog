@@ -1,7 +1,7 @@
 package com.mszlu.blog.controller;
 
-import com.mszlu.blog.dao.mapper.UploadImageMapper;
 import com.mszlu.blog.dao.pojo.UploadImage;
+import com.mszlu.blog.service.UploadImageService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
@@ -22,11 +22,11 @@ import java.util.concurrent.TimeUnit;
 public class ImageController {
 
     @Autowired
-    private UploadImageMapper uploadImageMapper;
+    private UploadImageService uploadImageService;
 
     @GetMapping("/{id}")
     public ResponseEntity<byte[]> get(@PathVariable("id") String id) {
-        UploadImage image = uploadImageMapper.selectById(id);
+        UploadImage image = uploadImageService.findById(id);
         if (image == null || image.getData() == null || image.getData().length == 0) {
             return ResponseEntity.notFound().build();
         }
