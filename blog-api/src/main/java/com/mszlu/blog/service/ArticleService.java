@@ -26,6 +26,9 @@ public interface ArticleService {
     /** 切换文章可见性：Article.VISIBILITY_PUBLIC / VISIBILITY_PRIVATE */
     Result updateVisibility(String articleId, int visibility);
 
+    /** 删除文章（仅作者本人），连带清理正文、标签关联、评论 */
+    Result deleteArticle(String articleId);
+
     /** 我的文章列表（含私密），数据隔离：只查自己的 */
     Result myArticles(String authorId, int page, int pageSize);
 

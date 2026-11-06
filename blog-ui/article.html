@@ -1,9 +1,10 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" href="icon/OIP.webp" type="image/webp">
+    <link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48">
+    <link rel="icon" href="icon/OIP.webp?v=20261105a" type="image/webp">
     <title>Article - Celeste Blog</title>
     <link rel="stylesheet" href="css/common.css?v=20261104a">
     <link rel="stylesheet" href="css/theme.css?v=20261001b">
@@ -62,10 +63,14 @@
                 <h1>{{ article.title }}</h1>
                 <div class="article-meta">
                     <span class="meta-author"><img class="meta-author-img" :src="authorImg(article)" alt="" loading="lazy" decoding="async">{{ authorName(article) }}</span>
-                    <span class="meta-date"><img class="meta-icon" src="celeste-icons/cs_variantmode.png" alt="" loading="lazy" decoding="async">{{ formatDate(article.createDate) }}</span>
-                    <span class="meta-views"><img class="meta-icon" src="celeste-icons/time.png" alt="" loading="lazy" decoding="async">{{ article.viewCounts || 0 }} Reads</span>
-                    <span class="meta-views"><img class="meta-icon" src="celeste-icons/time.png" alt="" loading="lazy" decoding="async">~{{ readMin }} min read</span>
-                    <span v-if="article.category" class="meta-category">{{ article.category.categoryName || article.category.name }}</span>
+                    <span class="meta-date" title="发布时间"><img class="meta-icon" src="celeste-icons/cs_variantmode.png" alt="" loading="lazy" decoding="async">{{ article.createDate }}</span>
+                    <!-- 公开状态只给作者本人看：读者拿到的私密文章在接口层就被拦掉了 -->
+                    <span v-if="canEdit && Number(article.visibility) === 0" class="meta-private" title="这篇还没有公开，其他人看不到">未公开</span>
+                    <span v-else-if="canEdit && article.publishTime" class="meta-pubtime" title="第一次切成公开的时刻">公开于 {{ article.publishTime }}</span>
+                    <span class="meta-views" title="阅读数"><img class="meta-icon" src="celeste-icons/time.png" alt="" loading="lazy" decoding="async">{{ article.viewCounts || 0 }} Reads</span>
+                    <!-- 预计阅读时长不能用秒表图标，和发布时间撞语义，之前被读成「-2min」 -->
+                    <span class="meta-views" title="预计阅读时长（分钟），不是发布时间"><img class="meta-icon meta-icon-feather" src="celeste-feather/feather0.png" alt="" loading="lazy" decoding="async">{{ readMin }} min read</span>
+                    <span v-if="article.category && (article.category.categoryName || article.category.name)" class="meta-category">{{ article.category.categoryName || article.category.name }}</span>
                 </div>
                 <div class="article-tags">
                     <span v-for="t in (article.tags || [])" :key="t.id" class="tag" style="cursor:pointer" @click="openTag(t.id)" title="查看该标签下的文章">{{ t.tagName || t.name }}</span>
@@ -80,7 +85,12 @@
             </button>
         </div>
         <div id="likersLine" style="text-align:center;font-size:12px;color:rgba(255,255,255,.55);margin:-6px 0 14px;">{{ likersText }}</div>
-        <div style="text-align:center;margin-bottom:14px"><button id="editArticleBtn" :style="{display: canEdit ? 'inline-block' : 'none'}" @click="editArticle">✏ Edit This Article</button></div>
+        <div style="text-align:center;margin-bottom:14px">
+            <button id="editArticleBtn" :style="{display: canEdit ? 'inline-block' : 'none'}" @click="editArticle">✏ Edit This Article</button>
+            <button id="deleteArticleBtn" :disabled="deleting" :style="{display: canEdit ? 'inline-block' : 'none'}" @click="deleteArticle">
+                {{ deleting ? '删除中…' : '🗑 Delete This Article' }}
+            </button>
+        </div>
         <div class="comments-section" id="commentsSection" v-show="headerStatus === 'ok'">
             <div class="comments-title">💬 Comments</div>
             <div class="comment-form" id="commentForm">
@@ -179,7 +189,8 @@
 <script src="js/auth.js?v=20261104a"></script>
 <script src="js/vue.global.prod.js?v=20261008a"></script>
 <script src="js/felt-piano.js?v=20261003"></script>
-<script src="js/snow-bgm.js"></script>
+
+<script src="js/snow-effect.js?v=20261106c"></script><script src="js/snow-bgm.js?v=20261106c"></script>
 <script src="js/article.js?v=20261106e"></script>
 <script src="js/seed.js?v=20261101c"></script>
 </body>

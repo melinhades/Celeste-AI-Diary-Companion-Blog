@@ -57,6 +57,8 @@ public class ArticleServiceImpl implements ArticleService {
     private CategoryService categoryService;
     @Autowired
     private DiaryMapper diaryMapper;
+    @Autowired
+    private com.mszlu.blog.dao.mapper.CommentsMapper commentsMapper;
 
     public ArticleVo copy(Article article, boolean isAuthor, boolean isBody, boolean isTags) {
         ArticleVo articleVo = new ArticleVo();
@@ -71,6 +73,10 @@ public class ArticleServiceImpl implements ArticleService {
             articleVo.setAnonymous(0);
         }
         articleVo.setCreateDate(new DateTime(article.getCreateDate()).toString("yyyy-MM-dd HH:mm"));
+        // 历史文章没记公开时间，下发 null 让前端退回到「仅显示创建时间」
+        if (article.getPublishTime() != null) {
+            articleVo.setPublishTime(new DateTime(article.getPublishTime()).toString("yyyy-MM-dd HH:mm"));
+        }
         if (isTags) {
             List<TagVo> tags = tagService.findTagsByArticleId(article.getId());
             articleVo.setTags(tags);
@@ -86,8 +92,12 @@ public class ArticleServiceImpl implements ArticleService {
         ArticleVo articleVo = copy(article, isAuthor, isBody, isTags);
         if(isCategory){
             String categoryId = article.getCategoryId();
-            CategoryVo categoryVo = categoryService.findCategoryById(categoryId);
-            articleVo.setCategory(categoryVo);
+            // 没选分类时不能去查：findCategoryById 查不到会回一个空 VO，
+            // 前端 v-if="article.category" 判真，详情页就多出一枚空分类胶囊
+            if (categoryId != null) {
+                CategoryVo categoryVo = categoryService.findCategoryById(categoryId);
+                articleVo.setCategory(categoryVo);
+            }
         }
         return articleVo;
     }
@@ -212,6 +222,8 @@ public class ArticleServiceImpl implements ArticleService {
         article.setTitle(articleParam.getTitle());
         article.setSummary(articleParam.getSummary());
         article.setCreateDate(System.currentTimeMillis());
+        // 手动发文直接就是公开态（visibility 走库默认值 1），公开时间与创建时间同刻
+        article.setPublishTime(article.getCreateDate());
         article.setAnonymous(Boolean.TRUE.equals(articleParam.getAnonymous()) ? 1 : 0);
         // 处理分类，如果没有选择分类则设置为null
         if (articleParam.getCategory() != null && articleParam.getCategory().getId() != null) {
@@ -357,7 +369,7 @@ public class ArticleServiceImpl implements ArticleService {
         article.setViewCounts(0);
         article.setCreateDate(System.currentTimeMillis());
         article.setAnonymous(0);
-        // 日记更私人：发布后先私密，由作者确认再切公开
+        // 日记更私人：发布后先私密，由作者确认再切公开；publish_time 留 NULL，切公开时再记
         article.setVisibility(Article.VISIBILITY_PRIVATE);
         article.setSourceType("diary");
         article.setSourceId(diaryId);
@@ -406,10 +418,45 @@ public class ArticleServiceImpl implements ArticleService {
                 return Result.fail(400, "正文为空，无法公开");
             }
         }
-        // 用 UpdateWrapper 只 set 一列：updateById 会把 weight 等默认值一起写回
-        articleMapper.update(null, new LambdaUpdateWrapper<Article>()
+        // 用 UpdateWrapper 只 set 需要的列：updateById 会把 weight 等默认值一起写回
+        LambdaUpdateWrapper<Article> update = new LambdaUpdateWrapper<Article>()
                 .eq(Article::getId, articleId)
-                .set(Article::getVisibility, visibility));
+                .set(Article::getVisibility, visibility);
+        // 只在从未公开过（publish_time 为 NULL）时记首次公开时间，
+        // 公开 → 私密 → 公开 保留最早那一次，不被反复切换冲掉
+        if (visibility == Article.VISIBILITY_PUBLIC && article.getPublishTime() == null) {
+            update.set(Article::getPublishTime, System.currentTimeMillis());
+        }
+        articleMapper.update(null, update);
+        return Result.success(null);
+    }
+
+    /** 一键删除文章：仅作者本人；连带清理标签关联、正文、评论。单事务保证不留孤儿数据 */
+    @Override
+    @Transactional
+    public Result deleteArticle(String articleId) {
+        SysUser user = UserThreadLocal.get();
+        if (user == null) {
+            return Result.fail(401, "未登录");
+        }
+        Article article = articleMapper.selectById(articleId);
+        if (article == null) {
+            return Result.fail(404, "文章不存在");
+        }
+        if (!user.getId().equals(article.getAuthorId())) {
+            return Result.fail(403, "只能删除自己的文章");
+        }
+        // 先删关联表，最后删主记录：中途失败整体回滚
+        LambdaQueryWrapper<ArticleTag> tagQw = new LambdaQueryWrapper<>();
+        tagQw.eq(ArticleTag::getArticleId, articleId);
+        articleTagMapper.delete(tagQw);
+        if (article.getBodyId() != null) {
+            articleBodyMapper.deleteById(article.getBodyId());
+        }
+        LambdaQueryWrapper<com.mszlu.blog.dao.pojo.Comment> cQw = new LambdaQueryWrapper<>();
+        cQw.eq(com.mszlu.blog.dao.pojo.Comment::getArticleId, articleId);
+        commentsMapper.delete(cQw);
+        articleMapper.deleteById(articleId);
         return Result.success(null);
     }
 

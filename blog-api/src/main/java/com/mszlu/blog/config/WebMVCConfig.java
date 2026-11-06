@@ -37,6 +37,7 @@ public class WebMVCConfig implements WebMvcConfigurer {
                 .addPathPatterns("/articles/myCount")
                 .addPathPatterns("/articles/publish-from-diary")
                 .addPathPatterns("/articles/visibility")
+                .addPathPatterns("/articles/delete/*")
                 .addPathPatterns("/articles/mine")
                 .addPathPatterns("/likes/toggle")
                 .addPathPatterns("/notifications/**")

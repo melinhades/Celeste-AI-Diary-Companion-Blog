@@ -24,6 +24,16 @@ public class ArticleVo {
      */
     private String createDate;
 
+    /**
+     * 首次公开时间；历史文章没记时为 null
+     */
+    private String publishTime;
+
+    /**
+     * 可见性：1=公开 0=私密（只有作者本人能拿到私密文章，前端据此提示未公开）
+     */
+    private Integer visibility;
+
     private String author;
 
     /**

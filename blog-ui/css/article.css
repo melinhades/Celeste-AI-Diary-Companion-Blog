@@ -160,6 +160,10 @@
     #likeBar { display: none; justify-content: center; margin: 0 0 20px; }
     #editArticleBtn { display: none; padding: 8px 22px; background: rgba(30,27,75,.6); border: 1px solid rgba(138,43,226,.3); border-radius: 20px; color: #c9c9dd; font-size: 13px; cursor: pointer; transition: all .25s; backdrop-filter: blur(8px); }
     #editArticleBtn:hover { color: #a78bfa; border-color: #a78bfa; }
+    /* 删除按钮：与编辑按钮同款胶囊，红色系提示危险操作 */
+    #deleteArticleBtn { padding: 8px 22px; margin-left: 10px; background: rgba(75,27,30,.55); border: 1px solid rgba(226,90,90,.3); border-radius: 20px; color: #dcb9b9; font-size: 13px; cursor: pointer; transition: all .25s; backdrop-filter: blur(8px); }
+    #deleteArticleBtn:hover:not(:disabled) { color: #ff8a8a; border-color: #ff8a8a; }
+    #deleteArticleBtn:disabled { opacity: .55; cursor: not-allowed; }
     .like-btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 24px; background: rgba(30,27,75,.6); border: 1px solid rgba(138,43,226,.3); border-radius: 24px; color: #c9c9dd; font-size: 14px; cursor: pointer; transition: all .25s; backdrop-filter: blur(8px); }
     .like-btn:hover { transform: translateY(-2px); border-color: #a78bfa; box-shadow: 0 0 14px rgba(167,139,250,.35); }
     .like-btn img { width: 26px; height: 26px; image-rendering: pixelated; }
@@ -179,8 +183,13 @@
     .hot-rank img { width: 22px; height: 22px; object-fit: contain; filter: drop-shadow(0 0 4px rgba(255,235,59,.5)); }
     .hot-rank.rank-1, .hot-rank.rank-2, .hot-rank.rank-3 { background: transparent; box-shadow: none; }
     .meta-icon { height: 14px; width: auto; vertical-align: -2px; margin-right: 4px; opacity: .9; filter: drop-shadow(0 0 3px rgba(255,235,59,.35)); }
+    /* 羽毛是斜长条且带透明边，按等比缩放把高度抬一点才和其他图标齐平 */
+    .meta-icon-feather { height: 17px; vertical-align: -3px; }
     .meta-author-img { width: 18px; height: 18px; border-radius: 50%; vertical-align: -4px; margin-right: 5px; border: 1px solid rgba(255,235,59,.6); }
     .meta-category { background: rgba(138,43,226,.2); color: #a78bfa; padding: 1px 8px; border-radius: 10px; border: 1px solid rgba(138,43,226,.3); }
+    /* 作者本人的公开状态提示：未公开用暖色告警，公开时间用弱化文字，不与 meta-category 抢视线 */
+    .meta-private { background: rgba(255,180,60,.16); color: #f0b95a; padding: 1px 8px; border-radius: 10px; border: 1px solid rgba(255,180,60,.35); }
+    .meta-pubtime { color: #7a7a94; }
     .toc-item { display: block; font-size: 13px; color: #b8b8d0; line-height: 1.6; padding: 5px 10px; margin: 2px 0; border-radius: 6px; cursor: pointer; border-left: 2px solid rgba(138,43,226,.25); transition: all .25s; }
     .toc-item:hover { color: #a78bfa; background: rgba(138,43,226,.12); border-left-color: #a78bfa; transform: translateX(3px); }
     /* index 同款底部雪带 */

@@ -69,5 +69,10 @@ public class Article {
          * 是否匿名发布：1=匿名 0=非匿名
          */
         private Integer anonymous;
+
+        /**
+         * 首次公开时间（毫秒时间戳）；私密状态下为 null，私密转公开只记第一次
+         */
+        private Long publishTime;
     }
 

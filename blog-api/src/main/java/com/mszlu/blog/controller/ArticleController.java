@@ -82,6 +82,12 @@ public class ArticleController {
         return articleService.updateVisibility(articleId, visibility);
     }
 
+    /** 一键删除文章（仅作者本人，详情页可见删除按钮） */
+    @PostMapping("delete/{id}")
+    public Result delete(@PathVariable("id") String articleId) {
+        return articleService.deleteArticle(articleId);
+    }
+
     /** 我的文章列表（含私密），数据隔离：只查自己的 */
     @GetMapping("mine")
     public Result myArticles(@RequestParam(defaultValue = "1") int page,

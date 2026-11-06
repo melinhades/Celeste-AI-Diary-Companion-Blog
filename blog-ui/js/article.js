@@ -10,39 +10,23 @@
         else setTimeout(go, 500);
     })();
 
-    // ===== 加载层内雪花（snow-bgm 同款，登录页风格） =====
+    // ===== 加载层内雪花（圆点雪 + overlay 雾层，与登录页口径一致） =====
     (function () {
         const c = document.getElementById('ldSnowCanvas');
         if (!c) return;
-        const ctx = c.getContext('2d');
-        function resize() { c.width = window.innerWidth; c.height = window.innerHeight; }
-        resize();
-        window.addEventListener('resize', resize);
-        const flakes = [];
-        for (let i = 0; i < 80; i++) {
-            flakes.push({
-                x: Math.random() * c.width, y: Math.random() * c.height,
-                r: Math.random() * 3 + 1, speed: Math.random() * 1.5 + 0.5,
-                wind: Math.random() * 0.5 - 0.25, opacity: Math.random() * 0.6 + 0.2,
-                swing: Math.random() * Math.PI * 2, swingSpeed: Math.random() * 0.02 + 0.01
-            });
+        function go() {
+            if (!(window.CelesteSnow && window.CelesteSnow.attach)) return;
+            window.CelesteSnow.attach(c, { particleStyle: 'dots' });   // 层被移除后渲染循环自动停机
         }
-        (function loop() {
-            if (!document.getElementById('ldSnowCanvas')) return;
-            ctx.clearRect(0, 0, c.width, c.height);
-            for (const f of flakes) {
-                f.y += f.speed; f.swing += f.swingSpeed;
-                f.x += Math.sin(f.swing) * 0.5 + f.wind;
-                if (f.y > c.height + 10) { f.y = -10; f.x = Math.random() * c.width; }
-                if (f.x > c.width + 10) f.x = -10;
-                if (f.x < -10) f.x = c.width + 10;
-                ctx.beginPath();
-                ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(255,255,255,' + f.opacity + ')';
-                ctx.fill();
-            }
-            requestAnimationFrame(loop);
-        })();
+        if (window.CelesteSnow && window.CelesteSnow.attach) {
+            go();
+        } else {
+            const s = document.createElement('script');
+            s.src = 'js/snow-effect.js?v=20261106c';
+            s.onload = go;
+            s.onerror = function () {};   // 加载失败：无雪降级
+            document.head.appendChild(s);
+        }
     })();
 
     // 雪花粒子系统与 BGM 由 js/snow-bgm.js 统一提供
@@ -121,6 +105,26 @@
     function openTag(id) { location.href = 'index.html?tag=' + id; }
     function openArticle(id) { location.href = 'article.html?id=' + id; }
     function editArticle() { location.href = 'write.html?edit=' + articleId; }
+
+    // 一键删除自己的文章：二次确认 → 调接口 → 回首页
+    const deleting = ref(false);
+    async function deleteArticle() {
+        if (deleting.value) return;
+        if (!confirm('确定要删除这篇文章吗？正文、标签和评论会一起删掉，无法恢复。')) return;
+        deleting.value = true;
+        try {
+            const res = await api(`/articles/delete/${articleId}`, 'POST');
+            if (res.success) {
+                alert('已删除');
+                location.href = 'index.html';
+            } else {
+                alert(res.msg || '删除失败，请稍后重试');
+            }
+        } catch (e) {
+            alert('删除失败，请稍后重试');
+        }
+        deleting.value = false;
+    }
 
     function buildToc() {
         const headings = document.querySelectorAll('.article-body h1,.article-body h2,.article-body h3');
@@ -394,6 +398,7 @@
                 loggedIn, comments, commentStatus, commentText, commentAnonymous, replyTarget, replyName,
                 likeReady, likeCount, liked, likePop, likersText, canEdit,
                 authorName, authorImg, commentAuthorName, openTag, openArticle, editArticle, formatDate,
+                deleting, deleteArticle,
                 renderCommentContent, clearReply, submitComment, toggleLike
             };
         }
