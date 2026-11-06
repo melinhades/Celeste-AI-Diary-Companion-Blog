@@ -149,9 +149,9 @@
   </div>
   <canvas id="scene" aria-label="第九章铭记场景：明亮星海中的浮空跳板与月球生物"></canvas>
   <div class="vignette"></div>
-  <div class="hud" id="hud"><span id="hudHeart">空无&nbsp; 0 / 1</span><span id="hudCollect">草莓 0/10 · 水母 0/4 · 羽毛 0/6</span></div>
+  <div class="hud" id="hud"><span id="hudHeart">虚空&nbsp; 0 / 1</span><span id="hudCollect">草莓 0/10 · 水母 0/4 · 羽毛 0/6</span></div>
   <button class="mute" id="mute" type="button" title="静音（M）">&#9835;</button>
-  <div class="toast" id="toast">拾起「空无」</div>
+  <div class="toast" id="toast">拾起「虚空」</div>
   <!-- messages.js 的雪花层：场景之上、聊天下方 -->
   <canvas id="snowCanvas" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:2;opacity:.55;"></canvas>
 
@@ -816,7 +816,7 @@
     // ===== 房间里的实体（坐标原样来自 LostLevels.bin，仅平移到相对出生点）=====
     const toWorld = arr => arr.map(p => ({ x: p[0] - SPAWN.x, y: p[1] - SPAWN.y }));
     // spinner ×95：原作把它们缠在房间两侧与底部，但页面上会在底部铺成一整片「星海」，
-    // 与铭记段「空无」的构图相冲 —— 数据完整保留（__scene.blades 可校），默认不绘制。
+    // 与铭记段「虚空」的构图相冲 —— 数据完整保留（__scene.blades 可校），默认不绘制。
     const DRAW_SPINNERS = false;
     const blades = toWorld([
       [128, 432], [176, 392], [184, 408], [160, 400], [144, 392], [376, 408], [384, 392],
@@ -1583,7 +1583,7 @@
       drawBlocks();                                  // floatySpaceBlock（lostlevels 自动瓦片）
       drawJumpThrus();                               // jumpThru（wood）
       drawDebris();                                  // floatingDebris
-      if (DRAW_SPINNERS) drawBlades();               // spinner ×95（默认关闭：底部的星海会破坏空无构图）
+      if (DRAW_SPINNERS) drawBlades();               // spinner ×95（默认关闭：底部的星海会破坏虚空构图）
       drawCreatures();                               // moonCreature ×9
       drawHeart();
       drawDust();
@@ -1614,8 +1614,8 @@
     function collectHeart() {
       heart.collected = true;
       flash = 0.85;
-      hudHeartEl.textContent = '空无 1 / 1';
-      toastEl.textContent = '拾起「空无」· Empty Space';
+      hudHeartEl.textContent = '虚空 1 / 1';
+      toastEl.textContent = '拾起「虚空」· Empty Space';
       toastEl.classList.add('show');
       toastTimer = 2.6;
       for (let i = 0; i < 26; i++) {
@@ -1696,7 +1696,7 @@
       stepJellies(dt);
       if (!fly) stepFeathers();
 
-      // 拾起空无之心（飞行中不判定）
+      // 拾起虚空之心（飞行中不判定）
       if (!fly && !heart.collected && Math.abs(m.x - heart.x) < 24 && Math.abs(m.y - heart.y) < 30) collectHeart();
 
       // 掉出房间底部（世界 y 56 是地板线）—— 飞行期不判定坠落
@@ -1843,7 +1843,7 @@
 
       reset(heart.x, heart.y); heart.collected = false;
       tick(1 / 60);
-      log('拾起空无之心', heart.collected === true, 'collected=' + heart.collected);
+      log('拾起虚空之心', heart.collected === true, 'collected=' + heart.collected);
 
       // —— 房间几何：对照 LostLevels.bin 的 lvl_e-00z ——
       log('实体数量 95/9/9/19', blades.length === 95 && creatures.length === 9 && debris.length === 19,
@@ -2082,7 +2082,7 @@
         runSelfTest();
         // 自检跑完后把世界复位到展示状态，方便对画面做视觉核对
         heart.collected = false;
-        hudHeartEl.textContent = '空无  0 / 1';
+        hudHeartEl.textContent = '虚空  0 / 1';
         updateHud();
         toastEl.classList.remove('show');
         toastEl.style.display = 'none';
