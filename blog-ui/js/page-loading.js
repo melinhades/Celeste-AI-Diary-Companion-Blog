@@ -16,9 +16,21 @@
     var OVERLAY_ID = 'pageLoadingOverlay';
     var FADE_MS = 650;
     var FALLBACK_MS = 15000;
+    var MIN_VISIBLE_MS = 1700;   // 至少可见两轮（0.8s × 2 = 1.6s），数据早到也不能一闪而过
 
     var overlay = document.getElementById(OVERLAY_ID);
     if (!overlay) return;
+
+    var shownAt = 0;   // 加载层可见起点（非 standby 页在初始化时记，index 在 show() 时记）
+
+    /* ---------- 空闲预热图集：提前 decode，show() 时不再冷抓 PNG ---------- */
+    function prewarmSprite() {
+        var img = overlay.querySelector('.loading-madeline-sprite');
+        if (!img || !img.decode) return;
+        var go = function () { img.decode().catch(function () {}); };
+        if (window.requestIdleCallback) window.requestIdleCallback(go, { timeout: 500 });
+        else setTimeout(go, 500);
+    }
 
     /* ---------- 雪花（画在加载层自己的画布上，首次显示时才启动） ---------- */
     var snowStarted = false;
@@ -76,6 +88,7 @@
     /* ---------- 显示：index 点鸟飞走后才唤醒 ---------- */
     function show() {
         if (dismissed) return;
+        shownAt = performance.now();
         overlay.removeAttribute('data-standby');
         overlay.setAttribute('aria-hidden', 'false');
         startSnow();
@@ -94,15 +107,19 @@
         dismissed = true;
         var el = document.getElementById(OVERLAY_ID);
         if (!el) return;
-        // 等两帧：宿主调用 ready() 时多半只是"资源就绪"，首帧绘制还没提交给合成器
-        requestAnimationFrame(function () {
+        // 可见时长门控：未跑满两轮就等剩下的时间，避免用户只看到一轮冷启动
+        var wait = Math.max(0, MIN_VISIBLE_MS - (performance.now() - shownAt));
+        setTimeout(function () {
+            // 等两帧：宿主调用 ready() 时多半只是"资源就绪"，首帧绘制还没提交给合成器
             requestAnimationFrame(function () {
-                el.classList.add('done');
-                setTimeout(function () {
-                    if (el.parentNode) el.parentNode.removeChild(el);
-                }, FADE_MS);
+                requestAnimationFrame(function () {
+                    el.classList.add('done');
+                    setTimeout(function () {
+                        if (el.parentNode) el.parentNode.removeChild(el);
+                    }, FADE_MS);
+                });
             });
-        });
+        }, wait);
     }
 
     /* ---------- bfcache 返回 index：把加载层退回待命态，下次点击还能用 ---------- */
@@ -113,9 +130,11 @@
         overlay.setAttribute('data-standby', '');
     }
 
+    prewarmSprite();
     if (overlay.hasAttribute('data-standby')) {
         /* index 页：等 show()，别启动兜底计时 */
     } else {
+        shownAt = performance.now();
         startSnow();
         setTimeout(ready, FALLBACK_MS);
     }

@@ -18,6 +18,7 @@
 
     var FLY_MS = 1200;         // 与 css crowFlyOut 1.2s 对齐
     var FLYUP_FRAME_MS = 80;   // 15 帧 × 80ms = 1.2s，接近 Celeste 原版 FlyUp delay 0.10s
+    var LOADING_MIN_MS = 2000; // 加载层至少可见两轮（0.8s × 2 = 1.6s），留点余量，避免只看到冷启动那一轮
 
     var bgm = document.getElementById('bgmPlayer');
     var Sfx = (window.BirdMotion && window.BirdMotion.Sfx) || { play: function () {} };
@@ -88,7 +89,7 @@
 
         if (reduced) {
             showLoading();
-            setTimeout(leave, 500);
+            setTimeout(leave, LOADING_MIN_MS);
             return;
         }
 
@@ -104,9 +105,9 @@
         }, FLYUP_FRAME_MS);
 
         // 鸟竖直飞 1.2s 期间，飞了 400ms（FlyUp 05/06 帧、还在视口内）后铺加载层盖住 header
-        // 加载层底下鸟继续飞，飞完 1.2s → leave() 跳目标页
+        // 加载层铺上后至少可见 LOADING_MIN_MS（两轮以上），再离开去目标页
         setTimeout(showLoading, 400);
-        setTimeout(leave, FLY_MS);
+        setTimeout(leave, 400 + LOADING_MIN_MS);
     }
 
     function reset() {

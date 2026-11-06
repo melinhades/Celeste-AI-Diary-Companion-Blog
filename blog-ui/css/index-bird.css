@@ -138,17 +138,29 @@
     opacity: .5;
     pointer-events: none;
 }
-/* 跑动的 Madeline：十帧均分，00 同时放 0% 与 100%，循环首尾衔接无跳变 */
+/* 跑动的 Madeline：单图集裁剪窗 + 位移步进（transform 走合成层，主线程掉帧也不跳帧） */
 #pageLoadingOverlay .loading-madeline {
     width: 120px;
     height: 120px;
-    background-size: 100% 100%;
-    background-repeat: no-repeat;
-    background-position: center;
-    image-rendering: pixelated;
-    animation: ldLoadingRun .8s steps(10) infinite;
     position: relative;
+    overflow: hidden;
     z-index: 1;
+}
+#pageLoadingOverlay .loading-madeline-sprite {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1200px;      /* 图集 2000×200：10 帧 × 120px */
+    height: 120px;
+    max-width: none;
+    display: block;
+    image-rendering: pixelated;
+    will-change: transform;
+    animation: ldSpriteRun .8s steps(10) infinite;
+}
+@keyframes ldSpriteRun {
+    from { transform: translate3d(0, 0, 0); }
+    to   { transform: translate3d(-1200px, 0, 0); }
 }
 #pageLoadingOverlay .loading-text {
     margin-top: 20px;
@@ -162,19 +174,6 @@
 }
 #pageLoadingOverlay .loading-dots::after { content: ''; animation: ldDots 1.5s steps(4, end) infinite; }
 
-@keyframes ldLoadingRun {
-    0%   { background-image: url('../celeste-gui/loading/00.png'); }
-    10%  { background-image: url('../celeste-gui/loading/01.png'); }
-    20%  { background-image: url('../celeste-gui/loading/02.png'); }
-    30%  { background-image: url('../celeste-gui/loading/03.png'); }
-    40%  { background-image: url('../celeste-gui/loading/04.png'); }
-    50%  { background-image: url('../celeste-gui/loading/05.png'); }
-    60%  { background-image: url('../celeste-gui/loading/06.png'); }
-    70%  { background-image: url('../celeste-gui/loading/07.png'); }
-    80%  { background-image: url('../celeste-gui/loading/08.png'); }
-    90%  { background-image: url('../celeste-gui/loading/09.png'); }
-    100% { background-image: url('../celeste-gui/loading/00.png'); }
-}
 @keyframes ldSnowDrift { from { background-position-x: 0; } to { background-position-x: -440px; } }
 @keyframes ldStarTwinkle { 0%, 100% { opacity: .25; } 50% { opacity: .9; } }
 @keyframes ldDots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }

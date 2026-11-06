@@ -1,3 +1,15 @@
+    // ===== 加载层：最短可见时长 + 空闲预热图集 =====
+    // 数据早到时也不能只跑一轮就撤（0.8s × 2 = 1.6s，至少两轮）
+    const ARTICLE_LOADING_MIN_MS = 1700;
+    const articleOverlayShownAt = performance.now();
+    (function () {
+        const img = document.querySelector('#articleLoadingOverlay .loading-madeline-sprite');
+        if (!img || !img.decode) return;
+        const go = () => img.decode().catch(() => {});
+        if (window.requestIdleCallback) window.requestIdleCallback(go, { timeout: 500 });
+        else setTimeout(go, 500);
+    })();
+
     // ===== 加载层内雪花（snow-bgm 同款，登录页风格） =====
     (function () {
         const c = document.getElementById('ldSnowCanvas');
@@ -130,7 +142,11 @@
     function loadArticle() {
         api(`/articles/article/view/${articleId}`, 'POST').then(res => {
             const overlay = document.getElementById('articleLoadingOverlay');
-            if (overlay) { overlay.remove(); }
+            if (overlay) {
+                // 至少可见两轮：未跑满就把剩余时间等完再移除
+                const wait = Math.max(0, ARTICLE_LOADING_MIN_MS - (performance.now() - articleOverlayShownAt));
+                setTimeout(() => overlay.remove(), wait);
+            }
             if (!res.success) {
                 headerStatus.value = 'error';
                 return;
