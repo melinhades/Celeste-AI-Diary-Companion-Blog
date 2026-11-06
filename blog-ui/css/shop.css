@@ -93,18 +93,18 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 body.intro .dot-bubble { opacity:0; pointer-events:none; }
 body.intro #sceneZoom #gameStage { opacity:0; }
 
-/* ===== resortLantern（REA：VertexLight Alpha=0.95+Sin(t)*0.05；Sprite.AddLoop 0.3s/5 帧） ===== */
+/* ===== resortLantern（REA：VertexLight/Bloom Alpha=0.95+Sin(t)*0.05 呼吸；Wiggler(2.5,1.2,StartZero) → Rotation=value*mult*30°） ===== */
 .resort-lantern {
     position:absolute; z-index:6; pointer-events:auto; cursor:pointer;
-    transform-origin:50% 25%;                  /* 挂架顶部（holder.png 的挂点） */
-    transition:transform .06s linear;           /* 允许 wiggler rAF 驱动，同时不影响静态 */
 }
-.resort-lantern.wiggling { transition:none; } /* wiggler 期间去掉 transition，由 JS 直接驱动 */
 .lantern-holder, .lantern-body {
     position:absolute; left:0; top:0; width:100%; height:100%;
     image-rendering:pixelated; pointer-events:none;
     user-select:none; -webkit-user-drag:none;
 }
+/* 灯体绕挂点（holder 挂环）倾摆，holder 固定 —— 对齐原版只旋转 lantern Sprite 而 holder 不动 */
+.lantern-body { transform-origin:50% 30%; will-change:transform; }
+/* bloom 辉光：径向渐变近似 BloomRenderer 的高斯模糊 bloomgradient；明暗由 JS 按 0.95+Sin(t)*0.05 呼吸 */
 .lantern-glow {
     position:absolute; left:50%; top:56%; width:320%; height:260%;
     transform:translate(-50%,-50%); pointer-events:none;
@@ -112,9 +112,7 @@ body.intro #sceneZoom #gameStage { opacity:0; }
         rgba(255,226,150,.42) 0%,
         rgba(255,196,96,.16) 38%,
         rgba(255,170,70,0) 72%);
-    animation:lanternFlicker 1.6s ease-in-out infinite;
 }
-@keyframes lanternFlicker { 0%,100% { opacity:.82; } 50% { opacity:1; } }
 
 /* ===== 像素 Oshiro（atlas 96×96 帧；缩放/锚点在 shop.js 中按 cover 比例设置） ===== */
 #pixelOshiro {

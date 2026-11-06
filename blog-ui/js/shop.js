@@ -497,32 +497,61 @@
             }
         }, 300);
     }
-    // ===== 灯笼 Wiggler（REA: ScaleWiggler(0.5s, 4Hz) + Rotation = value*mult*30°） =====
-    function lanternWiggle(el) {
-        if (el.__wiggleTimer) return;
-        el.classList.add('wiggling');
-        var DUR = 0.5, FREQ = 4;
-        var dir = (Math.random() < 0.5 ? -1 : 1);
-        var t0 = performance.now();
-        function tick(now) {
-            var t = (now - t0) / 1000;
-            if (t >= DUR) {
-                el.style.transform = '';
-                el.classList.remove('wiggling');
-                el.__wiggleTimer = null;
-                return;
-            }
-            // value 首帧 ±1 指数衰减，4Hz 正弦振荡
-            var value = 2 * Math.exp(-t / DUR * 3) * Math.sin(FREQ * Math.PI * t);
-            var scale = 1 + 0.15 * Math.abs(value);
-            var rot = dir * value * 30;
-            el.style.transform = 'scale(' + scale.toFixed(3) + ') rotate(' + rot.toFixed(1) + 'deg)';
-            el.__wiggleTimer = requestAnimationFrame(tick);
-        }
-        el.__wiggleTimer = requestAnimationFrame(tick);
+    // ===== resortLantern 运行时状态机（逐字段对齐 REA: Celeste.ResortLantern）=====
+    //   .ctor  : Wiggler.Create(this, freq=2.5, amp=1.2, cb, false, false) + StartZero=true
+    //            VertexLight(White, 0.95, 32, 64) + BloomPoint(0.8, 8)（房间 dark=false → 无遮罩暗场，
+    //            灯笼可见的"光影"即 bloom 辉光 + 呼吸 alpha，非聚光暗场）
+    //   Update : collideTimer-=dt; alphaTimer+=dt; alpha=0.95+Sin(alphaTimer*1.0)*0.05（同写 light/bloom.Alpha）
+    //            Wiggler: sineAdd=2π*1.2, inc=1/2.5, value=Cos(sineCounter)*Counter; Rotation=value*mult*30°
+    //   OnPlayer: collideTimer<=0 && player.Speed!=Zero → collideTimer=0.5, mult=Choose(±1), wiggler.Start()
+    //   摆动作用在灯体（holder 挂架固定），transform-origin 取挂点 → 灯罩绕自身倾摆，与原版一致
+    var LANTERN_STATE = [];
+    document.querySelectorAll('.resort-lantern').forEach(function (el, i) {
+        var ent = HALL_ENTITIES.lanterns[i] || { x: 128, y: 48 };
+        LANTERN_STATE.push({
+            el: el,
+            body: el.querySelector('.lantern-body'),
+            glow: el.querySelector('.lantern-glow'),
+            wx: ent.x,                     // 灯笼碰撞盒中心（世界 X = 房间原生 X）
+            wy: ent.y - ROOM_FLOOR_Y,      // 世界 Y（脚底 y=0 = 地板 152）→ 48-152 = -104
+            collideTimer: 0,
+            alphaTimer: i * 1.3,           // 两盏错相位，避免同步呼吸
+            wig: { inc: 1 / 2.5, add: Math.PI * 2 * 1.2, sine: Math.PI / 2, counter: 0, value: 0, mult: 1, active: false }
+        });
+    });
+    // IL: OnPlayer —— 玩家带速度撞进灯笼 8×8 碰撞盒：collideTimer 未冷却才触发，一次摆动持续约 2.5s
+    function lanternBump(L) {
+        if (L.collideTimer > 0) { L.collideTimer = 0.5; return; }   // IL: else 分支也重置 collideTimer=0.5
+        L.collideTimer = 0.5;
+        L.wig.mult = Math.random() < 0.5 ? -1 : 1;                   // IL: mult = Calc.Random.Choose(1, -1)
+        L.wig.counter = 1;                                           // IL: Wiggler.Start（StartZero → value 从 0 起）
+        L.wig.sine = Math.PI / 2;
+        L.wig.value = 0;
+        L.wig.active = true;
+        if (L.el) L.el.classList.add('wiggling');
     }
-    document.querySelectorAll('.resort-lantern').forEach(function (l) {
-        l.addEventListener('click', function (e) { e.stopPropagation(); lanternWiggle(l); });
+    // 每帧推进：呼吸 alpha → glow 明暗；Wiggler → 灯体旋转角（dt 走引擎时间，冻结时随之暂停）
+    function lanternStep(L, dt) {
+        if (L.collideTimer > 0) L.collideTimer = Math.max(0, L.collideTimer - dt);
+        L.alphaTimer += dt;
+        var alpha = 0.95 + Math.sin(L.alphaTimer * 1.0) * 0.05;       // IL: 0.95 + Sin(t)*0.05 → [0.90,1.00]
+        if (L.glow) L.glow.style.opacity = alpha.toFixed(3);
+        var w = L.wig;
+        if (w.active) {
+            w.sine += w.add * dt;
+            w.counter -= w.inc * dt;
+            if (w.counter <= 0) {
+                w.counter = 0; w.active = false; w.value = 0;
+                if (L.el) L.el.classList.remove('wiggling');
+            } else {
+                w.value = Math.cos(w.sine) * w.counter;               // IL: value = Cos(sineCounter)*Counter
+            }
+        }
+        if (L.body) L.body.style.transform = 'rotate(' + (w.value * w.mult * 30).toFixed(2) + 'deg)';
+    }
+    // 保留点击互动：无音源/够不到时也能手动触发同一套 Wiggler（碰撞触发见主循环）
+    LANTERN_STATE.forEach(function (L) {
+        L.el.addEventListener('click', function (e) { e.stopPropagation(); lanternBump(L); });
     });
     function layoutHall() {
         recalcRoomGeo();
@@ -1416,7 +1445,7 @@
         }
         function updatePoem(rdt) {
             if (!poem) { if (poemEl) poemEl.style.opacity = '0'; return; }
-            poem.timer += rdt;                                   // IL: timer += Engine.DeltaTime（MagicGlow 用）
+            poem.timer += rdt;                                   // IL: timer += Engine.DeltaTime（MagicGlow noiseEase 的时间源，见 drawPoemGlow）
             advancePoemHeart(rdt);
             for (var i = 0; i < poem.particles.length; i++) {
                 var p = poem.particles[i];
@@ -1486,16 +1515,70 @@
             ctx.restore();
         }
 
-        // 缺口：原作 smoke 层由 Effects 里的 MagicGlow 着色器（编译产物、无源）生成放射光晕，
-        // 此处用「同色 radial 柔光 + 对 poem RT 强高斯模糊」近似（等效 shader 的 alpha 0.5 / noiseDistort）
-        function drawPoemGlow(ctx, cx, cy, g, col) {
-            var R = 520 * g;
-            var bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
-            bg.addColorStop(0, hexA(col, 0.5));
-            bg.addColorStop(0.45, hexA(col, 0.18));
-            bg.addColorStop(1, hexA(col, 0));
-            ctx.fillStyle = bg;
-            ctx.fillRect(ctx.canvas.width * -0.1, ctx.canvas.height * -0.1, ctx.canvas.width * 1.2, ctx.canvas.height * 1.2);
+        // 官方 NoelFB/CelesteEffects 已发布 MagicGlow.fx 的 HLSL 源码（推翻旧注释「编译产物、无源」），逐行语义：
+        //   noiseval = SAMPLE(noise, uv * noiseSample + float2(0, noiseEase))   —— 噪声贴图随时间向上滚动
+        //   pos      = uv + (noiseval.gb - 0.5) * pixel * noiseDistort * 2      —— 采样坐标被噪声 g/b 扭曲
+        //   color    = Σ_{i=0..16} SAMPLE(text, pos + (0, pixel.y * direction * i)) * (1 - 0.06*i)
+        //              ↑ 17 次「向下」采样（shader 注释原文 sample downwards (smoke moves up)）→ 画面逐级向上拖影，
+        //                权重 1.00,0.94,…,0.04 线性递减 —— 这就是巨心背后那缕升腾的彩色烟迹
+        //   out      = color * noiseval.r * alpha                                —— 噪声 r 通道把烟撕成丝缕
+        // Poem 调用处的参数值（direction/noiseSample/noiseEase 速度/alpha）IL 取证未标注 → 按视觉标定（缺口）
+        var MG_TAPS = 17;             // shader：17 个采样头，权重 1.00 → 0.04（步长 -0.06）
+        var MG_STEP = 0.012;          // 每头间距 = smoke RT 高的 1.2%（≈ shader 的 direction 像素数，标定）
+        var MG_GAIN = 0.16;           // ≈ alpha 参数（叠加 17 头后整层再按 IL 乘 White*0.3）
+        var MG_SWAY_HZ = 2.2;         // ≈ noiseDistort 的横向摆动（用 sin 近似噪声 g/b 扰动）
+        var MG_SWAY_PH = 0.85;
+        var mgScratch = null, mgNoise = null, mgPat = null;
+
+        function mgNoiseTile() {
+            var T = 128, c = document.createElement('canvas');
+            c.width = T; c.height = T;
+            var x = c.getContext('2d'), img = x.createImageData(T, T), d = img.data;
+            function lat(ix, iy, p) {                       // 周期性格点 hash → 贴图无缝循环
+                ix = (ix % p + p) % p; iy = (iy % p + p) % p;
+                var h = Math.sin(ix * 127.1 + iy * 311.7 + p * 74.7) * 43758.5453;
+                return h - Math.floor(h);
+            }
+            function vn(u, v, p) {                          // 双线性插值 value noise（smoothstep）
+                var gx = u * p, gy = v * p, x0 = Math.floor(gx), y0 = Math.floor(gy);
+                var fx = gx - x0, fy = gy - y0;
+                fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
+                var a = lat(x0, y0, p), b = lat(x0 + 1, y0, p), cc = lat(x0, y0 + 1, p), e = lat(x0 + 1, y0 + 1, p);
+                return a + (b - a) * fx + (cc - a) * fy + (a - b - cc + e) * fx * fy;
+            }
+            for (var py = 0; py < T; py++) {
+                for (var px = 0; px < T; px++) {
+                    var u = px / T, v = py / T;
+                    var n = vn(u, v, 6) * 0.6 + vn(u, v, 13) * 0.4;   // 两个八度
+                    var o = (py * T + px) * 4;
+                    d[o] = d[o + 1] = d[o + 2] = 255;
+                    d[o + 3] = Math.round(255 * Math.min(1, Math.max(0.12, n * 1.5 - 0.15)));
+                }
+            }
+            x.putImageData(img, 0, 0);
+            return c;
+        }
+
+        // IL: MagicGlow —— 把 src（poem RT）画成 17 头升腾烟迹，噪声撕丝 + 随 timer 滚动（noiseEase）
+        function drawPoemGlow(ctx, src, w, h, timer) {
+            if (!mgNoise) mgNoise = mgNoiseTile();
+            ctx.globalCompositeOperation = 'source-over';
+            var step = Math.max(2, h * MG_STEP);
+            for (var i = MG_TAPS - 1; i >= 0; i--) {        // 远→近绘制，本体压在最上层
+                var wt = 1 - i * 0.06;                       // shader 权重：1.00, 0.94, ..., 0.04
+                var sway = Math.sin(timer * MG_SWAY_HZ + i * MG_SWAY_PH) * step * 0.6;
+                ctx.globalAlpha = wt * MG_GAIN;
+                ctx.drawImage(src, sway, -i * step, w, h);   // 「向下采样」→ 影像逐级上移
+            }
+            ctx.globalAlpha = 1;
+            // ≈ color * noiseval.r：噪声按 alpha 抠出烟丝；图案随 timer 上滚（= noiseEase）
+            ctx.save();
+            ctx.globalCompositeOperation = 'destination-in';
+            if (!mgPat) mgPat = ctx.createPattern(mgNoise, 'repeat');
+            ctx.translate(0, -((timer * 0.35) % 1) * 128);
+            ctx.fillStyle = mgPat;
+            ctx.fillRect(0, 0, w, h + 128);
+            ctx.restore();
         }
 
         function poemLayer(el, w, h) {
@@ -1560,15 +1643,19 @@
                 p.globalAlpha = 1;
             }
 
-            // —— smoke RT：半分辨率（IL: 960x540），MagicGlow + GaussianBlur ——
+            // —— smoke RT：半分辨率（IL: 960x540），MagicGlow → GaussianBlur ——
             var hw = Math.max(1, Math.round(W / 2)), hh = Math.max(1, Math.round(H / 2));
             poemGlow = poemLayer(poemGlow, hw, hh);
             var q = poemGlow.getContext('2d');
             q.clearRect(0, 0, hw, hh);
             q.imageSmoothingEnabled = true;
-            drawPoemGlow(q, hw / 2, hh / 2, g * 0.5, col);
-            q.filter = 'blur(' + Math.max(2, 6 * g) + 'px)';
-            q.drawImage(poemSharp, 0, 0, hw, hh);
+            mgScratch = poemLayer(mgScratch, hw, hh);        // MagicGlow 先在中转 RT 上叠加拖尾
+            var ms = mgScratch.getContext('2d');
+            ms.clearRect(0, 0, hw, hh);
+            ms.imageSmoothingEnabled = true;
+            drawPoemGlow(ms, poemSharp, hw, hh, poem.timer); // IL: MagicGlow(poem RT) 17 头烟迹 + 噪声撕丝
+            q.filter = 'blur(' + Math.max(2, 6 * g) + 'px)'; // IL: GaussianBlur（整张 smoke 模糊）
+            q.drawImage(mgScratch, 0, 0);
             q.filter = 'none';
 
             // —— IL: Render —— smoke（White*0.3）→ poem（整体透明度由 #heartGet 的 opacity 承担）——
@@ -2000,6 +2087,18 @@
                 if (madeline.y < CEIL_Y) { madeline.y = CEIL_Y; if (madeline.vy < 0) madeline.vy = 0; }
             }
             jumpEdge = false; dashEdge = false;
+
+            // —— resortLantern：碰撞触发（IL: OnPlayer，需 Speed!=Zero）+ 呼吸/Wiggler 推进（走引擎 dt，冻结即停）——
+            for (var li = 0; li < LANTERN_STATE.length; li++) {
+                var LN = LANTERN_STATE[li];
+                if (madeline && LN.collideTimer <= 0 &&
+                    (Math.abs(madeline.vx) > 1 || Math.abs(madeline.vy) > 1) &&   // IL: player.Speed != Vector2.Zero
+                    madeline.x + 4 > LN.wx - 4 && madeline.x - 4 < LN.wx + 4 &&   // IL: Hitbox(8,8,-4,-4)
+                    madeline.y > LN.wy - 4 && madeline.y - BODY_H < LN.wy + 4) {
+                    lanternBump(LN);
+                }
+                lanternStep(LN, edt);
+            }
 
             // —— 心的 bob / spin / shine / wiggle（未收集时） ——
             if (heart.mode !== 'none') {
