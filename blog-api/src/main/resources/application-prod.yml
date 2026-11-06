@@ -78,12 +78,31 @@ qiniu:
   accessKey: ${QINIU_ACCESS_KEY:}
   accessSecretKey: ${QINIU_SECRET_KEY:}
 
-# SiliconFlow 大模型配置
+# 大模型配置（OpenAI 兼容协议）
+# 切模型的最小变量集（只需改环境变量，不用改代码）：
+#   主对话：AI_BASE_URL / AI_API_KEY / AI_MODEL
+#   快模型：AI_FAST_MODEL / AI_FAST_BASE_URL / AI_FAST_API_KEY（情绪抽取、意图分类等前处理）
+#   向量：AI_EMBED_BASE_URL / AI_EMBED_API_KEY / AI_EMBEDDING_MODEL
+# 说明：AI_EMBED_BASE_URL 为空时回落 AI_BASE_URL；AI_EMBED_API_KEY 为空时保持原逻辑
+#       （用户自带 Key 优先，DeepSeek 用户无 embeddings 时回落系统 Key）
+#       AI_FAST_BASE_URL 为空时快模型走原主对话逻辑；非空时只有 model == ai.fast-model 才走
+#       fast base + fast Key（BYOK 用户 Key 不能用于快模型服务商，fast Key 为空则回落系统主 Key）
+# 切到 智谱 GLM-4.7-Flash + 硅基流动 bge-m3 时，只需设：
+#   AI_BASE_URL=https://open.bigmodel.cn/api/paas/v4  AI_MODEL=glm-4.7-flash
+#   快模型可继续用千问：AI_FAST_MODEL=Qwen/Qwen2.5-3B-Instruct
+#     + AI_FAST_BASE_URL=https://api.siliconflow.cn/v1 + AI_FAST_API_KEY=<硅基流动 Key>
+#   AI_EMBED_BASE_URL=https://api.siliconflow.cn/v1
+#   AI_EMBED_API_KEY=<硅基流动 Key>  AI_EMBEDDING_MODEL=BAAI/bge-m3
 ai:
   base-url: ${AI_BASE_URL:https://api.siliconflow.cn/v1}
   api-key: ${AI_API_KEY:}
   model: ${AI_MODEL:Qwen/Qwen2.5-7B-Instruct}
+  fast-model: ${AI_FAST_MODEL:Qwen/Qwen2.5-3B-Instruct}
+  fast-base-url: ${AI_FAST_BASE_URL:}
+  fast-api-key: ${AI_FAST_API_KEY:}
   embedding-model: ${AI_EMBEDDING_MODEL:BAAI/bge-m3}
+  embed-base-url: ${AI_EMBED_BASE_URL:}
+  embed-api-key: ${AI_EMBED_API_KEY:}
 
 # Madeline 情绪分析 v2 — 消融实验开关（全部默认为 true，置 false 即关闭对应子模块）
 # 消融实验流程：依次把每个开关置 false，跑相同 100 条输入，记录 Judge 评分变化

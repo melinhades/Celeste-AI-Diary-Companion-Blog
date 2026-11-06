@@ -55,6 +55,28 @@ public class AiClient {
     @Value("${ai.api-key:}")
     private String apiKey;
 
+    /** 独立 embedding 服务地址；未配置时回落 ai.base-url，保证换对话服务商不影响 RAG */
+    @Value("${ai.embed-base-url:}")
+    private String embedBaseUrl;
+
+    /** 独立 embedding 服务 Key；未配置时保持原有 Key 选择逻辑（用户 Key → 系统 Key） */
+    @Value("${ai.embed-api-key:}")
+    private String embedApiKey;
+
+    /**
+     * 快模型独立服务地址；为空则回落 ai.base-url。
+     * 只在本次请求的 model 等于 ai.fast-model 时生效；流式与 embedding 不走这条路由。
+     */
+    @Value("${ai.fast-base-url:}")
+    private String fastBaseUrl;
+
+    /**
+     * 快模型独立服务 Key；为空则回落系统主 Key（ai.api-key）。
+     * 注意：BYOK 用户的 Key 属于用户自己的服务商，不能拿去请求快模型端点。
+     */
+    @Value("${ai.fast-api-key:}")
+    private String fastApiKey;
+
     @Value("${ai.model:THUDM/GLM-4-9B-0414}")
     private String model;
 
@@ -63,6 +85,9 @@ public class AiClient {
     private String fastModel;
 
     public String getFastModel() { return fastModel; }
+
+    /** 主模型名：供需要在异步线程中显式传 userId 的调用方保持原模型语义 */
+    public String getModel() { return model; }
 
     @Value("${ai.embedding-model:BAAI/bge-m3}")
     private String embeddingModel;
@@ -434,17 +459,34 @@ public class AiClient {
 
     /** 显式 userId 版本（异步场景 / ThreadLocal 拿不到时使用） */
     public String chat(List<AiMessage> messages, boolean jsonMode, String model, String userId) {
-        String resolvedKey = resolveKey(userId);
-        if (resolvedKey == null) {
-            return "AI 服务未配置：请在账号设置中填入 API Key，或联系管理员启用系统默认 Key";
+        // 快模型独立路由：仅当本次 model 命中 ai.fast-model 且配置了 ai.fast-base-url 时生效
+        boolean fastRoute = fastBaseUrl != null && !fastBaseUrl.trim().isEmpty()
+                && model != null && model.equals(fastModel);
+        String resolvedKey;
+        KeySource keySource;
+        if (fastRoute) {
+            // BYOK 用户 Key 属于用户自己的服务商，不能用于快模型服务商；只用 fast Key，空则回落系统主 Key
+            resolvedKey = isKeyValid(fastApiKey) ? fastApiKey.trim()
+                    : (isKeyValid(apiKey) ? apiKey.trim() : null);
+            keySource = KeySource.SYSTEM;
+            if (resolvedKey == null) {
+                log.warn("快模型服务未配置：ai.fast-api-key 与 ai.api-key 均为空");
+                return null;
+            }
+        } else {
+            resolvedKey = resolveKey(userId);
+            if (resolvedKey == null) {
+                log.warn("AI 服务未配置：用户 Key 与系统默认 Key 均为空");
+                return null;
+            }
+            keySource = currentKeySource(resolvedKey, userId);
         }
-        KeySource keySource = currentKeySource(resolvedKey, userId);
         throttle();
         if (!tryAcquire()) {
             log.warn("AI 熔断器打开中，本次请求快速失败");
             return null;
         }
-        String effModel = chatModelOf(resolvedKey, userId, model);
+        String effModel = fastRoute ? model : chatModelOf(resolvedKey, userId, model);
         JSONObject body = new JSONObject();
         body.put("model", effModel);
         body.put("messages", JSON.parseArray(JSON.toJSONString(messages)));
@@ -457,7 +499,7 @@ public class AiClient {
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(resolvedKey);
 
-        String url = chatBaseOf(resolvedKey, userId) + "/chat/completions";
+        String url = (fastRoute ? fastBaseUrl.trim() : chatBaseOf(resolvedKey, userId)) + "/chat/completions";
         String bodyStr = body.toJSONString();
         if (log.isDebugEnabled()) {
             log.debug("AI 请求 url={}, model={}, messages={}, keySource={}, body={}",
@@ -509,18 +551,11 @@ public class AiClient {
                     }
                     continue;
                 }
-                // 其他 4xx：请求本身有问题（参数/鉴权/余额），重试无意义，直接失败
+                // 其他 4xx：请求本身有问题（参数/鉴权/余额），重试无意义，直接失败。
+                // 注意：失败原因只进日志，绝不当作模型正文返回，避免调用方把报错念给用户。
                 log.warn("AI 客户端错误 status={}, body={}", e.getStatusCode(), e.getResponseBodyAsString());
                 onFailure();
-                if (e.getStatusCode().value() == 402) {
-                    return keySource == KeySource.USER
-                            ? "你的 AI API Key 余额不足，请在账号设置中更换或充值"
-                            : "AI 服务余额不足，请联系管理员充值";
-                }
-                if (e.getStatusCode().value() == 429) {
-                    return "AI 服务限流中，请稍后再试";
-                }
-                return "AI 服务调用失败: " + e.getMessage();
+                return null;
             } catch (HttpServerErrorException | ResourceAccessException e) {
                 // 5xx 或网络异常/超时：可重试
                 lastErr = e;
@@ -646,14 +681,25 @@ public class AiClient {
     }
 
     public float[] embed(String text, String userId) {
-        String resolvedKey = resolveKey(userId);
-        if (resolvedKey == null) return null;
         if (text == null || text.trim().isEmpty()) return null;
-        // DeepSeek 没有 embeddings 接口：DeepSeek 用户的向量检索改用系统 Key（SiliconFlow）
-        String embedKey = resolvedKey;
-        if (isDeepseekUser(resolvedKey, userId)) {
-            if (!isKeyValid(apiKey)) return null;
-            embedKey = apiKey;
+
+        // embedding 端点：优先独立配置；未配置回落主对话地址（保持原有行为）
+        String embedUrl = (embedBaseUrl != null && !embedBaseUrl.trim().isEmpty()
+                ? embedBaseUrl.trim() : baseUrl) + "/embeddings";
+
+        // embedding Key：显式配置 ai.embed-api-key 时用独立凭据（embedding 与对话可能分属不同服务商）；
+        // 未配置时保持原逻辑：用户 Key 优先，DeepSeek 用户没有 embeddings → 回落系统 Key
+        String embedKey;
+        if (isKeyValid(embedApiKey)) {
+            embedKey = embedApiKey.trim();
+        } else {
+            String resolvedKey = resolveKey(userId);
+            if (resolvedKey == null) return null;
+            embedKey = resolvedKey;
+            if (isDeepseekUser(resolvedKey, userId)) {
+                if (!isKeyValid(apiKey)) return null;
+                embedKey = apiKey;
+            }
         }
         JSONObject body = new JSONObject();
         body.put("model", embeddingModel);
@@ -665,7 +711,7 @@ public class AiClient {
 
         try {
             ResponseEntity<String> response = restTemplate.postForEntity(
-                    baseUrl + "/embeddings",
+                    embedUrl,
                     new HttpEntity<>(body.toJSONString(), headers),
                     String.class);
             JSONObject json = JSON.parseObject(response.getBody());

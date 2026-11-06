@@ -41,6 +41,8 @@ logs/
 ### Application ###
 application-dev.properties
 application-prod.properties
+# 本机私有配置（含 API Key），绝不入仓
+blog-api/config/application-local.properties
 uploads/
 
 ### Blog-UI Art Assets (keep js/, css/, *.html, *.md) ###
