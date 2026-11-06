@@ -62,7 +62,7 @@ public interface DiaryService {
 
     Result featherKeyword();
 
-    /** 心之水晶：按近期日记情绪定色，AI 生成名称与描述 */
+    /** 心之水晶：一天一颗（服务端按 user_id + 自然日幂等），颜色只看当天日记的情绪标注 */
     Result heartCrystal();
 
     /** 情绪统计：各情绪出现次数 + 按月趋势（仅普通日记） */

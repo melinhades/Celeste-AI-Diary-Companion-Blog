@@ -6,6 +6,7 @@ import com.mszlu.blog.dao.mapper.DiaryMapper;
 import com.mszlu.blog.dao.mapper.DiaryChatLogMapper;
 import com.mszlu.blog.dao.mapper.DiaryCompanionMapper;
 import com.mszlu.blog.dao.mapper.EmotionStateMapper;
+import com.mszlu.blog.dao.mapper.HeartCrystalMapper;
 import com.mszlu.blog.dao.pojo.*;
 import com.mszlu.blog.service.DiaryService;
 import com.mszlu.blog.service.MemoryService;
@@ -26,9 +27,12 @@ import com.mszlu.blog.vo.params.DiaryParam;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -346,51 +350,41 @@ public class DiaryServiceImpl implements DiaryService {
         }
         String userId = user.getId();
 
-        // 近 10 篇日记的情绪 → 主色投票
-        // 红=不安/愤怒（炽热），蓝=平静/疲惫/悲伤/孤独（沉静），黄=开心/期待/满足/惊讶（明亮）
-        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Diary> wrapper =
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
-        wrapper.eq(Diary::getUserId, userId);
-        wrapper.eq(Diary::getType, "day");
-        wrapper.orderByDesc(Diary::getCreateDate);
-        wrapper.last("limit 10");
-        java.util.List<Diary> diaries = diaryMapper.selectList(wrapper);
+        // 日期口径：服务器 JVM 默认时区下的自然日（与日记 create_date 落库所用时区一致）
+        ZoneId zone = ZoneId.systemDefault();
+        LocalDate today = LocalDate.now(zone);
+        String day = today.toString();
 
-        int red = 0, blue = 0, yellow = 0;
-        StringBuilder trace = new StringBuilder();
-        for (Diary d : diaries) {
-            String e = d.getEmotion() == null ? "" : d.getEmotion();
-            if (!e.isEmpty()) trace.append(e).append(" ");
-            switch (e) {
-                case "不安": case "愤怒": red++; break;
-                case "平静": case "疲惫": case "悲伤": case "孤独": blue++; break;
-                case "开心": case "期待": case "满足": case "惊讶": yellow++; break;
-                default: break;
+        // 服务端按天幂等：当天已有记录就直接复用，不再调 LLM
+        HeartCrystal saved = findHeartCrystal(userId, day);
+        if (saved != null) {
+            return heartResult(saved);
+        }
+
+        // 颜色：当天全部普通日记按最后修改时间倒序，取第一篇有情绪标注的；全都没有才落蓝色
+        List<Diary> todayDiaries = findTodayDiaries(userId, today, zone);
+        String emotion = "";
+        for (Diary d : todayDiaries) {
+            if (d.getEmotion() != null && !d.getEmotion().trim().isEmpty()) {
+                emotion = d.getEmotion().trim();
+                break;
             }
         }
-        String color;
-        if (diaries.isEmpty()) {
-            color = "blue"; // 没有数据时默认蓝——正典里第一颗水晶心就是蓝色
-        } else if (red >= blue && red >= yellow) {
-            color = "red";
-        } else if (blue >= yellow) {
-            color = "blue";
-        } else {
-            color = "yellow";
+        String color = colorOfEmotion(emotion);
+
+        // 首次请求：AI 生成名称与描述（两行文本：第一行名称，第二行描述）
+        String prompt = PromptBuilder.heartTitle(color, emotion);
+        String reply = null;
+        try {
+            reply = aiClient.chat(
+                    new java.util.ArrayList<>(java.util.Arrays.asList(
+                            new AiMessage("user", prompt))));
+        } catch (Exception e) {
+            log.warn("心之水晶 AI 命名失败 userId={} date={}", userId, day, e);
         }
 
-        // AI 生成名称与描述（两行文本：第一行名称，第二行描述）
-        String prompt = PromptBuilder.heartTitle(color, trace.toString());
-        String reply = aiClient.chat(
-                new java.util.ArrayList<>(java.util.Arrays.asList(
-                        new AiMessage("user", prompt))));
-
-        String FALLBACK_TITLE = "red".equals(color) ? "不肯熄的心"
-                : "yellow".equals(color) ? "甜得过分的心" : "不知所谓的机器";
-        String FALLBACK_DESC = "red".equals(color) ? "那些没说出口的火，烧着烧着就成了灯。"
-                : "yellow".equals(color) ? "草莓攒出来的小太阳，专照阴天。" : "山底的冰凉水声，替你把心事泡得很轻。";
-
-        String title = FALLBACK_TITLE, desc = FALLBACK_DESC;
+        String title = fallbackTitle(color);
+        String desc = fallbackDesc(color);
         if (reply != null && !reply.trim().isEmpty()) {
             String[] lines = reply.trim().replaceAll("\"", "").split("\n");
             java.util.List<String> ok = new java.util.ArrayList<>();
@@ -403,10 +397,84 @@ public class DiaryServiceImpl implements DiaryService {
             }
         }
 
+        HeartCrystal row = new HeartCrystal();
+        row.setUserId(userId);
+        row.setCrystalDate(day);
+        row.setColor(color);
+        row.setTitle(title);
+        row.setDescription(desc);
+        row.setCreateDate(System.currentTimeMillis());
+        try {
+            heartCrystalMapper.insert(row);
+        } catch (DataIntegrityViolationException e) {
+            // 并发首访：另一个请求先落库，唯一键挡住本次插入 → 以已落库的那颗为准
+            HeartCrystal concurrent = findHeartCrystal(userId, day);
+            if (concurrent != null) return heartResult(concurrent);
+            log.warn("心之水晶落库失败 userId={} date={}", userId, day, e);
+        }
+        return heartResult(row);
+    }
+
+    /** 按用户 + 自然日查当天那颗心 */
+    private HeartCrystal findHeartCrystal(String userId, String day) {
+        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<HeartCrystal> wrapper =
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
+        wrapper.eq(HeartCrystal::getUserId, userId);
+        wrapper.eq(HeartCrystal::getCrystalDate, day);
+        wrapper.last("limit 1");
+        return heartCrystalMapper.selectOne(wrapper);
+    }
+
+    /**
+     * 当天全部普通日记，按「最后修改时间」倒序：
+     * COALESCE(update_date, create_date) DESC。
+     * 当前保存逻辑在新增和编辑时都会同时刷新这两个字段；历史行若 update_date 为空则回落到 create_date。
+     * 调用方从前往后取第一篇有情绪标注的日记。
+     */
+    private List<Diary> findTodayDiaries(String userId, LocalDate day, ZoneId zone) {
+        Date start = Date.from(day.atStartOfDay(zone).toInstant());
+        Date end = Date.from(day.plusDays(1).atStartOfDay(zone).toInstant());
+        com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Diary> wrapper =
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
+        wrapper.eq(Diary::getUserId, userId);
+        wrapper.eq(Diary::getType, "day");
+        wrapper.ge(Diary::getCreateDate, start);
+        wrapper.lt(Diary::getCreateDate, end);
+        wrapper.last("ORDER BY COALESCE(update_date, create_date) DESC");
+        return diaryMapper.selectList(wrapper);
+    }
+
+    /**
+     * 情绪 → 心色；映射沿用旧规则。
+     * 真实水晶心目前只有蓝/红/黄三档（灰色贴图是假心 FakeHeart，不是可选颜色），
+     * 因此空值/未知情绪统一蓝色兜底，不新增灰色。
+     */
+    private String colorOfEmotion(String emotion) {
+        if (emotion == null) return "blue";
+        switch (emotion) {
+            case "不安": case "愤怒": return "red";
+            case "平静": case "疲惫": case "悲伤": case "孤独": return "blue";
+            case "开心": case "期待": case "满足": case "惊讶": return "yellow";
+            default: return "blue";
+        }
+    }
+
+    private String fallbackTitle(String color) {
+        return "red".equals(color) ? "不肯熄的心"
+                : "yellow".equals(color) ? "甜得过分的心" : "不知所谓的机器";
+    }
+
+    private String fallbackDesc(String color) {
+        return "red".equals(color) ? "那些没说出口的火，烧着烧着就成了灯。"
+                : "yellow".equals(color) ? "草莓攒出来的小太阳，专照阴天。" : "山底的冰凉水声，替你把心事泡得很轻。";
+    }
+
+    /** 统一出口：落库记录 → 接口字段 */
+    private Result heartResult(HeartCrystal heart) {
         java.util.Map<String, Object> data = new java.util.HashMap<>();
-        data.put("color", color);
-        data.put("title", title);
-        data.put("desc", desc);
+        data.put("color", heart.getColor());
+        data.put("title", heart.getTitle());
+        data.put("desc", heart.getDescription());
         return Result.success(data);
     }
 

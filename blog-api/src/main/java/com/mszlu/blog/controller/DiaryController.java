@@ -127,7 +127,7 @@ public class DiaryController {
         return Result.success(null);
     }
 
-    /** 心之水晶：按近期日记情绪定色，AI 生成名称与描述 */
+    /** 心之水晶：一天一颗（服务端按 user_id + 自然日幂等），颜色只看当天日记的情绪标注 */
     @GetMapping("heart-crystal")
     public Result heartCrystal() {
         return diaryService.heartCrystal();

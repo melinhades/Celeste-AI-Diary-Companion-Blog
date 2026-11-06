@@ -730,26 +730,114 @@ public class PromptBuilder {
         return sb.toString();
     }
 
-    /** 心之水晶：根据情绪主色生成 Celeste 风格的收集品名称与一句话描述 */
-    public static String heartTitle(String color, String emotionTrace) {
+    /** 红心命名指导：对峙的具体性 */
+    private static final String HEART_GUIDANCE_RED =
+            "Red embodies confrontation—but Celeste confrontation is specific, costly, and aware of its own violence.\n"
+            + "Capture the exact nature of resistance:\n"
+            + "- What specific thing is being opposed? (not \"困难\" but the shape of the obstacle)\n"
+            + "- What is the physical sensation of this conflict? (heat/pressure/sharp edges/ringing/jaw tension)\n"
+            + "- What boundary is being drawn or crossed?\n"
+            + "- What used to be possible that now requires force?\n"
+            + "Red should feel like:\n"
+            + "- The moment before or after breaking something that can't be unbroken\n"
+            + "- A tool or weapon (literal or metaphorical) actually being used, not just held\n"
+            + "- Speech that ends a relationship, or silence that hardens into a position\n"
+            + "- Body memory: fists, teeth, running, the aftermath of shouting\n"
+            + "Avoid:\n"
+            + "- Abstract war metaphors (战斗/战场/盔甲)\n"
+            + "- Hero's journey language (征服/胜利)\n"
+            + "- Anger without object (just \"angry\"—angry at what? how does it manifest?)\n"
+            + "- Fire/flame/burning unless diary mentions actual heat\n"
+            + "The name should locate: where/when/with what is the confrontation happening?\n"
+            + "The subtitle should reveal: what is the cost, or what becomes impossible after this?";
+
+    /** 蓝心命名指导：缺席的具体形状 */
+    private static final String HEART_GUIDANCE_BLUE =
+            "Blue embodies the slow, cold, and distant—but Celeste blue has architecture and specificity.\n"
+            + "Capture the exact shape of absence:\n"
+            + "- What space has emptied? (a room, a routine, a conversation pattern)\n"
+            + "- What infrastructure remains after the people/purpose left? (furniture, schedules, unanswered messages)\n"
+            + "- What is the time signature of this loneliness? (hours/days/the gap between events)\n"
+            + "- What small physical detail makes the absence concrete?\n"
+            + "Blue should feel like:\n"
+            + "- Public spaces at wrong hours (lobbies at 3am, cafeterias between meals, platforms with no trains)\n"
+            + "- Communication devices with no signal (phones, doors, windows facing other windows)\n"
+            + "- Repetitive actions that used to have meaning (making tea for one, unlocking an empty apartment)\n"
+            + "- Temperature as emotional fact: actual cold, poor circulation, forgetting to eat\n"
+            + "Avoid:\n"
+            + "- Ocean/sea/drowning metaphors unless diary involves actual water\n"
+            + "- Darkness/shadow/abyss imagery (too theatrical)\n"
+            + "- Abstract distance (远方/彼岸)\n"
+            + "- Crying or explicit sadness markers (Celeste blue doesn't announce itself)\n"
+            + "The name should specify: what kind of empty space, what kind of waiting?\n"
+            + "The subtitle should measure: how is time passing differently? what routine persists without joy?";
+
+    /** 黄心命名指导：微小而具体的缓和 */
+    private static final String HEART_GUIDANCE_YELLOW =
+            "Yellow embodies small relief or forward motion—but Celeste yellow is earned, specific, and temporary.\n"
+            + "Capture the exact mechanism of this lightness:\n"
+            + "- What specific small thing went right? (not \"happiness\" but one concrete event)\n"
+            + "- What physical relief? (shoulders dropping, hunger returning, sleep coming easier)\n"
+            + "- What became possible today that wasn't yesterday? (a task completed, a message sent, a choice made)\n"
+            + "- What tiny evidence suggests effort mattered?\n"
+            + "Yellow should feel like:\n"
+            + "- First [X] after long absence: first appetite, first laughter, first unforced conversation, first decent sleep\n"
+            + "- Small functional victories: inbox cleared, room tidied, appointment kept, shower taken\n"
+            + "- Momentary sensory pleasure after deprivation: hot food, clean clothes, sun on face, working heating\n"
+            + "- Baby steps with full awareness they're baby steps (not \"recovery\" but \"today was okay\")\n"
+            + "Avoid:\n"
+            + "- Sunrise/dawn/light metaphors unless diary mentions morning\n"
+            + "- Rainbow/butterfly/spring clichés\n"
+            + "- Breakthrough/transformation language (too big)\n"
+            + "- \"终于\" unless something genuinely concluded\n"
+            + "- Naive optimism that forgets context (yellow knows it's fragile)\n"
+            + "The name should identify: what small thing, what moment of function or pleasure?\n"
+            + "The subtitle should acknowledge: that this is modest, hard-won, or surrounded by difficulty—but real.";
+
+    /** 心之水晶：按当天情绪与心色生成 Celeste 风格的名字与副标题 */
+    public static String heartTitle(String color, String todayEmotion) {
         StringBuilder sb = new StringBuilder();
-        sb.append("You are naming a collectible for the game Celeste (2018), writing in Chinese.\n");
-        sb.append("Celeste's crystal hearts have names like 「不知所谓的机器」 — short, deadpan, a little poetic, never chicken soup, never grandiose.\n\n");
+        sb.append("You are naming a crystal heart from Celeste Mountain. Generate a Chinese name and subtitle based on today's diary.\n\n");
+
+        sb.append("**Structural patterns (do NOT copy these exact phrases):**\n");
+        sb.append("- Two contrasting states joined: [quality] and [opposite quality]\n");
+        sb.append("- Action in present continuous: [verb]ing + [object/direction]\n");
+        sb.append("- Concrete object with implied metaphor: [thing] + [unexpected modifier]\n");
+        sb.append("- Spatial or temporal marker: [time/place] + [of/from] + [abstract concept]\n");
+        sb.append("- Single action verb followed by object or consequence\n\n");
+
+        sb.append("**Core aesthetic principles:**\n");
+        sb.append("- Melancholy without sentimentality: acknowledge weight, refuse self-pity\n");
+        sb.append("- Specificity over universality: not \"pain\" but \"the ringing in your ears after shouting\"\n");
+        sb.append("- Restraint: the most important word is often left unsaid\n");
+        sb.append("- Grounded in physical world: even abstract concepts must have texture, temperature, or location\n\n");
+
+        // 无情绪时整块省略，不留空壳
+        if (todayEmotion != null && !todayEmotion.trim().isEmpty()) {
+            sb.append("**Today's emotional context:**\n");
+            sb.append(todayEmotion.trim()).append("\n\n");
+        }
 
         String zh = "red".equals(color) ? "红" : "yellow".equals(color) ? "黄" : "蓝";
-        String mood = "red".equals(color)
-                ? "burning intensity — anxiety, anger, restless nights, the voice that wouldn't quiet down"
-                : "yellow".equals(color)
-                ? "bright warmth — joy, anticipation, small satisfied moments, gentle surprises"
-                : "quiet depth — calm, tiredness, sadness, loneliness, the still water at the bottom of the mountain";
-        sb.append("This heart is the ").append(zh).append("色水晶心. It embodies: ").append(mood).append(".\n");
-        if (emotionTrace != null && !emotionTrace.trim().isEmpty()) {
-            sb.append("Recent diary emotion labels (Chinese, background reference only): ").append(emotionTrace.trim()).append("\n");
-        }
-        sb.append("\nReply with EXACTLY two lines, plain text, no quotes, no markdown, no emoji:\n");
-        sb.append("Line 1: the heart's name, 2-8 Chinese characters, Celeste deadpan style (like 不知所谓的机器)\n");
-        sb.append("Line 2: one short description, at most 18 Chinese characters, understated but emotionally resonant\n");
-        sb.append("Use only Chinese characters and Chinese punctuation. No exclamation marks.\n");
+        String guidance = "red".equals(color)
+                ? HEART_GUIDANCE_RED
+                : "yellow".equals(color) ? HEART_GUIDANCE_YELLOW : HEART_GUIDANCE_BLUE;
+        sb.append("**For this ").append(zh).append(" heart:**\n");
+        sb.append(guidance).append("\n\n");
+
+        sb.append("**Strict format requirements:**\n");
+        sb.append("Line 1: Chinese name, 2-8 characters, no punctuation\n");
+        sb.append("Line 2: Chinese subtitle, maximum 18 characters, comma allowed but no ending punctuation\n\n");
+
+        sb.append("**Forbidden patterns:**\n");
+        sb.append("- Suffix clichés: 之心/的勇气/之路/之境/之门/的开始\n");
+        sb.append("- Motivational templates: \"相信XX\" \"勇敢XX\" \"不要放弃\"\n");
+        sb.append("- Weather/nature clichés unless diary explicitly mentions them: 暴风雨/彩虹/黎明/日落\n");
+        sb.append("- Therapy speak: 疗愈/成长/自我和解\n");
+        sb.append("- Question format in subtitle\n");
+        sb.append("- Copying or closely paraphrasing any previously generated hearts\n\n");
+
+        sb.append("Generate only the two lines. No explanation, no label, no extra formatting.");
         return sb.toString();
     }
 
