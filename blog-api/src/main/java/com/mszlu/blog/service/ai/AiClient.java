@@ -81,7 +81,7 @@ public class AiClient {
     private String model;
 
     /** 前处理快模型：情绪提取/意图分类不需要强推理，用小模型省延迟 */
-    @Value("${ai.fast-model:Qwen/Qwen2.5-3B-Instruct}")
+    @Value("${ai.fast-model:Qwen/Qwen2.5-7B-Instruct}")
     private String fastModel;
 
     public String getFastModel() { return fastModel; }
