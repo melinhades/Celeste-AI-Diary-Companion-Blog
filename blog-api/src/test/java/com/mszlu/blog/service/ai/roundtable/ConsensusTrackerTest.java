@@ -30,7 +30,7 @@ class ConsensusTrackerTest {
 
     @Test
     void validJson_populatesConsensusDisagreementsFocus() {
-        when(aiClient.chat(anyList(), eq(true))).thenReturn(
+        when(aiClient.chat(anyList(), eq(true), any(), any())).thenReturn(
                 "{\"consensus\":[\"先接纳情绪再行动\"],\"disagreements\":[\"是否该靠外部压力\"],\"focusPoint\":\"接纳情绪\",\"consensusScore\":72}");
         sp("madeline", "玛德琳", "我觉得先接纳情绪");
         sp("theo", "西奥", "同意，先接纳");

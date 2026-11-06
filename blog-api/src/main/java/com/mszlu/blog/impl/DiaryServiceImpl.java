@@ -1039,7 +1039,7 @@ public class DiaryServiceImpl implements DiaryService {
 
         DiaryChatPersonaChecker.CheckResult check =
                 personaChecker.checkOnce(s, systemPrompt, reactSnippet, intent);
-        if (check.pass) return s;
+        if (check.pass) return check.finalResponse;
 
         filterReason[0] = check.failReason;
         String suggestion = check.suggestion == null ? ""

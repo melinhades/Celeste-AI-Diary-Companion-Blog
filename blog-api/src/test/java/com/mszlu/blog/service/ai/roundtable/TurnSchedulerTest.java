@@ -41,7 +41,7 @@ class TurnSchedulerTest {
 
     @Test
     void normalJson_returnsParsedResult() {
-        when(aiClient.chat(anyList(), eq(true))).thenReturn(
+        when(aiClient.chat(anyList(), eq(true), any(), any())).thenReturn(
                 "{\"speakerId\":\"theo\",\"action\":\"补充\",\"publicNote\":\"西奥想补充一个角度\"}");
         addSpeech("madeline");
         TurnScheduler.ScheduleResult r = scheduler.schedule(session, null);

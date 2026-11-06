@@ -106,7 +106,7 @@ class RAGEvalTest {
     @Test
     void scenario3_recentFirst() {
         float[] queryVec = {1.0f, 0.0f, 0.0f};
-        when(aiClient.embed(anyString())).thenReturn(queryVec);
+        when(aiClient.embed(anyString(), any())).thenReturn(queryVec);
 
         long now = System.currentTimeMillis();
         Memory m1 = new Memory();
@@ -155,7 +155,7 @@ class RAGEvalTest {
     @Test
     void scenario4_importanceBoost() {
         float[] queryVec = {1.0f, 0.0f, 0.0f};
-        when(aiClient.embed(anyString())).thenReturn(queryVec);
+        when(aiClient.embed(anyString(), any())).thenReturn(queryVec);
 
         long now = System.currentTimeMillis();
         Memory m1 = new Memory();
