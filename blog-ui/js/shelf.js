@@ -666,7 +666,6 @@ function stopPeSnow() {
                 topEmotion: emotions[0] ? emotions[0].name : null,
                 emotions: emotions,
                 intensity: intensities.length ? Math.round(intensities.reduce((a, b) => a + b, 0) / intensities.length) : null,
-                keySentence: '',
                 events: events.slice(0, 5),
                 concerns: concerns.slice(0, 3)
             };
@@ -737,7 +736,6 @@ function stopPeSnow() {
                     topEmotion: emotionData ? emotionData.topEmotion : countEmotion(list.map(d => d.content || '')),
                     emotions: emotionData ? (emotionData.emotions || []) : [],
                     intensity: emotionData ? emotionData.intensity : null,
-                    keySentence: emotionData ? (emotionData.keySentence || '') : '',
                     events: emotionData ? (emotionData.events || []) : [],
                     concerns: emotionData ? (emotionData.concerns || []) : [],
                     quote: extractQuote(list),
@@ -778,7 +776,6 @@ function stopPeSnow() {
             }
             if (s.events && s.events.length) emotionLine += '\n这些日子：' + s.events.slice(0, 4).join('、');
             if (s.concerns && s.concerns.length) emotionLine += '\n你心里挂念着：' + s.concerns.join('、');
-            if (s.keySentence) emotionLine += '\n「' + s.keySentence + '」';
             exportPostcard({
                 title: s.label + ' · 共 ' + s.count + ' 篇',
                 date: fmt(s.createdAt),
