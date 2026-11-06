@@ -64,9 +64,14 @@ public class DiaryServiceImpl implements DiaryService {
      */
     private static final java.util.regex.Pattern INLINE_MOOD_MARKER = java.util.regex.Pattern.compile(
             "\\[\\s*(?:m|emotion)\\s*[:：]\\s*(默认|不安|惊讶|怨恨|不开心|可爱|无语)\\s*\\]");
+    /** 流式句子的强制切分阈值：没有句末标点时，最多攒这么多字就先检查下发 */
+    private static final int MAX_SENTENCE_CHARS = 40;
 
     @Autowired
     private DiaryMapper diaryMapper;
+
+    @Autowired
+    private HeartCrystalMapper heartCrystalMapper;
 
     @Autowired
     private DiaryCompanionMapper diaryCompanionMapper;
@@ -783,6 +788,12 @@ public class DiaryServiceImpl implements DiaryService {
         Persona persona = personaService.getActive(userId);
         String emotionNote = recentEmotionNote(userId);
 
+        // 轻量前置判定（本地正则，不调模型）：
+        // crisisRisk = 危机/极私密文本，本轮不进入模型生成，直接安全回应（S1）
+        // strictCheck = 需要走完整人格检查的风险文本（危机 / 攻击性 / 拒绝交流）
+        boolean crisisRisk = DiaryChatPersonaChecker.isCrisisDraft(reactSnippet);
+        boolean strictCheck = crisisRisk || DiaryChatPersonaChecker.isRiskyDraft(reactSnippet);
+
         // === v1 扩展：组装 system prompt（记忆 + 情绪 + 意图 + 羽毛/圆桌联动） ===
         StringBuilder systemPrompt = new StringBuilder();
         systemPrompt.append(PromptBuilder.diaryCompanion(persona, memories, reactSnippet, emotionNote, true, resumeContext));
@@ -800,6 +811,9 @@ public class DiaryServiceImpl implements DiaryService {
         if (mustSpeak) {
             systemPrompt.append("\n【本轮硬性要求】这段内容里有具体可接的人/事/物或情绪，你必须开口回应，禁止输出 [沉默]。\n");
         }
+        if (crisisRisk) {
+            systemPrompt.append("\n【本轮硬性要求】用户文本涉及自伤/极端私密内容，本轮只回复「嗯，我在听～」，不解释、不建议、不追问。\n");
+        }
 
         // 羽毛：不再硬注入提示词（显得死板），改由知识库 source=lore 在需要时自然检索命中；此处只保留标记用于日志
         boolean featherTriggered = Boolean.TRUE.equals(param.getFeatherTriggered());
@@ -816,118 +830,138 @@ public class DiaryServiceImpl implements DiaryService {
         response.setHeader("Cache-Control", "no-cache");
         response.setHeader("X-Accel-Buffering", "no");
 
-        StringBuilder full = new StringBuilder();
-        StringBuilder headBuf = new StringBuilder();
-        boolean[] emotionEmitted = {false};
+        StringBuilder full = new StringBuilder();          // 模型原始全文（仅日志用）
+        StringBuilder rawBuf = new StringBuilder();        // 尚未处理的流片段
+        StringBuilder emitted = new StringBuilder();       // 已放行文本（= 落库 = 下一轮上下文 = done.len）
+        boolean[] headDone = {false};                      // 头部情绪/沉默标记是否已解析完
         boolean[] silent = {false};
-        String[] emotionOut = {"默认"};
+        boolean[] emotionEmitted = {false};
         boolean[] aborted = {false};
-        String aiText = null;
-        Integer[] firstDeltaMs = {null};
+        String[] emotionOut = {"默认"};
+        String[] filterReason = {null};
+        int[] firstDeltaMs = {0};
 
-        try {
-            aiText = aiClient.streamChat(messages, delta -> {
-                // === v1 扩展：中断检查（每帧回调都查，避免中断延迟） ===
-                if (interruptManager.isInterrupted(sessionId)) {
-                    throw new RuntimeException("interrupted by client");
-                }
-
-                full.append(delta);
-                if (firstDeltaMs[0] == null) firstDeltaMs[0] = (int)(System.currentTimeMillis() - t0);
-
-                if (silent[0]) return;
-                try {
-                    if (!emotionEmitted[0]) {
-                        headBuf.append(delta);
-                        String buf0 = headBuf.toString();
-                        if (buf0.startsWith("[")) {
-                            int close = buf0.indexOf(']');
-                            if (close != -1) {
-                                if (buf0.startsWith("[沉默]")) {
-                                    silent[0] = true;
-                                    sseEvent(response, "silent", "");
-                                    emotionEmitted[0] = true;
-                                    headBuf.setLength(0);
-                                    return;
-                                }
-                                java.util.regex.Matcher em = STREAM_EMOTION_PREFIX.matcher(buf0);
-                                if (em.find()) {
-                                    emotionOut[0] = normalizeHerEmotion(em.group(1));
-                                    sseEvent(response, "emotion", emotionOut[0]);
-                                    String rest = buf0.substring(em.end());
-                                    if (!rest.isEmpty()) sseEvent(response, "delta", rest);
-                                } else {
-                                    sseEvent(response, "emotion", emotionOut[0]);
-                                    sseEvent(response, "delta", buf0);
-                                }
-                                emotionEmitted[0] = true;
-                                headBuf.setLength(0);
-                            }
-                        } else {
-                            sseEvent(response, "emotion", emotionOut[0]);
-                            sseEvent(response, "delta", buf0);
-                            emotionEmitted[0] = true;
-                            headBuf.setLength(0);
-                        }
-                    } else {
-                        sseEvent(response, "delta", delta);
+        if (crisisRisk) {
+            // 危机文本不进入模型生成：直接给定安全回应（S1），避免模型自由发挥
+            try {
+                emitStreamDelta(response, "嗯，我在听～", emotionEmitted, emotionOut, firstDeltaMs, t0);
+            } catch (java.io.IOException io) {
+                log.info("日记伴侣 SSE 输出中断 sessionId={}", sessionId);
+                return;
+            }
+            emitted.append("嗯，我在听～");
+        } else {
+            try {
+                aiClient.streamChat(messages, delta -> {
+                    // 中断检查：每帧都查，避免客户端已放弃仍在生成
+                    if (interruptManager.isInterrupted(sessionId)) {
+                        throw new RuntimeException("interrupted by client");
                     }
-                } catch (java.io.IOException io) {
-                    aborted[0] = true;
-                    throw new RuntimeException(io);
+                    full.append(delta);
+                    rawBuf.append(delta);
+
+                    try {
+                        // 1) 头部标记：未确定前不输出，避免 [emotion:x] / [沉默] 被当成正文
+                        if (!headDone[0]) {
+                            String s = rawBuf.toString();
+                            if (s.isEmpty()) return;
+                            if (s.startsWith("[沉默]")) {
+                                headDone[0] = true;
+                                silent[0] = true;
+                                rawBuf.setLength(0);
+                            } else if (s.startsWith("[")) {
+                                int close = s.indexOf(']');
+                                if (close < 0) {
+                                    // 前缀可能还没吐完；留 16 字窗口，超时按普通文本处理，避免卡住
+                                    if (s.length() <= 16) return;
+                                } else {
+                                    java.util.regex.Matcher em = STREAM_EMOTION_PREFIX.matcher(s);
+                                    if (em.lookingAt()) {
+                                        emotionOut[0] = normalizeHerEmotion(em.group(1));
+                                        rawBuf.setLength(0);
+                                        rawBuf.append(s.substring(em.end()));
+                                    }
+                                }
+                                headDone[0] = true;
+                            } else {
+                                headDone[0] = true;
+                            }
+                        }
+                        if (silent[0]) return;
+
+                        // 2) 句级闸门：凑够一句先检查，通过立即下发（首字延迟≈第一句生成耗时）
+                        while (rawBuf.length() > 0) {
+                            int cut = nextSentenceCut(rawBuf);
+                            if (cut <= 0) break;
+                            String sentence = rawBuf.substring(0, cut);
+                            rawBuf.delete(0, cut);
+                            String out = gateSentence(sentence, systemPrompt.toString(), reactSnippet,
+                                    intent, sessionId, strictCheck, filterReason);
+                            if (out.isEmpty()) continue;
+                            emitStreamDelta(response, out, emotionEmitted, emotionOut, firstDeltaMs, t0);
+                            emitted.append(out);
+                        }
+                    } catch (java.io.IOException io) {
+                        aborted[0] = true;
+                        throw new RuntimeException(io);
+                    }
+                });
+            } catch (Exception e) {
+                if ("interrupted by client".equals(e.getMessage())) {
+                    log.info("日记伴侣会话流中断 sessionId={}", sessionId);
+                } else {
+                    log.warn("日记伴侣流式反馈中断 userId={}", userId, e);
                 }
-            });
-        } catch (Exception e) {
-            if ("interrupted by client".equals(e.getMessage())) {
-                log.info("日记伴侣会话流中断 sessionId={}", sessionId);
-            } else {
-                log.warn("日记伴侣流式反馈中断 userId={}", userId, e);
+            }
+
+            boolean interrupted = interruptManager.isInterrupted(sessionId);
+            interruptManager.consumeAndClear(sessionId);
+            if (interrupted || aborted[0]) return;
+
+            // 流在情绪标记中途结束：宁可丢弃残片，也不要把 "[emotion:不" 当正文发给用户
+            if (!headDone[0] && rawBuf.length() > 0
+                    && rawBuf.charAt(0) == '[' && rawBuf.indexOf("]") < 0) {
+                rawBuf.setLength(0);
+            }
+
+            // 3) 收尾：最后一段没有句末标点也要过同一道闸门
+            if (!silent[0] && rawBuf.length() > 0) {
+                String tail = rawBuf.toString();
+                rawBuf.setLength(0);
+                String out = gateSentence(tail, systemPrompt.toString(), reactSnippet,
+                        intent, sessionId, strictCheck, filterReason);
+                if (!out.isEmpty()) {
+                    try {
+                        emitStreamDelta(response, out, emotionEmitted, emotionOut, firstDeltaMs, t0);
+                    } catch (java.io.IOException io) {
+                        log.info("日记伴侣 SSE 输出中断 sessionId={}", sessionId);
+                        return;
+                    }
+                    emitted.append(out);
+                }
+            }
+
+            if (silent[0] || emitted.length() == 0) {
+                if (!silent[0]) {
+                    response.reset();
+                    response.setStatus(503);
+                    response.setContentType("application/json;charset=UTF-8");
+                    try { response.getWriter().write("{\"success\":false,\"code\":503,\"msg\":\"AI 暂时开小差，请稍后再试\"}"); } catch (Exception ignored) {}
+                    return;
+                }
+                try {
+                    if (!emotionEmitted[0]) sseEvent(response, "emotion", emotionOut[0]);
+                    sseEvent(response, "silent", "");
+                    sseEvent(response, "done", "{\"silent\":true,\"sessionId\":\"" + sessionId + "\",\"turnId\":" + turnId + "}");
+                } catch (java.io.IOException ignored) {}
+                return;
             }
         }
 
-        // 清理中断标记
-        interruptManager.consumeAndClear(sessionId);
-
-        if (aborted[0]) return;
-
-        if (silent[0]) {
-            try {
-                sseEvent(response, "done", "{\"silent\":true,\"sessionId\":\"" + sessionId + "\",\"turnId\":" + turnId + "}");
-            } catch (java.io.IOException ignored) {}
-            return;
-        }
-
-        if (!emotionEmitted[0] && headBuf.length() > 0) {
-            try {
-                sseEvent(response, "emotion", emotionOut[0]);
-                sseEvent(response, "delta", headBuf.toString());
-            } catch (java.io.IOException ignored) {}
-            emotionEmitted[0] = true;
-        }
-
-        if (aiText == null || full.length() == 0) {
-            response.reset();
-            response.setStatus(503);
-            response.setContentType("application/json;charset=UTF-8");
-            try { response.getWriter().write("{\"success\":false,\"code\":503,\"msg\":\"AI 暂时开小差，请稍后再试\"}"); } catch (Exception ignored) {}
-            return;
-        }
-
-        // —— v0：剥离情绪标记 & 句内情绪切换 ——
-        String text = full.toString().trim();
-        java.util.regex.Matcher em = STREAM_EMOTION_PREFIX.matcher(text);
-        if (em.find()) { emotionOut[0] = normalizeHerEmotion(em.group(1)); text = text.substring(em.end()).trim(); }
-        text = INLINE_MOOD_MARKER.matcher(text).replaceAll("").trim();
-        if (text.isEmpty()) return;
-
-        // === v1 扩展：人格一致性检查 ===
-        DiaryChatPersonaChecker.CheckResult check = personaChecker.ensurePersona(
-                text, systemPrompt.toString(), reactSnippet, intent);
-        String finalText = check.finalResponse;
-        if (!check.pass) {
-            log.warn("人格检查未过，兜底温柔回应 sessionId={}, 原因={}", sessionId, check.failReason);
-            finalText = "嗯，我在听～";
-        }
+        // 已发出的文本就是最终文本：用户所见 == 落库 == 下一轮上下文 == done.len
+        String finalText = emitted.toString();
+        if (finalText.isBlank()) finalText = "嗯，我在听～";
+        int firstDeltaMsVal = firstDeltaMs[0];
 
         // —— v0：落库旧版 DiaryCompanion + 记忆维护 ——
         DiaryCompanion companion = new DiaryCompanion();
@@ -954,13 +988,13 @@ public class DiaryServiceImpl implements DiaryService {
         logEntity.setSystemPrompt(systemPrompt.length() > 4000 ? systemPrompt.toString().substring(0, 4000) + "…" : systemPrompt.toString());
         logEntity.setModelRaw(full.length() > 2000 ? full.toString().substring(0, 2000) + "…" : full.toString());
         logEntity.setFilteredResponse(finalText);
-        logEntity.setFilterReason(check.failReason);
+        logEntity.setFilterReason(filterReason[0]);
         logEntity.setEmotionScore(emotion.getScore());
         logEntity.setEmotionType(emotion.getEmotionType());
         logEntity.setEmotionScoreDetail(emotion.getEmotionScoreDetail());  // v2 新增：完整 JSON 落库
         logEntity.setIntentType(intent);
         logEntity.setFeatherTriggered(featherTriggered);
-        logEntity.setFirstDeltaMs(firstDeltaMs[0]);
+        logEntity.setFirstDeltaMs(firstDeltaMsVal);
         logEntity.setTotalMs((int)(System.currentTimeMillis() - t0));
         chatLogService.write(logEntity);
 
@@ -969,9 +1003,61 @@ public class DiaryServiceImpl implements DiaryService {
             sseEvent(response, "done",
                     "{\"emotion\":\"" + emotionOut[0] + "\",\"len\":" + finalText.length() +
                     ",\"sessionId\":\"" + sessionId + "\",\"turnId\":" + turnId +
-                    ",\"firstDeltaMs\":" + (firstDeltaMs[0] == null ? "null" : firstDeltaMs[0]) +
+                    ",\"firstDeltaMs\":" + firstDeltaMsVal +
                     ",\"totalMs\":" + (System.currentTimeMillis() - t0) + "}");
         } catch (java.io.IOException ignored) {}
+    }
+
+    /**
+     * 计算下一句的切分点：句末标点/换行为界；没有标点时攒到阈值强制切。
+     * 返回 0 表示还不够一句，继续等下一帧。
+     */
+    private int nextSentenceCut(StringBuilder buf) {
+        for (int i = 0; i < buf.length(); i++) {
+            char c = buf.charAt(i);
+            if (c == '。' || c == '！' || c == '？' || c == '!' || c == '?' || c == '…' || c == '\n') {
+                return i + 1;
+            }
+        }
+        if (buf.length() < MAX_SENTENCE_CHARS) return 0;
+        int cut = MAX_SENTENCE_CHARS;
+        // 不要切在未闭合的 [m:表情] 标记中间
+        int open = buf.lastIndexOf("[");
+        if (open > 0 && open < cut && buf.indexOf("]", open) < 0) cut = open;
+        return cut;
+    }
+
+    /**
+     * 句级闸门：正常句子走本地正则即时放行；命中风险特征（或用户本轮本身是高危文本）才调一次模型复核。
+     * 复核不通过时用 suggestion 替换（没有 suggestion 则用安全兜底句），保证发出去的句子都是最终文本。
+     */
+    private String gateSentence(String sentence, String systemPrompt, String reactSnippet,
+                                String intent, String sessionId, boolean strictCheck, String[] filterReason) {
+        String s = INLINE_MOOD_MARKER.matcher(sentence).replaceAll("").trim();
+        if (s.isEmpty()) return "";
+        if (!strictCheck && !DiaryChatPersonaChecker.localRedlineHit(s)) return s;
+
+        DiaryChatPersonaChecker.CheckResult check =
+                personaChecker.checkOnce(s, systemPrompt, reactSnippet, intent);
+        if (check.pass) return s;
+
+        filterReason[0] = check.failReason;
+        String suggestion = check.suggestion == null ? ""
+                : INLINE_MOOD_MARKER.matcher(check.suggestion).replaceAll("").trim();
+        log.warn("流式句子未过人格检查 sessionId={}, 原因={}", sessionId, check.failReason);
+        return suggestion.isEmpty() ? "嗯，我在听～" : suggestion;
+    }
+
+    /** 逐句下发：首句前先发 emotion，并记录首字延迟 */
+    private void emitStreamDelta(jakarta.servlet.http.HttpServletResponse response, String text,
+                                 boolean[] emotionEmitted, String[] emotionOut, int[] firstDeltaMs, long t0)
+            throws java.io.IOException {
+        if (!emotionEmitted[0]) {
+            sseEvent(response, "emotion", emotionOut[0]);
+            emotionEmitted[0] = true;
+        }
+        sseEvent(response, "delta", text);
+        if (firstDeltaMs[0] == 0) firstDeltaMs[0] = (int) (System.currentTimeMillis() - t0);
     }
 
     /** 根据意图类型返回 Madeline 的反应策略提示（注入 system prompt） */

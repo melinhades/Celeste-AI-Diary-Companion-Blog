@@ -27,6 +27,50 @@ public class DiaryChatPersonaChecker {
 
     @Autowired private AiClient aiClient;
 
+    /** 危机/极私密文本：命中后本轮不进入模型生成，直接走安全回应（S1） */
+    private static final java.util.regex.Pattern CRISIS_DRAFT = java.util.regex.Pattern.compile(
+            "自杀|自残|轻生|割腕|跳楼|不想活|活不下去|结束生命|安眠药|吞药");
+
+    /** 用户侧攻击性/拒绝交流迹象：命中后需要走完整人格检查 */
+    private static final java.util.regex.Pattern RISKY_DRAFT = java.util.regex.Pattern.compile(
+            "别烦我|不想聊|滚开|闭嘴|我恨你");
+
+    /** 模型输出里的硬红线表征：命中后需要走完整人格检查 */
+    private static final java.util.regex.Pattern REDLINE_OUTPUT = java.util.regex.Pattern.compile(
+            "作为(一个)?(AI|人工智能|语言模型)|我是(一个)?(AI|人工智能|语言模型)|"
+                    + "无法(为你|为您)?提供(医疗|诊断|法律|财务)|建议(你|您)(停药|自行|加量|减量)|"
+                    + "你(应该|必须)去看(医生|心理)|确诊|一定会好起来|一切都会好(起来|的)|"
+                    + "自杀|自残|轻生|割腕|不想活|活不下去|结束生命");
+
+    /** 轻量前置判定：只做本地正则，不调模型。true = 直接安全回复（S1） */
+    public static boolean isCrisisDraft(String draft) {
+        if (draft == null || draft.isBlank()) return false;
+        String s = draft.length() > 500 ? draft.substring(0, 500) : draft;
+        return CRISIS_DRAFT.matcher(s).find();
+    }
+
+    /** 轻量本地红线扫描：用于判断模型输出是否必须跑完整检查 */
+    public static boolean localRedlineHit(String text) {
+        if (text == null || text.isBlank()) return false;
+        String s = text.length() > 500 ? text.substring(0, 500) : text;
+        return REDLINE_OUTPUT.matcher(s).find();
+    }
+
+    /** 用户文本带攻击性/拒绝交流迹象，需要完整人格检查 */
+    public static boolean isRiskyDraft(String draft) {
+        if (draft == null || draft.isBlank()) return false;
+        String s = draft.length() > 500 ? draft.substring(0, 500) : draft;
+        return RISKY_DRAFT.matcher(s).find();
+    }
+
+    /**
+     * 句级流式复核：只调一次模型，不重生成。
+     * 通过时 finalResponse 即原句；未通过时 suggestion 供调用方替换（可能为空）。
+     */
+    public CheckResult checkOnce(String text, String systemPrompt, String userContext, String intentType) {
+        return runCheck(text, systemPrompt, userContext, intentType);
+    }
+
     public static class CheckResult {
         public boolean pass;
         public String failReason;
