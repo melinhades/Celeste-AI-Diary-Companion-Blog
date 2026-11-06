@@ -70,7 +70,7 @@ mybatis-plus:
 # JWT 配置 - 生产环境建议通过环境变量注入强密钥；此处给非空默认值兜底，
 # 避免 JWT_SECRET 未配置时空密钥导致 hmacShaKeyFor 抛 WeakKeyException（登录报“系统异常”）
 jwt:
-  secret: ${JWT_SECRET:MszluBlogJwtSecretKey2026AbcXyz789}
+  secret: ${JWT_SECRET:CHANGE_ME_JWT_SECRET_32_BYTES_MINIMUM}
   expiration: 2592000000  # 30天，单位毫秒
 
 # 七牛云配置
