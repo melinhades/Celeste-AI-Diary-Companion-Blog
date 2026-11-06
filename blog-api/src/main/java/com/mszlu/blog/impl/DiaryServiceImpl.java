@@ -192,8 +192,9 @@ public class DiaryServiceImpl implements DiaryService {
         java.util.concurrent.CompletableFuture.runAsync(() -> {
             try {
                 String snippet = content.substring(0, Math.min(1500, content.length()));
-                String reply = aiClient.chat(new java.util.ArrayList<>(java.util.Arrays.asList(
-                        new AiMessage("user", PromptBuilder.emotionAnalyze(snippet)))));
+                java.util.List<AiMessage> msgs = new java.util.ArrayList<>();
+                msgs.add(new AiMessage("user", PromptBuilder.emotionAnalyze(snippet)));
+                String reply = aiClient.chat(msgs, true, aiClient.getModel(), userId);
                 java.util.Map<String, Object> data = parseEmotionReply(reply, snippet);
                 Diary upd = new Diary();
                 upd.setId(diaryId);
@@ -722,7 +723,7 @@ public class DiaryServiceImpl implements DiaryService {
                 ? CompletableFuture.completedFuture(cachedIntent)
                 : CompletableFuture.supplyAsync(() -> {
                     if (interruptManager.isInterrupted(sessionId)) throw new RuntimeException("interrupted");
-                    String r = intentClassifier.classify(reactSnippet, finalSummary);
+                    String r = intentClassifier.classify(userId, reactSnippet, finalSummary);
                     putCached(intentKey, r);
                     return r;
                 }, aiExecutor).exceptionally(ex -> {

@@ -27,6 +27,11 @@ public class DiaryChatIntentClassifier {
 
     /** 入口点，companionStream 入口处调 */
     public String classify(String diaryText, String recentContext) {
+        return classify(null, diaryText, recentContext);
+    }
+
+    /** 异步线程内调用时必须显式传 userId，避免回退到系统 Key */
+    public String classify(String userId, String diaryText, String recentContext) {
         if (diaryText == null || diaryText.trim().isEmpty()) return "吐槽";
 
         String prompt = "判断以下中文日记的意图类型，只输出严格 JSON：\n" +
@@ -43,7 +48,7 @@ public class DiaryChatIntentClassifier {
         msgs.add(new AiMessage("user", prompt));
 
         try {
-            String raw = aiClient.chat(msgs, true, aiClient.getFastModel());
+            String raw = aiClient.chat(msgs, true, aiClient.getFastModel(), userId);
             if (raw != null) {
                 JSONObject obj = JSON.parseObject(raw.trim());
                 String intent = obj.getString("intent");

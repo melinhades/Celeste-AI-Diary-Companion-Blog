@@ -276,7 +276,7 @@ public class RoundtableEngine {
                         "1~2 句话、不超过 60 个字，直接说：\n");
         }
         msgs.add(new AiMessage("user", user.toString()));
-        return aiClient.chat(msgs, false);
+        return aiClient.chat(msgs, false, aiClient.getModel(), session.getUserId());
     }
 
     /**
@@ -298,7 +298,7 @@ public class RoundtableEngine {
             user.append("- 不许自说自话另起话题，不许顺着补充，不许重复任何人说过的观点。\n");
             user.append("如果你不反对，或者只是想补充、追问、表示赞同，什么都别说，只回复 ").append(INTERJECT_PASS).append("。");
             msgs.add(new AiMessage("user", user.toString()));
-            String out = aiClient.chat(msgs, false);
+            String out = aiClient.chat(msgs, false, aiClient.getModel(), session.getUserId());
             if (out == null) return null;
             String trimmed = out.trim();
             // 门控：不反对就跳过本次插话
@@ -326,7 +326,7 @@ public class RoundtableEngine {
         }
         user.append(instruction);
         msgs.add(new AiMessage("user", user.toString()));
-        return aiClient.chat(msgs, false);
+        return aiClient.chat(msgs, false, aiClient.getModel(), session.getUserId());
     }
 
     // ==================== 知识库检索 ====================
@@ -424,7 +424,8 @@ public class RoundtableEngine {
                 older.append("【").append(m.get("name")).append("】").append(m.get("content")).append("\n");
             }
             String raw = aiClient.chat(Collections.singletonList(new AiMessage("user",
-                    PromptBuilder.roundtableSummaryPrompt(session.getTopic(), older.toString()))), false);
+                    PromptBuilder.roundtableSummaryPrompt(session.getTopic(), older.toString()))),
+                    false, aiClient.getModel(), session.getUserId());
             if (raw != null && !raw.trim().isEmpty()) {
                 String fresh = raw.trim();
                 String prev = session.getRollingSummary();
@@ -432,7 +433,8 @@ public class RoundtableEngine {
                 if (merged.length() > SUMMARY_MAX_CHARS) {
                     String re = aiClient.chat(Collections.singletonList(new AiMessage("user",
                             "把下面的圆桌讨论摘要整体压缩到 " + SUMMARY_MAX_CHARS + " 字以内，"
-                                    + "优先保留未解决的分歧、关键决定和用户的实际处境，只输出压缩结果：\n" + merged)), false);
+                                    + "优先保留未解决的分歧、关键决定和用户的实际处境，只输出压缩结果：\n" + merged)),
+                            false, aiClient.getModel(), session.getUserId());
                     merged = (re != null && !re.trim().isEmpty()) ? re.trim()
                             : merged.substring(merged.length() - SUMMARY_MAX_CHARS);
                 }
@@ -479,7 +481,8 @@ public class RoundtableEngine {
             if (all.size() < 6 || session.getUserId() == null) return;
             String digest = transcriptDigest(session, 3500);
             String raw = aiClient.chat(Collections.singletonList(new AiMessage("user",
-                    PromptBuilder.roundtableMemoryPrompt(session.getTopic(), digest))), true);
+                    PromptBuilder.roundtableMemoryPrompt(session.getTopic(), digest))),
+                    true, aiClient.getModel(), session.getUserId());
             if (raw == null) return;
             JSONArray arr = JSON.parseObject(raw).getJSONArray("memories");
             if (arr == null || arr.isEmpty()) return;
@@ -497,7 +500,7 @@ public class RoundtableEngine {
                 Integer imp = m.getInteger("importance");
                 mem.setImportance(imp == null ? 6 : Math.max(1, Math.min(10, imp)));
                 mem.setCreateDate(System.currentTimeMillis());
-                float[] vec = aiClient.embed(content);
+                float[] vec = aiClient.embed(content, session.getUserId());
                 if (vec != null) mem.setEmbedding(JSON.toJSONString(vec));
                 memoryMapper.insert(mem);
                 saved++;
@@ -546,7 +549,8 @@ public class RoundtableEngine {
         }
         long t0 = System.currentTimeMillis();
         String raw = aiClient.chat(java.util.Collections.singletonList(
-                new AiMessage("user", PromptBuilder.roundtableJudgePrompt(session.getTopic(), record.toString()))), true);
+                new AiMessage("user", PromptBuilder.roundtableJudgePrompt(session.getTopic(), record.toString()))),
+                true, aiClient.getModel(), session.getUserId());
         if (raw == null) return fallback;
         try {
             JSONObject json = JSON.parseObject(raw);

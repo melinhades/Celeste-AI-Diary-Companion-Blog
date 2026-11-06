@@ -2,6 +2,7 @@ package com.mszlu.blog.service.diarychat;
 
 import com.mszlu.blog.dao.mapper.DiaryChatSessionMapper;
 import com.mszlu.blog.dao.pojo.DiaryChatSession;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.mszlu.blog.service.ai.AiClient;
 import com.mszlu.blog.service.ai.AiMessage;
 import com.alibaba.fastjson.JSON;
@@ -37,6 +38,8 @@ public class DiaryChatMemory {
         public String summary = "";                                // MySQL 里存的累计摘要，启动时加载
         public int turnCount = 0;                                  // 已完成的总轮次（含已压缩的）
         public LocalDateTime lastActiveAt = LocalDateTime.now();
+        /** false 表示 sessionId 与库里其他用户的会话冲突，本会话只保留内存、不写库 */
+        public boolean persistable = true;
 
         SessionBuffer(String sessionId, String userId) {
             this.sessionId = sessionId;
@@ -118,6 +121,12 @@ public class DiaryChatMemory {
         DiaryChatSession entity = sessionMapper.selectById(sessionId);
         if (entity != null) {
             SessionBuffer buf = new SessionBuffer(sessionId, userId);
+            // 越权防护：sessionId 由客户端传入，必须确认归属，避免读到其他用户的摘要
+            if (userId == null || !userId.equals(entity.getUserId())) {
+                buf.persistable = false;
+                log.warn("会话 ID 归属不匹配，降级为内存会话 sessionId={}", sessionId);
+                return buf;
+            }
             buf.summary = entity.getSummary() == null ? "" : entity.getSummary();
             buf.turnCount = entity.getTurnCount() == null ? 0 : entity.getTurnCount();
             buf.lastActiveAt = entity.getLastActiveAt() == null ? LocalDateTime.now() : entity.getLastActiveAt();
@@ -128,6 +137,7 @@ public class DiaryChatMemory {
 
     private void saveToDb(SessionBuffer buf) {
         try {
+            if (!buf.persistable) return;
             DiaryChatSession entity = sessionMapper.selectById(buf.sessionId);
             if (entity == null) {
                 entity = new DiaryChatSession();
@@ -139,10 +149,18 @@ public class DiaryChatMemory {
                 entity.setCreatedAt(LocalDateTime.now());
                 sessionMapper.insert(entity);
             } else {
-                entity.setSummary(buf.summary);
-                entity.setTurnCount(buf.turnCount);
-                entity.setLastActiveAt(buf.lastActiveAt);
-                sessionMapper.updateById(entity);
+                // 越权防护：更新时同时限定 user_id，绝不覆盖其他用户的会话
+                if (buf.userId == null || !buf.userId.equals(entity.getUserId())) {
+                    buf.persistable = false;
+                    log.warn("拒绝写入非本人会话 sessionId={}", buf.sessionId);
+                    return;
+                }
+                sessionMapper.update(null, new LambdaUpdateWrapper<DiaryChatSession>()
+                        .eq(DiaryChatSession::getSessionId, buf.sessionId)
+                        .eq(DiaryChatSession::getUserId, buf.userId)
+                        .set(DiaryChatSession::getSummary, buf.summary)
+                        .set(DiaryChatSession::getTurnCount, buf.turnCount)
+                        .set(DiaryChatSession::getLastActiveAt, buf.lastActiveAt));
             }
         } catch (Exception e) {
             log.warn("会话记忆落库失败 sessionId={}: {}", buf.sessionId, e.getMessage());
@@ -168,7 +186,7 @@ public class DiaryChatMemory {
             msgs.add(new AiMessage("system", "你是一个对话摘要器，输出 ≤ 100 字的中文摘要，保留关键信息。"));
             msgs.add(new AiMessage("user", sb.toString()));
 
-            String compressed = aiClient.chat(msgs);
+            String compressed = aiClient.chat(msgs, false, aiClient.getModel(), buf.userId);
             if (compressed == null || compressed.isBlank()) return;
             compressed = compressed.trim().replaceAll("\\s+", " ").length() > 100
                     ? compressed.trim().substring(0, 100) + "…"

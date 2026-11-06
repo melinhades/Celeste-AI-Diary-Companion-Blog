@@ -136,14 +136,14 @@ public class DiaryChatEmotionExtractor {
     private volatile float[][] prototypeVectors;
     /** 全部失败后的冷却截止时间：避免上游异常时每条消息都重试 8 次 embed（每次都触发全局限速） */
     private volatile long prototypeRetryAfter = 0;
-    private synchronized void ensurePrototypeVectors() {
+    private synchronized void ensurePrototypeVectors(String userId) {
         if (prototypeVectors != null) return;
         long now = System.currentTimeMillis();
         if (now < prototypeRetryAfter) return;
         float[][] vecs = new float[PLUTCHIK_PROTOTYPES.length][];
         int validCount = 0;
         for (int i = 0; i < PLUTCHIK_PROTOTYPES.length; i++) {
-            float[] v = aiClient.embed(PLUTCHIK_PROTOTYPES[i]);
+            float[] v = aiClient.embed(PLUTCHIK_PROTOTYPES[i], userId);
             if (v != null && v.length > 0) { vecs[i] = v; validCount++; }
         }
         // 全部失败时：保持 null，调用方降级，并冷却 60s 再重试
@@ -214,7 +214,7 @@ public class DiaryChatEmotionExtractor {
                         fb.put("ablation_note", "text-module-disabled-used-keyword-fallback");
                         return fb;
                     }
-                    return analyzeTextSide(finalText);
+                    return analyzeTextSide(finalText, userId);
                 });
         java.util.concurrent.CompletableFuture<JSONObject> embedFuture =
                 java.util.concurrent.CompletableFuture.supplyAsync(() -> {
@@ -224,7 +224,7 @@ public class DiaryChatEmotionExtractor {
                         sk.put("ablation_note", "embed-module-disabled");
                         return sk;
                     }
-                    return crossValidateByEmbed(finalText, null); // 先不算 difference，拿到 plutchikPrimary 后补
+                    return crossValidateByEmbed(finalText, null, userId); // 先不算 difference，拿到 plutchikPrimary 后补
                 });
 
         JSONObject textAnalysis = textFuture.join();
@@ -369,7 +369,7 @@ public class DiaryChatEmotionExtractor {
     // ────────────────────────────────────────────────────
     // （二）纯文本侧 AI 分析 —— Plutchik 三层 + 程度/否定/转折
     // ────────────────────────────────────────────────────
-    private JSONObject analyzeTextSide(String text) {
+    private JSONObject analyzeTextSide(String text, String userId) {
         JSONObject result = new JSONObject();
         if (text == null || text.trim().isEmpty()) {
             result.put("score", 0.0);
@@ -407,7 +407,7 @@ public class DiaryChatEmotionExtractor {
         msgs.add(new AiMessage("user", prompt));
 
         try {
-            String raw = aiClient.chat(msgs, true, aiClient.getFastModel());
+            String raw = aiClient.chat(msgs, true, aiClient.getFastModel(), userId);
             if (raw != null) {
                 JSONObject obj = JSON.parseObject(raw.trim());
                 result.put("plutchikPrimary", obj.getString("plutchik_primary"));
@@ -607,7 +607,7 @@ public class DiaryChatEmotionExtractor {
     // ────────────────────────────────────────────────────
     // Embedding 交叉验证：文本 embedding vs 8 个情绪原型句 embedding
     // ────────────────────────────────────────────────────
-    private JSONObject crossValidateByEmbed(String text, String aiPrimary) {
+    private JSONObject crossValidateByEmbed(String text, String aiPrimary, String userId) {
         JSONObject result = new JSONObject();
         result.put("top_match", "");
         result.put("top_score", 0.0);
@@ -621,10 +621,10 @@ public class DiaryChatEmotionExtractor {
 
         try {
             // 懒加载原型句 embedding（一次成本，后续全复用）
-            ensurePrototypeVectors();
+            ensurePrototypeVectors(userId);
             if (prototypeVectors == null) { result.put("confidence", "low"); return result; }
 
-            float[] textVec = aiClient.embed(text);
+            float[] textVec = aiClient.embed(text, userId);
             if (textVec == null || textVec.length == 0) {
                 result.put("confidence", "low");
                 return result;

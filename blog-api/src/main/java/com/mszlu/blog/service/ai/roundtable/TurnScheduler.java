@@ -50,7 +50,7 @@ public class TurnScheduler {
         }
         String last = lastSpeaker(session);
         try {
-            String raw = aiClient.chat(buildMessages(session, last), true);
+            String raw = aiClient.chat(buildMessages(session, last), true, aiClient.getModel(), session.getUserId());
             if (raw != null) {
                 JSONObject obj = JSON.parseObject(raw);
                 if (obj != null) {

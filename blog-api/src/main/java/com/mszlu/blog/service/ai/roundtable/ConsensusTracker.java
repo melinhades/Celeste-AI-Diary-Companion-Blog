@@ -32,7 +32,7 @@ public class ConsensusTracker {
     public Map<String, Object> update(RoundtableSession session) {
         Map<String, Object> pulse;
         try {
-            String raw = aiClient.chat(buildMessages(session), true);
+            String raw = aiClient.chat(buildMessages(session), true, aiClient.getModel(), session.getUserId());
             pulse = parse(raw);
         } catch (Exception e) {
             log.warn("共识分析失败，走兜底: {}", e.getMessage());

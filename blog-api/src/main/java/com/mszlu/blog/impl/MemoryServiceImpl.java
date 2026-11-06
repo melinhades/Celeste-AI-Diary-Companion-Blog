@@ -91,7 +91,7 @@ public class MemoryServiceImpl implements MemoryService {
         // 2. RAG：当前消息向量化，与记忆向量算余弦相似度取 Top 8（用缓存 + 时间衰减 × 重要性融合）
         boolean vectorHit = false;
         if (userContent != null && !userContent.isEmpty()) {
-            float[] queryVec = aiClient.embed(userContent);
+            float[] queryVec = aiClient.embed(userContent, userId);
             if (queryVec != null) {
                 LambdaQueryWrapper<Memory> pool = new LambdaQueryWrapper<>();
                 pool.eq(Memory::getUserId, userId);
@@ -220,9 +220,21 @@ public class MemoryServiceImpl implements MemoryService {
     private List<ContextChunk> reRank(List<Map.Entry<ContextChunk, Double>> scored, int limit) {
         if (scored == null || scored.isEmpty()) return new ArrayList<>();
 
-        double memQuota = Math.ceil(limit * memoryQuota);
-        double diaQuota = Math.ceil(limit * diaryQuota);
-        double lorQuota = limit - memQuota - diaQuota;
+        int cap = Math.max(1, limit);
+        int memQuota;
+        int diaQuota;
+        int lorQuota;
+        if (cap <= 2) {
+            // 小配额优先保证 lore 至少 1 条，剩余给 memory
+            memQuota = cap - 1;
+            diaQuota = 0;
+            lorQuota = 1;
+        } else {
+            // 用 floor 而非 ceil：避免 memory+diary 把槽位吃满，导致 lore 恒为 0
+            memQuota = (int) Math.floor(cap * memoryQuota);
+            diaQuota = (int) Math.floor(cap * diaryQuota);
+            lorQuota = Math.max(1, cap - memQuota - diaQuota);
+        }
 
         List<Map.Entry<ContextChunk, Double>> mem = new ArrayList<>();
         List<Map.Entry<ContextChunk, Double>> dia = new ArrayList<>();
@@ -235,31 +247,29 @@ public class MemoryServiceImpl implements MemoryService {
             else lor.add(e);
         }
 
-        // Memory：时间衰减（lastMentionedTime 优先，null → createDate）× 重要性融合
-        mem.sort((a, b) -> {
-            double sa = a.getValue();
-            double sb = b.getValue();
-            // 取 createDate / importance 兜底（ContextChunk 没带，退回纯 sim 比较）
-            return Double.compare(sb, sa);
-        });
-        // 注：时间衰减 + 重要性融合只在 searchContext 里已读 DB 表时生效，
-        // ContextChunk 封装后丢失原始字段，所以这里先按 sim 排。
-        // 真正的衰减与融合在 searchContext 内部组装 scored 时就乘进去了（见下方改动）。
+        mem.sort((a, b) -> Double.compare(b.getValue(), a.getValue()));
+        dia.sort((a, b) -> Double.compare(b.getValue(), a.getValue()));
+        lor.sort((a, b) -> Double.compare(b.getValue(), a.getValue()));
 
         List<ContextChunk> out = new ArrayList<>();
         int mi = 0, di = 0, li = 0;
-        while (out.size() < limit) {
-            boolean progress = false;
-            if (out.size() < memQuota && mi < mem.size()) {
-                out.add(mem.get(mi++).getKey()); progress = true;
-            }
-            if (out.size() < memQuota + diaQuota && di < dia.size() && out.size() < limit) {
-                out.add(dia.get(di++).getKey()); progress = true;
-            }
-            if (li < lor.size() && out.size() < limit) {
-                out.add(lor.get(li++).getKey()); progress = true;
-            }
-            if (!progress) break;
+
+        // 先按分源配额取
+        for (int i = 0; i < memQuota && mi < mem.size() && out.size() < cap; i++) {
+            out.add(mem.get(mi++).getKey());
+        }
+        for (int i = 0; i < diaQuota && di < dia.size() && out.size() < cap; i++) {
+            out.add(dia.get(di++).getKey());
+        }
+        for (int i = 0; i < lorQuota && li < lor.size() && out.size() < cap; i++) {
+            out.add(lor.get(li++).getKey());
+        }
+
+        // 某个源为空时用其余源补齐，保证返回条数尽量接近 limit
+        while (out.size() < cap && (mi < mem.size() || di < dia.size() || li < lor.size())) {
+            if (mi < mem.size()) out.add(mem.get(mi++).getKey());
+            else if (di < dia.size()) out.add(dia.get(di++).getKey());
+            else if (li < lor.size()) out.add(lor.get(li++).getKey());
         }
         return out;
     }
@@ -283,7 +293,7 @@ public class MemoryServiceImpl implements MemoryService {
     private void doExtract(String userId, String prompt, String source) {
         try {
             String json = aiClient.chat(
-                    Arrays.asList(new AiMessage("user", prompt)), true);
+                    Arrays.asList(new AiMessage("user", prompt)), true, aiClient.getModel(), userId);
             if (json == null) {
                 return;
             }
@@ -301,7 +311,7 @@ public class MemoryServiceImpl implements MemoryService {
                 memory.setImportance(item.getIntValue("importance"));
                 memory.setCreateDate(System.currentTimeMillis());
                 // 顺手向量化（失败不影响记忆入库，下次 reindex 可补）
-                float[] vec = aiClient.embed(memory.getContent());
+                float[] vec = aiClient.embed(memory.getContent(), userId);
                 if (vec != null) memory.setEmbedding(JSON.toJSONString(vec));
                 memoryMapper.insert(memory);
             }
@@ -358,7 +368,7 @@ public class MemoryServiceImpl implements MemoryService {
         qw.isNull(Memory::getEmbedding);
         int done = 0;
         for (Memory m : memoryMapper.selectList(qw)) {
-            float[] vec = aiClient.embed(m.getContent());
+            float[] vec = aiClient.embed(m.getContent(), user.getId());
             if (vec != null) {
                 Memory upd = new Memory();
                 upd.setEmbedding(JSON.toJSONString(vec));
@@ -389,7 +399,7 @@ public class MemoryServiceImpl implements MemoryService {
             chunkMapper.delete(del);
 
             for (String piece : splitChunks(content)) {
-                float[] vec = aiClient.embed((title != null ? title + "：" : "") + piece);
+                float[] vec = aiClient.embed((title != null ? title + "：" : "") + piece, userId);
                 if (vec == null) continue;
                 DocumentChunk c = new DocumentChunk();
                 c.setUserId(userId);
@@ -434,7 +444,7 @@ public class MemoryServiceImpl implements MemoryService {
     // ================= RAG 统一检索工具 =================
     @Override
     public List<ContextChunk> searchContext(String userId, String query, int limit) {
-        float[] qv = aiClient.embed(query);
+        float[] qv = aiClient.embed(query, userId);
         if (qv == null) return new ArrayList<>();
 
         List<Map.Entry<ContextChunk, Double>> scored = new ArrayList<>();
