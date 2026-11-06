@@ -75,10 +75,10 @@ This dual-platform flow creates meaning: **intimate personal reflections in the 
 | <img src="assets/readme/icons/strawberry.png" height="56"> | **Strawberry Economy** | Earn 🍓 through writing, spend in Oshiro's shop | ✅ |
 | <img src="assets/readme/icons/badeline-spin.gif" height="56"> | **Badeline Night Talk** | Shatter the mirror to summon your shadow self; 15 emotion portraits + emotion-driven voice sfx | ✅ |
 | <img src="assets/readme/icons/campfire.gif" height="56"> | **Dream World** | Snow-night campfire & mirror room with smooth cinematic camera pan | ✅ |
-| <img src="assets/readme/icons/berryos-desktop.gif" height="56"> | **BerryOS Desktop** | Simulated retro OS: desktop icons, taskbar, clock, strawberry Start menu | ✅ |
-| <img src="assets/readme/icons/monthly-ppt.png" height="56"> | **Monthly PPT Player** | Auto-generated monthly slideshow with cube/dissolve/spin 3D transitions & BGM | ✅ |
+| <img src="assets/readme/icons/berryos-desktop.gif" height="56"> | **BerryOS Desktop** | Simulated retro OS: desktop icons, taskbar, clock, strawberry Start menu, cassette.exe ambience deck | ✅ |
+| <img src="assets/readme/icons/monthly-ppt.png" height="56"> | **Diary PPT Player** | Diary-triggered 「topic 与我」slideshow: recurring-worry detection → 6-page deck from your own diary text (AI optional, local fallback), cube/dissolve/spin 3D transitions & BGM | ✅ |
 | <img src="assets/readme/icons/madeline-sing.gif" height="56"> | **Madeline Sings** | Click the payphone on a snow night to hear her sing | ✅ |
-| 💬 | **Realtime Chatroom** | SSE live chat, online badge, emoji stickers, real-time like/comment notifications | ✅ |
+| 💬 | **Realtime Chatroom** | SSE live chat (header Chat → 铭记·山间聊天室), online badge, emoji stickers; `messages.html` retains the like/comment notification feed | ✅ |
 | <img src="assets/readme/icons/analytics.png" height="56"> | **Analytics** | Emotion tracking, writing insights & engagement metrics | 🔄 |
 | <img src="assets/readme/icons/lock.png" height="56"> | **Security Hardened** | BCrypt, JWT env-config, bounded pools, magic-number uploads | ✅ |
 | 📈 | **Observability Ready** | Actuator + Prometheus metrics, full-link TraceId, AI health probe | ✅ |
@@ -141,15 +141,15 @@ Oshiro's cozy inn — pixel-perfect Celeste interior with purple curtains, campf
   <img src="docs/screenshots/berryos.png" alt="BerryOS Desktop" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
 </p>
 
-A fully simulated retro operating system. Double-click **我的大山** to return to the blog, open the auto-generated monthly **总结.ppt**, or empty the **回收站** — complete with a taskbar, live clock, custom bird cursor, and a strawberry BerryOS Start menu.
+A fully simulated retro operating system. Double-click **我的大山** to return to the blog, open **凌波微步与我.ppt** (regenerated from your latest diary worry when one is detected, otherwise a preset deck), launch **cassette.exe** for ambience mixing, or empty the **回收站** — complete with a taskbar, live clock, custom bird cursor, and a strawberry BerryOS Start menu.
 
-### 📊 Monthly PPT Player — *Cube, dissolve, and spin transitions — your month, slideshow-style.*
+### 📊 Diary PPT Player — *Your worry becomes a 6-page 「topic 与我」deck — cube, dissolve, and spin transitions.*
 
 <p align="center">
-  <img src="docs/screenshots/berryos-ppt.png" alt="Monthly PPT" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
+  <img src="docs/screenshots/berryos-ppt.png" alt="Diary PPT" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
 </p>
 
-Double-click the monthly PPT icon on BerryOS: a splash expands from the icon, BGM kicks in, and the slideshow plays with **cube / dissolve / spin** 3D transitions, pixel typewriter text, and per-slide sound effects. Click or use arrow keys to page through; Esc exits. The slide data is fully decoupled from the renderer — future AI-generated monthly JSON simply replaces the data.
+Double-click the PPT icon on BerryOS: a splash expands from the icon, BGM kicks in, and the slideshow plays with **cube / dissolve / spin** 3D transitions, pixel typewriter text, and per-slide sound effects. Click or use arrow keys to page through; Esc exits. Slides are built in the browser from your diary text around the currently detected worry (AI is optional with a local fallback), so each deck reflects the diary you actually wrote.
 
 ### 🌃 Internet Cafe — *Neon signs flicker; step inside the dome.*
 
@@ -173,7 +173,7 @@ A quiet snow-night scene under glowing pixel stars. Click the payphone: the rece
   <img src="docs/screenshots/realtime-chat.png" alt="Realtime Chatroom" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
 </p>
 
-A Server-Sent-Events (SSE) live chatroom — left rail switches between **山间聊天** (group chat) and **notify** (like/comment feed). Self/other message bubbles, a live **online-presence badge**, a typing indicator, and a pixel-sticker emoji panel. Messages are broadcast to all connected clients in real time; the notification column surfaces likes and comments on your writing as they happen.
+A Server-Sent-Events (SSE) live chatroom. The header Chat entry is **铭记·山间聊天室** (`celeste-farewell-remembered-demo.html`), a single chat panel that reuses `messages.js`; `messages.html` still exists as the older two-pane **山间聊天** + **notify** (like/comment feed) layout shown in this screenshot. Self/other message bubbles, a live **online-presence badge**, a typing indicator, and a pixel-sticker emoji panel. Messages are broadcast to all connected clients in real time; the notification column surfaces likes and comments on your writing as they happen.
 
 ### 🐦 AI Roundtable — *Five Celeste souls at the table, debating until consensus.*
 
@@ -189,7 +189,7 @@ The most fully-realized feature. Bring any dilemma to the table and **Madeline, 
 - **Connection generations + reconnect grace** — stale connections can't kill a reconnected owner, and a 3-second grace window buffers events while the browser retries, so no speech is lost or duplicated
 - **Observe / participate modes** — anyone can watch a live meeting (`observe/{id}` replays the transcript then tails live events); the owner gets a one-click **switch-to-participate** button that reattaches to the same session
 - **Anti-repetition, topic-first prompts** — slim persona prompts (~150 chars each) plus 8 overriding common rules: every turn must add new progress, restating others' views ≤10 chars, no in-character plot digressions, 1–3 sentences
-- **Upstream rate-limit protection** — global minimum request interval (800ms) across all AI calls, plus exponential-backoff retries on HTTP 429
+- **Upstream rate-limit protection** — global minimum request interval (100ms in the shipped config, env-overridable; 800ms code fallback) across all AI calls, plus exponential-backoff retries on HTTP 429
 - Double-click the stage for fullscreen; the consensus panel tracks 2–4 points of agreement and 1–3 disagreements per meeting
 
 ---
@@ -275,7 +275,7 @@ If the copyright holder requests removal, relevant content will be removed immed
 │  ┌──────────────────┐      ┌──────────────────┐      ┌──────────────────┐  │
 │  │   blog-ui/       │      │   blog-api/      │      │  blog-admin/     │  │
 │  │  (Frontend)      │◄────►│  (Core API)      │◄────►│  (Admin Panel)   │  │
-│  │  Vue 3 (CDN)     │ REST │  Spring Boot     │      │  Spring Boot +   │  │
+│  │  Vue 3 (global)  │ REST │  Spring Boot     │      │  Spring Boot +   │  │
 │  │  CSS/JS          │      │  3.2.6 + MP      │      │  Spring Security │  │
 │  │  Port: 8080      │      │  Port: 8888      │      │  Port: 8889      │  │
 │  └──────────────────┘      └────────┬─────────┘      └──────────────────┘  │
@@ -299,14 +299,16 @@ If the copyright holder requests removal, relevant content will be removed immed
 | Language | Java | 17 LTS | Type-safe, performant backend |
 | Framework | Spring Boot | 3.2.6 | Convention-over-configuration |
 | ORM | MyBatis-Plus | 3.5.11 | Enhanced MyBatis with CRUD, pagination |
-| Security | Spring Security + JWT | 6.x / 0.9.1 | Stateless auth, BCrypt passwords |
+| Security | Spring Security + JWT | 6.x / 0.11.5 | Stateless auth, BCrypt passwords |
 | Cache/Session | Redis + Lettuce | 6.x | Distributed cache, token store |
 | AI Gateway | SiliconFlow | — | Qwen2.5-7B (chat), bge-m3 (embedding) |
 | Database | MySQL | 5.7+/8.0 | Primary persistence |
-| Monitoring | Actuator + Micrometer + Prometheus | 2.5.x / 1.10+ | Metrics, health checks |
+| Monitoring | Actuator + Micrometer + Prometheus | 3.2.x / 1.12+ | Metrics, health checks |
 | Build | Maven | 3.6+ | Multi-module build |
-| Frontend | Vue 3 (CDN global build) | 3.x | Zero-build, reactive data binding, component reuse |
+| Frontend | Vue 3 (global build) | 3.x | Zero-build, reactive data binding, component reuse; `js/vue.global.prod.js` locally, CDN on the key-setup pages |
 | Fonts | Renogare + CelesteZH | — | Pixel-perfect Celeste aesthetic |
+
+> Image storage: Cloudflare R2 (S3-compatible) when `r2.enabled=true`; otherwise uploads fall back to the database. The Qiniu SDK/config is retained but no longer used by the upload path.
 
 ---
 
@@ -328,12 +330,14 @@ blog/
 │       │   │   ├── WebMVCConfig.java         # CORS, interceptors
 │       │   │   └── MybatisPlusConfig.java    # MP plugins, ID generator
 │       │   ├── controller/              # REST endpoints
+│       │   │   ├── AgentController.java     # Madeline tool-calling agent SSE (step/emotion/delta)
 │       │   │   ├── ArticleController.java    # Blog articles
 │       │   │   ├── CategoryController.java   # Categories
 │       │   │   ├── ChatController.java       # AI chat
 │       │   │   ├── CommentsController.java   # Comments
 │       │   │   ├── DiaryController.java      # Diary entries
 │       │   │   ├── FeatherController.java    # Feather game
+│       │   │   ├── ImageController.java      # Image serving (R2 → DB fallback)
 │       │   │   ├── LikeController.java       # Likes
 │       │   │   ├── LoginController.java      # Auth (JWT)
 │       │   │   ├── LogoutController.java     # Logout
@@ -345,7 +349,7 @@ blog/
 │       │   │   ├── RegisterController.java     # Registration
 │       │   │   ├── RoundtableController.java   # AI roundtable SSE (stream/observe/interject/stop)
 │       │   │   ├── TagsController.java       # Tags
-│       │   │   ├── UploadController.java     # File upload (magic-number validated)
+│       │   │   ├── UploadController.java     # File upload (magic-number validated, R2 → DB)
 │       │   │   └── UserController.java       # User profile
 │       │   ├── dao/
 │       │   │   ├── mapper/                # MyBatis mappers
@@ -359,7 +363,9 @@ blog/
 │       │   │       ├── ai/
 │       │   │       │   ├── AiClient.java           # Qwen2.5 client (JSON mode, throttle, 429 retry, circuit breaker)
 │       │   │       │   ├── PromptBuilder.java      # Centralized prompt engineering
-│       │   │       │   ├── MemorySearchService.java
+│       │   │       │   ├── madeline/               # Tool-calling agent for diary chat
+│       │   │       │   │   ├── MadelineAgentEngine.java  # 6-step tool loop + SSE events
+│       │   │       │   │   └── PolishTextTool.java       # 润色/Polish tool
 │       │   │       │   └── roundtable/             # AI roundtable engine
 │       │   │       │       ├── RoundtableSession.java    # Session state, CAS start gate, owner generation
 │       │   │       │       ├── RoundtableEngine.java     # Turn loop, chunked SSE push, reconnect grace
@@ -368,9 +374,12 @@ blog/
 │       │   │       │       ├── ConsensusTracker.java     # Agreement/disagreement extraction
 │       │   │       │       ├── TurnScheduler.java        # Next-speaker selection
 │       │   │       │       ├── RosterBuilder.java        # Character roster assembly
-│       │   │       │       └── RoundtableTopicService.java # Topic suggestions & parsing
+│       │   │       │       ├── RoundtableTopicService.java # Topic suggestions & parsing
+│       │   │       │       └── RoundtableHistoryService.java # Meeting history
+│       │   │       ├── diarychat/                  # Emotion extraction, intent classifier, persona checker
 │       │   ├── utils/
 │       │   │   ├── JWTUtils.java               # JWT create/verify (env-configurable)
+│       │   │   ├── R2Utils.java                # Cloudflare R2 (S3) storage + DB fallback
 │       │   │   └── UserThreadLocal.java        # Thread-local user context
 │       │   ├── vo/                      # View objects (API contracts)
 │       │   └── common/
@@ -379,7 +388,7 @@ blog/
 │       └── resources/
 │           ├── application.properties        # Dev config
 │           ├── application-prod.yml          # Production config (HikariCP, security headers)
-│           └── log4j2.xml                    # Structured JSON logging
+│           └── log4j2-spring.xml              # Console log pattern with TraceId from MDC
 ├── blog-admin/                          # Admin backend module
 │   └── src/main/java/com/mszlu/blog/admin/
 │       ├── config/SecurityConfig.java         # Spring Security form login + RBAC
@@ -389,10 +398,13 @@ blog/
 └── blog-ui/                             # Frontend static assets
     ├── index.html                       # Blog index
     ├── diary.html                       # Diary main page
-    ├── berryos.html                     # BerryOS retro desktop + monthly PPT player
+    ├── berryos.html                     # BerryOS retro desktop + diary-driven PPT player
     ├── internet_cafe.html               # Internet Cafe scene: neon animation & interior reveal
     ├── payphone.html                    # Snow-night payphone: Madeline sings
-    ├── messages.html                    # SSE live chatroom + like/comment notifications
+    ├── messages.html                    # Legacy two-pane chat + notify page (reuses messages.js)
+    ├── celeste-farewell-remembered-demo.html # Current Chat entry: 铭记·山间聊天室 (reuses messages.js)
+    ├── cassette.html                    # BerryOS cassette.exe ambience mixer
+    ├── api-key-setup-enhanced.html      # Per-user AI API key setup & test
     ├── roundtable.html                  # Character roundtable with voices
     ├── write.html                       # Writing editor (Markdown + AI tools)
     ├── shelf.html                       # Dream world: Heart Door & Badeline
@@ -438,8 +450,12 @@ export MYSQL_PASSWORD="your_strong_db_password"
 export REDIS_PASSWORD="your_redis_password"
 
 # === External Services ===
-export QINIU_ACCESS_KEY="your_qiniu_ak"
-export QINIU_SECRET_KEY="your_qiniu_sk"
+# Optional: Cloudflare R2 image storage (DB fallback when disabled)
+export R2_ENABLED="false"
+export R2_ENDPOINT="https://<account-id>.r2.cloudflarestorage.com"
+export R2_BUCKET="your_bucket"
+export R2_ACCESS_KEY_ID="your_r2_ak"
+export R2_SECRET_ACCESS_KEY="your_r2_sk"
 export AI_API_KEY="your_siliconflow_api_key"
 export AI_BASE_URL="https://api.siliconflow.cn/v1"
 export AI_MODEL="Qwen/Qwen2.5-7B-Instruct"
@@ -512,7 +528,7 @@ spring.profiles.active=dev
 # Database
 spring.datasource.url=jdbc:mysql://localhost:3306/blog?useUnicode=true&characterEncoding=UTF-8&serverTimeZone=UTC
 spring.datasource.username=root
-spring.datasource.password=${MYSQL_PASSWORD:your_password}
+spring.datasource.password=1234
 spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
 
 # MyBatis-Plus
@@ -524,25 +540,36 @@ mybatis-plus.mapper-locations=classpath*:com/mszlu/blog/dao/mapper/**/*.xml
 spring.servlet.multipart.max-request-size=20MB
 spring.servlet.multipart.max-file-size=8MB
 
-# Qiniu Cloud Storage
-qiniu.accessKey=${QINIU_ACCESS_KEY:your-access-key}
-qiniu.accessSecretKey=${QINIU_ACCESS_SECRET_KEY:your-secret-key}
+# Legacy Qiniu SDK config (retained, not used by the upload path)
+qiniu.accessKey=your-access-key
+qiniu.accessSecretKey=your-secret-key
+
+# Cloudflare R2 image storage (S3-compatible; DB fallback when off/incomplete)
+r2.enabled=${R2_ENABLED:false}
+r2.endpoint=${R2_ENDPOINT:}
+r2.bucket=${R2_BUCKET:}
+r2.access-key-id=${R2_ACCESS_KEY_ID:}
+r2.secret-access-key=${R2_SECRET_ACCESS_KEY:}
+r2.region=${R2_REGION:auto}
+r2.key-prefix=${R2_KEY_PREFIX:images/}
 
 # AI (SiliconFlow)
 ai.base-url=${AI_BASE_URL:https://api.siliconflow.cn/v1}
 ai.api-key=${AI_API_KEY:your-api-key}
 ai.model=${AI_MODEL:Qwen/Qwen2.5-7B-Instruct}
 ai.embedding-model=${AI_EMBEDDING_MODEL:BAAI/bge-m3}
-# AI resilience: global throttle, 429 backoff, circuit breaker
-ai.min-interval-ms=800          # min gap between any two AI requests
-ai.rate-limit.retries=3         # retries on HTTP 429
-ai.rate-limit.backoff-ms=2000   # exponential base: 2s, 4s, 8s
+ai.connect-timeout=10000        # connect timeout (ms)
+ai.read-timeout=30000           # read timeout (ms)
+# AI resilience: throttle, 429 backoff, circuit breaker
+ai.min-interval-ms=${AI_MIN_INTERVAL_MS:100}  # min gap between AI requests
+ai.rate-limit.retries=3         # code default on HTTP 429 (key not in file)
+ai.rate-limit.backoff-ms=2000   # exponential base: 2s, 4s, 8s (code default)
 ai.max-retries=1                # retries for 5xx / timeout
 ai.circuit.failure-threshold=5  # consecutive failures before opening
 ai.circuit.open-duration=30000  # open circuit cooldown (ms)
 
 # JWT (env-configurable)
-jwt.secret=${JWT_SECRET:123456Mszlu!@###$$}
+jwt.secret=${JWT_SECRET:MszluBlogJwtSecretKey2026AbcXyz789}
 jwt.expiration=2592000000
 
 # Actuator & Prometheus
@@ -559,12 +586,21 @@ spring:
     hikari:
       maximum-pool-size: 20
       minimum-idle: 5
-      idle-timeout: 300000
-      max-lifetime: 1200000
+      keepalive-time: 30000
+      idle-timeout: 60000
+      max-lifetime: 600000
       connection-timeout: 30000
-  redis:
-    lettuce:
-      pool: { max-active: 20, max-idle: 10, min-idle: 2 }
+      pool-name: BlogHikariCP
+  data:
+    redis:
+      ssl: { enabled: ${REDIS_SSL:true} }
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 10
+          min-idle: 2
+          max-wait: 2000ms
+      timeout: 3000ms
 
 server:
   headers:
@@ -636,7 +672,7 @@ logging:
 
 - **Feather Breathing Game**: Physics-based (gravity, wind, collision), precision landing scoring, `feather-landed` custom event
 - **Strawberry Economy**: Earn 🍓 by writing, spend in Oshiro's shop for themes/decorations
-- **Pixel Avatars**: 8-direction Madeline sprite with spatial audio
+- **Pixel Avatars**: data-driven Madeline avatar (move / fun / sit / sleep / wake / fall animations) with spatial audio
 
 ### 5. Security Hardening
 
@@ -647,7 +683,7 @@ logging:
 | **Token Expiry** | 30 days (configurable via `jwt.expiration`) |
 | **Thread Pool** | Bounded queue (1000), `CallerRunsPolicy` rejection |
 | **File Upload** | Extension + MIME type + Magic number validation |
-| **Dependencies** | Fastjson 1.2.101 (CVE fixes), MyBatis-Plus unified |
+| **Dependencies** | Fastjson 1.2.83 (CVE fixes), MyBatis-Plus unified |
 | **Observability** | Actuator health/info/prometheus, Prometheus export |
 
 ### 6. AI Roundtable Engine
@@ -665,6 +701,8 @@ A five-character multi-agent debate over SSE, in `service/ai/roundtable/`.
 | POST `{id}/interject` | Owner interjection, drained into the debate at the next turn boundary |
 | POST `{id}/stop` | End the meeting and produce the final summary card |
 
+Also exposed: `GET /roundtable/history` (owner's meeting history, optional `limit`) and `DELETE /roundtable/history/{id}`.
+
 **Session & connection model:**
 
 - `RoundtableSession.tryStartEngine()` is a CAS gate — the engine runs at most once per session even if the endpoint is hit repeatedly
@@ -676,7 +714,7 @@ A five-character multi-agent debate over SSE, in `service/ai/roundtable/`.
 
 **AI gateway resilience** (`AiClient`):
 
-1. **Global throttle** — an `AtomicLong` enforces a minimum 800ms gap (`ai.min-interval-ms`) between any two outbound AI requests process-wide, preventing burst 429s during fast debates
+1. **Global throttle** — an `AtomicLong` enforces a configurable minimum gap (`ai.min-interval-ms`; 100ms in the shipped config, 800ms code fallback) between any two outbound AI requests process-wide, preventing burst 429s during fast debates
 2. **429 exponential backoff** — rate-limit responses retry up to 3 times (2s → 4s → 8s) instead of failing like other 4xx errors
 3. **Circuit breaker** — 5 consecutive failures open the circuit for 30s with fast-fail, then a half-open probe
 4. **Selective retry** — only 5xx / network timeouts retry; 400/401/402 fail fast
@@ -703,7 +741,7 @@ A human-to-human live chat over SSE (no AI) — `RealtimeChatController`, base p
 - **Heartbeat & cleanup** — each emitter gets its own scheduled 25s heartbeat; `onCompletion/onTimeout/onError` all route through `removeClient`, which cancels the heartbeat and rebroadcasts presence after a 100ms coalescing delay
 - **30-min SSE timeout** — browsers auto-reconnect on `EventSource` error; the token is re-validated on each reconnect
 
-**Frontend** (`messages.html`): a two-pane layout — left rail toggles between **山间聊天** (chat) and **notify** (likes/comments feed); self/other bubbles, an online-count badge, a typing indicator, and a pixel-sticker emoji picker pulled from `Atlases/Portraits/`.
+**Frontend** (`messages.js`): the live chat panel is mounted in `celeste-farewell-remembered-demo.html` (**铭记·山间聊天室**, the header Chat entry) as a single chat view; `messages.html` remains reachable with the original two-pane layout — left rail toggles between **山间聊天** (chat) and **notify** (likes/comments feed); self/other bubbles, an online-count badge, a typing indicator, and a pixel-sticker emoji picker pulled from `Atlases/Portraits/`.
 
 ---
 
@@ -728,11 +766,14 @@ A human-to-human live chat over SSE (no AI) — `RealtimeChatController`, base p
 ```
 blog-ui/
 ├── index.html          → Blog feed (category filter, search, popular, tags)
-├── diary.html          → Postcard viewer + Madeline chat (~2400-line diary.js)
-├── berryos.html        → BerryOS retro desktop + monthly PPT player
+├── diary.html          → Postcard viewer + Madeline chat (~3300-line diary.js)
+├── berryos.html        → BerryOS retro desktop + diary-driven PPT player
 ├── internet_cafe.html  → Neon-sign scene with layered interior reveal
 ├── payphone.html       → Snow-night payphone: Madeline sings
-├── messages.html       → SSE live chatroom (group chat + notify column)
+├── messages.html       → Legacy two-pane chat + notify page (reuses messages.js)
+├── celeste-farewell-remembered-demo.html → Current Chat entry: 铭记·山间聊天室 (reuses messages.js)
+├── cassette.html       → BerryOS cassette.exe ambience mixer
+├── api-key-setup-enhanced.html → Per-user AI API key setup & test
 ├── roundtable.html     → Character roundtable: SSE debate, idempotent reconnect, buffered typewriter
 ├── write.html          → Markdown editor + AI toolbar (Polish, Generate, Madeline)
 ├── shelf.html          → Dream world (Heart Door, mirror room, Badeline)
@@ -745,17 +786,18 @@ blog-ui/
 
 **Key JS Modules**:
 - `api.js` — Centralized fetch wrapper with auth interceptors, strawberry balance
-- `diary.js` — Immersive typewriter, streaming AI, emotion UI, autosave, feather game integration
+- `diary.js` — Immersive typewriter, tool-calling agent SSE, emotion UI, autosave, feather game integration
 - `badeline-voice.js` — Badeline emotion voice: `pre+abcabc` loop, per-emotion rate/volume, `sad_solo` special
 - `write-madeline.js` — 8-pose pixel avatar, resource optimizer, spatial audio
 - `feather-game.js` — Physics engine, difficulty scaling, event system
+- `pptgen.js` — Diary-triggered 「topic 与我」deck builder (AI optional, local fallback)
 
 ---
 
 ## 🧪 Testing & Quality
 
 ### Current State
-- Unit tests: **19 test classes / 127 cases** — auth chain (`JWTUtils`, `LoginServiceImpl`, `LoginIntercepter`, `TokenServiceImpl`), prod config validation (`ConfigValidator`), TraceId filter, roundtable engine (session CAS/concurrency, consensus, roster, turn scheduling, session bus), Badeline stage rules, diary persona checker, faceEmotion mapping; all green (`RoundtableEngineE2eTest` requires the external AI service and is skipped in CI-style runs)
+- Unit tests: **22 test classes / 154 cases** — auth chain (`JWTUtils`, `LoginServiceImpl`, `LoginIntercepter`, `TokenServiceImpl`), prod config validation (`ConfigValidator`), TraceId filter, roundtable engine (session CAS/concurrency, consensus, roster, turn scheduling, session bus, history), Badeline stage rules, diary persona checker, faceEmotion mapping, comment/article/memory/RAG services, `ArchitectureTest`; all green (`RoundtableEngineE2eTest` requires the external AI service and is excluded in CI)
 - Integration tests: None yet (Testcontainers planned)
 - Coverage gate: Not yet configured (JaCoCo planned)
 - Static analysis: **Checkstyle + SpotBugs** (zero-baseline, enforced via `mvn verify`)
@@ -793,13 +835,15 @@ blog-ui/
 
 ### CI Pipeline (Actual)
 
-`.github/workflows/ci.yml` runs on every push/PR: JDK 17 setup → Maven cache → `mvn clean verify -B` (compile + 127 unit tests + Checkstyle + SpotBugs). A separate `qodana_code_quality.yml` runs Qodana static analysis with a baseline.
+`.github/workflows/ci.yml` runs on every push/PR: JDK 17 setup → Maven cache → `mvn clean verify -B` (compile + 154 unit tests + Checkstyle + SpotBugs). A separate `qodana_code_quality.yml` runs Qodana static analysis with a baseline.
 
 ---
 
 ## <img src="assets/readme/icons/farewell.png"> Deployment Guide
 
-### Docker Compose (Recommended for Prod)
+### Docker Compose (Self-Hosted Reference)
+
+> The live deployment uses Cloudflare Pages (frontend) + Render running the root `Dockerfile` (blog-api) + TiDB Cloud / Upstash. This repo does **not** ship a `docker-compose.yml` or per-module Dockerfiles — the template below is a self-hosting starting point; add the missing admin Dockerfile before enabling the `blog-admin` service.
 
 ```yaml
 # docker-compose.yml
@@ -826,15 +870,18 @@ services:
       interval: 10s
 
   blog-api:
-    build: ./blog-api
+    build: .  # root Dockerfile builds blog-api
     ports: ["8888:8888"]
     environment:
       SPRING_PROFILES_ACTIVE: prod
       MYSQL_HOST: mysql
       REDIS_HOST: redis
       JWT_SECRET: ${JWT_SECRET}
-      QINIU_ACCESS_KEY: ${QINIU_ACCESS_KEY}
-      QINIU_SECRET_KEY: ${QINIU_SECRET_KEY}
+      R2_ENABLED: ${R2_ENABLED:-false}
+      R2_ENDPOINT: ${R2_ENDPOINT}
+      R2_BUCKET: ${R2_BUCKET}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
       AI_API_KEY: ${AI_API_KEY}
     depends_on:
       mysql: { condition: service_healthy }
@@ -842,7 +889,7 @@ services:
     restart: unless-stopped
 
   blog-admin:
-    build: ./blog-admin
+    build: ./blog-admin  # requires a Dockerfile you provide (not included)
     ports: ["8889:8889"]
     environment:
       SPRING_PROFILES_ACTIVE: prod
@@ -968,11 +1015,13 @@ git push origin feature/your-feature-name
 | Check | Tool | Threshold |
 |-------|------|-----------|
 | Compile | Maven | Zero errors |
-| Unit Tests | JUnit 5 | ≥ 70% coverage (target) |
-| Integration Tests | Testcontainers | All pass |
+| Unit Tests | JUnit 5 | 154 cases pass; coverage gate not enforced (JaCoCo planned) |
+| Integration Tests | Testcontainers | Planned (Testcontainers not wired) |
 | Static Analysis | SpotBugs + Checkstyle | Zero critical/high |
-| Dependency Scan | OWASP Dependency-Check | Zero CVE ≥ High |
-| SonarQube | SonarCloud | Quality Gate pass |
+| Dependency Scan | OWASP Dependency-Check | Not configured yet |
+| SonarQube | SonarCloud | Not configured (Qodana scan is used) |
+
+> CI currently enforces compile + unit tests + Checkstyle/SpotBugs (plus the separate Qodana scan). JaCoCo coverage, Testcontainers integration tests, OWASP Dependency-Check and SonarCloud are planned but not wired yet.
 
 ---
 
@@ -987,7 +1036,7 @@ git push origin feature/your-feature-name
 | **Mobile support?** | Responsive, but optimized for desktop/tablet |
 | **AI Models?** | Qwen2.5-7B (chat), bge-m3 (embeddings) via SiliconFlow |
 | **Data privacy?** | MySQL storage; prod requires encryption, backups, access control |
-| **Own AI key?** | Yes — set `AI_API_KEY` env var |
+| **Own AI key?** | Yes — set `AI_API_KEY` server-side, or use the in-app 🔑 setup (`api-key-setup-enhanced.html`) for a per-user key + connection test |
 
 ### Common Issues
 
@@ -1020,7 +1069,7 @@ git push origin feature/your-feature-name
 - [x] RAG retrieval depth: vector cache + time decay (τ=30d) + importance fusion + per-source quota rerank
 - [x] Security: log desensitization (no full JWT in logs), prod startup secret validation
 - [x] Debug residue cleanup (no `Thread.sleep` debug blocks / `System.out.println` in main sources)
-- [x] Unit tests across auth chain, roundtable engine, emotion pipeline (127 cases)
+- [x] Unit tests across auth chain, roundtable engine, emotion pipeline (154 cases)
 
 ### Near Term (v1.1)
 - [ ] Monthly snapshot lazy-fill verification + backend restart resilience

@@ -81,10 +81,10 @@
 <tr><td align="center"><img src="assets/readme/icons/strawberry.png" height="56"></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t052-dark.webp"><img src="assets/readme/t052.webp" width="182" alt="Strawberry Economy"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t053-dark.webp"><img src="assets/readme/t053.webp" width="395" alt="Earn 🍓 through writing, spend in Oshiro's shop"></picture></td><td align="center"><img src="assets/readme/icons/celeste/completed.png" height="18"></td></tr>
 <tr><td align="center"><img src="assets/readme/icons/badeline-spin.gif" height="56"></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t055-dark.webp"><img src="assets/readme/t055.webp" width="170" alt="Badeline Night Talk"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t056-dark.webp"><img src="assets/readme/t056.webp" width="433" alt="Shatter the mirror to summon your shadow self; 15 emotion portraits + emotion-driven voice sfx"></picture></td><td align="center"><img src="assets/readme/icons/celeste/completed.png" height="18"></td></tr>
 <tr><td align="center"><img src="assets/readme/icons/campfire.gif" height="56"></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t058-dark.webp"><img src="assets/readme/t058.webp" width="113" alt="Dream World"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t059-dark.webp"><img src="assets/readme/t059.webp" width="413" alt="Snow-night campfire &amp; mirror room with smooth cinematic camera pan"></picture></td><td align="center"><img src="assets/readme/icons/celeste/completed.png" height="18"></td></tr>
-<tr><td align="center"><img src="assets/readme/icons/berryos-desktop.gif" height="56"></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t061-dark.webp"><img src="assets/readme/t061.webp" width="149" alt="BerryOS Desktop"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t062-dark.webp"><img src="assets/readme/t062.webp" width="430" alt="Simulated retro OS: desktop icons, taskbar, clock, strawberry Start menu"></picture></td><td align="center"><img src="assets/readme/icons/celeste/completed.png" height="18"></td></tr>
-<tr><td align="center"><img src="assets/readme/icons/monthly-ppt.png" height="56"></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t064-dark.webp"><img src="assets/readme/t064.webp" width="166" alt="Monthly PPT Player"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t065-dark.webp"><img src="assets/readme/t065.webp" width="353" alt="Auto-generated monthly slideshow with cube/dissolve/spin 3D transitions &amp; BGM"></picture></td><td align="center"><img src="assets/readme/icons/celeste/completed.png" height="18"></td></tr>
+<tr><td align="center"><img src="assets/readme/icons/berryos-desktop.gif" height="56"></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t061-dark.webp"><img src="assets/readme/t061.webp" width="149" alt="BerryOS Desktop"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t062-dark.webp"><img src="assets/readme/t062.webp" width="430" alt="Simulated retro OS: desktop icons, taskbar, clock, strawberry Start menu, cassette.exe ambience deck"></picture></td><td align="center"><img src="assets/readme/icons/celeste/completed.png" height="18"></td></tr>
+<tr><td align="center"><img src="assets/readme/icons/monthly-ppt.png" height="56"></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t064-dark.webp"><img src="assets/readme/t064.webp" width="166" alt="Diary PPT Player"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t065-dark.webp"><img src="assets/readme/t065.webp" width="353" alt="Diary-triggered 「topic 与我」slideshow: recurring-worry detection → 6-page deck from your own diary text (AI optional, local fallback), cube/dissolve/spin 3D transitions &amp; BGM"></picture></td><td align="center"><img src="assets/readme/icons/celeste/completed.png" height="18"></td></tr>
 <tr><td align="center"><img src="assets/readme/icons/madeline-sing.gif" height="56"></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t067-dark.webp"><img src="assets/readme/t067.webp" width="132" alt="Madeline Sings"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t068-dark.webp"><img src="assets/readme/t068.webp" width="449" alt="Click the payphone on a snow night to hear her sing"></picture></td><td align="center"><img src="assets/readme/icons/celeste/completed.png" height="18"></td></tr>
-<tr><td align="center"><img src="assets/readme/icons/celeste/chatroom.png" height="56"></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t071-dark.webp"><img src="assets/readme/t071.webp" width="168" alt="Realtime Chatroom"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t072-dark.webp"><img src="assets/readme/t072.webp" width="453" alt="SSE live chat, online badge, emoji stickers, real-time like/comment notifications"></picture></td><td align="center"><img src="assets/readme/icons/celeste/completed.png" height="18"></td></tr>
+<tr><td align="center"><img src="assets/readme/icons/celeste/chatroom.png" height="56"></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t071-dark.webp"><img src="assets/readme/t071.webp" width="168" alt="Realtime Chatroom"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t072-dark.webp"><img src="assets/readme/t072.webp" width="453" alt="SSE live chat (header Chat → 铭记·山间聊天室), online badge, emoji stickers; messages.html retains the like/comment notification feed"></picture></td><td align="center"><img src="assets/readme/icons/celeste/completed.png" height="18"></td></tr>
 <tr><td align="center"><img src="assets/readme/icons/analytics.png" height="56"></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t074-dark.webp"><img src="assets/readme/t074.webp" width="82" alt="Analytics"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t075-dark.webp"><img src="assets/readme/t075.webp" width="419" alt="Emotion tracking, writing insights &amp; engagement metrics"></picture></td><td align="center"><img src="assets/readme/icons/celeste/in-progress.png" height="18"></td></tr>
 <tr><td align="center"><img src="assets/readme/icons/lock.png" height="56"></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t077-dark.webp"><img src="assets/readme/t077.webp" width="164" alt="Security Hardened"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t078-dark.webp"><img src="assets/readme/t078.webp" width="477" alt="BCrypt, JWT env-config, bounded pools, magic-number uploads"></picture></td><td align="center"><img src="assets/readme/icons/celeste/completed.png" height="18"></td></tr>
 <tr><td align="center"><img src="assets/readme/icons/celeste/roadmap.png" height="56"></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t081-dark.webp"><img src="assets/readme/t081.webp" width="177" alt="Observability Ready"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t082-dark.webp"><img src="assets/readme/t082.webp" width="440" alt="Actuator + Prometheus metrics, full-link TraceId, AI health probe"></picture></td><td align="center"><img src="assets/readme/icons/celeste/completed.png" height="18"></td></tr>
@@ -150,15 +150,15 @@
   <img src="docs/screenshots/berryos.png" alt="BerryOS Desktop" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
 </p>
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t098-dark.webp"><img src="assets/readme/t098.webp" width="856" alt="A fully simulated retro operating system. Double-click 我的大山 to return to the blog, open the auto-generated monthly 总结.ppt, or empty the 回收站 — complete with a taskbar, live clock, custom bird cursor, and a strawberry BerryOS Start menu."></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t098-dark.webp"><img src="assets/readme/t098.webp" width="856" alt="A fully simulated retro operating system. Double-click 我的大山 to return to the blog, open 凌波微步与我.ppt (regenerated from your latest diary worry when one is detected, otherwise a preset deck), launch cassette.exe for ambience mixing, or empty the 回收站 — complete with a taskbar, live clock, custom bird cursor, and a strawberry BerryOS Start menu."></picture>
 
-### <img src="assets/readme/icons/celeste/monthly-ppt.png" height="24"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t099-dark.webp"><img src="assets/readme/t099.webp" width="758" alt="Monthly PPT Player — Cube, dissolve, and spin transitions — your month, slideshow-style."></picture>
+### <img src="assets/readme/icons/celeste/monthly-ppt.png" height="24"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t099-dark.webp"><img src="assets/readme/t099.webp" width="758" alt="Diary PPT Player — Your worry becomes a 6-page 「topic 与我」deck — cube, dissolve, and spin transitions."></picture>
 
 <p align="center">
-  <img src="docs/screenshots/berryos-ppt.png" alt="Monthly PPT" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
+  <img src="docs/screenshots/berryos-ppt.png" alt="Diary PPT" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
 </p>
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t100-dark.webp"><img src="assets/readme/t100.webp" width="875" alt="Double-click the monthly PPT icon on BerryOS: a splash expands from the icon, BGM kicks in, and the slideshow plays with cube / dissolve / spin 3D transitions, pixel typewriter text, and per-slide sound effects. Click or use arrow keys to page through; Esc exits. The slide data is fully decoupled from the renderer — future AI-generated monthly JSON simply replaces the data."></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t100-dark.webp"><img src="assets/readme/t100.webp" width="875" alt="Double-click the PPT icon on BerryOS: a splash expands from the icon, BGM kicks in, and the slideshow plays with cube / dissolve / spin 3D transitions, pixel typewriter text, and per-slide sound effects. Slides are built in the browser from your diary text around the currently detected worry (AI is optional with a local fallback), so each deck reflects the diary you actually wrote. Click or use arrow keys to page through; Esc exits."></picture>
 
 ### <img src="assets/readme/icons/celeste/internet-cafe.png" height="26"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t101-dark.webp"><img src="assets/readme/t101.webp" width="486" alt="Internet Cafe — Neon signs flicker; step inside the dome."></picture>
 
@@ -182,7 +182,7 @@
   <img src="docs/screenshots/realtime-chat.png" alt="Realtime Chatroom" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
 </p>
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t106-dark.webp"><img src="assets/readme/t106.webp" width="878" alt="A Server-Sent-Events (SSE) live chatroom — left rail switches between 山间聊天 (group chat) and notify (like/comment feed). Self/other message bubbles, a live online-presence badge, a typing indicator, and a pixel-sticker emoji panel. Messages are broadcast to all connected clients in real time; the notification column surfaces likes and comments on your writing as they happen."></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t106-dark.webp"><img src="assets/readme/t106.webp" width="878" alt="SSE live chat with online-presence badge, typing indicator, and a pixel-sticker emoji panel. The header Chat entry is 铭记·山间聊天室 (celeste-farewell-remembered-demo.html), a single chat panel that reuses messages.js; messages.html still exists as the older two-pane 山间聊天 + notify (like/comment feed) layout shown in this screenshot."></picture>
 
 ### <img src="assets/readme/icons/celeste/roundtable-bird.png" height="28"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t107-dark.webp"><img src="assets/readme/t107.webp" width="638" alt="AI Roundtable — Five Celeste souls at the table, debating until consensus."></picture>
 
@@ -198,7 +198,7 @@
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t111-dark.webp"><img src="assets/readme/t111.webp" width="856" alt="Connection generations + reconnect grace — stale connections can't kill a reconnected owner, and a 3-second grace window buffers events while the browser retries, so no speech is lost or duplicated"></picture>
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t112-dark.webp"><img src="assets/readme/t112.webp" width="800" alt="Observe / participate modes — anyone can watch a live meeting (observe/{id} replays the transcript then tails live events); the owner gets a one-click switch-to-participate button that reattaches to the same session"></picture>
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t113-dark.webp"><img src="assets/readme/t113.webp" width="819" alt="Anti-repetition, topic-first prompts — slim persona prompts (~150 chars each) plus 8 overriding common rules: every turn must add new progress, restating others' views ≤10 chars, no in-character plot digressions, 1–3 sentences"></picture>
-- <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t114-dark.webp"><img src="assets/readme/t114.webp" width="849" alt="Upstream rate-limit protection — global minimum request interval (800ms) across all AI calls, plus exponential-backoff retries on HTTP 429"></picture>
+- <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t114-dark.webp"><img src="assets/readme/t114.webp" width="849" alt="Upstream rate-limit protection — global minimum request interval (100ms in the shipped config, env-overridable; 800ms code fallback) across all AI calls, plus exponential-backoff retries on HTTP 429"></picture>
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t115-dark.webp"><img src="assets/readme/t115.webp" width="845" alt="Double-click the stage for fullscreen; the consensus panel tracks 2–4 points of agreement and 1–3 disagreements per meeting"></picture>
 
 ---
@@ -292,7 +292,7 @@
 │  ┌──────────────────┐      ┌──────────────────┐      ┌──────────────────┐  │
 │  │   blog-ui/       │      │   blog-api/      │      │  blog-admin/     │  │
 │  │  (Frontend)      │◄────►│  (Core API)      │◄────►│  (Admin Panel)   │  │
-│  │  Vue 3 (CDN)     │ REST │  Spring Boot     │      │  Spring Boot +   │  │
+│  │  Vue 3 (global)  │ REST │  Spring Boot     │      │  Spring Boot +   │  │
 │  │  CSS/JS          │      │  3.2.6 + MP      │      │  Spring Security │  │
 │  │  Port: 8080      │      │  Port: 8888      │      │  Port: 8889      │  │
 │  └──────────────────┘      └────────┬─────────┘      └──────────────────┘  │
@@ -316,15 +316,17 @@
 <tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t170-dark.webp"><img src="assets/readme/t170.webp" width="86" alt="Language"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t171-dark.webp"><img src="assets/readme/t171.webp" width="41" alt="Java"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t172-dark.webp"><img src="assets/readme/t172.webp" width="54" alt="17 LTS"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t173-dark.webp"><img src="assets/readme/t173.webp" width="275" alt="Type-safe, performant backend"></picture></td></tr>
 <tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t174-dark.webp"><img src="assets/readme/t174.webp" width="96" alt="Framework"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t175-dark.webp"><img src="assets/readme/t175.webp" width="101" alt="Spring Boot"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t176-dark.webp"><img src="assets/readme/t176.webp" width="37" alt="3.2.6"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t177-dark.webp"><img src="assets/readme/t177.webp" width="266" alt="Convention-over-configuration"></picture></td></tr>
 <tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t178-dark.webp"><img src="assets/readme/t178.webp" width="38" alt="ORM"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t179-dark.webp"><img src="assets/readme/t179.webp" width="109" alt="MyBatis-Plus"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t180-dark.webp"><img src="assets/readme/t180.webp" width="41" alt="3.5.11"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t181-dark.webp"><img src="assets/readme/t181.webp" width="357" alt="Enhanced MyBatis with CRUD, pagination"></picture></td></tr>
-<tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t182-dark.webp"><img src="assets/readme/t182.webp" width="71" alt="Security"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t183-dark.webp"><img src="assets/readme/t183.webp" width="190" alt="Spring Security + JWT"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t184-dark.webp"><img src="assets/readme/t184.webp" width="80" alt="6.x / 0.9.1"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t185-dark.webp"><img src="assets/readme/t185.webp" width="289" alt="Stateless auth, BCrypt passwords"></picture></td></tr>
+<tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t182-dark.webp"><img src="assets/readme/t182.webp" width="71" alt="Security"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t183-dark.webp"><img src="assets/readme/t183.webp" width="190" alt="Spring Security + JWT"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t184-dark.webp"><img src="assets/readme/t184.webp" width="80" alt="6.x / 0.11.5"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t185-dark.webp"><img src="assets/readme/t185.webp" width="289" alt="Stateless auth, BCrypt passwords"></picture></td></tr>
 <tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t186-dark.webp"><img src="assets/readme/t186.webp" width="131" alt="Cache/Session"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t187-dark.webp"><img src="assets/readme/t187.webp" width="132" alt="Redis + Lettuce"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t188-dark.webp"><img src="assets/readme/t188.webp" width="24" alt="6.x"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t189-dark.webp"><img src="assets/readme/t189.webp" width="261" alt="Distributed cache, token store"></picture></td></tr>
 <tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t190-dark.webp"><img src="assets/readme/t190.webp" width="101" alt="AI Gateway"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t191-dark.webp"><img src="assets/readme/t191.webp" width="96" alt="SiliconFlow"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t192-dark.webp"><img src="assets/readme/t192.webp" width="11" alt="—"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t193-dark.webp"><img src="assets/readme/t193.webp" width="350" alt="Qwen2.5-7B (chat), bge-m3 (embedding)"></picture></td></tr>
 <tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t194-dark.webp"><img src="assets/readme/t194.webp" width="84" alt="Database"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t195-dark.webp"><img src="assets/readme/t195.webp" width="60" alt="MySQL"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t196-dark.webp"><img src="assets/readme/t196.webp" width="68" alt="5.7+/8.0"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t197-dark.webp"><img src="assets/readme/t197.webp" width="174" alt="Primary persistence"></picture></td></tr>
-<tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t198-dark.webp"><img src="assets/readme/t198.webp" width="91" alt="Monitoring"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t199-dark.webp"><img src="assets/readme/t199.webp" width="320" alt="Actuator + Micrometer + Prometheus"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t200-dark.webp"><img src="assets/readme/t200.webp" width="96" alt="2.5.x / 1.10+"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t201-dark.webp"><img src="assets/readme/t201.webp" width="192" alt="Metrics, health checks"></picture></td></tr>
+<tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t198-dark.webp"><img src="assets/readme/t198.webp" width="91" alt="Monitoring"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t199-dark.webp"><img src="assets/readme/t199.webp" width="320" alt="Actuator + Micrometer + Prometheus"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t200-dark.webp"><img src="assets/readme/t200.webp" width="96" alt="3.2.x / 1.12+"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t201-dark.webp"><img src="assets/readme/t201.webp" width="192" alt="Metrics, health checks"></picture></td></tr>
 <tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t202-dark.webp"><img src="assets/readme/t202.webp" width="41" alt="Build"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t203-dark.webp"><img src="assets/readme/t203.webp" width="55" alt="Maven"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t204-dark.webp"><img src="assets/readme/t204.webp" width="33" alt="3.6+"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t205-dark.webp"><img src="assets/readme/t205.webp" width="159" alt="Multi-module build"></picture></td></tr>
-<tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t206-dark.webp"><img src="assets/readme/t206.webp" width="76" alt="Frontend"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t207-dark.webp"><img src="assets/readme/t207.webp" width="212" alt="Vue 3 (CDN global build)"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t208-dark.webp"><img src="assets/readme/t208.webp" width="23" alt="3.x"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t209-dark.webp"><img src="assets/readme/t209.webp" width="448" alt="Zero-build, reactive data binding, component reuse"></picture></td></tr>
+<tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t206-dark.webp"><img src="assets/readme/t206.webp" width="76" alt="Frontend"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t207-dark.webp"><img src="assets/readme/t207.webp" width="212" alt="Vue 3 (global build; js/vue.global.prod.js locally, CDN on the key-setup pages)"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t208-dark.webp"><img src="assets/readme/t208.webp" width="23" alt="3.x"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t209-dark.webp"><img src="assets/readme/t209.webp" width="448" alt="Zero-build, reactive data binding, component reuse"></picture></td></tr>
 <tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t210-dark.webp"><img src="assets/readme/t210.webp" width="46" alt="Fonts"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t211-dark.webp"><img src="assets/readme/t211.webp" width="193" alt="Renogare + CelesteZH"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t212-dark.webp"><img src="assets/readme/t212.webp" width="11" alt="—"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t213-dark.webp"><img src="assets/readme/t213.webp" width="268" alt="Pixel-perfect Celeste aesthetic"></picture></td></tr>
 </table>
+
+> Image storage: Cloudflare R2 (S3-compatible) when `r2.enabled=true`; otherwise uploads fall back to the database. The Qiniu SDK/config is retained but no longer used by the upload path.
 
 ---
 
@@ -348,12 +350,14 @@ blog/
 │       │   │   ├── WebMVCConfig.java         # CORS, interceptors
 │       │   │   └── MybatisPlusConfig.java    # MP plugins, ID generator
 │       │   ├── controller/              # REST endpoints
+│       │   │   ├── AgentController.java     # Madeline tool-calling agent SSE (step/emotion/delta)
 │       │   │   ├── ArticleController.java    # Blog articles
 │       │   │   ├── CategoryController.java   # Categories
 │       │   │   ├── ChatController.java       # AI chat
 │       │   │   ├── CommentsController.java   # Comments
 │       │   │   ├── DiaryController.java      # Diary entries
 │       │   │   ├── FeatherController.java    # Feather game
+│       │   │   ├── ImageController.java      # Image serving (R2 → DB fallback)
 │       │   │   ├── LikeController.java       # Likes
 │       │   │   ├── LoginController.java      # Auth (JWT)
 │       │   │   ├── LogoutController.java     # Logout
@@ -365,7 +369,7 @@ blog/
 │       │   │   ├── RegisterController.java     # Registration
 │       │   │   ├── RoundtableController.java   # AI roundtable SSE (stream/observe/interject/stop)
 │       │   │   ├── TagsController.java       # Tags
-│       │   │   ├── UploadController.java     # File upload (magic-number validated)
+│       │   │   ├── UploadController.java     # File upload (magic-number validated, R2 → DB)
 │       │   │   └── UserController.java       # User profile
 │       │   ├── dao/
 │       │   │   ├── mapper/                # MyBatis mappers
@@ -379,7 +383,9 @@ blog/
 │       │   │       ├── ai/
 │       │   │       │   ├── AiClient.java           # Qwen2.5 client (JSON mode, throttle, 429 retry, circuit breaker)
 │       │   │       │   ├── PromptBuilder.java      # Centralized prompt engineering
-│       │   │       │   ├── MemorySearchService.java
+│       │   │       │   ├── madeline/               # Tool-calling agent for diary chat
+│       │   │       │   │   ├── MadelineAgentEngine.java  # 6-step tool loop + SSE events
+│       │   │       │   │   └── PolishTextTool.java       # 润色/Polish tool
 │       │   │       │   └── roundtable/             # AI roundtable engine
 │       │   │       │       ├── RoundtableSession.java    # Session state, CAS start gate, owner generation
 │       │   │       │       ├── RoundtableEngine.java     # Turn loop, chunked SSE push, reconnect grace
@@ -388,9 +394,12 @@ blog/
 │       │   │       │       ├── ConsensusTracker.java     # Agreement/disagreement extraction
 │       │   │       │       ├── TurnScheduler.java        # Next-speaker selection
 │       │   │       │       ├── RosterBuilder.java        # Character roster assembly
-│       │   │       │       └── RoundtableTopicService.java # Topic suggestions & parsing
+│       │   │       │       ├── RoundtableTopicService.java # Topic suggestions & parsing
+│       │   │       │       └── RoundtableHistoryService.java # Meeting history
+│       │   │       ├── diarychat/                  # Emotion extraction, intent classifier, persona checker
 │       │   ├── utils/
 │       │   │   ├── JWTUtils.java               # JWT create/verify (env-configurable)
+│       │   │   ├── R2Utils.java                # Cloudflare R2 (S3) storage + DB fallback
 │       │   │   └── UserThreadLocal.java        # Thread-local user context
 │       │   ├── vo/                      # View objects (API contracts)
 │       │   └── common/
@@ -399,7 +408,7 @@ blog/
 │       └── resources/
 │           ├── application.properties        # Dev config
 │           ├── application-prod.yml          # Production config (HikariCP, security headers)
-│           └── log4j2.xml                    # Structured JSON logging
+│           └── log4j2-spring.xml              # Console log pattern with TraceId from MDC
 ├── blog-admin/                          # Admin backend module
 │   └── src/main/java/com/mszlu/blog/admin/
 │       ├── config/SecurityConfig.java         # Spring Security form login + RBAC
@@ -409,10 +418,13 @@ blog/
 └── blog-ui/                             # Frontend static assets
     ├── index.html                       # Blog index
     ├── diary.html                       # Diary main page
-    ├── berryos.html                     # BerryOS retro desktop + monthly PPT player
+    ├── berryos.html                     # BerryOS retro desktop + diary-driven PPT player
     ├── internet_cafe.html               # Internet Cafe scene: neon animation & interior reveal
     ├── payphone.html                    # Snow-night payphone: Madeline sings
-    ├── messages.html                    # SSE live chatroom + like/comment notifications
+    ├── messages.html                    # Legacy two-pane chat + notify page (reuses messages.js)
+    ├── celeste-farewell-remembered-demo.html # Current Chat entry: 铭记·山间聊天室 (reuses messages.js)
+    ├── cassette.html                    # BerryOS cassette.exe ambience mixer
+    ├── api-key-setup-enhanced.html      # Per-user AI API key setup & test
     ├── roundtable.html                  # Character roundtable with voices
     ├── write.html                       # Writing editor (Markdown + AI tools)
     ├── shelf.html                       # Dream world: Heart Door & Badeline
@@ -460,8 +472,12 @@ export MYSQL_PASSWORD="your_strong_db_password"
 export REDIS_PASSWORD="your_redis_password"
 
 # === External Services ===
-export QINIU_ACCESS_KEY="your_qiniu_ak"
-export QINIU_SECRET_KEY="your_qiniu_sk"
+# Optional: Cloudflare R2 image storage (DB fallback when disabled)
+export R2_ENABLED="false"
+export R2_ENDPOINT="https://<account-id>.r2.cloudflarestorage.com"
+export R2_BUCKET="your_bucket"
+export R2_ACCESS_KEY_ID="your_r2_ak"
+export R2_SECRET_ACCESS_KEY="your_r2_sk"
 export AI_API_KEY="your_siliconflow_api_key"
 export AI_BASE_URL="https://api.siliconflow.cn/v1"
 export AI_MODEL="Qwen/Qwen2.5-7B-Instruct"
@@ -537,7 +553,7 @@ spring.profiles.active=dev
 # Database
 spring.datasource.url=jdbc:mysql://localhost:3306/blog?useUnicode=true&characterEncoding=UTF-8&serverTimeZone=UTC
 spring.datasource.username=root
-spring.datasource.password=${MYSQL_PASSWORD:your_password}
+spring.datasource.password=1234
 spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
 
 # MyBatis-Plus
@@ -549,25 +565,36 @@ mybatis-plus.mapper-locations=classpath*:com/mszlu/blog/dao/mapper/**/*.xml
 spring.servlet.multipart.max-request-size=20MB
 spring.servlet.multipart.max-file-size=8MB
 
-# Qiniu Cloud Storage
-qiniu.accessKey=${QINIU_ACCESS_KEY:your-access-key}
-qiniu.accessSecretKey=${QINIU_ACCESS_SECRET_KEY:your-secret-key}
+# Legacy Qiniu SDK config (retained, not used by the upload path)
+qiniu.accessKey=your-access-key
+qiniu.accessSecretKey=your-secret-key
+
+# Cloudflare R2 image storage (S3-compatible; DB fallback when off/incomplete)
+r2.enabled=${R2_ENABLED:false}
+r2.endpoint=${R2_ENDPOINT:}
+r2.bucket=${R2_BUCKET:}
+r2.access-key-id=${R2_ACCESS_KEY_ID:}
+r2.secret-access-key=${R2_SECRET_ACCESS_KEY:}
+r2.region=${R2_REGION:auto}
+r2.key-prefix=${R2_KEY_PREFIX:images/}
 
 # AI (SiliconFlow)
 ai.base-url=${AI_BASE_URL:https://api.siliconflow.cn/v1}
 ai.api-key=${AI_API_KEY:your-api-key}
 ai.model=${AI_MODEL:Qwen/Qwen2.5-7B-Instruct}
 ai.embedding-model=${AI_EMBEDDING_MODEL:BAAI/bge-m3}
-# AI resilience: global throttle, 429 backoff, circuit breaker
-ai.min-interval-ms=800          # min gap between any two AI requests
-ai.rate-limit.retries=3         # retries on HTTP 429
-ai.rate-limit.backoff-ms=2000   # exponential base: 2s, 4s, 8s
+ai.connect-timeout=10000        # connect timeout (ms)
+ai.read-timeout=30000           # read timeout (ms)
+# AI resilience: throttle, 429 backoff, circuit breaker
+ai.min-interval-ms=${AI_MIN_INTERVAL_MS:100}  # min gap between AI requests
+ai.rate-limit.retries=3         # code default on HTTP 429 (key not in file)
+ai.rate-limit.backoff-ms=2000   # exponential base: 2s, 4s, 8s (code default)
 ai.max-retries=1                # retries for 5xx / timeout
 ai.circuit.failure-threshold=5  # consecutive failures before opening
 ai.circuit.open-duration=30000  # open circuit cooldown (ms)
 
 # JWT (env-configurable)
-jwt.secret=${JWT_SECRET:123456Mszlu!@###$$}
+jwt.secret=${JWT_SECRET:MszluBlogJwtSecretKey2026AbcXyz789}
 jwt.expiration=2592000000
 
 # Actuator & Prometheus
@@ -584,12 +611,21 @@ spring:
     hikari:
       maximum-pool-size: 20
       minimum-idle: 5
-      idle-timeout: 300000
-      max-lifetime: 1200000
+      keepalive-time: 30000
+      idle-timeout: 60000
+      max-lifetime: 600000
       connection-timeout: 30000
-  redis:
-    lettuce:
-      pool: { max-active: 20, max-idle: 10, min-idle: 2 }
+      pool-name: BlogHikariCP
+  data:
+    redis:
+      ssl: { enabled: ${REDIS_SSL:true} }
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 10
+          min-idle: 2
+          max-wait: 2000ms
+      timeout: 3000ms
 
 server:
   headers:
@@ -667,7 +703,7 @@ logging:
 
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t293-dark.webp"><img src="assets/readme/t293.webp" width="797" alt="Feather Breathing Game: Physics-based (gravity, wind, collision), precision landing scoring, feather-landed custom event"></picture>
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t294-dark.webp"><img src="assets/readme/t294.webp" width="758" alt="Strawberry Economy: Earn 🍓 by writing, spend in Oshiro's shop for themes/decorations"></picture>
-- <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t295-dark.webp"><img src="assets/readme/t295.webp" width="521" alt="Pixel Avatars: 8-direction Madeline sprite with spatial audio"></picture>
+- <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t295-dark.webp"><img src="assets/readme/t295.webp" width="521" alt="Pixel Avatars: data-driven Madeline avatar (move / fun / sit / sleep / wake / fall animations) with spatial audio"></picture>
 
 ### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t296-dark.webp"><img src="assets/readme/t296.webp" width="187" alt="5. Security Hardening"></picture>
 
@@ -678,7 +714,7 @@ logging:
 <tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t303-dark.webp"><img src="assets/readme/t303.webp" width="113" alt="Token Expiry"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t304-dark.webp"><img src="assets/readme/t304.webp" width="345" alt="30 days (configurable via jwt.expiration)"></picture></td></tr>
 <tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t305-dark.webp"><img src="assets/readme/t305.webp" width="104" alt="Thread Pool"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t306-dark.webp"><img src="assets/readme/t306.webp" width="411" alt="Bounded queue (1000), CallerRunsPolicy rejection"></picture></td></tr>
 <tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t307-dark.webp"><img src="assets/readme/t307.webp" width="98" alt="File Upload"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t308-dark.webp"><img src="assets/readme/t308.webp" width="429" alt="Extension + MIME type + Magic number validation"></picture></td></tr>
-<tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t309-dark.webp"><img src="assets/readme/t309.webp" width="125" alt="Dependencies"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t310-dark.webp"><img src="assets/readme/t310.webp" width="412" alt="Fastjson 1.2.101 (CVE fixes), MyBatis-Plus unified"></picture></td></tr>
+<tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t309-dark.webp"><img src="assets/readme/t309.webp" width="125" alt="Dependencies"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t310-dark.webp"><img src="assets/readme/t310.webp" width="412" alt="Fastjson 1.2.83 (CVE fixes), MyBatis-Plus unified"></picture></td></tr>
 <tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t311-dark.webp"><img src="assets/readme/t311.webp" width="116" alt="Observability"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t312-dark.webp"><img src="assets/readme/t312.webp" width="465" alt="Actuator health/info/prometheus, Prometheus export"></picture></td></tr>
 </table>
 
@@ -698,6 +734,8 @@ logging:
 <tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t328-dark.webp"><img src="assets/readme/t328.webp" width="124" alt="POST {id}/stop"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t329-dark.webp"><img src="assets/readme/t329.webp" width="465" alt="End the meeting and produce the final summary card"></picture></td></tr>
 </table>
 
+> Also exposed: `GET /roundtable/history` (owner's meeting history, optional `limit`) and `DELETE /roundtable/history/{id}`.
+
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t330-dark.webp"><img src="assets/readme/t330.webp" width="248" alt="Session &amp; connection model:"></picture>
 
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t331-dark.webp"><img src="assets/readme/t331.webp" width="855" alt="RoundtableSession.tryStartEngine() is a CAS gate — the engine runs at most once per session even if the endpoint is hit repeatedly"></picture>
@@ -709,7 +747,7 @@ logging:
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t336-dark.webp"><img src="assets/readme/t336.webp" width="282" alt="AI gateway resilience (AiClient):"></picture>
 
-1. <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t337-dark.webp"><img src="assets/readme/t337.webp" width="856" alt="Global throttle — an AtomicLong enforces a minimum 800ms gap (ai.min-interval-ms) between any two outbound AI requests process-wide, preventing burst 429s during fast debates"></picture>
+1. <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t337-dark.webp"><img src="assets/readme/t337.webp" width="856" alt="Global throttle — an AtomicLong enforces a configurable minimum gap (ai.min-interval-ms; 100ms in the shipped config, 800ms code fallback) between any two outbound AI requests process-wide, preventing burst 429s during fast debates"></picture>
 2. <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t338-dark.webp"><img src="assets/readme/t338.webp" width="851" alt="429 exponential backoff — rate-limit responses retry up to 3 times (2s → 4s → 8s) instead of failing like other 4xx errors"></picture>
 3. <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t339-dark.webp"><img src="assets/readme/t339.webp" width="813" alt="Circuit breaker — 5 consecutive failures open the circuit for 30s with fast-fail, then a half-open probe"></picture>
 4. <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t340-dark.webp"><img src="assets/readme/t340.webp" width="634" alt="Selective retry — only 5xx / network timeouts retry; 400/401/402 fail fast"></picture>
@@ -737,7 +775,7 @@ logging:
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t358-dark.webp"><img src="assets/readme/t358.webp" width="771" alt="Heartbeat &amp; cleanup — each emitter gets its own scheduled 25s heartbeat; onCompletion/onTimeout/onError all route through removeClient, which cancels the heartbeat and rebroadcasts presence after a 100ms coalescing delay"></picture>
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t359-dark.webp"><img src="assets/readme/t359.webp" width="824" alt="30-min SSE timeout — browsers auto-reconnect on EventSource error; the token is re-validated on each reconnect"></picture>
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t360-dark.webp"><img src="assets/readme/t360.webp" width="822" alt="Frontend (messages.html): a two-pane layout — left rail toggles between 山间聊天 (chat) and notify (likes/comments feed); self/other bubbles, an online-count badge, a typing indicator, and a pixel-sticker emoji picker pulled from Atlases/Portraits/."></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t360-dark.webp"><img src="assets/readme/t360.webp" width="822" alt="Frontend (messages.js): the live chat panel is mounted in celeste-farewell-remembered-demo.html (铭记·山间聊天室, the header Chat entry) as a single chat view; messages.html remains reachable with the original two-pane layout — left rail toggles between 山间聊天 (chat) and notify (likes/comments feed); self/other bubbles, an online-count badge, a typing indicator, and a pixel-sticker emoji picker pulled from Atlases/Portraits/."></picture>
 
 ---
 
@@ -765,11 +803,14 @@ logging:
 ```
 blog-ui/
 ├── index.html          → Blog feed (category filter, search, popular, tags)
-├── diary.html          → Postcard viewer + Madeline chat (~2400-line diary.js)
-├── berryos.html        → BerryOS retro desktop + monthly PPT player
+├── diary.html          → Postcard viewer + Madeline chat (~3300-line diary.js)
+├── berryos.html        → BerryOS retro desktop + diary-driven PPT player
 ├── internet_cafe.html  → Neon-sign scene with layered interior reveal
 ├── payphone.html       → Snow-night payphone: Madeline sings
-├── messages.html       → SSE live chatroom (group chat + notify column)
+├── messages.html       → Legacy two-pane chat + notify page (reuses messages.js)
+├── celeste-farewell-remembered-demo.html → Current Chat entry: 铭记·山间聊天室 (reuses messages.js)
+├── cassette.html       → BerryOS cassette.exe ambience mixer
+├── api-key-setup-enhanced.html → Per-user AI API key setup & test
 ├── roundtable.html     → Character roundtable: SSE debate, idempotent reconnect, buffered typewriter
 ├── write.html          → Markdown editor + AI toolbar (Polish, Generate, Madeline)
 ├── shelf.html          → Dream world (Heart Door, mirror room, Badeline)
@@ -783,10 +824,11 @@ blog-ui/
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t384-dark.webp"><img src="assets/readme/t384.webp" width="145" alt="Key JS Modules:"></picture>
 
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t385-dark.webp"><img src="assets/readme/t385.webp" width="668" alt="api.js — Centralized fetch wrapper with auth interceptors, strawberry balance"></picture>
-- <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t386-dark.webp"><img src="assets/readme/t386.webp" width="809" alt="diary.js — Immersive typewriter, streaming AI, emotion UI, autosave, feather game integration"></picture>
+- <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t386-dark.webp"><img src="assets/readme/t386.webp" width="809" alt="diary.js — Immersive typewriter, tool-calling agent SSE, emotion UI, autosave, feather game integration"></picture>
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t387-dark.webp"><img src="assets/readme/t387.webp" width="853" alt="badeline-voice.js — Badeline emotion voice: pre+abcabc loop, per-emotion rate/volume, sad_solo special"></picture>
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t388-dark.webp"><img src="assets/readme/t388.webp" width="616" alt="write-madeline.js — 8-pose pixel avatar, resource optimizer, spatial audio"></picture>
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t389-dark.webp"><img src="assets/readme/t389.webp" width="542" alt="feather-game.js — Physics engine, difficulty scaling, event system"></picture>
+- pptgen.js — Diary-triggered 「topic 与我」deck builder (AI optional, local fallback)
 
 ---
 
@@ -796,7 +838,7 @@ blog-ui/
 
 ### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t391-dark.webp"><img src="assets/readme/t391.webp" width="117" alt="Current State"></picture>
 
-- <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t392-dark.webp"><img src="assets/readme/t392.webp" width="840" alt="Unit tests: 19 test classes / 127 cases — auth chain (JWTUtils, LoginServiceImpl, LoginIntercepter, TokenServiceImpl), prod config validation (ConfigValidator), TraceId filter, roundtable engine (session CAS/concurrency, consensus, roster, turn scheduling, session bus), Badeline stage rules, diary persona checker, faceEmotion mapping; all green (RoundtableEngineE2eTest requires the external AI service and is skipped in CI-style runs)"></picture>
+- <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t392-dark.webp"><img src="assets/readme/t392.webp" width="840" alt="Unit tests: 22 test classes / 154 cases — auth chain (JWTUtils, LoginServiceImpl, LoginIntercepter, TokenServiceImpl), prod config validation (ConfigValidator), TraceId filter, roundtable engine (session CAS/concurrency, consensus, roster, turn scheduling, session bus, history), Badeline stage rules, diary persona checker, faceEmotion mapping, comment/article/memory/RAG services, ArchitectureTest; all green (RoundtableEngineE2eTest requires the external AI service and is excluded in CI)"></picture>
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t393-dark.webp"><img src="assets/readme/t393.webp" width="452" alt="Integration tests: None yet (Testcontainers planned)"></picture>
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t394-dark.webp"><img src="assets/readme/t394.webp" width="465" alt="Coverage gate: Not yet configured (JaCoCo planned)"></picture>
 - <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t395-dark.webp"><img src="assets/readme/t395.webp" width="676" alt="Static analysis: Checkstyle + SpotBugs (zero-baseline, enforced via mvn verify)"></picture>
@@ -834,7 +876,7 @@ blog-ui/
 
 ### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t398-dark.webp"><img src="assets/readme/t398.webp" width="167" alt="CI Pipeline (Actual)"></picture>
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t399-dark.webp"><img src="assets/readme/t399.webp" width="836" alt=".github/workflows/ci.yml runs on every push/PR: JDK 17 setup → Maven cache → mvn clean verify -B (compile + 127 unit tests + Checkstyle + SpotBugs). A separate qodana_code_quality.yml runs Qodana static analysis with a baseline."></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t399-dark.webp"><img src="assets/readme/t399.webp" width="836" alt=".github/workflows/ci.yml runs on every push/PR: JDK 17 setup → Maven cache → mvn clean verify -B (compile + 154 unit tests + Checkstyle + SpotBugs). A separate qodana_code_quality.yml runs Qodana static analysis with a baseline."></picture>
 
 ---
 
@@ -842,7 +884,9 @@ blog-ui/
 
 ## <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t400-dark.webp"><img src="assets/readme/t400.webp" width="219" alt="Deployment Guide"></picture>
 
-### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t401-dark.webp"><img src="assets/readme/t401.webp" width="374" alt="Docker Compose (Recommended for Prod)"></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t401-dark.webp"><img src="assets/readme/t401.webp" width="374" alt="Docker Compose (Self-Hosted Reference)"></picture>
+
+> The live deployment uses Cloudflare Pages (frontend) + Render running the root `Dockerfile` (blog-api) + TiDB Cloud / Upstash. This repo does **not** ship a `docker-compose.yml` or per-module Dockerfiles — the template below is a self-hosting starting point; add the missing admin Dockerfile before enabling the `blog-admin` service.
 
 ```yaml
 # docker-compose.yml
@@ -869,15 +913,18 @@ services:
       interval: 10s
 
   blog-api:
-    build: ./blog-api
+    build: .  # root Dockerfile builds blog-api
     ports: ["8888:8888"]
     environment:
       SPRING_PROFILES_ACTIVE: prod
       MYSQL_HOST: mysql
       REDIS_HOST: redis
       JWT_SECRET: ${JWT_SECRET}
-      QINIU_ACCESS_KEY: ${QINIU_ACCESS_KEY}
-      QINIU_SECRET_KEY: ${QINIU_SECRET_KEY}
+      R2_ENABLED: ${R2_ENABLED:-false}
+      R2_ENDPOINT: ${R2_ENDPOINT}
+      R2_BUCKET: ${R2_BUCKET}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY}
       AI_API_KEY: ${AI_API_KEY}
     depends_on:
       mysql: { condition: service_healthy }
@@ -885,7 +932,7 @@ services:
     restart: unless-stopped
 
   blog-admin:
-    build: ./blog-admin
+    build: ./blog-admin  # requires a Dockerfile you provide (not included)
     ports: ["8889:8889"]
     environment:
       SPRING_PROFILES_ACTIVE: prod
@@ -1013,12 +1060,14 @@ git push origin feature/your-feature-name
 <table>
 <tr><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t419-dark.webp"><img src="assets/readme/t419.webp" width="55" alt="Check"></picture></th><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t420-dark.webp"><img src="assets/readme/t420.webp" width="37" alt="Tool"></picture></th><th align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t421-dark.webp"><img src="assets/readme/t421.webp" width="85" alt="Threshold"></picture></th></tr>
 <tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t422-dark.webp"><img src="assets/readme/t422.webp" width="71" alt="Compile"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t423-dark.webp"><img src="assets/readme/t423.webp" width="55" alt="Maven"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t424-dark.webp"><img src="assets/readme/t424.webp" width="97" alt="Zero errors"></picture></td></tr>
-<tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t425-dark.webp"><img src="assets/readme/t425.webp" width="84" alt="Unit Tests"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t426-dark.webp"><img src="assets/readme/t426.webp" width="59" alt="JUnit 5"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t427-dark.webp"><img src="assets/readme/t427.webp" width="210" alt="≥ 70% coverage (target)"></picture></td></tr>
-<tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t428-dark.webp"><img src="assets/readme/t428.webp" width="145" alt="Integration Tests"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t429-dark.webp"><img src="assets/readme/t429.webp" width="128" alt="Testcontainers"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t430-dark.webp"><img src="assets/readme/t430.webp" width="68" alt="All pass"></picture></td></tr>
+<tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t425-dark.webp"><img src="assets/readme/t425.webp" width="84" alt="Unit Tests"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t426-dark.webp"><img src="assets/readme/t426.webp" width="59" alt="JUnit 5"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t427-dark.webp"><img src="assets/readme/t427.webp" width="210" alt="154 cases pass; coverage gate not enforced (JaCoCo planned)"></picture></td></tr>
+<tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t428-dark.webp"><img src="assets/readme/t428.webp" width="145" alt="Integration Tests"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t429-dark.webp"><img src="assets/readme/t429.webp" width="128" alt="Testcontainers"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t430-dark.webp"><img src="assets/readme/t430.webp" width="68" alt="Planned (Testcontainers not wired)"></picture></td></tr>
 <tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t431-dark.webp"><img src="assets/readme/t431.webp" width="128" alt="Static Analysis"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t432-dark.webp"><img src="assets/readme/t432.webp" width="198" alt="SpotBugs + Checkstyle"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t433-dark.webp"><img src="assets/readme/t433.webp" width="151" alt="Zero critical/high"></picture></td></tr>
-<tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t434-dark.webp"><img src="assets/readme/t434.webp" width="158" alt="Dependency Scan"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t435-dark.webp"><img src="assets/readme/t435.webp" width="243" alt="OWASP Dependency-Check"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t436-dark.webp"><img src="assets/readme/t436.webp" width="139" alt="Zero CVE ≥ High"></picture></td></tr>
-<tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t437-dark.webp"><img src="assets/readme/t437.webp" width="97" alt="SonarQube"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t438-dark.webp"><img src="assets/readme/t438.webp" width="100" alt="SonarCloud"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t439-dark.webp"><img src="assets/readme/t439.webp" width="155" alt="Quality Gate pass"></picture></td></tr>
+<tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t434-dark.webp"><img src="assets/readme/t434.webp" width="158" alt="Dependency Scan"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t435-dark.webp"><img src="assets/readme/t435.webp" width="243" alt="OWASP Dependency-Check"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t436-dark.webp"><img src="assets/readme/t436.webp" width="139" alt="Not configured yet"></picture></td></tr>
+<tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t437-dark.webp"><img src="assets/readme/t437.webp" width="97" alt="SonarQube"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t438-dark.webp"><img src="assets/readme/t438.webp" width="100" alt="SonarCloud"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t439-dark.webp"><img src="assets/readme/t439.webp" width="155" alt="Not configured (Qodana scan is used)"></picture></td></tr>
 </table>
+
+> CI currently enforces compile + unit tests + Checkstyle/SpotBugs (plus the separate Qodana scan). JaCoCo coverage, Testcontainers integration tests, OWASP Dependency-Check and SonarCloud are planned but not wired yet.
 
 ---
 
@@ -1035,7 +1084,7 @@ git push origin feature/your-feature-name
 <tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t448-dark.webp"><img src="assets/readme/t448.webp" width="139" alt="Mobile support?"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t449-dark.webp"><img src="assets/readme/t449.webp" width="391" alt="Responsive, but optimized for desktop/tablet"></picture></td></tr>
 <tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t450-dark.webp"><img src="assets/readme/t450.webp" width="96" alt="AI Models?"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t451-dark.webp"><img src="assets/readme/t451.webp" width="389" alt="Qwen2.5-7B (chat), bge-m3 (embeddings) via SiliconFlow"></picture></td></tr>
 <tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t452-dark.webp"><img src="assets/readme/t452.webp" width="122" alt="Data privacy?"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t453-dark.webp"><img src="assets/readme/t453.webp" width="445" alt="MySQL storage; prod requires encryption, backups, access control"></picture></td></tr>
-<tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t454-dark.webp"><img src="assets/readme/t454.webp" width="106" alt="Own AI key?"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t455-dark.webp"><img src="assets/readme/t455.webp" width="231" alt="Yes — set AI_API_KEY env var"></picture></td></tr>
+<tr><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t454-dark.webp"><img src="assets/readme/t454.webp" width="106" alt="Own AI key?"></picture></td><td align="left"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t455-dark.webp"><img src="assets/readme/t455.webp" width="231" alt="Yes — set AI_API_KEY server-side, or use the in-app 🔑 setup (api-key-setup-enhanced.html) for a per-user key + connection test"></picture></td></tr>
 </table>
 
 ### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t456-dark.webp"><img src="assets/readme/t456.webp" width="137" alt="Common Issues"></picture>
@@ -1073,7 +1122,7 @@ git push origin feature/your-feature-name
 - [x] <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t491-dark.webp"><img src="assets/readme/t491.webp" width="830" alt="RAG retrieval depth: vector cache + time decay (τ=30d) + importance fusion + per-source quota rerank"></picture>
 - [x] <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t492-dark.webp"><img src="assets/readme/t492.webp" width="685" alt="Security: log desensitization (no full JWT in logs), prod startup secret validation"></picture>
 - [x] <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t493-dark.webp"><img src="assets/readme/t493.webp" width="758" alt="Debug residue cleanup (no Thread.sleep debug blocks / System.out.println in main sources)"></picture>
-- [x] <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t494-dark.webp"><img src="assets/readme/t494.webp" width="665" alt="Unit tests across auth chain, roundtable engine, emotion pipeline (127 cases)"></picture>
+- [x] <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t494-dark.webp"><img src="assets/readme/t494.webp" width="665" alt="Unit tests across auth chain, roundtable engine, emotion pipeline (154 cases)"></picture>
 
 ### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t495-dark.webp"><img src="assets/readme/t495.webp" width="138" alt="Near Term (v1.1)"></picture>
 
