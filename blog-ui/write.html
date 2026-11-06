@@ -1,9 +1,10 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" href="icon/OIP.webp" type="image/webp">
+    <link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48">
+    <link rel="icon" href="icon/OIP.webp?v=20261105a" type="image/webp">
     <title>Write - Celeste Blog</title>
     <link rel="stylesheet" href="css/common.css?v=20261104a">
     <link rel="stylesheet" href="css/text-fx.css?v=20261004a">
@@ -78,7 +79,7 @@
 </div>
 
 <img id="wpPixelMadeline" src="celeste-gui/bounceline.gif" alt="Madeline" title="单击摸摸她 · 双击打开聊天记录" loading="lazy" decoding="async">
-<canvas id="snowCanvas" style="position:fixed;inset:0;z-index:0;pointer-events:none;"></canvas>
+<canvas id="snowCanvas" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;"></canvas>
 <div id="wpGameDialog">
     <div id="wpGameDialogPortrait"><img id="wpGameDialogPortraitImg" src="celeste-portraits/madeline/normal00.png" alt="Madeline" loading="lazy" decoding="async"></div>
     <div id="wpGameDialogBody">
@@ -108,7 +109,8 @@
 <script src="js/vue.global.prod.js?v=20261008a"></script>
 <script src="js/auth.js?v=20261104a"></script>
 <script src="js/madeline-core.js?v=20261002"></script>
-<script src="js/snow-bgm.js"></script>
+
+<script src="js/snow-effect.js?v=20261106c"></script><script src="js/snow-bgm.js?v=20261106c"></script>
 <script src="js/write-madeline.js?v=20261025a"></script>
 <script src="js/write-2.js?v=20261015b"></script>
 <script src="js/write-3.js?v=20261015b"></script>

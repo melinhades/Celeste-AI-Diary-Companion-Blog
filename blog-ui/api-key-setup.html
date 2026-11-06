@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" href="icon/OIP.webp" type="image/webp">
+    <link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48">
+    <link rel="icon" href="icon/OIP.webp?v=20261105a" type="image/webp">
     <title>AI Key Setup - Celeste Blog</title>
     <link rel="stylesheet" href="css/common.css?v=20261104a">
     <link rel="preload" href="celeste-font-en/Renogare-Regular.otf" as="font" type="font/otf" crossorigin>
@@ -359,11 +360,22 @@
                   snow.Direction.x = -4 + 3 * sineOut(p);
                   snow.Update(dt);
                   ctx.setTransform(1, 0, 0, 1, 0, 0);
-                  ctx.clearRect(0, 0, W, H);
+                  // 先画成与页面背景一致的画面（暗底 + 雪花 + overlay），结尾才能无缝交接
+                  ctx.globalCompositeOperation = 'source-over';
+                  ctx.globalAlpha = 1;
+                  ctx.fillStyle = '#05060a';
+                  ctx.fillRect(0, 0, W, H);
                   snow.Render(ctx, pattern);
-              }
 
-              overlay.style.opacity = Math.max(0, 1 - p * 2);
+                  // 黑幕从 1 线性淡到 0：暗起 → 逐帧亮到正常背景
+                  ctx.globalCompositeOperation = 'source-over';
+                  ctx.globalAlpha = 1 - p;
+                  ctx.fillStyle = '#000';
+                  ctx.fillRect(0, 0, W, H);
+              } else {
+                  // 素材加载失败时退化为整屏黑幕淡出，避免卡死
+                  overlay.style.opacity = Math.max(0, 1 - p * 2);
+              }
 
               if (p < 1) {
                   requestAnimationFrame(frame);

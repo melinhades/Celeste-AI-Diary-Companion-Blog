@@ -1,72 +1,42 @@
-// ===== 雪花粒子系统 + BGM（index / login / register 公共） =====
-// 顶层 var / function 会挂到 window，供 index.html 的雪花增强版（分类图片切换）重新赋值扩展
+// ===== 雪花粒子系统 + BGM（index / login / register / diary / article / archives / write 公共） =====
+// 雪：圆点粒子（网页原版效果）+ Celeste overlay 雾层（js/snow-effect.js 的 attach 负责背景层）。
+// 接口不变：startSnow() / stopSnow() 仍为全局函数，diary.js 等处的调用无需改动。
 
 var snowCanvas = document.getElementById('snowCanvas');
-var snowCtx = snowCanvas ? snowCanvas.getContext('2d') : null;
-var snowflakes = [];
-var snowAnimFrame = null;
+var snowHandle = null;   // CelesteSnow.attach 返回的 { stop, snow }
 
-function resizeSnowCanvas() {
-    if (!snowCanvas) return;
-    snowCanvas.width = window.innerWidth;
-    snowCanvas.height = window.innerHeight;
-}
-
-function createSnowflake() {
-    return {
-        x: Math.random() * snowCanvas.width,
-        y: -10,
-        r: Math.random() * 3 + 1,
-        speed: Math.random() * 1.5 + 0.5,
-        wind: Math.random() * 0.5 - 0.25,
-        opacity: Math.random() * 0.6 + 0.2,
-        swing: Math.random() * Math.PI * 2,
-        swingSpeed: Math.random() * 0.02 + 0.01
-    };
-}
-
-function initSnowflakes() {
-    snowflakes = [];
-    for (let i = 0; i < 80; i++) {
-        const f = createSnowflake();
-        f.y = Math.random() * snowCanvas.height;
-        snowflakes.push(f);
-    }
-}
-
-function drawSnowflakes() {
-    snowCtx.clearRect(0, 0, snowCanvas.width, snowCanvas.height);
-    for (const f of snowflakes) {
-        f.y += f.speed;
-        f.swing += f.swingSpeed;
-        f.x += Math.sin(f.swing) * 0.5 + f.wind;
-        if (f.y > snowCanvas.height + 10) { f.y = -10; f.x = Math.random() * snowCanvas.width; }
-        if (f.x > snowCanvas.width + 10) f.x = -10;
-        if (f.x < -10) f.x = snowCanvas.width + 10;
-        snowCtx.beginPath();
-        snowCtx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
-        snowCtx.fillStyle = `rgba(255,255,255,${f.opacity})`;
-        snowCtx.fill();
-    }
-    snowAnimFrame = requestAnimationFrame(drawSnowflakes);
+/** snow-effect.js 未随页面加载时动态补载（正常页面都应显式引在 snow-bgm.js 之前） */
+function ensureSnowLib(cb) {
+    if (window.CelesteSnow && window.CelesteSnow.attach) return cb();
+    var s = document.createElement('script');
+    s.src = 'js/snow-effect.js?v=20261106c';
+    s.onload = cb;
+    s.onerror = cb;   // 加载失败：保持无雪，页面功能不受影响
+    document.head.appendChild(s);
 }
 
 function startSnow() {
-    if (!snowCanvas || snowAnimFrame) return;
-    resizeSnowCanvas();
-    initSnowflakes();
-    drawSnowflakes();
+    if (!snowCanvas || snowHandle) return;
+    ensureSnowLib(function () {
+        if (snowHandle || !snowCanvas.isConnected) return;
+        if (!(window.CelesteSnow && window.CelesteSnow.attach)) return;
+        // 背景雪只要圆点，不要 overlay 雾层（雾层仅保留在圆桌与加载层）
+        snowHandle = window.CelesteSnow.attach(snowCanvas, {
+            particleStyle: 'dots',
+            overlayAlpha: 0
+        });
+    });
 }
 
 function stopSnow() {
-    if (snowAnimFrame) { cancelAnimationFrame(snowAnimFrame); snowAnimFrame = null; }
-    if (snowCtx) snowCtx.clearRect(0, 0, snowCanvas.width, snowCanvas.height);
+    if (snowHandle) { snowHandle.stop(); snowHandle = null; }
+    if (snowCanvas) {
+        var c = snowCanvas.getContext('2d');
+        if (c) c.clearRect(0, 0, snowCanvas.width, snowCanvas.height);
+    }
 }
 
-if (snowCanvas) {
-    window.addEventListener('resize', resizeSnowCanvas);
-    startSnow();
-}
+if (snowCanvas) startSnow();
 
 // ===== BGM（postcard.mp3：进度跨页接续 + 自动播放兜底） =====
 // 页面若自行管理 BGM（如 diary 使用 bgmTimeDiary），可在 <html> 上标记 data-no-auto-bgm 关闭本段

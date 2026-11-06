@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" href="icon/OIP.webp" type="image/webp">
+    <link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48">
+    <link rel="icon" href="icon/OIP.webp?v=20261105a" type="image/webp">
     <title>AI Key Setup - Celeste Blog</title>
     <link rel="stylesheet" href="css/common.css?v=20261104a">
     <link rel="preload" href="celeste-font-en/Renogare-Regular.otf" as="font" type="font/otf" crossorigin>
@@ -98,7 +99,8 @@
             transform: translateX(-50%) translateY(24px);
             width: min(94vw, 900px);
             min-height: 128px;
-            z-index: 950;
+            /* 高于安装过场覆盖层(z-index:9999)，让 Madeline 说话气泡能盖在成功静帧之上被看见 */
+            z-index: 10002;
             display: flex;
             align-items: center;
             gap: 18px;
@@ -274,6 +276,10 @@
           var ASSET = 'Atlases/Overworld/';
           var W = 0, H = 0, snow = null;
 
+          // 供入场过场复用同一个雪花实例，避免交接收尾时粒子重新分布
+          var resolveBg = null;
+          window.__celesteSnowBgReady = new Promise(function (r) { resolveBg = r; });
+
           function resize() {
               W = window.innerWidth;
               H = window.innerHeight;
@@ -306,11 +312,34 @@
 
                   var STEP = 1 / 60, acc = 0, last = performance.now();
 
+                  // 入场过场复用这一个实例：只暴露实例与贴图，禁止另建实例
+                  resolveBg({
+                      snow: snow,
+                      overlayImage: imgs[1]
+                  });
+
+                  // 覆盖层（安装/验证过场、入场过场）盖满整屏，或标签页切后台时，
+                  // 背景雪花看不见，只跳过整屏绘制；相位（Update）照常推进，
+                  // 过场结束时同一实例原地接上，粒子不会停顿或重新分布。
+                  function coveredHidden() {
+                      if (document.hidden) return true;
+                      var io = document.getElementById('installOverlay');
+                      if (io && io.classList.contains('show')) return true;
+                      var ino = document.getElementById('introOverlay');
+                      if (ino) return true;      // 入场过场 remove 之后自然恢复
+                      return false;
+                  }
+
                   function frame(now) {
                       var dt = Math.min((now - last) / 1000, 0.25);
                       last = now;
                       acc += dt;
+                      var hidden = coveredHidden();
                       while (acc >= STEP) { snow.Update(STEP); acc -= STEP; }
+                      if (hidden) {
+                          requestAnimationFrame(frame);
+                          return;
+                      }
 
                       ctx.setTransform(1, 0, 0, 1, 0, 0);
                       ctx.globalCompositeOperation = 'source-over';
@@ -327,7 +356,7 @@
       })();
     </script>
     <script>
-      // 入场过场
+      // 入场过场：复用背景层同一个 HiresSnow 实例，只接管方向与绘制
       (function () {
           var overlay = document.getElementById('introOverlay');
           var cv = document.getElementById('introCanvas');
@@ -335,22 +364,13 @@
           if (!window.CelesteSnow) { overlay.remove(); return; }
 
           var ctx = cv.getContext('2d');
-          var ASSET = 'Atlases/Overworld/';
           var DURATION = 1.5;
           var W = window.innerWidth, H = window.innerHeight;
           cv.width = W; cv.height = H;
 
-          function loadImage(src) {
-              return new Promise(function (resolve) {
-                  var img = new Image();
-                  img.onload = function () { resolve(img); };
-                  img.onerror = function () { resolve(null); };
-                  img.src = src;
-              });
-          }
           function sineOut(p) { return Math.sin(p * Math.PI / 2); }
 
-          var snow = null, pattern = null;
+          var bg = null, pattern = null;
           var started = false, startAt = 0;
 
           function begin() {
@@ -362,39 +382,50 @@
 
           function frame(now) {
               var p = Math.min((now - startAt) / 1000 / DURATION, 1);
-              var dt = 1 / 60;
+              var snow = bg && bg.snow;
 
+              // 相位由背景层每帧推进，这里只设置方向和绘制，不重复 Update
               if (snow) {
                   snow.Direction.x = -4 + 3 * sineOut(p);
-                  snow.Update(dt);
                   ctx.setTransform(1, 0, 0, 1, 0, 0);
-                  ctx.clearRect(0, 0, W, H);
+                  // 先画成与页面背景一致的画面（暗底 + 雪花 + overlay），结尾才能无缝交接
+                  ctx.globalCompositeOperation = 'source-over';
+                  ctx.globalAlpha = 1;
+                  ctx.fillStyle = '#05060a';
+                  ctx.fillRect(0, 0, W, H);
                   snow.Render(ctx, pattern);
-              }
 
-              overlay.style.opacity = Math.max(0, 1 - p * 2);
+                  // 黑幕从 1 线性淡到 0：暗起 → 逐帧亮到正常背景
+                  ctx.globalCompositeOperation = 'source-over';
+                  ctx.globalAlpha = 1 - p;
+                  ctx.fillStyle = '#000';
+                  ctx.fillRect(0, 0, W, H);
+              } else {
+                  // 素材加载失败时退化为整屏黑幕淡出，避免卡死
+                  overlay.style.opacity = Math.max(0, 1 - p * 2);
+              }
 
               if (p < 1) {
                   requestAnimationFrame(frame);
+              } else if (snow) {
+                  // 同一帧交接：先解除遮挡判定让背景层用同一实例绘出一帧，再移除过场
+                  overlay.id = '';
+                  requestAnimationFrame(function () { overlay.remove(); });
               } else {
                   overlay.remove();
               }
           }
 
-          Promise.all([loadImage(ASSET + 'snow.png'), loadImage(ASSET + 'overlay.png')])
-              .then(function (imgs) {
-                  if (imgs[0] && imgs[1]) {
-                      pattern = ctx.createPattern(imgs[1], 'repeat');
-                      snow = new CelesteSnow.HiresSnow({
-                          width: W, height: H,
-                          overlayAlpha: CelesteSnow.IL.DEFAULT_OVERLAY_ALPHA,
-                          snowImage: imgs[0],
-                          overlayImage: imgs[1]
-                      });
-                      snow.Direction.x = -4;
-                  }
+          var ready = window.__celesteSnowBgReady;
+          if (ready && ready.then) {
+              ready.then(function (api) {
+                  if (!api) return;
+                  bg = api;
+                  pattern = ctx.createPattern(api.overlayImage, 'repeat');
+                  overlay.style.opacity = 1;   // 兜底阶段可能残留半透明，接管后恢复整层不透明
                   begin();
               });
+          }
           setTimeout(begin, 800);
       })();
     </script>    <script>
@@ -470,6 +501,63 @@
           let succeededAt = 0;
           let last = 0;
 
+          // 过场画布不再写死 1920×1080：每帧要画十几层 scale:2 的全屏大图 + 拉丝雪，
+          // 固定高分辨率在核显上逐帧光栅是卡顿主因。后备分辨率跟随实际显示像素并封顶到 1440 宽，
+          // seq 仍按 1920×1080 虚拟坐标绘制，用一次 setTransform 把虚拟空间映射到实际像素即可。
+          const VIRTUAL_W = CC.VIRTUAL_WIDTH, VIRTUAL_H = CC.VIRTUAL_HEIGHT;
+          let baseT = 1;
+          function sizeInstallCanvas() {
+              const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+              const fit = Math.min(window.innerWidth / VIRTUAL_W, window.innerHeight / VIRTUAL_H);
+              let bw = Math.min(VIRTUAL_W, 1440, Math.round(VIRTUAL_W * fit * dpr));
+              bw = Math.max(320, bw);
+              const bh = Math.max(180, Math.round(bw * VIRTUAL_H / VIRTUAL_W));
+              canvas.width = bw; canvas.height = bh;
+              baseT = bw / VIRTUAL_W;
+              ctx.imageSmoothingEnabled = true;
+          }
+          sizeInstallCanvas();
+          const onInstallResize = function () {
+              if (stopped) return;
+              sizeInstallCanvas();
+              // 改分辨率会清空画布；若已烘焙过静帧，需按新尺寸重烘一张，否则静帧丢失变黑屏
+              if (settled) bakePoster();
+          };
+          window.addEventListener('resize', onInstallResize);
+
+          // 序列播完后画面是静止的（十几层大图 + 拉丝雪），等待 API 返回的那几秒仍逐帧整屏重绘，
+          // 正是“测试过程卡顿”的根源。做法：抵达结束帧时把静帧一次性烘焙到离屏 poster，之后不再每帧
+          // 重画整场——只在字幕淡入窗口内或成功状态翻转时贴回 poster + 叠字幕，其余时间保持画布内容不动，
+          // 于是等待期近乎零渲染（卡顿消失），同时完整保留美好的结束画面。
+          var poster = document.createElement('canvas');
+          var posterCtx = poster.getContext('2d');
+          var settled = false;
+          var paintedSucceeded = false;
+
+          // 供上层 await：过场动画整段播完（抵达结束帧）时兑现，用于“动画彻底放完后再让 Madeline 说话”
+          var resolveAnimDone;
+          var animDone = new Promise(function (r) { resolveAnimDone = r; });
+
+          function bakePoster() {
+              poster.width = canvas.width;
+              poster.height = canvas.height;
+              posterCtx.setTransform(1, 0, 0, 1, 0, 0);
+              posterCtx.clearRect(0, 0, poster.width, poster.height);
+              // 以当前（结束态）变换把整场重画一遍作为底图，再整块拷进 poster
+              ctx.setTransform(baseT, 0, 0, baseT, 0, 0);
+              seq.render(ctx, assets);
+              posterCtx.drawImage(canvas, 0, 0);
+          }
+
+          function paintSettled(elapsed) {
+              ctx.setTransform(1, 0, 0, 1, 0, 0);
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              ctx.drawImage(poster, 0, 0);
+              ctx.setTransform(baseT, 0, 0, baseT, 0, 0);
+              drawCaption(elapsed);
+              paintedSucceeded = succeeded;
+          }
+
           function stopAudio() {
               testAudio.pause();
               successAudio.pause();
@@ -511,7 +599,7 @@
               : Promise.resolve();
 
           function drawCaption(elapsed) {
-              const a = Math.min(1, elapsed / 400);
+              const a = Math.min(1, elapsed / 150);
               const title = succeeded ? '安装成功' : '连接检测中';
               const subtitle = succeeded ? 'AI KEY 已接入 · 点击进入' : '正在验证 API KEY…';
               ctx.save();
@@ -523,7 +611,7 @@
               ctx.font = '64px Renogare, CelesteZH, sans-serif';
               ctx.fillText(title, 960, 452);
               ctx.shadowBlur = 0;
-              ctx.globalAlpha = a * Math.max(0, Math.min(1, (elapsed - 500) / 400));
+              ctx.globalAlpha = a * Math.max(0, Math.min(1, (elapsed - 180) / 220));
               ctx.fillStyle = 'rgba(230,235,242,.72)';
               ctx.font = '20px Renogare, CelesteZH, sans-serif';
               ctx.fillText(subtitle, 960, 512);
@@ -534,15 +622,26 @@
               if (stopped) return;
               const dt = Math.min(0.05, (now - last) / 1000);
               last = now;
-              if (!held) {
+
+              // 过场仍在播放：逐帧推进 + 全量重绘。注意这里不再被 held 冻结——
+              // 即使 API 秒回，也让 0.5s 淡入 + 滑入的完整过场先播完，避免卡在黑场/半程画面“看不到美好画面”。
+              if (!seq.finished) {
                   seq.update(dt);
+                  ctx.setTransform(baseT, 0, 0, baseT, 0, 0);
+                  seq.render(ctx, assets);
+                  rafId = requestAnimationFrame(tick);
+                  return;
               }
-              seq.render(ctx, assets);
-              if (seq.finished && !held) {
-                  if (!doneAt) doneAt = now;
-                  const captionStart = succeeded ? Math.max(doneAt, succeededAt) : doneAt;
-                  drawCaption(Math.max(0, now - captionStart));
-                  if (succeeded) overlay.classList.add('ready');
+
+              // 已经播完：烘焙一次静帧，之后走廉价重绘（贴 poster + 叠字幕），不再整场重画
+              if (!doneAt) doneAt = now;
+              if (!settled) { settled = true; bakePoster(); if (resolveAnimDone) resolveAnimDone(); }
+              const captionStart = succeeded ? Math.max(doneAt, succeededAt) : doneAt;
+              const elapsed = Math.max(0, now - captionStart);
+              if (succeeded) overlay.classList.add('ready');
+              // 仅字幕淡入期间，或成功状态刚翻转时重画；其余时间保持画布不动 → 等待期近乎零开销
+              if (elapsed < 1000 || succeeded !== paintedSucceeded) {
+                  paintSettled(elapsed);
               }
               rafId = requestAnimationFrame(tick);
           }
@@ -556,6 +655,7 @@
 
           return {
               ready: ready,
+              done: animDone,
               hold: function () { held = true; },
               succeed: function () {
                   if (stopped || succeeded) return;
@@ -571,6 +671,7 @@
                   stopped = true;
                   stopAudio();
                   if (rafId) cancelAnimationFrame(rafId);
+                  window.removeEventListener('resize', onInstallResize);
                   overlay.removeEventListener('click', goToDiary);
                   overlay.classList.remove('show');
                   overlay.classList.remove('ready');
@@ -735,6 +836,8 @@
                       if (result.success) {
                           await api('/users/api-key', 'PUT', { apiKey: pendingKey, model: m });
                           anim.succeed();
+                          // 先等整段测试完成动画彻底播完，再让 Madeline 说话（气泡已抬到黑幕之上，看得见）
+                          await anim.done;
                           await speak('连接成功！一切就绪。', '可爱');
                           closeGameDialog();
                           // 等用户点击过场画面跳转

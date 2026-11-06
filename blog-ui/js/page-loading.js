@@ -32,57 +32,33 @@
         else setTimeout(go, 500);
     }
 
-    /* ---------- 雪花（画在加载层自己的画布上，首次显示时才启动） ---------- */
+    /* ---------- 雪花（画在加载层自己的画布上，首次显示时才启动） ----------
+       particleStyle:'dots' → 圆点雪（网页原版效果）；背景 overlay 雾层由 attach 一并绘制。
+       加载层被移除后 attach 的渲染循环自动停机。 */
     var snowStarted = false;
+    var snowHandle = null;
     function startSnow() {
         if (snowStarted) return;
         snowStarted = true;
         var c = document.getElementById('ldSnowCanvas');
         if (!c) return;
-        var ctx = c.getContext('2d');
-        var flakes = [];
-
-        function resize() {
-            var dpr = Math.min(window.devicePixelRatio || 1, 2);
-            c.width = Math.round(window.innerWidth * dpr);
-            c.height = Math.round(window.innerHeight * dpr);
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        function go() {
+            if (snowHandle || !c.isConnected) return;
+            if (!(window.CelesteSnow && window.CelesteSnow.attach)) return;
+            snowHandle = window.CelesteSnow.attach(c, { particleStyle: 'dots' });
         }
-        resize();
-        window.addEventListener('resize', resize);
-
-        for (var i = 0; i < 80; i++) {
-            flakes.push({
-                x: Math.random() * window.innerWidth,
-                y: Math.random() * window.innerHeight,
-                r: Math.random() * 3 + 1,
-                speed: Math.random() * 1.5 + 0.5,
-                wind: Math.random() * 0.5 - 0.25,
-                opacity: Math.random() * 0.6 + 0.2,
-                swing: Math.random() * Math.PI * 2,
-                swingSpeed: Math.random() * 0.02 + 0.01
-            });
+        if (window.CelesteSnow && window.CelesteSnow.attach) {
+            go();
+        } else {
+            var s = document.createElement('script');
+            s.src = 'js/snow-effect.js?v=20261106c';
+            s.onload = go;
+            s.onerror = function () {};   // 加载失败：无雪降级，加载层功能不受影响
+            document.head.appendChild(s);
         }
-
-        (function loop() {
-            if (!c.isConnected) return;      // 加载层被移除后自然停机
-            var W = window.innerWidth, H = window.innerHeight;
-            ctx.clearRect(0, 0, W, H);
-            for (var k = 0; k < flakes.length; k++) {
-                var f = flakes[k];
-                f.y += f.speed;
-                f.swing += f.swingSpeed;
-                f.x += Math.sin(f.swing) * 0.5 + f.wind;
-                if (f.y > H + 10) { f.y = -10; f.x = Math.random() * W; }
-                if (f.x > W + 10) f.x = -10;
-                if (f.x < -10) f.x = W + 10;
-                ctx.beginPath();
-                ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(255,255,255,' + f.opacity + ')';
-                ctx.fill();
-            }
-            requestAnimationFrame(loop);
-        })();
+    }
+    function stopSnow() {
+        if (snowHandle) { snowHandle.stop(); snowHandle = null; }
     }
 
     /* ---------- 显示：index 点鸟飞走后才唤醒 ---------- */
@@ -115,6 +91,7 @@
                 requestAnimationFrame(function () {
                     el.classList.add('done');
                     setTimeout(function () {
+                        stopSnow();
                         if (el.parentNode) el.parentNode.removeChild(el);
                     }, FADE_MS);
                 });
