@@ -113,6 +113,14 @@
 
     <dependencyManagement>
         <dependencies>
+            <!-- AWS SDK v2 BOM：统一管理 S3 兼容客户端（用于 Cloudflare R2）各子模块版本 -->
+            <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>bom</artifactId>
+                <version>2.46.7</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <dependency>
                 <groupId>com.baomidou</groupId>
                 <artifactId>mybatis-plus-spring-boot3-starter</artifactId>

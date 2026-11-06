@@ -37,6 +37,13 @@
         <Bug pattern="DM_EXIT"/>
     </Match>
 
+    <!-- R2 读取结果载体 record：data 是从对象存储刚读出的一次性字节数组，
+         无共享引用、用完即随响应写出，防御性拷贝纯属浪费。 -->
+    <Match>
+        <Class name="~com\.mszlu\.blog\.utils\.R2Utils\$Stored"/>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    </Match>
+
     <!-- ========== 临时排除（附移除条件） ========== -->
 
     <!-- 含未提交 faceEmotion WIP 改动的冻结类，WIP 合并后逐个移除本条目 -->

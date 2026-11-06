@@ -2,7 +2,9 @@ package com.mszlu.blog.controller;
 
 import com.mszlu.blog.dao.pojo.UploadImage;
 import com.mszlu.blog.service.UploadImageService;
+import com.mszlu.blog.utils.R2Utils;
 import com.mszlu.blog.vo.Result;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -15,13 +17,18 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 
 @RestController
+@Slf4j
 @RequestMapping("upload")
 public class UploadController {
 
     @Autowired
     private UploadImageService uploadImageService;
+
+    @Autowired
+    private R2Utils r2Utils;
 
     private static final List<String> ALLOWED_EXTENSIONS = Arrays.asList("png", "jpg", "jpeg", "gif", "webp");
     private static final List<String> ALLOWED_MIME_TYPES = Arrays.asList(
@@ -62,8 +69,17 @@ public class UploadController {
         }
 
         try {
-            // 存数据库而不是容器磁盘：线上磁盘是临时的，重启/重新部署后文件会丢失导致 404
             byte[] bytes = file.getBytes();
+            // 优先写 R2（对象存储，与 Cloudflare 同生态、零出口流量费）；
+            // 未启用或写入失败则回退数据库（历史图片与本地开发都走这条，零依赖）
+            if (r2Utils.isEnabled()) {
+                String r2Id = UUID.randomUUID().toString().replace("-", "");
+                if (r2Utils.put(r2Id, contentType.toLowerCase(), bytes)) {
+                    return Result.success("/images/" + r2Id);
+                }
+                log.warn("R2 写入失败，回退数据库存储, file:{}", originalFilename);
+            }
+            // 存数据库而不是容器磁盘：线上磁盘是临时的，重启/重新部署后文件会丢失导致 404
             UploadImage image = new UploadImage();
             image.setContentType(contentType.toLowerCase());
             image.setData(bytes);
@@ -71,6 +87,8 @@ public class UploadController {
             String id = uploadImageService.save(image);
             return Result.success("/images/" + id);
         } catch (Exception e) {
+            log.error("图片上传失败, file:{}, size:{}KB, contentType:{}", originalFilename,
+                    file.getSize() / 1024, contentType, e);
             return Result.fail(20001, "上传失败");
         }
     }

@@ -78,6 +78,17 @@ qiniu:
   accessKey: ${QINIU_ACCESS_KEY:}
   accessSecretKey: ${QINIU_SECRET_KEY:}
 
+# Cloudflare R2 图片存储（S3 兼容）；默认关闭，关闭或配置不全时图片自动回退存数据库
+# 启用：部署时设 R2_ENABLED=true 并注入 R2_ENDPOINT / R2_BUCKET / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY
+r2:
+  enabled: ${R2_ENABLED:false}
+  endpoint: ${R2_ENDPOINT:}
+  bucket: ${R2_BUCKET:}
+  access-key-id: ${R2_ACCESS_KEY_ID:}
+  secret-access-key: ${R2_SECRET_ACCESS_KEY:}
+  region: ${R2_REGION:auto}
+  key-prefix: ${R2_KEY_PREFIX:images/}
+
 # 大模型配置（OpenAI 兼容协议）
 # 切模型的最小变量集（只需改环境变量，不用改代码）：
 #   主对话：AI_BASE_URL / AI_API_KEY / AI_MODEL

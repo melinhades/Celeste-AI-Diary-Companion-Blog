@@ -86,6 +86,12 @@
             <artifactId>qiniu-java-sdk</artifactId>
         </dependency>
 
+        <!-- Cloudflare R2 图片上传：R2 兼容 S3 协议，用 AWS SDK v2 的 S3 客户端接入（版本由父 pom 的 BOM 锁定） -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+        </dependency>
+
         <!-- 架构守护测试（ArchitectureTest）：包级循环依赖 + Controller 不得直连 Mapper -->
         <dependency>
             <groupId>com.tngtech.archunit</groupId>
