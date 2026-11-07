@@ -357,11 +357,8 @@
     async function doAddM(text, emotion) {
         text = String(text || '').replace(/[（(][^（）()]*[）)]/g, '').trim();
         if (!text) return;
-        const parts = String(text).split(/(?<=[。！？!?…\n])/).map(s => s.trim()).filter(Boolean);
-        const msgs = [];
-        let buf = '';
-        for (const p of parts) { buf += p; if (buf.length >= 45) { msgs.push(buf); buf = ''; } }
-        if (buf) msgs.push(buf);
+        // 长台词分段统一走 MadelineCore.segmentSpeech（与日记页同一套切口）
+        const msgs = (window.MadelineCore && MadelineCore.segmentSpeech) ? MadelineCore.segmentSpeech(text) : [text];
         if (!msgs.length) return;
 
         const useGD = !chatOpen;

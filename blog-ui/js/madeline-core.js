@@ -137,6 +137,91 @@
         };
     }
 
+    // ===== 台词分段：全站唯一实现 =====
+    // 收口前存在三套并行逻辑：diary.js 的死函数 splitSpeak（按逗号切、上限 42）、
+    // diary.js 的 splitIntoMessages 与流式循环内的内联判断（只认句末标点、上限 45）、
+    // write-madeline.js 的内联拷贝。三套阈值/切分字符不一致，长句会漏切。
+    // 注意：后端 DiaryServiceImpl.nextSentenceCut 不在此列——它只负责把模型输出切成 SSE delta
+    // （传输层分块 + 句级安全闸门），不下发任何“分段边界”；前端会把 delta 拼回完整文本后按本规则重新切。
+    // 统一规则（整段回退与流式打字共用）：
+    //   1) 软上限 45 字：遇句末标点（。！？!?…换行，含英文句点）收尾；
+    //   2) 分句兜底 60 字：一直没句末标点时，遇逗号/分号/冒号/顿号收尾；
+    //   3) 硬上限 72 字：什么标点都没有也强制切，避免整段挤在一个气泡里。
+    // 长度按 UTF-16 单元计（emoji 占 2，与旧实现一致）；硬切时避开代理对，不把 emoji 劈成两半。
+    const SEG_SOFT_MAX = 45;
+    const SEG_CLAUSE_MAX = 60;
+    const SEG_HARD_MAX = 72;
+    const SEG_SENTENCE_END = /[。！？!?…\n.]/;
+    const SEG_CLAUSE_END = /[，,；;：:、]/;
+    /** 段边界空白：空格/制表/换行/CRLF 等，归属前一段段尾 */
+    const SEG_WS_CHAR = /\s/;
+
+    /** 码点长度：emoji / 代理对按 1 计（与不变式测试的段长口径一致） */
+    function speechLength(str) {
+        const s = String(str == null ? '' : str);
+        let n = 0;
+        for (let i = 0; i < s.length; i++) {
+            const c = s.charCodeAt(i);
+            if (c >= 0xD800 && c <= 0xDBFF && i + 1 < s.length) {
+                const d = s.charCodeAt(i + 1);
+                if (d >= 0xDC00 && d <= 0xDFFF) i++;
+            }
+            n++;
+        }
+        return n;
+    }
+
+    /** 当前段（seg 已含刚打出的字）是否该收尾 */
+    function speechShouldBreak(seg) {
+        const n = seg.length;
+        if (!n) return false;
+        const code = seg.charCodeAt(n - 1);
+        if (n >= SEG_HARD_MAX) return !(code >= 0xD800 && code <= 0xDBFF);  // 高代理结尾：等 emoji 补全
+        if (n >= SEG_SOFT_MAX && SEG_SENTENCE_END.test(seg.charAt(n - 1))) return true;
+        if (n >= SEG_CLAUSE_MAX && SEG_CLAUSE_END.test(seg.charAt(n - 1))) return true;
+        return false;
+    }
+
+    /** 整段台词 → 气泡数组；切口与流式打字完全一致 */
+    function segmentSpeech(text) {
+        const src = String(text == null ? '' : text);
+        // 整段回复的两条例外：第一块不留前导空白，最后一块不留尾随空白
+        let start = 0;
+        while (start < src.length && SEG_WS_CHAR.test(src.charAt(start))) start++;
+        let end = src.length;
+        while (end > start && SEG_WS_CHAR.test(src.charAt(end - 1))) end--;
+        if (start >= end) return [src];      // 空串 / 全空白：保持旧行为
+
+        const out = [];
+        let displayStart = start;   // 本段实际输出的起点（已跳过前导空白）
+        let logicalStart = start;   // 判定切点用的起点：上一刀之后（含段间空白），与改前口径一致
+        let i = start;
+        while (i < end) {
+            // 按码点推进：整段切分不会把 emoji 拆成半字
+            const ch = String.fromCodePoint(src.codePointAt(i));
+            const next = i + ch.length;
+            if (speechShouldBreak(src.slice(logicalStart, next))) {
+                // 边界空白归属：切点之后的空白/换行/CRLF 默认并进本段段尾；
+                // 但硬上限优先——并入后本段超过 72 码点就不并，这段空白留在下一段段首。
+                let j = next;
+                let cp = speechLength(src.slice(displayStart, next));   // 本段已含触发切点的字符
+                while (j < end && SEG_WS_CHAR.test(src.charAt(j))) {
+                    if (cp + 1 > SEG_HARD_MAX) break;
+                    cp++;
+                    j++;
+                }
+                out.push(src.slice(displayStart, j));
+                displayStart = j;
+                logicalStart = next;   // 下一段长度仍从切点之后算，保证切点与改前一致
+                i = j;
+            } else {
+                i = next;
+            }
+        }
+        if (displayStart < end) out.push(src.slice(displayStart, end));
+        return out.length ? out : [src];
+    }
+
     global.MadelineCore = {
         EMOTION_GROUP: EMOTION_GROUP,
         isPositive: isPositive,
@@ -145,6 +230,12 @@
         rnd: rnd,
         weightedPick: weightedPick,
         DEFAULT_MODES: DEFAULT_MODES,
-        createCore: createCore
+        createCore: createCore,
+        SEG_SOFT_MAX: SEG_SOFT_MAX,
+        SEG_CLAUSE_MAX: SEG_CLAUSE_MAX,
+        SEG_HARD_MAX: SEG_HARD_MAX,
+        speechLength: speechLength,
+        speechShouldBreak: speechShouldBreak,
+        segmentSpeech: segmentSpeech
     };
 })(typeof window !== 'undefined' ? window : this);

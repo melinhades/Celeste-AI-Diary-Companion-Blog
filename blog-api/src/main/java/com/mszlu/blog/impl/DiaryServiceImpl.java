@@ -899,7 +899,15 @@ public class DiaryServiceImpl implements DiaryService {
                             String clean = gateSentence(sentence, systemPrompt.toString(), reactSnippet,
                                     intent, sessionId, strictCheck, mustSpeak, filterReason, emitText);
                             if (emitText[0].isEmpty()) continue;
-                            emitStreamDelta(response, emitText[0], emotionEmitted, emotionOut, firstDeltaMs, t0);
+                            String out = emitText[0];
+                            // 只对整段回复的第一块剥离开头空白；句中开头空格是上一句留下的
+                            // 词间分隔（如 "Really? Yes." 里的 " Yes."），必须原样保留
+                            if (emitted.length() == 0) {
+                                out = out.stripLeading();
+                                clean = clean.stripLeading();
+                            }
+                            if (out.isEmpty()) continue;
+                            emitStreamDelta(response, out, emotionEmitted, emotionOut, firstDeltaMs, t0);
                             emitted.append(clean);
                         }
                     } catch (java.io.IOException io) {
@@ -933,13 +941,23 @@ public class DiaryServiceImpl implements DiaryService {
                 String clean = gateSentence(tail, systemPrompt.toString(), reactSnippet,
                         intent, sessionId, strictCheck, mustSpeak, filterReason, emitText);
                 if (!emitText[0].isEmpty()) {
-                    try {
-                        emitStreamDelta(response, emitText[0], emotionEmitted, emotionOut, firstDeltaMs, t0);
-                    } catch (java.io.IOException io) {
-                        log.info("日记伴侣 SSE 输出中断 sessionId={}", sessionId);
-                        return;
+                    String out = emitText[0];
+                    if (emitted.length() == 0) {
+                        out = out.stripLeading();
+                        clean = clean.stripLeading();
                     }
-                    emitted.append(clean);
+                    // 最后一块收掉结尾空白；中间块绝不能收，否则会和下一块首字粘连
+                    out = out.stripTrailing();
+                    clean = clean.stripTrailing();
+                    if (!out.isEmpty()) {
+                        try {
+                            emitStreamDelta(response, out, emotionEmitted, emotionOut, firstDeltaMs, t0);
+                        } catch (java.io.IOException io) {
+                            log.info("日记伴侣 SSE 输出中断 sessionId={}", sessionId);
+                            return;
+                        }
+                        emitted.append(clean);
+                    }
                 }
             }
 
@@ -1011,7 +1029,10 @@ public class DiaryServiceImpl implements DiaryService {
     }
 
     /**
-     * 计算下一句的切分点：句末标点/换行为界；没有标点时攒到阈值强制切。
+     * 传输层分块：把模型输出按句切成 SSE delta，供句级安全闸门逐句检查、并降低首字延迟。
+     * 它只决定“什么时候发下一块”，不下发分段边界；前端会把 delta 拼回完整文本，
+     * 再用 MadelineCore 的唯一规则（句末 45 / 分句 60 / 硬上限 72）重新切气泡。
+     * 因此这里的 40 字硬上限刻意不与前端对齐：对齐会把首字延迟抬到 45 字以上。
      * 返回 0 表示还不够一句，继续等下一帧。
      */
     private int nextSentenceCut(StringBuilder buf) {
@@ -1033,29 +1054,33 @@ public class DiaryServiceImpl implements DiaryService {
      * 句级闸门：正常句子走本地正则即时放行；命中风险特征（或用户本轮本身是高危文本）才调一次模型复核。
      *
      * 双轨返回值：
-     *   return 值 = 剥离 [m:表情] 后的纯文本，用于落库 / 记忆 / done.len；
-     *   emitText[0] = 实际下发文本，放行时保留原句里的 [m:表情]，供前端 feeder 换脸。
+     *   return 值 = 剥离 [m:表情] 后的原句文本（保留词间空格），用于落库 / 记忆 / done.len；
+     *   emitText[0] = 实际下发文本，放行时保留原句里的 [m:表情] 与全部内部空格，供前端 feeder 换脸。
+     * 安全判断只看 trim 后的 s；首尾空白由调用方按「整段回复的第一/最后一块」裁掉，
+     * 这样 "Really? Yes." 分块下发后前端能拼回原句，又不会在气泡首尾露出空白。
      * 复核不通过时用 suggestion 替换；S1-S3「该沉默」在句级不生效（危机已由 crisisRisk 前置拦截）；
      * R1-R6 硬红线且没有 suggestion 时才用安全兜底句，其余未知原因放行原句。
      */
     private String gateSentence(String sentence, String systemPrompt, String reactSnippet,
                                 String intent, String sessionId, boolean strictCheck, boolean mustSpeak,
                                 String[] filterReason, String[] emitText) {
-        String s = INLINE_MOOD_MARKER.matcher(sentence).replaceAll("").trim();
+        // 判断用 trim 文本（安全逻辑不变）；下发与落库用 raw，保留词间空格
+        String raw = INLINE_MOOD_MARKER.matcher(sentence).replaceAll("");
+        String s = raw.trim();
         emitText[0] = "";
         if (s.isEmpty()) return "";
         if (!strictCheck && !DiaryChatPersonaChecker.localRedlineHit(s)) {
-            emitText[0] = sentence.trim();
-            return s;
+            emitText[0] = sentence;
+            return raw;
         }
 
         DiaryChatPersonaChecker.CheckResult check =
                 personaChecker.checkOnce(s, systemPrompt, reactSnippet, intent, mustSpeak);
         if (check.pass) {
             if (check.finalResponse == null || check.finalResponse.equals(s)) {
-                // 未改写 → 下发保留 [m:表情] 的原句
-                emitText[0] = sentence.trim();
-                return s;
+                // 未改写 → 下发保留 [m:表情] 的原句（不能 trim，否则英文句间空格会被吃掉）
+                emitText[0] = sentence;
+                return raw;
             }
             String rewritten = INLINE_MOOD_MARKER.matcher(check.finalResponse).replaceAll("").trim();
             emitText[0] = rewritten;
@@ -1067,8 +1092,8 @@ public class DiaryServiceImpl implements DiaryService {
         // S1-S3 是「该沉默」规则：整轮危机已由 crisisRisk 前置拦截，句级再据此拦截会把
         // 正常倾诉的每一句都替换成「嗯，我在听～」，这里直接放行
         if (reason.startsWith("S")) {
-            emitText[0] = sentence.trim();
-            return s;
+            emitText[0] = sentence;
+            return raw;
         }
 
         String suggestion = check.suggestion == null ? ""
@@ -1084,8 +1109,8 @@ public class DiaryServiceImpl implements DiaryService {
             return "嗯，我在听～";
         }
         // 判定原因不明（裁判输出缺字段等）→ 放行原句，不再整段替换
-        emitText[0] = sentence.trim();
-        return s;
+        emitText[0] = sentence;
+        return raw;
     }
 
     /** 逐句下发：首句前先发 emotion，并记录首字延迟 */

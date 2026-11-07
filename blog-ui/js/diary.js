@@ -323,39 +323,6 @@
         } catch (e) {}
     });
 
-    function splitSpeak(text) {
-        const parts = String(text || '').split(/(?<=[。！？!?…\n])/).map(s => s.trim()).filter(Boolean);
-        const merged = [];
-        for (const p of parts) {
-            const last = merged[merged.length - 1];
-            if (last !== undefined && last.length < 12 && last.length + p.length <= 26) merged[merged.length - 1] = last + p;
-            else merged.push(p);
-        }
-        const out = [];
-        for (const s of merged) {
-            if (s.length <= 42) { out.push(s); continue; }
-            let buf = '';
-            for (const piece of s.split(/(?<=[，,；;：:])/)) {
-                if ((buf + piece).length > 42 && buf) { out.push(buf); buf = piece; }
-                else buf += piece;
-            }
-            if (buf) out.push(buf);
-        }
-        return out.length ? out : [String(text)];
-    }
-
-    function splitIntoMessages(text) {
-        const parts = String(text || '').split(/(?<=[。！？!?…\n])/).map(s => s.trim()).filter(Boolean);
-        const msgs = [];
-        let buf = '';
-        for (const p of parts) {
-            buf += p;
-            if (buf.length >= 45) { msgs.push(buf); buf = ''; }
-        }
-        if (buf) msgs.push(buf);
-        return msgs.length ? msgs : [String(text)];
-    }
-
     function newMadelineRow(emotion) {
         const row = document.createElement('div');
         row.style.display = 'flex';
@@ -486,16 +453,33 @@
                 clearTimeout(gameDialogHideTimer);
                 openGameDialog(emotion);
             }
-            // 长文本分段：与整段回退的 splitIntoMessages 对齐，凑够 45 字遇句末标点就换一条气泡接着说
+            // 长文本分段：与整段回退共用 MadelineCore.speechShouldBreak（句末 45 / 分句 60 / 硬上限 72）
+            // segStart 是判定切点的「逻辑起点」（旧口径：上一刀之后，含段间空白），
+            // displayStart 是当前气泡真正显示的起点；两者分开才能做到「切点不变、边界空白归前一段」。
             let segStart = 0;
+            let displayStart = 0;
+            let pendingBreak = false;   // 已到切点：后续空白并进上一段段尾，等第一个非空白字才开新段
+            let breakCut = 0;           // 挂起切点的位置，也是下一段的逻辑起点
+            let firstCharSeen = false;  // 例外：整段回复的第一块不留前导空白
             let histBubble = null, avImg = null;
             let pendingNewRowEmo = null; // 待开新气泡的情绪：等下一位字符真正到来才建行，避免流尾出现永远空着的气泡
+            let rowActive = true;        // 当前是否已有气泡行承接本段；溢出后空白留给下一段，先冻结上一行
             const newRow = (emo) => {
                 const r = newMadelineRow(emo);
                 histBubble = r.bubble; avImg = r.avImg; rowAvatar = r.avImg;
                 if (window.TextFx) { TextFx.set(histBubble, ''); histBubble.classList.add('tfx-typing'); }
                 else histBubble.textContent = '';
                 chatMessages.scrollTop = chatMessages.scrollHeight;
+            };
+            // 下一段真正开写时才建行，并把游戏对话框同步清空
+            const openSegRow = () => {
+                newRow(pendingNewRowEmo || emotion || '默认');
+                pendingNewRowEmo = null;
+                if (useGameDialog && myToken === gameDialogToken) {
+                    if (window.TextFx) { TextFx.set(gameDialogText, ''); gameDialogEl.classList.add('tfx-typing'); }
+                    else gameDialogText.textContent = '';
+                }
+                return true;
             };
             newRow(emotion);
             if (useGameDialog) {
@@ -521,15 +505,57 @@
                         voiceEmotion = r.voice; segmentLocked = r.locked;
                         sentenceBuf = ''; // 新段落重新攒句，避免跨情绪误判
                     }
-                    // 上一段已收尾：此刻真的有新字要打了，才创建下一条气泡
-                    if (pendingNewRowEmo !== null) { newRow(pendingNewRowEmo); pendingNewRowEmo = null; }
-                    const shown = pending.slice(segStart, typedCount); // 只打当前分段
-                    const marked = window.TextFx ? TextFx.autoMark(shown) : shown;
-                    if (window.TextFx) TextFx.set(histBubble, marked);
-                    else histBubble.textContent = shown;
-                    if (useGameDialog) {
-                        if (window.TextFx) TextFx.set(gameDialogText, marked);
-                        else gameDialogText.textContent = shown;
+                    // 例外：整段回复的第一块不留前导空白（跳过开头空白，不计入首段）
+                    if (!firstCharSeen) {
+                        if (/\s/.test(ch)) {
+                            chatMessages.scrollTop = chatMessages.scrollHeight;
+                            await sleep(45 + Math.random() * 20);
+                            continue;
+                        }
+                        firstCharSeen = true;
+                        displayStart = typedCount - 1;
+                        segStart = typedCount - 1;
+                    }
+                    // pending-break：边界空白默认并进上一段段尾；但硬上限优先——
+                    // 并入后上一段超过 72 码点就不并，这段空白留在下一段段首。
+                    if (pendingBreak) {
+                        if (/\s/.test(ch)) {
+                            const curShown = pending.slice(displayStart, typedCount);
+                            const segLen = (window.MadelineCore && MadelineCore.speechLength)
+                                ? MadelineCore.speechLength(curShown) : curShown.length;
+                            const limit = (window.MadelineCore && MadelineCore.SEG_HARD_MAX)
+                                ? MadelineCore.SEG_HARD_MAX : 72;
+                            if (segLen > limit) {
+                                // 溢出：上一段冻结在切点（不含这段空白），空白留给下一段段首
+                                if (rowActive) {
+                                    const prev = pending.slice(displayStart, typedCount - 1);
+                                    const prevMarked = window.TextFx ? TextFx.autoMark(prev) : prev;
+                                    if (window.TextFx) { TextFx.set(histBubble, prevMarked); histBubble.classList.remove('tfx-typing'); }
+                                    else histBubble.textContent = prev;
+                                    rowActive = false;
+                                }
+                                displayStart = typedCount - 1;
+                                segStart = breakCut;
+                                pendingBreak = false;
+                            }
+                        } else {
+                            rowActive = openSegRow();
+                            displayStart = typedCount - 1;
+                            segStart = breakCut;   // 下一段的长度仍从切点之后算，和整段切分一致
+                            pendingBreak = false;
+                        }
+                    }
+                    // 溢出后下一段从空白开始：等第一个非空白字再建行，避免流尾出现空气泡
+                    if (!rowActive && !/\s/.test(ch)) rowActive = openSegRow();
+                    if (rowActive) {
+                        const shown = pending.slice(displayStart, typedCount); // 只打当前分段
+                        const marked = window.TextFx ? TextFx.autoMark(shown) : shown;
+                        if (window.TextFx) TextFx.set(histBubble, marked);
+                        else histBubble.textContent = shown;
+                        if (useGameDialog) {
+                            if (window.TextFx) TextFx.set(gameDialogText, marked);
+                            else gameDialogText.textContent = shown;
+                        }
                     }
                     // 音效 + 句内情绪推断（仅在「默认」段生效；AI 显式情绪优先）
                     if (/[。！？!?]/.test(ch)) {
@@ -543,14 +569,20 @@
                         speakCount++;
                         if (speakCount % 3 === 1) playSpeakSound(voiceEmotion);
                     }
-                    // 凑够 45 字且落在句末标点（含省略号/换行）→ 收尾本段；新气泡推迟到下一位字符到来再建
-                    if (/[。！？!?…\n]/.test(ch) && typedCount - segStart >= 45) {
-                        if (window.TextFx) histBubble.classList.remove('tfx-typing');
-                        segStart = typedCount;
-                        pendingNewRowEmo = voiceEmotion || emotion || '默认';
-                        if (useGameDialog && myToken === gameDialogToken) {
-                            if (window.TextFx) { TextFx.set(gameDialogText, ''); gameDialogEl.classList.add('tfx-typing'); }
-                            else gameDialogText.textContent = '';
+                    // 与整段回退共用 MadelineCore.speechShouldBreak（句末 45 / 分句 60 / 硬上限 72）
+                    // 只在本段未挂起切点时判定；已挂起时后续空白不能再次改写切点
+                    if (!pendingBreak) {
+                        const curSeg = pending.slice(segStart, typedCount);
+                        // 唯一规则来自 MadelineCore；核心脚本没加载时退化为“不切段”，
+                        // 不再保留旧的「只认句末标点 + 45 字」兜底规则，避免出现第二套切口
+                        const segBreak = (window.MadelineCore && MadelineCore.speechShouldBreak)
+                            ? MadelineCore.speechShouldBreak(curSeg)
+                            : false;
+                        if (segBreak) {
+                            if (window.TextFx) histBubble.classList.remove('tfx-typing');
+                            pendingBreak = true;
+                            breakCut = typedCount;
+                            pendingNewRowEmo = voiceEmotion || emotion || '默认';
                         }
                     }
                     chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -561,8 +593,11 @@
             }
 
             // 收尾：补全最后一段文本、去掉打字态
-            // （分段点恰好在流末尾时 lastSeg 为空：histBubble 仍指向已完成的旧气泡，绝不能用空串覆盖它）
-            const lastSeg = pending.slice(segStart, typedCount);
+            // 例外：最后一块不留尾随空白。挂起切点时，切点之后吸收的空白就是整段尾随空白，直接切在 breakCut。
+            // （分段点恰好在流末尾时 lastSeg 仍是刚说完的那一段，histBubble 不会停在空白）
+            const lastSeg = pendingBreak
+                ? pending.slice(displayStart, breakCut)
+                : pending.slice(displayStart, typedCount).replace(/\s+$/, '');
             if (lastSeg) {
                 const fullMarked = window.TextFx ? TextFx.autoMark(lastSeg) : lastSeg;
                 if (window.TextFx) { TextFx.set(histBubble, fullMarked); histBubble.classList.remove('tfx-typing'); }
@@ -574,7 +609,10 @@
                 if (window.TextFx) {
                     if (lastSeg) TextFx.set(gameDialogText, TextFx.autoMark(lastSeg));
                     gameDialogEl.classList.remove('tfx-typing');
-                } else gameDialogText.textContent = lastSeg;
+                } else if (lastSeg) {
+                    // 空尾巴不覆盖：分段点恰好在流末尾时，对话框应保留刚说完的那一段
+                    gameDialogText.textContent = lastSeg;
+                }
             }
             pmReactToEmotion(voiceEmotion);
             if (useGameDialog && myToken === gameDialogToken) {
@@ -606,7 +644,8 @@
         text = String(text || '').replace(/[（(][^（）()]*[）)]/g, '').trim();
         if (!text) return;
         await waitUserPause(6000);
-        const messages = splitIntoMessages(text);
+        // 长台词分段统一走 MadelineCore.segmentSpeech（与流式打字同一套切口）
+        const messages = (window.MadelineCore && MadelineCore.segmentSpeech) ? MadelineCore.segmentSpeech(text) : [text];
         const useGameDialog = forceGameDialog || !chatOpen;
         // 认领本次说话的世代号：用户中途点关闭会让 gameDialogToken 改变，据此立刻停下，不再隐形说话
         const myToken = gameDialogToken;
