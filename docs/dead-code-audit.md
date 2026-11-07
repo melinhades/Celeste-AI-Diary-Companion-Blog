@@ -74,7 +74,7 @@
   |---|---|
   | `blog-ui/js/api.js:72` | `spendBerries`（2026-11-06 已删除） |
   | `blog-ui/js/article.js:356` | `loadRelated` |
-  | `blog-ui/js/diary.js:326` | `splitSpeak` |
+  | `blog-ui/js/diary.js:326` | `splitSpeak`（2026-11-07 已删除，并入 `MadelineCore.segmentSpeech`） |
   | `blog-ui/js/diary.js:2811` | `pmShoo` |
   | `blog-ui/js/feather-game.js:249` | `nextGuide` |
   | `blog-ui/js/roundtable-voice.js:200` | `stopBadeline` |
