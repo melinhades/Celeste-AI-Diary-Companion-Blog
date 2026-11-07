@@ -32,9 +32,7 @@ window.Store = (function () {
         DAILY_POSTCARD_CACHE: 'dailyPostcardCache',
         // 草莓钱包
         BERRY_BALANCE: 'berryBalance',
-        BERRY_SPENT: 'berrySpent',
         BERRY_OWNED: 'berryOwned',            // 已拥有的收集物（json 数组）
-        BERRY_PENDING_CREDIT: 'berryPendingCredit',
         // 心门 / 水晶心
         HEART_DOOR_LIT: 'heartDoorLit',       // 已点亮颗数（int）
         HEART_DOOR_SPLIT: 'heartDoorSplit',   // 分裂动画已播过（flag）
@@ -42,8 +40,8 @@ window.Store = (function () {
         HEART_CRYSTAL_DAY: 'heartCrystalDay', // 当日首颗（json 对象）
         CRYSTAL_HEART: 'crystalHeart',        // 最近一颗（json 对象）
         // 镜之房间
-        MIRROR_BROKEN: 'mirrorBroken',        // 镜子破碎（flag，DOM 回退模式才写）
-        MIRROR_REROLL: 'mirrorReroll',        // 玩家提过 dream 模式 → 下次进梦重掷
+        MIRROR_BROKEN: 'mirrorBroken',        // 镜子真正碎裂过（flag，不可逆；canvas/DOM 两种模式都写）
+        DREAM_DASH: 'dreamDash',              // 梦块（果冻）已激活（flag，不可逆）
         // dream 场景的鸟群
         DREAM_BIRD_TIP: 'dreamBirdTip',       // 金色鸟的首次操作引导已看过（flag，设备级）
         // Badeline

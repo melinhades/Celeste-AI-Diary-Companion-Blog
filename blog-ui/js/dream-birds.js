@@ -311,20 +311,17 @@
         ctx.globalAlpha = 1;
     }
 
-    /* ================= 站位：雪脊上「篝火右侧 → 心门左侧」的那段雪桥 ================= */
-    // 篝火宽度是 clamp(...)，小屏时相对更宽，直接写百分比会撞上火焰；
-    // 每次布局都按 #dsFire 的实测右缘算可用区间。slot 0..1 在这个区间里归一。
-    var SLOT_LO = 0.60, SLOT_HI = 0.845;
+    /* ================= 站位：雪脊左段（Madeline 左侧的雪坡） ================= */
+    // 左界给雪墙/屏幕边留 5%；右界按 #dsMadeline 的实测左缘再回收 4%——
+    // 所有鸟都落在 Madeline 左边，不写死某个屏幕宽度的 x 值。
+    var SLOT_LO = 0.05, SLOT_HI = 0.34;
     function refreshSlots() {
         var lr = left.getBoundingClientRect(), W = lr.width || 1;
-        var fire = document.getElementById('dsFire');
-        var fr = fire ? fire.getBoundingClientRect() : null;
-        var fireR = (fr && fr.width > 1) ? (fr.right - lr.left) / W : 0.60;
-        // 右界让开贴右缘的心门（宽 21.9vh）：窄屏心门能吃掉半个画面，写死 0.845 会钻到门底下
-        var door = document.getElementById('heartDoor');
-        var doorW = (door && door.offsetWidth > 1) ? door.offsetWidth / W : 0.14;
-        SLOT_HI = Math.min(0.86, Math.max(fireR + 0.06, 0.97 - doorW));
-        SLOT_LO = Math.min(SLOT_HI - 0.04, Math.max(0.54, fireR + 0.012));
+        var mad = document.getElementById('dsMadeline');
+        var mr = mad ? mad.getBoundingClientRect() : null;
+        var madL = (mr && mr.width > 1) ? (mr.left - lr.left) / W : 0.39;
+        SLOT_HI = Math.max(0.16, Math.min(0.34, madL - 0.04));
+        SLOT_LO = Math.max(0.03, Math.min(0.05, SLOT_HI - 0.10));
     }
     function slotX(slot) { return (SLOT_LO + (SLOT_HI - SLOT_LO) * slot) * CW; }
 
@@ -340,7 +337,7 @@
         this.tint = null; this.tintMode = null;
         this.sprite.onFrame = function (anim, frame) {
             if ((anim === 'peck' || anim === 'peckRare') && frame === 6) {
-                // 原版每只鸟的 OnFrameChange 都播 bird_peck；页面里三只鸟可能同时啄，
+                // 原版每只鸟的 OnFrameChange 都播 bird_peck；页面里两只大鸟可能同时啄，
                 // 全局 1.6s 节流一下，避免糊成一片（纯音量层面的偏差）
                 if (clock - lastPeckSfx > 1.6) { lastPeckSfx = clock; sfx('bird_peck'); }
             }
@@ -454,9 +451,10 @@
     };
 
     /* ================= 巡航鸟（BirdPath / hover 口径） ================= */
-    // 比例坐标的闭环航路：沿 SimpleCurve 一段段飞，落点停 0.4~1.2s 悬停
+    // 比例坐标的闭环航路：沿 SimpleCurve 一段段飞，落点停 0.4~1.2s 悬停。
+    // x 全部落在 Madeline 左侧的雪坡空域（0.09~0.32），不依赖具体屏幕宽度。
     var FLY_NODES = [
-        [0.56, 0.60], [0.70, 0.46], [0.84, 0.55], [0.78, 0.66], [0.62, 0.68]
+        [0.09, 0.60], [0.20, 0.46], [0.31, 0.55], [0.27, 0.66], [0.13, 0.68]
     ];
     function Flyer(idx) {
         this.idx = idx;
@@ -526,17 +524,18 @@
     function buildBirds() {
         if (bigs.length) return;
         refreshSlots();
-        // 三只大鸟沿「篝火右缘 → 心门左缘」的雪桥排开：金鸟贴着篝火、面向 Madeline
-        // （引导时朝她啄地），另两只一前一后站开。slot 0..1 在这段雪桥上归一，
-        // dy 是相对雪线的像素偏移，用来做出一点前后层次。
+        // 两只大鸟站在 Madeline 左侧的雪坡上：金鸟最左、面向右侧的她（引导时朝她啄地）。
+        // 蓝鸟保留 slot 0.88 / dy +5 这只：它站在左段最右端、离 Madeline 最近，正好补上
+        // 雪坡与 Madeline 之间的空当；dy +5 让它略偏前景，和金鸟的 dy=0 形成前后层次。
+        // （被删的那只只差站位/深度：slot 0.44、dy -6；两只的动画节奏与延迟完全相同，
+        //   不涉及轨迹插值，所以纯粹按画面平衡取舍。）
         gold = new BigBird(0.10, 0);
         gold.gold = true;
         gold.tint = '#ffcf4d'; gold.tintMode = 'gold';
-        gold.facing = -1;                       // 面向 Madeline
-        var b1 = new BigBird(0.44, -6);
-        var b2 = new BigBird(0.88, 5);
-        b1.facing = -1; b2.facing = 1;
-        bigs.push(gold, b1, b2);
+        gold.facing = 1;                        // 站在 Madeline 左边，面向她（朝右）
+        var blue = new BigBird(0.88, 5);
+        blue.facing = 1;
+        bigs.push(gold, blue);
 
         // 5 只小鸟错开 dy：单层 canvas 也有一点纵深，不像贴纸排排站
         var spots = [[0.24, 9], [0.36, -13], [0.60, 7], [0.72, -9], [0.97, 3]];
@@ -595,7 +594,7 @@
     function* tutorialScript() {
         var g = gold;
         if (!g) return;
-        g.facing = -1;
+        g.facing = 1;                            // 鸟在左、Madeline 在右：引导全程朝右
         yield 0.7;
         // Caw：croak 播到第 9 帧才出声
         g.sprite.set('croak', true);
@@ -714,7 +713,7 @@
             bigs[i].sprite.set('idle', true);
             bigs[i].rot = 0; bigs[i].sx = 1; bigs[i].sy = 1;
         }
-        gold.facing = -1;
+        gold.facing = 1;
         for (var j = 0; j < flutters.length; j++) {
             var fb = flutters[j];
             fb.gone = false; fb.fly = null; fb.hop = null;

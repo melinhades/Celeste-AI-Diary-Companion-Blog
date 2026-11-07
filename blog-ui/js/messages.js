@@ -191,6 +191,7 @@
                 const items = ref([]);
                 const typingName = ref(null);
                 let seq = 0;
+                let lastCrawlAt = 0;   // Badeline 爬出气泡的冷却，避免表情包连发时刷屏
                 let myUserId = null;
                 let myNickname = null;
                 const seenIds = {};   // 简单去重（历史和实时推送可能重叠）
@@ -318,6 +319,23 @@
                         it.hue = hashHue(m.userId);
                     }
                     items.value.push(it);
+                    // 聊天室里出现 Badeline（她的表情包 / 署名消息）→ 从这条气泡里爬出来
+                    if (!quiet && window.BadelineCrawlOut &&
+                        (/badeline|暗面琳/i.test(it.name || '') || /\[bade:[a-zA-Z]+\]/.test(m.content || '')) &&
+                        Date.now() - lastCrawlAt > 1600) {
+                        lastCrawlAt = Date.now();
+                        const ik = it.ik;
+                        nextTick(() => setTimeout(() => {
+                            const row = document.querySelector('.chat-msg[data-key="' + ik + '"]');
+                            const bub = row && row.querySelector('.bubble');
+                            if (!bub) return;
+                            window.BadelineCrawlOut.play({
+                                box: bub,
+                                portrait: row.querySelector('.av:not(.placeholder)'),
+                                scaleRef: document.getElementById('chatLog') || bub
+                            });
+                        }, 220));
+                    }
                     if (!quiet) scheduleFlush();
                 }
 
