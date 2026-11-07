@@ -9,8 +9,6 @@ public interface SysUserService {
 
     SysUser findUserById(String id);
 
-    SysUser findUser(String account, String password);
-
     Result findUserByToken(String token);
     //根据账号查找用户
     SysUser findUserByAccount(String account);
@@ -21,9 +19,6 @@ public interface SysUserService {
 
     /** 查询当前登录用户的草莓余额 */
     Result berryBalance(String token);
-
-    /** 原子消费草莓（delta 必须为负，余额不允许为负）；正向变动只能由服务端业务发放 */
-    Result adjustBerry(String token, Integer delta);
 
     /** 新日记保存成功后的服务端权威奖励（+1 草莓，仅内部调用） */
     void grantDiaryBerry(String userId);

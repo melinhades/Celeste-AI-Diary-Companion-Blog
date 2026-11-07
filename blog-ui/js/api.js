@@ -45,7 +45,7 @@ function showToast(msg, type) {
 function berryBalance() {
     if (localStorage.getItem('berryBalance') === null) {
         // 首次访问（还没从后端同步过）：用旧本地口径兜底，syncBerryBalance 后会被后端值覆盖
-        const init = Math.max(parseInt(localStorage.getItem('diarySaveCount') || '0') - parseInt(localStorage.getItem('berrySpent') || '0'), 0);
+        const init = Math.max(parseInt(localStorage.getItem('diarySaveCount') || '0'), 0);
         localStorage.setItem('berryBalance', String(init));
     }
     return parseInt(localStorage.getItem('berryBalance') || '0');
@@ -65,36 +65,6 @@ function syncBerryBalance() {
     });
 }
 /**
- * 草莓消费（只发送负向 delta）。
- * 已登录：先乐观更新本地 → POST 后端 → 用返回的权威值对账，失败回滚；
- * 未登录：只写本地（保留本地展示口径，不写服务端）。
- */
-function spendBerries(n) {
-    n = Math.abs(Number(n) || 0);
-    if (!n) return Promise.resolve(false);
-    const token = localStorage.getItem('token');
-    const prev = berryBalance();
-    const optimistic = Math.max(prev - n, 0);
-    localStorage.setItem('berryBalance', String(optimistic));
-    emitBerriesChange(optimistic);
-    if (!token) return Promise.resolve(false);
-    return api('/users/berry', 'POST', { delta: -n }).then(res => {
-        if (res.success && res.data && typeof res.data.berry === 'number') {
-            // 权威值与本地乐观值不一致时对账（他端变动/服务端扣减兜底等）
-            if (res.data.berry !== berryBalance()) {
-                localStorage.setItem('berryBalance', String(res.data.berry));
-                emitBerriesChange(res.data.berry);
-            }
-            return true;
-        }
-        // 后端写失败（含余额不足 success=false）：回滚乐观更新
-        localStorage.setItem('berryBalance', String(prev));
-        emitBerriesChange(prev);
-        return false;
-    });
-}
-
-/**
  * 领取草莓籽奖励：服务端按 6 小时冷却发放。
  * granted=false 表示冷却期内已领过，同样用返回的权威余额刷新本地，不报错。
  */
@@ -113,18 +83,15 @@ function claimSeedBerry() {
 }
 window.claimSeedBerry = claimSeedBerry;
 
-// 安全修复：公开接口不再接受正向 delta，清理旧客户端攒下的待补账余额
-localStorage.removeItem('berryPendingCredit');
-
 // ===== 用户级本地状态隔离 =====
 // 这些 key 是「某个账号的」数据，存在全局 localStorage 里，换账号不清理就会出现
 // 「登录 test 却看到上个账号的明信片署名 / 已点亮的心门」这类串号。
 const USER_SCOPED_KEYS = [
-    'badelineChatLog', 'berryBalance', 'berryOwned', 'berryPendingCredit', 'berrySpent',
+    'badelineChatLog', 'berryBalance', 'berryOwned',
     'crystalHeart', 'dailyPostcardCache', 'diaryChatSessionId', 'diaryFarewell',
     'diaryLastSaveDate', 'diarySaveCount', 'diarySnapshots', 'diaryStreak', 'diaryUnsaved',
     'heartCrystalDay', 'heartDoorHearts', 'heartDoorLit', 'heartDoorSplit',
-    'lastEmotion', 'madeline_emotion', 'mirrorBroken', 'mirrorReroll',
+    'lastEmotion', 'madeline_emotion', 'mirrorBroken', 'dreamDash',
     'pmLastVisit', 'postcardDate'
 ];
 /** 纯展示/缓存类：登出即作废，避免下一个账号看到上一个人的明信片 */

@@ -60,15 +60,6 @@ public class SysUserServiceImpl implements SysUserService {
     }
 
     @Override
-    public SysUser findUser(String account, String password) {
-        LambdaQueryWrapper<SysUser> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(SysUser::getAccount, account);
-        queryWrapper.eq(SysUser::getPassword, password);
-        queryWrapper.last("limit 1");
-        return sysUserMapper.selectOne(queryWrapper);
-    }
-
-    @Override
     public Result findUserByToken(String token) {
         SysUser sysUser = tokenService.checkToken(token);
         if (sysUser == null) {
@@ -112,40 +103,6 @@ public class SysUserServiceImpl implements SysUserService {
         int berry = fresh.getBerry() == null ? 0 : fresh.getBerry();
         java.util.Map<String, Object> data = new java.util.HashMap<>();
         data.put("berry", berry);
-        return Result.success(data);
-    }
-
-    @Override
-    public Result adjustBerry(String token, Integer delta) {
-        SysUser loginUser = tokenService.checkToken(token);
-        if (loginUser == null) {
-            return Result.fail(ErrorCode.TOKEN_ERROR.getCode(), ErrorCode.TOKEN_ERROR.getMsg());
-        }
-        if (delta == null || delta == 0) {
-            return Result.fail(400, "delta 非法");
-        }
-        if (delta > 0) {
-            return Result.fail(403, "草莓只能通过服务端业务奖励获得");
-        }
-        if (delta < -100000) {
-            return Result.fail(400, "delta 超出范围");
-        }
-        int spend = -delta; // 已保证 delta >= -100000，不会溢出
-        // 数据库原子消费，带余额充足条件，保证余额永不为负
-        LambdaUpdateWrapper<SysUser> uw = new LambdaUpdateWrapper<>();
-        uw.eq(SysUser::getId, loginUser.getId());
-        uw.ge(SysUser::getBerry, spend);
-        uw.setSql("berry = COALESCE(berry, 0) - " + spend);
-        int rows = sysUserMapper.update(null, uw);
-        if (rows == 0) {
-            return Result.fail(400, "草莓余额不足");
-        }
-
-        SysUser fresh = sysUserMapper.selectById(loginUser.getId());
-        tokenService.refreshUserCache(token, fresh);
-        java.util.Map<String, Object> data = new java.util.HashMap<>();
-        Integer berry = fresh.getBerry();
-        data.put("berry", berry == null ? Integer.valueOf(0) : berry);
         return Result.success(data);
     }
 
