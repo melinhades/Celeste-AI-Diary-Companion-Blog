@@ -52,11 +52,11 @@ public class PptImageService {
 
     /**
      * 唯一一处 provider 切换点：
-     * POLLINATIONS = Pollinations 新 API（默认，吃参考图，人物跨页一致；需要 sk_ key，按张扣 pollen）
-     * KOLORS       = 硅基流动 Kolors（保留，免费、国内直连、可关显式水印，但不吃参考图）
+     * KOLORS       = 硅基流动 Kolors（默认：按张免费、国内直连、实测可出 1344×768；但不吃参考图，每张人物各自独立）
+     * POLLINATIONS = Pollinations 新 API（保留：吃参考图，人物跨页一致；需要 sk_ key，按张扣 pollen）
      * BIGMODEL     = 智谱 CogView-3-Flash（保留的旧实现，免费档会强制加「AI生成」水印）
      */
-    private static final ImageProvider IMAGE_PROVIDER = ImageProvider.POLLINATIONS;
+    private static final ImageProvider IMAGE_PROVIDER = ImageProvider.KOLORS;
 
     private static final String KOLORS_BASE_URL = "https://api.siliconflow.cn/v1";
     private static final String KOLORS_MODEL = "Kwai-Kolors/Kolors";
@@ -201,17 +201,18 @@ public class PptImageService {
     }
 
     private String resolveKey() {
-        String k = imageApiKey == null ? "" : imageApiKey.trim();
-        if (isValidKey(k)) return k;
-
         if (IMAGE_PROVIDER == ImageProvider.KOLORS) {
-            // 复用项目已有的硅基流动 Key：dev/local 的 siliconflow.api-key，线上通常由 AI_FAST_API_KEY 注入
+            // 只认硅基流动自己的 Key：dev/local 的 siliconflow.api-key，线上通常由 AI_FAST_API_KEY 注入。
+            // 不能回落到 ai.image-api-key —— 那个现在是 Pollinations 的 sk_，发给硅基流动会直接 401。
             String sf = siliconFlowKey == null ? "" : siliconFlowKey.trim();
             if (isValidKey(sf)) return sf;
             String fast = fastApiKey == null ? "" : fastApiKey.trim();
             if (isValidKey(fast)) return fast;
             return null;
         }
+
+        String k = imageApiKey == null ? "" : imageApiKey.trim();
+        if (isValidKey(k)) return k;
 
         // 智谱：仅当对话 base-url 也指向智谱时才复用对话 Key，避免把别的厂商 Key 发过去
         String chatKey = chatApiKey == null ? "" : chatApiKey.trim();
@@ -228,7 +229,8 @@ public class PptImageService {
     private String resolveBaseUrl() {
         String v = imageBaseUrl == null ? "" : imageBaseUrl.trim();
         if (IMAGE_PROVIDER == ImageProvider.KOLORS) {
-            return v.isEmpty() || v.contains("bigmodel.cn") ? KOLORS_BASE_URL : v;
+            // 忽略智谱/Pollinations 的地址，避免切 provider 时把请求发到别家
+            return v.isEmpty() || v.contains("bigmodel.cn") || v.contains("pollinations") ? KOLORS_BASE_URL : v;
         }
         if (IMAGE_PROVIDER == ImageProvider.POLLINATIONS) {
             return v.isEmpty() || v.contains("siliconflow") || v.contains("bigmodel.cn")
@@ -240,7 +242,9 @@ public class PptImageService {
     private String resolveImageModel() {
         String v = imageModel == null ? "" : imageModel.trim();
         if (IMAGE_PROVIDER == ImageProvider.KOLORS) {
-            return v.isEmpty() || v.toLowerCase().contains("cogview") ? KOLORS_MODEL : v;
+            // 忽略智谱/Pollinations 的模型名
+            return v.isEmpty() || v.toLowerCase().contains("cogview") || v.toLowerCase().contains("flux")
+                    ? KOLORS_MODEL : v;
         }
         if (IMAGE_PROVIDER == ImageProvider.POLLINATIONS) {
             return v.isEmpty() || v.toLowerCase().contains("kolors") || v.toLowerCase().contains("cogview")
@@ -387,7 +391,11 @@ public class PptImageService {
         }
     }
 
-    /** 硅基流动 Kolors：请求体用 image_size；X-Enable-Watermark: 0 关闭显式「AI生成」水印；响应 images[0].url */
+    /**
+     * 硅基流动 Kolors：请求体用 image_size（实测 1344x768 原样输出，不是固定方图）；
+     * X-Enable-Watermark: 0 关闭显式「AI生成」水印；响应 images[0].url 是 S3 临时地址（Expires=3600，1 小时），
+     * 所以必须由调用方立刻下载落库。Kolors 不支持参考图入参，同一 prompt 多张会得到不同的人。
+     */
     private String callKolors(String key, String prompt) {
         try {
             JSONObject body = new JSONObject();
@@ -474,9 +482,8 @@ public class PptImageService {
                 return null;
             }
 
-            String contentType = resp.getHeaders().getContentType() != null
-                    ? resp.getHeaders().getContentType().toString()
-                    : null;
+            MediaType contentTypeHeader = resp.getHeaders().getContentType();
+            String contentType = contentTypeHeader != null ? contentTypeHeader.toString() : null;
             StoredImage stored = fitForStorage(bytes, resolveImageMime(bytes, contentType));
             if (stored == null) {
                 log.warn("生成图片超过 {} 字节且压缩失败，跳过入库", MAX_STORE_BYTES);
