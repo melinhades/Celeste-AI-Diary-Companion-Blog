@@ -4,7 +4,7 @@
    数据来源：Content/Maps/LostLevels.bin
      · 瓦片：solids（m=lostlevels · n=scifi）、bg（e=bgLostLevels）
      · 装饰：bgdecals / fgdecals（10-farewell 的植物、碎石、珊瑚、裂纹、故障块）
-     · 实体：wavedashmachine（咖啡厅本体）、spikes、floatingDebris、dreamBlock
+     · 实体：wavedashmachine（咖啡厅本体）、floatingDebris、dreamBlock
      · 背景：/Map/Style 的 bright 组（见 internet_cafe-2.js）
    机制来源：REA 反编译 Celeste.dll 的 WaveDashTutorialMachine
      · playerInside = X-37 < player.X < X+46 且 player.Y > Y-58（或与 frontWall 相交）
@@ -58,7 +58,7 @@
   //       中心叠 'bumpBlockCenterFire'（Sprites.xml：objects/BumpBlockNew/fire_center，7 帧 0.08s）
   //       碎裂 / 重生的碎石：'objects/bumpblocknew/fire_rubble'（4 帧，BreakDebris / RespawnDebris）
   // 尺寸：原作由地图 EntityData.Width/Height 决定；本场景自选 16×16（两格），
-  //       放在最右侧那段空旷场景里（x 808..824，y 96..112），正好落在两枚悬空刺（x 784 / x 832）之间的空域
+  //       放在最右侧那段空旷场景里（x 808..824，y 96..112）的空域
   var JELLY = {
     x: 808, y: 96, w: 16, h: 16, startX: 808, startY: 96,
     state: 0, iceMode: false, iceModeNext: false,
@@ -216,10 +216,8 @@
           .then(function (im) { IMG.noise[idx] = im; }));
       })(q);
     }
-    // 杂物 / 尖刺
+    // 杂物
     jobs.push(put('debris', BASE + 'scenery/debris.png'));
-    jobs.push(put('spikeUp', BASE + 'danger/spikes/default_up00.png'));
-    jobs.push(put('spikeLeft', BASE + 'danger/spikes/default_left00.png'));
     // 序章 IntroCar 四件套（scenery/car/*）
     jobs.push(put('carBody', BASE + 'scenery/car/body.png'));
     jobs.push(put('carWheels', BASE + 'scenery/car/wheels.png'));
@@ -246,6 +244,14 @@
     // 梦境方块粒子：objects/dreamblock/particles.png（21×7，三片 7×7 子图，索引 0/1/2）
     // 原作 .ctor 取子图 (14,0)、(7,0)、(0,0)、(7,0)，即 particleTextures = [x14, x7, x0, x7]
     jobs.push(put('dreamParticles', BASE + 'objects/dreamblock/particles.png'));
+    // 尘土粒子：ParticleTypes.Dust 的 SourceChooser = particles/smoke0..3（8×8）
+    IMG.smoke = [];
+    for (var sm = 0; sm < 4; sm++) {
+      (function (idx) {
+        jobs.push(loadImage(BASE + 'particles/smoke' + idx + '.png')
+          .then(function (im) { IMG.smoke[idx] = im; }));
+      })(sm);
+    }
     // 装饰（bg 在前、fg 在玩家之前之后）
     MAP.bgDecals.forEach(function (d) {
       if (!IMG['decal:' + d[0]]) jobs.push(put('decal:' + d[0], BASE + 'decals/' + d[0]));
@@ -585,14 +591,9 @@
   }
   // DreamDashCheck 专用：「非 Solid 非 DreamBlock」的可碰撞实体
   // （原作 CollideCheck<Solid, DreamBlock> 是排除语义——瓦片/果冻/前墙/梦境块全被跳过，
-  //   本场景只剩尖刺与车的 JumpThru 碰撞盒参与；dreamblock 周围没有这些实体，实际恒 false）
+  //   本场景只剩车的 JumpThru 碰撞盒参与；dreamblock 周围没有这些实体，实际恒 false）
   function dreamForeign(x, feetY) {
     var x0 = x - 4, x1 = x + 4, y0 = feetY - 11, y1 = feetY;
-    for (var i = 0; i < MAP.spikes.length; i++) {
-      var s = MAP.spikes[i];
-      var w = s.w || 8, h = s.h || 8;
-      if (x1 > s.x && x0 < s.x + w && y1 > s.y && y0 < s.y + h) return true;
-    }
     // 车的两段 JumpThru 碰撞盒：Hitbox(25,4,-15,-17) + Hitbox(19,4,8,-11)
     if (x1 > CAR.x - 15 && x0 < CAR.x + 10 && y1 > CAR.y - 17 && y0 < CAR.y - 13) return true;
     if (x1 > CAR.x + 8 && x0 < CAR.x + 27 && y1 > CAR.y - 11 && y0 < CAR.y - 7) return true;
@@ -1037,46 +1038,44 @@
   // ===== 死亡 / 重生 =====
   var dust = [], time = 0, flash = 0, deathTimer = 0;
   // angle 省略 = 向上全向爆散；传入弧度 = 沿该方向的锥形（原作 Dust.Burst(pos, angle, n)）
+  // 原作 Dust.Burst → ParticleTypes.Dust（ParticleTypes.Load IL）：
+  //   SourceChooser = particles/smoke0..3（8×8）· Color = White · LifeMin/Max = 0.3/0.5
+  //   Size = 0.7 ± 0.2 · RotationMode = 1（随机旋转）· ScaleOut = 1 · Acceleration = (0,4)
   function spawnDust(x, y, n, angle) {
     var hasAngle = typeof angle === 'number';
     for (var i = 0; i < n; i++) {
       var a = hasAngle ? angle + (Math.random() - 0.5) * 0.8
                        : -Math.PI / 2 + (Math.random() - 0.5) * 1.9;
       var sp = 18 + Math.random() * 34;
+      var life = 0.3 + Math.random() * 0.2;
       dust.push({
         x: x, y: y - 1, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.6,
-        life: 0.3 + Math.random() * 0.35, ttl: 0.65
+        life: life, ttl: life,
+        tex: (Math.random() * 4) | 0,
+        rot: Math.random() * DREAM_TAU,
+        size: 0.7 + (Math.random() - 0.5) * 0.2
       });
     }
   }
-  // Displacement.AddBurst 近似：
-  //   AddBurst(pos, strength, dir, radius, duration) 在原作里是把 pos 附近像素沿速度方向推开，
-  //   再由 AddBurst(...).WorldClipCollider = dreamBlock.Collider / WorldClipPadding = 2 裁到块体内。
-  // 引擎无 shader，用「沿速度拉伸的白色环 + 块体裁剪」近似，方向与裁剪半径严格对齐 IL：
-  //   · DreamDashUpdate 块内 OnInterval(.04) AddBurst(Center, 0.3, 0, 40, 1)
-  //   · DreamBlock.FootstepRipple 落地 AddBurst(Position, 0.5, 0, 40, 1)
-  function spawnRipple(x, y, radius, strength, angle, clipBlock) {
+  // Displacement.AddBurst 近似（引擎无 shader，用白色扩张环代替像素位移）：
+  //   AddBurst(pos, strength, direction, radius, duration)
+  //   · DreamDashUpdate 块内 OnInterval(.04) AddBurst(Center, 0.3, 0, 40, 1)，WorldClipCollider = 块体（padding 0）
+  //   · DreamBlock.FootstepRipple 落地 AddBurst(Position, 0.5, 0, 40, 1)，WorldClipCollider = 块体 + WorldClipPadding = 1
+  //   direction = 0 → 各向同性（不按速度旋转 / 拉伸）；duration = 1
+  function spawnRipple(x, y, radius, strength, clipBlock, pad) {
     dreamRipples.push({
-      x: x, y: y, r1: radius, life: 0.25, max: 0.25,
-      strength: strength, angle: angle || 0, clip: clipBlock || null
+      x: x, y: y, r1: radius, life: 1, max: 1,
+      strength: strength, clip: clipBlock || null, pad: pad || 0
     });
   }
   // quiet=true：开局定位用，不放白闪/冻结（否则一进场先白一下再卡 0.35s）
   function respawn(quiet) {
     m.x = SPAWN.x; m.y = SPAWN.y; m.vx = 0; m.vy = 0;
     feetPrev = SPAWN.y;
-    m.onGround = true; m.ducking = false; m.fastJump = false;
-    m.scaleX = m.scaleY = 1; m.maxFall = 160; m.highestAirY = 0;
-    m.varJumpTimer = 0; m.jumpGraceTimer = 0; m.jumpBufferTimer = 0;
-    m.setState(CelesteCharacter.ST.Normal);
-    m.dashes = m.maxDashes; m.stamina = 110; m.freezeTimer = 0;
     m.dashTime = 0; m.dashTrail.length = 0;
     m.wallSlideDir = 0; m.wallSlideTimer = 1.2; m.dashAttackTimer = 0;
     m.bodySolidFn = bodySolid;
     dreamTravelStop();   // 重生时停掉可能残留的 dreamblock_travel 循环
-    if (m.sprite) m.sprite.play('idle');
-    m.hair.reset(SPAWN.x, SPAWN.y, 1);
-    snapCam();
     dust.length = 0;
     if (quiet) {
       deathTimer = 0;
@@ -1089,15 +1088,6 @@
   function die() {
     if (deathTimer > 0 || leaving) return;
     respawn();
-  }
-  function touchingSpikes() {
-    var x0 = m.x - 4, x1 = m.x + 4, y0 = m.y - 11, y1 = m.y;
-    for (var i = 0; i < MAP.spikes.length; i++) {
-      var s = MAP.spikes[i];
-      var w = s.w || 8, h = s.h || 8;
-      if (x1 > s.x + 1 && x0 < s.x + w - 1 && y1 > s.y + 1 && y0 < s.y + h - 1) return true;
-    }
-    return false;
   }
 
   // ===== 进入 berryOS =====
@@ -1473,40 +1463,28 @@
     ctx.globalAlpha = 1;
   }
 
-  function drawSpikes() {
-    for (var i = 0; i < MAP.spikes.length; i++) {
-      var s = MAP.spikes[i];
-      var img = s.dir === 'up' ? IMG.spikeUp : IMG.spikeLeft;
-      if (!img) continue;
-      var w = s.w || 8, h = s.h || 8;
-      if (!cullRect(s.x - 1, s.y - 1, w + 2, h + 2)) continue;
-      var count = s.dir === 'up' ? Math.max(1, Math.round(w / TILE)) : Math.max(1, Math.round(h / TILE));
-      for (var c = 0; c < count; c++) {
-        if (s.dir === 'up') {
-          var p = toScreen({ x: s.x + c * TILE, y: s.y });
-          ctx.drawImage(img, Math.round(p.x), Math.round(p.y + (8 - img.height) * Z),
-            Math.round(img.width * Z), Math.round(img.height * Z));
-        } else {
-          var p2 = toScreen({ x: s.x, y: s.y + c * TILE });
-          ctx.drawImage(img, Math.round(p2.x + (8 - img.width) * Z), Math.round(p2.y),
-            Math.round(img.width * Z), Math.round(img.height * Z));
-        }
-      }
-    }
-  }
-
   function drawDust() {
-    ctx.fillStyle = '#c6ecff';
+    var texs = IMG.smoke;
+    if (!texs || !texs.length) return;
     for (var i = 0; i < dust.length; i++) {
       var d = dust[i];
+      var tex = texs[d.tex];
+      if (!tex) continue;
       var p = toScreen(d);
-      ctx.globalAlpha = Math.max(0, Math.min(1, d.life / 0.4));
-      ctx.fillRect(Math.round(p.x), Math.round(p.y), 3, 3);
+      var t = 1 - d.life / d.ttl;                       // 0 → 1
+      var scale = d.size * (1 + t * 0.5) * Z;           // ScaleOut：随寿命张开
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(d.rot);                                // RotationMode = 1（随机朝向）
+      ctx.globalAlpha = Math.max(0, Math.min(1, 1 - t)) * 0.8;
+      ctx.drawImage(tex, -tex.width * scale / 2, -tex.height * scale / 2,
+        tex.width * scale, tex.height * scale);
+      ctx.restore();
     }
     ctx.globalAlpha = 1;
   }
 
-  // Displacement.AddBurst 的近似：沿速度拉伸的白色环，裁剪到梦境块体内（WorldClipPadding = 2）
+  // Displacement.AddBurst 的近似：各向同性白色扩张环，裁剪到梦境块体内（WorldClipPadding）
   function drawDreamRipples() {
     if (!dreamRipples.length) return;
     ctx.save();
@@ -1519,17 +1497,14 @@
       var r = (2 + (rp.r1 - 2) * t) * Z;
       ctx.save();
       if (rp.clip) {
-        var c0 = toScreen({ x: rp.clip.x + 2, y: rp.clip.y + 2 });
+        var c0 = toScreen({ x: rp.clip.x + rp.pad, y: rp.clip.y + rp.pad });
         ctx.beginPath();
-        ctx.rect(c0.x, c0.y, (rp.clip.w - 4) * Z, (rp.clip.h - 4) * Z);
+        ctx.rect(c0.x, c0.y, (rp.clip.w - rp.pad * 2) * Z, (rp.clip.h - rp.pad * 2) * Z);
         ctx.clip();
       }
-      ctx.translate(p.x, p.y);
-      if (rp.angle) ctx.rotate(rp.angle);
-      ctx.scale(1.7, 1);                       // 沿速度方向拉伸，形成"穿行气流"
       ctx.globalAlpha = rp.strength * (1 - t);
       ctx.beginPath();
-      ctx.arc(0, 0, r, 0, DREAM_TAU);
+      ctx.arc(p.x, p.y, r, 0, DREAM_TAU);
       ctx.stroke();
       ctx.restore();
     }
@@ -1566,6 +1541,8 @@
   }
 
   function render() {
+    // Level.Shake 是相机位移：渲染期临时叠加，避免影响 update/鼠标命中
+    var camX = cam.x, camY = cam.y;
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
     ctx.fillStyle = '#050505';
@@ -1577,7 +1554,6 @@
     drawTiles(spriteM, 'm');                     // 地面 / 平台（m=lostlevels）
     drawTiles(spriteN, 'n');                     // scifi 段（n=scifi）
     drawDebris();
-    drawSpikes();
     drawBarrier(CAR.x + 32, null);               // depth -10：白栏杆（玩家身后）
     drawJelly();                                 // 果冻块体（玩家之前）
     drawMachineSprite(IMG.back);                 // 咖啡厅内部（建筑背层）
@@ -1596,6 +1572,7 @@
     for (var j = 0; j < MAP.fgDecals.length; j++) drawDecal(MAP.fgDecals[j]);
     drawCafeFront();                             // 前墙 / 霓虹（进店后淡出）
     sky.renderFg(cam.x, cam.y);                  // purplesunset additive .25
+    cam.x = camX; cam.y = camY;
     if (flash > 0) {
       ctx.globalAlpha = Math.min(1, flash);
       ctx.fillStyle = '#eaf6ff';
@@ -1648,8 +1625,8 @@
       dreamRippleTimer -= dt;
       if (dreamRippleTimer <= 0) {
         dreamRippleTimer = 0.04;
-        // 原作 pos = Center、WorldClipCollider = dreamBlock.Collider
-        spawnRipple(m.x, m.y - 5.5, 40, 0.3, Math.atan2(m.vy, m.vx), m.dreamBlock);
+        // 原作 pos = Center、WorldClipCollider = dreamBlock.Collider（padding 0）
+        spawnRipple(m.x, m.y - 5.5, 40, 0.3, m.dreamBlock, 0);
       }
     } else {
       dreamRippleTimer = 0;
@@ -1671,7 +1648,7 @@
       updateCam(dt);
     }
 
-    if (touchingSpikes() || m.y > ROOM.h + 12) die();
+    if (m.y > ROOM.h + 12) die();
 
     for (var i = dust.length - 1; i >= 0; i--) {
       var d = dust[i];
@@ -1748,7 +1725,9 @@
     }
     if (vy >= 80) spawnDust(m.x, m.y, 8);
     // 原作 DreamBlock.FootstepRipple(Position)：落地时脚下是 DreamBlock 顶面 → AddBurst(0.5, 0, 40, 1)
-    if (dreamBlockTopAt(m.x, m.y)) spawnRipple(m.x, m.y, 40, 0.5);
+    // + WorldClipCollider = 块体、WorldClipPadding = 1
+    var rippleBlock = dreamBlockTopAt(m.x, m.y);
+    if (rippleBlock) spawnRipple(m.x, m.y, 40, 0.5, rippleBlock, 1);
   };
 
   respawn(true);
