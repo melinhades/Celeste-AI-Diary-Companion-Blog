@@ -240,8 +240,9 @@
     </div>
   </div>
 
+  <script src="js/lib/sfx.js?v=20261107a"></script>
   <script src="js/celeste-hair.js"></script>
-  <script src="js/celeste-character.js?v=20261103a"></script>
+  <script src="js/celeste-character.js?v=20261107d"></script>
   <script src="js/bird-motion.js?v=20261031a"></script>
   <script src="js/page-loading.js?v=20261106d"></script>
   <script>
@@ -333,14 +334,13 @@
       // jumpThru 的 texture 全是 'default' → 第九章 AreaData.Jumpthru = "wood"
       put('lost', BASE + 'tilesets/lostlevels.png');
       put('jt', BASE + 'objects/jumpthru/wood.png');
-      // 聊天互动素材：草莓 wings 10 帧（flap）· 水母 glider idle 10 / held 1 / fall 3 / fallLoop 2 / death 8
+      // 聊天互动素材：草莓 wings 10 帧（flap）· 水母 glider idle 10 / held 1 / fall 3 / fallLoop 2
       // · 金羽毛 idle/flash 各 21 帧 · 星飞球体 starFly00 · 变形 startStarFly 4 帧
       for (let i = 0; i < 10; i++) put('berry' + i, BASE + 'collectables/strawberry/wings0' + i + '.png');
       for (let i = 0; i < 10; i++) put('jelly' + i, BASE + 'objects/glider/idle' + i + '.png');
       put('jellyHeld', BASE + 'objects/glider/held0.png');
       for (let i = 0; i < 3; i++) put('jellyFall' + i, BASE + 'objects/glider/fall' + i + '.png');
       for (let i = 0; i < 2; i++) put('jellyFallLoop' + i, BASE + 'objects/glider/fallLoop' + i + '.png');
-      for (let i = 0; i < 8; i++) put('jellyDeath' + i, BASE + 'objects/glider/death0' + i + '.png');
       for (let i = 0; i < 21; i++) {
         put('feather' + i, BASE + 'objects/flyFeather/idle' + String(i).padStart(2, '0') + '.png');
         put('feather' + (21 + i), BASE + 'objects/flyFeather/flash' + String(i).padStart(2, '0') + '.png');
@@ -422,7 +422,8 @@
       for (let i = 0; i < WALLS.length; i++) {
         const b = WALLS[i];
         if (b.y >= feetY || b.y + b.h <= top) continue;
-        if (x < b.x || x >= b.x + b.w) continue;
+        // 上下边界必须对称包含：贴左墙时探针恰好落在 b.x + b.w，用 >= 会被误判成「不在墙上」
+        if (x < b.x || x > b.x + b.w) continue;
         return dir > 0 ? b.x : b.x + b.w;
       }
       return null;
@@ -809,7 +810,7 @@
     const cam = { x: 0, y: 0 };
     const dust = [];
     const particles = [];
-    let time = 0, flash = 0, toastTimer = 0, deathTimer = 0;
+    let time = 0, flash = 0, toastTimer = 0, deathTimer = 0, hitstop = 0, gliderBoostTimer = 0;
 
     const heart = { x: 320 - SPAWN.x, y: 80 - SPAWN.y - 20, collected: false, t: 0 };
 
@@ -882,10 +883,17 @@
       speedStart: 250, accel: 1000, turnRate: 5.5850534,
       vIdle: 91, vTurn: 140, vFast: 190, sameDot: 0.45,
       time: 2.0, warnTime: 0.5, warnStep: 0.05,
-      wallDead: 0.2, wallRest: 0.5, exitX: 140, exitUp: 100
+      wallDead: 0.2, wallRest: 0.5, exitX: 140, exitUp: 100,
+      // Sprites.xml L137-138 的头发锚点：startStarFly hair="0,-2" / starFly hair="0,3"
+      hairMorphY: -2, hairFlyY: 3,
+      // FlyFeather..ctor(L62) / L53：SineWave(0.6f,0f).Randomize() → 0.6Hz ±2px；Hitbox 20×20 @(-10,-10)
+      sineFreq: 0.6, sineAmp: 2, hitW: 20, hitH: 20,
+      // FlyFeather.CollectRoutine(L176-181)：Level.Shake() → yield 0.05s → P_Collect×10 + SlashFx
+      collectFreeze: 0.05,
+      // 页面表现：原作只有 Shake，无整屏闪光；闪光与 Shake 同时机触发
+      collectFlash: 0.25
     };
     const BOUND = { x0: -304, x1: 304, y0: -288, y1: 48 };
-    const COLLECT_R = 14;
     // —— 水母 Glider（Holdable）—
     // 证据（Celeste.dll）：
     //   · Glider..ctor：Hold = Holdable(0.3)，PickupCollider 20×22 @(-10,-16)，SlowFall=true，SlowRun=false
@@ -903,7 +911,12 @@
       throwX: 100, throwY: -40, recoil: 80,
       carryY: -16,
       pickX: 10, pickTop: 16, pickBottom: 6,
-      deathTime: 0.64, deathStep: 0.08,
+      // Player.PickupCoroutine(L4388-4430)：0.16s CubeInOut 吸附；SimpleCurve 控制点
+      // (begin.X + sign(begin.X)*2, CarryOffsetTarget.Y-2)，CarryOffsetTarget=(0,-12)，CarryYOffset=-4
+      pickupTime: 0.16, carryCtrlX: 2, carryCtrlY: -18,
+      boostUp: 105,      // PickupCoroutine L4424：Speed.Y = Min(Speed.Y, -105)
+      boostDash: 240,    // PickupCoroutine L4420：gliderBoostDir.Y<0 → Min(Speed.Y, -240*|dirY|)
+      boostWindow: 0.55, // Player.cs L1835/L1906：StartDash → gliderBoostTimer = 0.55s
       idleStep: 0.1, fallStep: 0.08,
       bubbleFreq: 0.3, bubbleAmp: 1,   // Glider..ctor：new SineWave(0.3, 0)；未抓取前悬浮 ±1px 缓慢起伏
       originY: 27.8
@@ -933,6 +946,10 @@
     }
     function approachTo(v, target, step) {
       return v < target ? Math.min(v + step, target) : Math.max(v - step, target);
+    }
+    // Ease.CubeInOut（Player.PickupCoroutine 的 Tween 缓动）
+    function cubeInOut(t) {
+      return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
     }
     function normV(x, y) {
       const l = Math.sqrt(x * x + y * y);
@@ -1015,7 +1032,8 @@
         bubble: true, homeX: x, homeY: y, bobPhase: Math.random() * 6.283,
         rot: 0, scaleX: 1, scaleY: 1,
         highFrictionTimer: 0, gravityTimer: 0,
-        deathT: -1, minHoldTimer: 0, cannotHoldTimer: 0, animT: Math.random() * 1.2, openT: 0
+        pickupT: 0, pickupFromX: 0, pickupFromY: 0, pickupVx: 0, pickupVy: 0, boostDirY: 0,
+        minHoldTimer: 0, cannotHoldTimer: 0, animT: Math.random() * 1.2, openT: 0
       });
       updateHud();
     }
@@ -1031,8 +1049,10 @@
       // NormalUpdate IL 74-107：!Ducking && GrabCheck && !IsTired（CheckStamina < 20）
       if (heldJelly || m.ducking || fly || m.checkStamina() < 20) return false;
       let best = null, bestD = Infinity;
+      // Glider.OnPickup + Player.PickupCoroutine(L4388-4430)：记录当前相对位置，
+      // 0.16s 内按 SimpleCurve 把水母吸到 carry 位置；期间 Player.Speed 清零
       for (const j of jellies) {
-        if (j.deathT >= 0 || j.cannotHoldTimer > 0 || !inPickupRange(j)) continue;
+        if (j.cannotHoldTimer > 0 || !inPickupRange(j)) continue;
         const d = Math.abs(m.x - j.x) + Math.abs(j.y - (m.y - 5));
         if (d < bestD) { bestD = d; best = j; }
       }
@@ -1040,11 +1060,19 @@
       heldJelly = best;
       best.minHoldTimer = GLIDER.pickupDelay;
       best.highFrictionTimer = 0.5;
+      best.pickupT = GLIDER.pickupTime;
+      best.pickupFromX = best.x - m.x;
+      best.pickupFromY = best.y - m.y;
+      best.pickupVx = m.vx; best.pickupVy = m.vy;
+      // Player.StartDash L3761：gliderBoostDir = DashDir；冲刺中向上抓 → 拾取结束时 -240*|dirY|
+      best.boostDirY = (gliderBoostTimer > 0 && m.dashDir) ? m.dashDir.y : 0;
       best.vx = 0; best.vy = 0;
       best.gravityTimer = 0;
       best.bubble = false;                 // Glider.OnPickup：bubble = 0（此后按物理物件处理）
       best.scaleX = 1; best.scaleY = 1;
-      best.x = m.x; best.y = m.y + GLIDER.carryY;
+      best.x = m.x + best.pickupFromX; best.y = m.y + best.pickupFromY;
+      m.vx = 0; m.vy = 0;
+      m.sprite.play('pickUp');             // Player.StPickup：0.16s 拾取姿势
       updateHud();
       return true;
     }
@@ -1054,6 +1082,7 @@
       if (!j) return;
       heldJelly = null;
       j.minHoldTimer = 0;
+      j.pickupT = 0;
       j.cannotHoldTimer = GLIDER.regrabDelay;      // Holdable.Release: cannotHoldTimer = cannotHoldDelay
       j.gravityTimer = GLIDER.releaseGravity;
       j.vx = dirX * GLIDER.throwX;
@@ -1063,6 +1092,7 @@
       let tries = 0;
       while (gliderSolidAt(j.x, j.y) && tries++ < 10) j.y -= 1;   // Holdable.Release 的脱困上移
       m.holdSlowFall = false;
+      if (m.sprite.current === 'pickUp') m.sprite.play('idle');
       updateHud();
     }
     // Player.Throw：Release(UnitX*Facing) + 后坐 80；下方向键则走 Player.Drop（零速度）
@@ -1078,13 +1108,27 @@
       for (let i = jellies.length - 1; i >= 0; i--) {
         const j = jellies[i];
         if (j.spawnT < 1) j.spawnT = Math.min(1, j.spawnT + dt / 0.35);
-        if (j.deathT >= 0) {
-          j.deathT += dt;
-          if (j.deathT >= GLIDER.deathTime) jellies.splice(i, 1);
-          continue;
-        }
         if (j === heldJelly) {
           j.animT += dt;
+          if (j.pickupT > 0) {
+            // Player.PickupCoroutine：0.16s CubeInOut 沿 SimpleCurve 吸附
+            j.pickupT = Math.max(0, j.pickupT - dt);
+            const k = cubeInOut(1 - j.pickupT / GLIDER.pickupTime);
+            const c = { x: j.pickupFromX + Math.sign(j.pickupFromX) * GLIDER.carryCtrlX, y: GLIDER.carryCtrlY };
+            const u = 1 - k;
+            j.x = m.x + u * u * j.pickupFromX + 2 * u * k * c.x;
+            j.y = m.y + u * u * j.pickupFromY + 2 * u * k * c.y + k * k * GLIDER.carryY;
+            if (j.pickupT === 0) {
+              j.x = m.x; j.y = m.y + GLIDER.carryY;
+              // PickupCoroutine L4410-4425：恢复原速度、Y 封顶 0；冲刺拾取/上升拾取的助推
+              m.vx = j.pickupVx;
+              m.vy = Math.min(j.pickupVy, 0);
+              if (j.boostDirY < 0) m.vy = Math.min(m.vy, -GLIDER.boostDash * Math.abs(j.boostDirY));
+              else if (m.vy < 0) m.vy = Math.min(m.vy, -GLIDER.boostUp);
+              if (m.sprite.current === 'pickUp') m.sprite.play('idle');
+            }
+            continue;
+          }
           // Glider.Update：holder.Speed.Y > 20（或风向上）→ PlayOpen(fall/fallLoop)
           j.openT = m.vy > 20 ? j.openT + dt : 0;
           // 持有：Carry 到 Player.Position + (0,-12) + CarryYOffset；旋转按 ClampedMap(Speed.X,-300,300,+34°/-34°)
@@ -1121,7 +1165,8 @@
           if (j.gravityTimer > 0) j.gravityTimer -= dt;
           else {
             const g = j.vy < -30 ? GLIDER.gravAirUp : GLIDER.gravAir;
-            const fric = j.vy < 0 ? GLIDER.frictionUp : (j.highFrictionTimer > 0 ? GLIDER.frictionDown : GLIDER.frictionUp);
+            // Glider.Update：X 摩擦 vy<0 → 40；vy≥0 → highFrictionTimer>0 ? 40 : 10
+            const fric = j.vy < 0 ? GLIDER.frictionUp : (j.highFrictionTimer > 0 ? GLIDER.frictionUp : GLIDER.frictionDown);
             j.vx = approachTo(j.vx, 0, fric * dt);
             j.vy = approachTo(j.vy, 30, g * dt);
           }
@@ -1155,7 +1200,7 @@
       const fx = Math.random() < 0.5 ? 0.06 + Math.random() * 0.24 : 0.70 + Math.random() * 0.24;
       const x = clampN(cam.x - SPAWN.x + fx * vw, BOUND.x0, BOUND.x1);
       const y = clampN(cam.y - SPAWN.y + vh * (0.18 + Math.random() * 0.27), -280, 40);
-      feathers.push({ x: x, y: y, phase: Math.random() * 6 });
+      feathers.push({ x: x, y: y, phase: Math.random() * Math.PI * 4 });   // SineWave.Randomize → [0,4π)
       updateHud();
     }
 
@@ -1175,10 +1220,17 @@
     function stepFeathers() {
       for (let i = feathers.length - 1; i >= 0; i--) {
         const f = feathers[i];
-        if (Math.hypot(f.x - m.x, f.y - (m.y - 6)) >= COLLECT_R) continue;
+        // FlyFeather Hitbox 20×20 @(-10,-10) 与 Player 8×11 相交（含 f 的局部正弦偏移）
+        const fy = f.y + Math.sin(time * Math.PI * 2 * STARFLY.sineFreq + f.phase) * STARFLY.sineAmp;
+        if (Math.abs(f.x - m.x) >= (STARFLY.hitW / 2 + 4) ||
+            fy - STARFLY.hitH / 2 >= m.y || fy + STARFLY.hitH / 2 <= m.y - 11) continue;
         feathers.splice(i, 1);
         updateHud();
         startFly(f);
+        // FlyFeather.CollectRoutine：Shake → 0.05s 冻结；页面补整屏闪光与 feather_get
+        hitstop = Math.max(hitstop, STARFLY.collectFreeze);
+        flash = Math.max(flash, STARFLY.collectFlash);
+        if (window.Sfx) Sfx.play('feather/feather_get');
         return;
       }
     }
@@ -1205,18 +1257,15 @@
       toastTimer = 2.6;
     }
 
-    function stepFly(dt) {
+    function stepFly(dt, input) {
       const f = fly;
       f.t += dt;
       if (f.t < STARFLY.chargeTotal) {
-        // starFlyTransforming：Speed → 0；0.32s 切 startStarFly 之后的金色球体
+        // starFlyTransforming：Speed → 0；0.32s 动画切 starFly，但发色/发量到 0.42s 才变
         f.len = Math.max(0, f.len - STARFLY.accel * dt);
-        if (f.t >= STARFLY.chargeAnim && m.hair.count !== 7) {
-          m.hair.count = 7;
-          m.hair.setColor('fly');
-          m.hair.reset(m.x, m.y - 6, m.facing);
-        }
-        m.hair.update(m.x, m.y, m.facing, 0, -2, dt, 1);
+        // 0.32 前是 startStarFly（hair="0,-2"）；0.32 起是 starFly（hair="0,3" → 发根 = 球心）
+        const hairY = f.t < STARFLY.chargeAnim ? STARFLY.hairMorphY : STARFLY.hairFlyY;
+        m.hair.update(m.x, m.y, m.facing, 0, hairY, dt, 1);
         return;
       }
       if (f.t - dt < STARFLY.chargeTotal) {
@@ -1225,6 +1274,10 @@
         if (d0) { f.mx = d0.x; f.my = d0.y; f.last = d0; }
         f.len = STARFLY.speedStart;
         f.timer = STARFLY.time;
+        // StarFlyCoroutine：发射瞬间才 HairCount=7 + 飞行发色
+        m.hair.count = 7;
+        m.hair.setColor('fly');
+        m.hair.reset(m.x, m.y - 6, m.facing);
       }
 
       const dir = inputDir();
@@ -1262,7 +1315,21 @@
       m.x = nx; m.y = ny;
       if (Math.abs(f.mx) > 0.01) m.facing = f.mx > 0 ? 1 : -1;
 
-      m.hair.update(m.x, m.y, m.facing, 0, 3, dt, 1);   // HairOffset (0,3) → 发根落在球心
+      m.hair.update(m.x, m.y, m.facing, 0, STARFLY.hairFlyY, dt, 1);   // HairOffset (0,3) → 发根落在球心
+
+      // StarFlyUpdate 提前结束（Player.cs:4760-4808，逐条按原作条件）：
+      // 1) Jump.Pressed + OnGround(3) → Jump；2) Jump.Pressed + WallJumpCheck(±1) → WallJump
+      // 3) Grab.Check + ClimbCheck → 抓墙；4) CanDash → StartDash。撞墙本身只反弹，不结束。
+      const gy = groundY(m.x);
+      if (input.jumpPressed && gy !== VOID && gy - m.y <= 3) {
+        endFly(false);
+        m.onGround = true;                 // OnGround(3) 成立才能走 Jump 分支
+        m.update(dt, input);
+        return;
+      }
+      if (input.jumpPressed && (m.wallCheck(1) || m.wallCheck(-1))) { endFly(false); m.update(dt, input); return; }
+      if (input.grabHeld && m.wallCheck(m.facing)) { endFly(false); m.update(dt, input); return; }
+      if (m.canDash(input)) { endFly(false); m.update(dt, input); return; }
 
       f.timer -= dt;
       if (f.timer < STARFLY.warnTime) {
@@ -1319,10 +1386,9 @@
       }
     }
 
-    // 帧选择（Sprites.xml）：idle 10 帧 0.1s；fall 3 帧 0.08s → fallLoop 2 帧 0.08s 循环；
-    // death 8 帧 0.08s（DestroyAnimationRoutine）；held 单帧
+    // 帧选择（Sprites.xml）：idle 10 帧 0.1s；fall 3 帧 0.08s → fallLoop 2 帧 0.08s 循环；held 单帧
+    // 原作只有撞 SeekerBarrier 才播 death；本场景无该实体 → 水母不存在碎裂/死亡帧
     function jellyImage(j) {
-      if (j.deathT >= 0) return IMG['jellyDeath' + Math.min(7, Math.floor(j.deathT / GLIDER.deathStep))];
       if (j === heldJelly) {
         if (m.vy > 20) {
           const t = j.openT - 3 * GLIDER.fallStep;          // fall 播完再切 fallLoop
@@ -1360,7 +1426,7 @@
       for (const f of feathers) {
         const img = IMG['feather' + (Math.floor((time + f.phase) / 0.06) % 42)];
         if (!img) continue;
-        const p = toScreen({ x: f.x, y: f.y + Math.sin(time * 2 + f.phase) * 3 });
+        const p = toScreen({ x: f.x, y: f.y + Math.sin(time * Math.PI * 2 * STARFLY.sineFreq + f.phase) * STARFLY.sineAmp });
         const w = 32 * Z;
         if (p.x < -w || p.x > W + w || p.y < -w || p.y > H + w) continue;
         ctx.drawImage(img, Math.round(p.x - w / 2), Math.round(p.y - w / 2), w, w);
@@ -1379,7 +1445,9 @@
         if (img) ctx.drawImage(img, Math.round(feet.x - 16 * Z * sc), Math.round(feet.y - 32 * Z * sc), w, w);
       } else {
         // 球心 = (m.x, m.y-6)，origin (16,32) ⇒ 左上角 = 球心 + (-16,-26)
-        const col = (f.timer < STARFLY.warnTime && f.flash) ? '#AC3232' : '#ffd65c';
+        // 0.32–0.42s 仍是普通发色（与原作 StarFlyCoroutine 一致），0.42s 才转飞行色
+        const charging = f.t < STARFLY.chargeTotal;
+        const col = charging ? '#ffffff' : ((f.timer < STARFLY.warnTime && f.flash) ? '#AC3232' : '#ffd65c');
         const img = tinted('orb', col);
         const orb = toScreen({ x: m.x, y: m.y - 6 });
         if (img) ctx.drawImage(img, Math.round(orb.x - 16 * Z), Math.round(orb.y - 26 * Z), 32 * Z, 32 * Z);
@@ -1637,9 +1705,6 @@
       m.x = 0; m.y = 0; m.vx = 0; m.vy = 0;
       feetPrev = 0;
       m.onGround = true; m.ducking = false; m.fastJump = false;
-      m.scaleX = m.scaleY = 1; m.maxFall = 160; m.highestAirY = 0;
-      m.varJumpTimer = 0; m.jumpGraceTimer = 0; m.jumpBufferTimer = 0;
-      m.setState(CelesteCharacter.ST.Normal);   // 冲刺/攀爬中途重来时状态也要复位
       m.dashes = m.maxDashes; m.stamina = 110; m.freezeTimer = 0;
       m.dashTime = 0; m.dashTrail.length = 0;
       m.wallSlideDir = 0; m.wallSlideTimer = 1.2; m.dashAttackTimer = 0;
@@ -1648,6 +1713,8 @@
       m.hair.reset(0, 0, 1);
       snapCam();
       dust.length = 0; particles.length = 0;
+      hitstop = 0;
+      gliderBoostTimer = 0;
       deathTimer = 0.45;
       flash = Math.max(flash, 0.35);
     }
@@ -1657,6 +1724,8 @@
       updateLayers(dt);
 
       if (deathTimer > 0) { deathTimer -= dt; return; }
+      // FlyFeather.CollectRoutine：收集瞬间冻结 0.05s（原作 yield 0.05f）
+      if (hitstop > 0) { hitstop -= dt; return; }
 
       const input = {
         left: !!(keys['a'] || keys['arrowleft']),
@@ -1670,7 +1739,9 @@
         aimX: (keys['d'] || keys['arrowright'] ? 1 : 0) - (keys['a'] || keys['arrowleft'] ? 1 : 0),
         aimY: (keys['s'] || keys['arrowdown'] ? 1 : 0) - (keys['w'] || keys['arrowup'] ? 1 : 0)
       };
+      if (dashEdge) gliderBoostTimer = GLIDER.boostWindow;
       jumpEdge = dashEdge = false;
+      if (gliderBoostTimer > 0) gliderBoostTimer -= dt;
 
       // —— 水母持有（Player.NormalUpdate 的 Holding 分支，IL 74-1048）——
       // 未持有：按住抓取键 + PickupCollider 相交 → Pickup（minHoldTimer=0.35）
@@ -1687,7 +1758,12 @@
       feetPrev = m.y;
       // 持有时原作跳过整个攀爬分支 → 向引擎屏蔽 grabHeld
       const moveInput = heldJelly ? Object.assign({}, input, { grabHeld: false }) : input;
-      if (fly) stepFly(dt); else m.update(dt, moveInput);
+      // Player.StPickup：0.16s 内只跑 PickupCoroutine，不跑 NormalUpdate（Speed=0、无重力）
+      if (heldJelly && heldJelly.pickupT > 0) {
+        m.vx = 0; m.vy = 0;
+        m.sprite.update(dt);
+        m.hair.update(m.x, m.y, m.facing, 0, STARFLY.hairMorphY, dt, 1);
+      } else if (fly) stepFly(dt, moveInput); else m.update(dt, moveInput);
       updateCam(dt);
 
       // 跟随队列 / 水母 / 羽毛（飞行期不吃新羽毛）
@@ -1780,6 +1856,13 @@
       log('墙体探测左面 -80', wallAtFn(-84, -50, 1) === -80 && wallCollideFn(-82, -50, 1) === -80
         && wallCollideFn(-90, -50, 1) === null,
         [wallAtFn(-84, -50, 1), wallCollideFn(-82, -50, 1), wallCollideFn(-90, -50, 1)].join(' / '));
+
+      // 左墙：贴同一浮块右面（世界 x=-64）向左抓 → StClimb。
+      // 旧版 wallAtFn 的右边界用 >=，贴左墙时探针 x 恰好等于 b.x+b.w 被丢弃，左侧墙全部抓不住。
+      reset(-60, -46); m.onGround = false; m.facing = -1;
+      step(1, { left: true, grabHeld: true });
+      log('抓左墙 StClimb', wallAtFn(-60, -50, -1) === -64 && m.state === CelesteCharacter.ST.Climb,
+        'wall=' + wallAtFn(-60, -50, -1) + ' state=' + m.state);
 
       // 冲刺：X 触发 → 冻结 3 帧 → StDash 240（原作 DashSpeed）
       reset(0, 0);
@@ -1912,7 +1995,8 @@
         x: x, y: y, vx: 0, vy: 0, spawnT: 1, phase: 0, rot: 0, scaleX: 1, scaleY: 1,
         bubble: false, homeX: x, homeY: y, bobPhase: 0,
         highFrictionTimer: 0, gravityTimer: 0,
-        deathT: -1, minHoldTimer: 0, cannotHoldTimer: 0, animT: 0, openT: 0
+        pickupT: 0, pickupFromX: 0, pickupFromY: 0, pickupVx: 0, pickupVy: 0, boostDirY: 0,
+        minHoldTimer: 0, cannotHoldTimer: 0, animT: 0, openT: 0
       });
       ChatScene.reset(); reset(0, 0);
       const j1 = jellyAt(0, -16);
@@ -1947,12 +2031,15 @@
         jb.bubble === true && jb.x === 0 && Math.abs(jb.y - -40) <= GLIDER.bubbleAmp + 0.01 && jb.vy === 0,
         'bubble=' + jb.bubble + ' @' + jb.x + ',' + jb.y.toFixed(2) + ' vy=' + jb.vy);
 
-      // 冲刺/高速撞上水母时抓取：Holdable.Pickup / Glider.OnPickup 都不清零 Player.Speed
+      // Player.PickupCoroutine：抓到的瞬间 Speed 清零，0.16s 吸附结束后恢复（Y 封顶 0，上升拾取 -105）
       ChatScene.reset(); reset(0, 0);
       const jm = jellyAt(0, -16); jellies.push(jm);
       m.onGround = false; m.vx = 240; m.vy = -120;
-      log('冲刺抓取保留玩家动量', tryPickupJelly() && m.vx === 240 && m.vy === -120,
-        'playerV=' + m.vx.toFixed(2) + ',' + m.vy.toFixed(2));
+      const pickedNow = tryPickupJelly();
+      const zeroedNow = m.vx === 0 && m.vy === 0;
+      for (let i = 0; i < 12; i++) stepJellies(1 / 60);
+      log('冲刺抓取：吸附期清零 → 结束恢复动量', pickedNow && zeroedNow && m.vx === 240 && m.vy === -120,
+        'zeroed=' + zeroedNow + ' playerV=' + m.vx.toFixed(2) + ',' + m.vy.toFixed(2));
 
       // Player.Throw：Release(UnitX*Facing) → Glider.OnRelease Speed=(100,-40)，玩家后坐 -80
       ChatScene.reset(); reset(0, 0);
@@ -1963,7 +2050,7 @@
       log('投掷水母 (100,-40) + 后坐', !heldJelly && j2.vx === 100 && j2.vy === -40 && m.vx === -80,
         'v=' + j2.vx + ',' + j2.vy + ' playerVx=' + m.vx);
       // Player.Drop（Throw 时 MoveY==1）：Release(Vector2.Zero) → 零速度
-      j2.deathT = -1; j2.cannotHoldTimer = 0; j2.x = m.x; j2.y = m.y + GLIDER.carryY;
+      j2.cannotHoldTimer = 0; j2.x = m.x; j2.y = m.y + GLIDER.carryY;
       tryPickupJelly();
       m.facing = 1; m.vx = 0;
       throwJelly(true);
@@ -1987,6 +2074,7 @@
       ChatScene.reset(); reset(0, 0);
       const j5 = jellyAt(0, -16); jellies.push(j5);
       keys['shift'] = true; tick(1 / 60);
+      for (let i = 0; i < 10; i++) tick(1 / 60);      // StPickup 0.16s：只跑 PickupCoroutine
       m.onGround = false; m.y = -100; m.vy = 40; m.holdSlowFall = true;
       keys['s'] = true; tick(1 / 60);
       const guarded = m.holdCannotDuck === true;
@@ -2000,14 +2088,54 @@
       log('地面再次按下 → Drop 水母', !heldJelly && j5.vx === 0 && j5.vy === 0,
         'held=' + (heldJelly === j5) + ' v=' + j5.vx + ',' + j5.vy);
       keys['s'] = false; keys['shift'] = false;
-      reset(0, 0);   // Drop 后 m.ducking = true，复位后再测销毁动画
+      reset(0, 0);
 
-      // Glider 销毁动画 8 帧 ×0.08s = 0.64s 后 RemoveSelf
+      // Glider.Update：掉出房间底部（Top > Bounds.Bottom+16）→ RemoveSelf，同时释放数量名额
       ChatScene.reset();
-      const jd = jellyAt(0, -40); jellies.push(jd); jd.deathT = 0;
-      if (jellies.length) for (let i = 0; i < 40; i++) stepJellies(1 / 60);
-      log('死亡动画后回收', jellies.length === 0, jellies.length);
+      const jd = jellyAt(0, BOUND.y1 + 40); jellies.push(jd);
+      const beforeDrop = jellies.length;
+      stepJellies(1 / 60);
+      log('掉出底部消失并释放名额', jellies.length === beforeDrop - 1 && !jellies.includes(jd) && jd.x === 0,
+        'before=' + beforeDrop + ' after=' + jellies.length + ' hud=' + hudCollectEl.textContent.indexOf('水母 0/4'));
       ChatScene.reset();
+
+      // 拾取吸附：0.16s 内从抓取点曲线运动到 carry(0,-16)，结束才恢复位置
+      ChatScene.reset(); reset(0, 0);
+      const ja = jellyAt(13.5, -6); jellies.push(ja);
+      log('拾取开始于原位', tryPickupJelly() && ja.pickupT === GLIDER.pickupTime
+        && Math.abs(ja.x - 13.5) < 1e-9 && Math.abs(ja.y + 6) < 1e-9,
+        '@' + ja.x.toFixed(1) + ',' + ja.y.toFixed(1) + ' pickupT=' + ja.pickupT);
+      for (let i = 0; i < 12; i++) stepJellies(1 / 60);
+      log('吸附到 carry(0,-16)', ja.pickupT === 0 && ja.x === m.x && ja.y === m.y + GLIDER.carryY,
+        '@' + ja.x.toFixed(1) + ',' + ja.y.toFixed(1));
+      // 上升拾取助推：PickupCoroutine L4422-4425 → Speed.Y = Min(Speed.Y, -105)
+      ChatScene.reset(); reset(0, 0);
+      const jb2 = jellyAt(0, -16); jellies.push(jb2);
+      m.onGround = false; m.vy = -2;
+      tryPickupJelly();
+      for (let i = 0; i < 12; i++) stepJellies(1 / 60);
+      log('上升拾取助推 -105', m.vy === -GLIDER.boostUp, 'vy=' + m.vy);
+      // 冲刺窗口内向上拾取：gliderBoostDir.Y<0 → -240*|dirY|
+      ChatScene.reset(); reset(0, 0);
+      const jbd = jellyAt(0, -16); jellies.push(jbd);
+      m.onGround = false; m.vy = 0; m.dashDir = { x: 0, y: -1 }; gliderBoostTimer = GLIDER.boostWindow;
+      tryPickupJelly();
+      for (let i = 0; i < 12; i++) stepJellies(1 / 60);
+      log('冲刺向上拾取 -240', m.vy === -GLIDER.boostDash, 'vy=' + m.vy);
+      ChatScene.reset();
+
+      // Glider.Update X 摩擦：vy≥0 时 highFrictionTimer>0 → 40，否则 10（旧实现两支写反）
+      const frictionCase = (hf, vx) => {
+        const jf = jellyAt(0, -120); jf.vy = 0; jf.vx = vx; jf.highFrictionTimer = hf; jf.bubble = false;
+        jellies.length = 0; jellies.push(jf);
+        m.x = -1000; m.y = -1000;
+        stepJellies(1 / 60);
+        return vx - jf.vx;
+      };
+      const fHi = frictionCase(0.5, 40), fLo = frictionCase(0, 40);
+      ChatScene.reset();
+      log('空中摩擦分支 40/10', Math.abs(fHi - 40 / 60) < 1e-9 && Math.abs(fLo - 10 / 60) < 1e-9,
+        'high=' + fHi.toFixed(4) + ' low=' + fLo.toFixed(4));
 
       // Follower::Update 只看 DelayTimer（FollowDelay=0.3），延迟期内位置完全不动
       ChatScene.reset();
@@ -2024,11 +2152,54 @@
       log('触碰羽毛进入飞行', !!fly && feathers.length === 0, 'fly=' + !!fly);
       if (fly) {
         let frm = 0;
-        while (fly && frm < 200) { stepFly(1 / 60); frm++; }
+        while (fly && frm < 200) { stepFly(1 / 60, {}); frm++; }
         log('StarFly 约 2s 结束', !fly && frm > 120 && frm <= 190, frm + ' 帧');
         log('飞行后头发复原', m.hair.count === 4 && m.hair.colorIdx === 0 && m.hair.rigid === false,
           m.hair.count + '/' + m.hair.colorIdx + '/' + m.hair.rigid);
       }
+      ChatScene.reset();
+
+      // StarFlyUpdate 提前结束：落地跳 / 贴墙跳 / 抓墙 / 冲刺（Player.cs:4760-4808）
+      ChatScene.reset(); reset(0, 0);
+      startFly({ x: m.x + 20, y: m.y });
+      for (let i = 0; i < 26; i++) stepFly(1 / 60, {});
+      m.y = groundY(m.x) - 1; feetPrev = m.y;
+      stepFly(1 / 60, { jumpPressed: true });
+      log('落地跳提前结束', !fly && m.vy <= -100, 'fly=' + !!fly + ' vy=' + m.vy.toFixed(1));
+
+      ChatScene.reset(); reset(0, 0);
+      startFly({ x: m.x + 20, y: m.y });
+      for (let i = 0; i < 26; i++) stepFly(1 / 60, {});
+      const wallCheckOrig = m.wallCheck;
+      m.wallCheck = () => true;
+      stepFly(1 / 60, { jumpPressed: true });
+      m.wallCheck = wallCheckOrig;
+      log('贴墙跳提前结束', !fly, 'fly=' + !!fly);
+
+      ChatScene.reset(); reset(0, 0);
+      startFly({ x: m.x + 20, y: m.y });
+      for (let i = 0; i < 26; i++) stepFly(1 / 60, {});
+      m.wallCheck = () => true;
+      stepFly(1 / 60, { grabHeld: true });
+      m.wallCheck = wallCheckOrig;
+      log('抓墙提前结束', !fly, 'fly=' + !!fly);
+
+      ChatScene.reset(); reset(0, 0);
+      startFly({ x: m.x + 20, y: m.y });
+      for (let i = 0; i < 26; i++) stepFly(1 / 60, {});
+      m.dashes = 1; m.stamina = 110;
+      stepFly(1 / 60, { dashPressed: true, aimX: 1, aimY: 0, right: true });
+      log('冲刺提前结束', !fly && m.state === CelesteCharacter.ST.Dash, 'fly=' + !!fly + ' state=' + m.state);
+
+      ChatScene.reset();
+
+      // 聊天表情包链路：messages.js L159 把 🪶 → [c:feather]，consumeText 按标记生成
+      ChatScene.reset();
+      consumeText('[c:feather]');
+      log('聊天表情包生成羽毛', feathers.length === 1, 'feather=' + feathers.length);
+      ChatScene.reset();
+      consumeText('[c:jelly]');
+      log('聊天表情包生成水母', jellies.length === 1, 'jelly=' + jellies.length);
       ChatScene.reset();
 
       out.textContent = lines.join('\n') + '\n' + pass + ' pass / ' + fail + ' fail';
@@ -2122,11 +2293,12 @@
     main();
   })();
   </script>
-  <script src="js/api.js?v=20261002"></script>
+  <script src="js/api.js?v=20261106a"></script>
   <script src="js/auth.js?v=20261104a"></script>
   <script src="js/felt-piano.js?v=20261003"></script>
   <script src="js/vue.global.prod.js?v=20261008a"></script>
-  <script src="js/messages.js?v=20261106c"></script>
+  <script src="js/badeline-crawlout.js?v=20261107b"></script>
+<script src="js/messages.js?v=20261106d"></script>
   <script src="js/seed.js?v=20261101c"></script>
   <script>
     // v-cloak 兜底：Vue 挂载后由这里清掉，避免面板一直隐藏

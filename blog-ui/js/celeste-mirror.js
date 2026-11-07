@@ -23,8 +23,9 @@ var VIEW_W = 320, VIEW_H = 180;            // Celeste 原生视口（16:9）
 var cv = null, ctx = null;                 // 由 MirrorScene.init 注入（独立页自动取 #cv）
 var ctx_ready = false;
 var W = 0, H = 0, Z = 1;
-// 嵌入模式配置：drawBadeline=false 屏蔽自带 BadelineDummy（交 DOM 版）；onBreak 破碎那一刻回调宿主
-var SCENE = { drawBadeline: true, onBreak: null, autoStart: true };
+// 嵌入模式配置：drawBadeline=false 屏蔽自带 BadelineDummy（交 DOM 版）；
+// onBreak=碎裂帧回调；onEnd=EndCutscene/OnEnd 帧回调（音乐起播点）；onDone=收尾归位后回调
+var SCENE = { drawBadeline: true, onBreak: null, onEnd: null, onDone: null, autoStart: true, sting1Src: null };
 var _assetsReady = false, _sceneReady = false;
 
 /* =====================================================================
@@ -999,6 +1000,8 @@ var DT = 1 / 60, tGlobal = 0;
 
 function cubeIn(t) { return t * t * t; }
 function cubeInOut(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+// IL: Level.ZoomTo / Level.ZoomBack 都是 Ease.SineInOut（Level.cs:1771 / 1815）
+function sineInOut(t) { return -(Math.cos(Math.PI * t) - 1) / 2; }
 function approach(v, target, amt) {
   return v < target ? Math.min(v + amt, target) : Math.max(v - amt, target);
 }
@@ -1032,7 +1035,7 @@ function* zoomTo(tx, ty, tz, dur) {
   var fx = cam.x, fy = cam.y, fz = cam.zoom, e = 0;
   while (e < 1) {
     e += DT / dur;
-    var k = cubeInOut(Math.min(1, e));
+    var k = sineInOut(Math.min(1, e));
     cam.x = fx + (tx - fx) * k;
     cam.y = fy + (ty - fy) * k;
     cam.zoom = fz + (tz - fz) * k;
@@ -1045,7 +1048,7 @@ function* zoomBack(dur) {                      // CS02_Mirror.<ZoomBack>: wait 1
   var fz = cam.zoom, e = 0;
   while (e < 1) {
     e += DT / dur;
-    cam.zoom = fz + (1 - fz) * cubeInOut(Math.min(1, e));
+    cam.zoom = fz + (1 - fz) * sineInOut(Math.min(1, e));
     yield null;
   }
   cam.zoom = 1;
@@ -1084,7 +1087,7 @@ function* breakRoutine(dir) {
   }
   MIRROR.smashed = true; MIRROR.breakT = 0;
   SESSION_DREAMING = true;                        // 碎镜入梦：StarsBG 转入下坠拖尾分支
-  if (SCENE.onBreak) { try { SCENE.onBreak(); } catch (e) {} }   // 嵌入模式：通知宿主触发 summon/BGM/对话
+  if (SCENE.onBreak) { try { SCENE.onBreak(); } catch (e) {} }   // 嵌入模式：通知宿主「镜已碎」这一帧
   glassCrack();
   yield 0.6;
   shake(0.3);
@@ -1170,9 +1173,13 @@ function* activateBlock() {
 function* cutscene() {
   CUT.started = true;
   hideHint();
+  // IL: sfx.Play("event:/music/lvl2/dreamblock_sting_pt1") —— 过场开始第一帧，位置 = 镜子中心
+  // 缺口：本地无该事件音源，留 sting1Src 钩子，不拿别的曲子顶替
+  playSfx('sting1');
   yield 1.0;
   yield 0.4;
   yield 0.5;                                     // 无玩家：相当于 DummyRunTo 的时长
+  yield 0.5;                                     // IL: DummyRunTo 之后还有 0.5f
   // ZoomTo(mirror.Position - cam.Position - UnitY*24, 2, 1) → 中心 = (160,240)
   yield* zoomTo(160, 240, 2, 1);
   yield 0.5;
@@ -1190,8 +1197,14 @@ function* cutscene() {
   startCoro(zoomBack(3));                        // IL：Add(ZoomBack()) 与激活并发
   yield* activateBlock();
   yield 0.5;
-  yield* panTo(160, 196, 1.2);                    // 无玩家跟随时自行收尾构图
+  // IL: ++Cutscene 到此 EndCutscene → CS02_Mirror.OnEnd：
+  //     Music.Event = "event:/music/lvl2/mirror"; Audio.Apply(false) → 直接 start（音乐在这一帧起播）
+  if (SCENE.onEnd) { try { SCENE.onEnd(); } catch (e) {} }
+  // 原作 OnEnd 之后由 Player 跟随把相机拉回玩家附近；本页没有玩家，用 1.2s 归位到进房机位
+  // (160,216)，让 DOM 命中区/后续交互与过场前构图完全一致。这是本移植的收尾补偿，不属于过场本身。
+  yield* panTo(160, 216, 1.2);
   CUT.done = true;
+  if (SCENE.onDone) { try { SCENE.onDone(); } catch (e) {} }
 }
 
 /* =====================================================================
@@ -1328,6 +1341,27 @@ function resetScene() {
   showHint();
 }
 
+// 持久化呈现态：镜子「已破」或梦块「已激活」时跳过过场，直接把渲染推到终态。
+// 只改呈现/MIRROR/DREAM 字段，不碰 localStorage —— 事实本身由宿主在真实碎裂帧写入。
+function applyStateNow(smashed, dreamDash) {
+  if (smashed) {
+    MIRROR.smashed = true; MIRROR.smashEnded = true;
+    MIRROR.breakT = 0.72;                       // 9 帧碎玻璃的最后一帧（delay 0.08）
+    SESSION_DREAMING = true;                    // StarsBG 进入下坠拖尾分支
+    MIRROR.updateShine = false;
+    MIRROR.shineOffset = 33; MIRROR.shineAlpha = 1;
+    MIRROR.autoUpdateReflection = false;
+    MIRROR.refl.show = false;                   // 镜面碎完：倒影不再出现在洞里
+    CUT.started = true; CUT.done = true;        // 本次停留不再触发完整过场
+    hideHint();
+  }
+  if (dreamDash) {                              // DreamBlock.ActivateNoRoutine 的结果
+    DREAM.playerHasDreamDash = true;
+    dreamSetup();
+  }
+}
+var PENDING_STATE = null;                        // boot 前的请求队列（init 是异步的）
+
 function boot() {
   resize();
   if (window.ResizeObserver) {
@@ -1339,6 +1373,12 @@ function boot() {
   setupDebris();
   prerenderRoom();
   dreamSetup();
+  // 素材/房间就绪前宿主可能已经请求了持久化状态（刷新后首次进房会命中这条路径）
+  if (PENDING_STATE) {
+    var st = PENDING_STATE;
+    PENDING_STATE = null;
+    applyStateNow(st[0], st[1]);
+  }
   loadHair(function () {
     MIRROR.refl.hair = makeHair();
     if (MIRROR.refl.hair) MIRROR.refl.hair.reset(MIRROR.refl.x, MIRROR.refl.y, -1);
@@ -1407,8 +1447,8 @@ function boot() {
 }
 
 // 组件化入口：canvasEl 为挂载的 <canvas>，opts 覆盖 SCENE 行为。
-// shelf 嵌入用 { drawBadeline:false, onBreak:fn, autoStart:false } —— 过场只画场景与碎镜，
-// Badeline 交回 shelf 的 DOM 图层（保持行为树/对话/BGM class 契约不变）。
+// shelf 嵌入用 { drawBadeline:true, autoStart:false, onDone:fn } —— Badeline 由本模块按
+// 世界坐标绘制（绝对锚定在镜心，跑出画面后 RemoveSelf），过场结束再交给宿主 summon() 的 DOM 层。
 function initScene(canvasEl, opts) {
   if (!canvasEl || cv) return;
   opts = opts || {};
@@ -1416,7 +1456,13 @@ function initScene(canvasEl, opts) {
   ctx = cv.getContext('2d');
   SCENE.drawBadeline = opts.drawBadeline !== undefined ? !!opts.drawBadeline : true;
   SCENE.onBreak = opts.onBreak || null;
+  SCENE.onEnd = opts.onEnd || null;
+  SCENE.onDone = opts.onDone || null;
   SCENE.autoStart = opts.autoStart !== undefined ? !!opts.autoStart : true;
+  // 音源钩子：pt1 sting 本地仓库缺失（见 docs/celeste-shelf-mirror-rea.md），
+  // 宿主可通过 opts.sting1Src 注入同名事件的音频；不注入则保持静默，不拿别的曲子顶替。
+  SCENE.sting1Src = opts.sting1Src || null;
+  if (SCENE.sting1Src) mkSfx('sting1', SCENE.sting1Src, 0.5);
   var go = function () { if (!_sceneReady) { _sceneReady = true; boot(); } };
   if (_assetsReady) go();
   else loadAll(function () { _assetsReady = true; go(); });
@@ -1431,6 +1477,12 @@ window.MirrorScene = {
     for (var i = 0; i < Math.round((+n || 0) * 60); i++) { DT = 1 / 60; tGlobal += DT; update(DT); }
   },
   reset: function () { if (_sceneReady) resetScene(); },
+  // 持久化呈现态：smashed=镜子按已破渲染，dreamDash=梦块按已激活渲染。
+  // 未就绪（init 仍在校验/加载素材）时排队，boot 完成后补上，刷新后首次进房不会闪回未破镜。
+  applyState: function (smashed, dreamDash) {
+    if (!_sceneReady) { PENDING_STATE = [!!smashed, !!dreamDash]; return; }
+    applyStateNow(!!smashed, !!dreamDash);
+  },
   resize: function () { resize(); },
   isReady: function () { return _sceneReady; },
   // 诊断快照：宿主页无头验证/排错用（过场协程是否在推进、碎镜是否发生）

@@ -114,6 +114,8 @@
     // 冲刺残影（纯表现层，不参与物理）
     const DASH_TRAIL_TIME = 0.22;              // 单枚残影存活时长
     const DASH_TRAIL_MAX = 10;                 // 同屏最多残影数
+
+    const HAIR_MODES = ['normal', 'used', 'flash', 'two', 'fly'];
     // 原作 Celeste.Player.GetCurrentTrailColor："Get the current player dash trail color."
     // 即残影按当前 trail 颜色着色（本地 Celeste.xml L7017-7021 有据）。
     // 顺序与 celeste-hair.js 的 HAIR_COLORS 一致：normal/used/flash/two/fly
@@ -164,6 +166,7 @@
     }
     function lerp(a, b, t) { return a + (b - a) * t; }
     function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+    function cubeOut(t) { return 1 - Math.pow(1 - t, 3); }   // Ease.CubeOut
     function range(a, b) { const o = []; for (let i = a; i <= b; i++) o.push(i); return o; }
     function parseHair(s) {
         return s.split('|').map(e => {
@@ -195,6 +198,8 @@
         fallSlow:   { path: 'jumpSlow',   delay: 0.10, frames: [2, 3],      goto: null },
         fallFast:   { path: 'jumpFast',   delay: 0.10, frames: [2, 3],      goto: null },
         duck:       { path: 'duck',       delay: 0,    frames: [0],         loop: true },
+        // Sprites.xml L11：<Anim id="pickUp" path="pickup" delay="0.06" />（StPickup 0.16s）
+        pickUp:     { path: 'pickup',     delay: 0.06, frames: range(0, 4),  goto: null },
         // 冲刺 / 蹲滑 / 力竭：逐字取自 Sprites.xml
         //   <Loop id="dash"  path="dash"  delay="0.09" />   全帧 0-3
         //   <Loop id="slide" path="slide" delay="0.03" />   全帧 0-2
@@ -247,6 +252,8 @@
         jumpSlow: parseHair('1,-3|1,-3|1,-2|0,-2'),
         jumpFast: parseHair('1,-3|1,-3|1,-2|0,-2'),
         duck:   parseHair('0,3'),
+        // Sprites.xml L130：<Frames path="pickup" hair="2,0|1,-1|0,-2|0,-2|0,-2"/>
+        pickup: parseHair('2,0|1,-1|0,-2|0,-2|0,-2'),
         // 以下五条逐字复制 Sprites.xml 的 <Metadata><Frames path="…" hair="…">
         dash:   parseHair('2,0|2,0|2,0|2,1'),
         slide:  parseHair('0,3|0,3|0,3'),
@@ -336,6 +343,7 @@
     // ===== 人物 =====
     class Character {
         constructor(textures, hair, opts) {
+            this.textures = textures;
             this.sprite = new Sprite(textures, opts);
             this.hair = hair;
 
@@ -1625,9 +1633,11 @@
 
             // ===== 地面碰撞 =====
             let gy = this.groundYFn(this.x);
-            // 本帧是否发生「落地/触地」事件（原作 OnCollideV 被调用）：DreamDashCheck 在其后执行
-            const groundHit = !this.onGround && this.vy >= 0 && this.y >= gy;
-            if (this.onGround) {
+            // 原作 OnCollideV(向下) 的入口条件只有 Speed.Y > 0（IL：ldfld Speed.Y / ble → 跳过），
+            // 与上一帧是否 OnGround 无关。站在梦境块顶按「下 + 冲刺」时，DashUpdate 让 Speed.Y = 240，
+            // MoveV 立刻撞到块顶 → 必须同样走 OnCollideV，才能在分支内执行 DreamDashCheck(UnitY)。
+            const downHit = this.vy > 0 && this.y >= gy;
+            if (this.onGround && !downHit) {
                 if (gy - this.y > 2) {
                     this.onGround = false;
                 } else {
@@ -1636,46 +1646,41 @@
                 }
             }
             // 原作 OnCollideV(向下)：
-            if (!this.onGround && this.vy >= 0 && this.y >= gy) {
-                // 原作 Dash corner correction（OnCollideV）：下冲落地时若脚下是边沿，横向挪 ≤4px 滑过去
-                // 安装版 IL：StDash 与 StRedDash 共用该角修正分支
-                if ((this.state === ST_DASH || this.state === ST_RED_DASH) && !this.dashStartedOnGround && this.vy > 0) {
-                    let fixed = false;
+            if (downHit) {
+                // 原作 Dash corner correction（OnCollideV）：
+                //   if (State == StDash || (State == StRedDash && !dashStartedOnGround))
+                let fixed = false;
+                if (this.state === ST_DASH || (this.state === ST_RED_DASH && !this.dashStartedOnGround)) {
                     if (this.vx <= 0) {
                         for (let i = -1; i >= -DASH_CORNER_CORRECTION && !fixed; i--)
                             if (this.groundYFn(this.x + i) > this.y + 1) { this.x += i; this.y += 1; fixed = true; }
                     }
-                    if (this.vx >= 0) {
+                    if (!fixed && this.vx >= 0) {
                         for (let i = 1; i <= DASH_CORNER_CORRECTION && !fixed; i++)
                             if (this.groundYFn(this.x + i) > this.y + 1) { this.x += i; this.y += 1; fixed = true; }
                     }
+                    // 角修正成功 → 原作 MoveHExact + MoveVExact 后直接 return，不再走 DreamDashCheck / 落地
                     if (fixed) gy = this.groundYFn(this.x);
-                    else {
-                        const landVy = this.vy;
-                        this.y = gy; this.vy = 0; this.onGround = true;
-                        // 原作 Dash Slide（OnCollideV）：向下冲落地 → vy=0、vx×1.2、蹲滑、DashDir.Y=0
-                        if (this.dashDir.x !== 0 && this.dashDir.y > 0) this.dashSlide();
-                        this.landEffects(landVy);
-                        gy = this.groundYFn(this.x);
-                        if (this.y < gy) { this.y = gy; }
-                        // 原作 OnCollideV：红球冲刺硬撞地面 → StHitSquash(6)
-                        if (this.state === ST_RED_DASH) this.beginHitSquash();
-                    }
-                } else {
+                }
+                // 原作顺序：角修正 → DreamDashCheck(UnitY*Sign(Speed.Y)) → DashSlide / 落地 / FootstepRipple
+                if (!fixed && this.dreamDashCheck(0, Math.sign(this.vy) || 1)) {
+                    this.y = gy;                  // MoveV 撞停位置：脚底贴住块顶
+                    this.onGround = false;         // StDreamDash 不再走贴地逻辑（否则出口帧会被吸回块顶）
+                    this.beginDreamDash();
+                    this.updateSharedVisuals(dt);
+                    return;
+                }
+                if (!fixed) {
                     const landVy = this.vy;
                     this.y = gy; this.vy = 0; this.onGround = true;
+                    // 原作 Dash Slide（OnCollideV）：向下冲落地 → vy=0、vx×1.2、蹲滑、DashDir.Y=0
+                    if (this.dashDir.x !== 0 && this.dashDir.y > 0) this.dashSlide();
                     this.landEffects(landVy);
+                    gy = this.groundYFn(this.x);
+                    if (this.y < gy) { this.y = gy; }
                     // 原作 OnCollideV：红球冲刺硬撞地面 → StHitSquash(6)
                     if (this.state === ST_RED_DASH) this.beginHitSquash();
                 }
-            }
-
-            // 原作 OnCollideV(向下) 的 DreamDashCheck(UnitY * Sign(Speed.Y))：
-            // ★ 在落地 + Dash 角修正（OnGround / MoveHExact / MoveVExact 循环）之后执行
-            if (groundHit && this.dreamDashCheck(0, 1)) {
-                this.beginDreamDash();
-                this.updateSharedVisuals(dt);
-                return;
             }
 
             // 最高点
