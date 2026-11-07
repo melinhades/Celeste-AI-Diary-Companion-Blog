@@ -15,6 +15,7 @@ import java.sql.Statement;
 /**
  * 启动时做最小化的向前兼容建表/补列：
  * - ms_upload_image：图片持久化表（线上容器磁盘不可持久）
+ * - ms_ppt_image：PPT AI 配图持久化表（生图 URL 只活 1 小时，必须立即落库）
  * - ms_notification：评论/点赞消息表（匿名评论需要靠它携带匿名标记）
  * - 实体新增但历史库里没有的列：MyBatis-Plus 的 selectById/selectList 会显式列出实体全部字段，
  *   少一列就是 "Unknown column" 异常，接口表现为「系统异常」，所以必须逐列补齐
@@ -30,6 +31,15 @@ public class SchemaInitializer implements ApplicationRunner {
             "content_type varchar(64) DEFAULT NULL," +
             "data longblob," +
             "create_date bigint DEFAULT NULL," +
+            "PRIMARY KEY (id)" +
+            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+
+    /** PPT AI 配图：供应商 URL 只活 1 小时，必须立即下载并把二进制落库 */
+    private static final String CREATE_PPT_IMAGE = "CREATE TABLE IF NOT EXISTS ms_ppt_image (" +
+            "id varchar(64) NOT NULL," +
+            "mime varchar(64) DEFAULT NULL," +
+            "data longblob," +
+            "created_at bigint DEFAULT NULL," +
             "PRIMARY KEY (id)" +
             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 
@@ -86,10 +96,11 @@ public class SchemaInitializer implements ApplicationRunner {
         try (Connection conn = dataSource.getConnection()) {
             try (Statement st = conn.createStatement()) {
                 st.execute(CREATE_UPLOAD_IMAGE);
+                st.execute(CREATE_PPT_IMAGE);
                 st.execute(CREATE_NOTIFICATION);
                 st.execute(CREATE_HEART_CRYSTAL);
             } catch (Exception e) {
-                log.error("ms_upload_image / ms_notification / ms_heart_crystal 建表失败（图片读取、消息列表与心之水晶会受影响，请手动建表）", e);
+                log.error("ms_upload_image / ms_ppt_image / ms_notification / ms_heart_crystal 建表失败（图片读取、PPT 配图、消息列表与心之水晶会受影响，请手动建表）", e);
             }
             for (String[] expected : EXPECTED_COLUMNS) {
                 if (ensureColumn(conn, expected[0], expected[1], expected[2]) && "publish_time".equals(expected[1])) {

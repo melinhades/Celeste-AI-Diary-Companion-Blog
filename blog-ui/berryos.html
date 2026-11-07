@@ -97,7 +97,22 @@
   /* 选中后文字变深色（游戏内选中态） */
   .deskicon.selected .di-label { color: #2e2e40; }
 
-  /* 回收站：纯静态图标，不参与任何 hover/选中/进入 */
+  /* 多份课件格子：pointer 拖拽（鼠标/触摸通用），位置变化平滑重排 */
+  .deskicon[data-ppt-id] {
+    touch-action: none;
+    transition: left .25s ease, top .25s ease;
+  }
+  .deskicon.ppt-dragging { z-index: 12; opacity: .85; transition: none; }
+  .deskicon.ppt-removing { animation: pptShrink .26s ease forwards; pointer-events: none; }
+  @keyframes pptShrink {
+    from { opacity: 1; transform: translate(-50%, 0) scale(1); }
+    to   { opacity: 0; transform: translate(-50%, 0) scale(.2); }
+  }
+  /* 回收站仅作为拖放目标时高亮，图片本体不改 */
+  #icoRecycle.drop-hot { filter: brightness(1.8) drop-shadow(0 0 .7cqw rgba(255, 255, 255, .9)); }
+
+  /* 回收站：图标本体保持原样，不参与 hover/选中/进入；
+     只作为课件格子的拖放目标（拖入高亮，放下即删） */
   .ico { position: absolute; display: block; }
   #icoRecycle  { left: 5.025%; top: 23.77%; width: 6.610%; }
   #lblRecycle {
@@ -316,7 +331,9 @@
              border: .12cqw dashed rgba(0,0,0,.35); border-radius: .3cqw;
              background: rgba(255,255,255,.28); color: rgba(0,0,0,.45);
              font-family: 'HanTplReg',sans-serif; font-size: 1.15cqw; text-align:center; -webkit-text-stroke-width: 0; }
+  .s-img { overflow: hidden; }
   .s-img img { width: 100%; height: 100%; object-fit: contain; display:block; }
+  .s-img.cover img { object-fit: cover; }
 
   /* 彩虹字：每字 HSB 色相 0~308 等差，饱和 80% 亮 90% → 换算为 HSL(78%,54%) */
   .ch { color: hsl(var(--hue, 0), 78%, 54%); }
@@ -328,16 +345,27 @@
     font-family: 'HanTplReg',sans-serif; font-size: 1.05cqw;
     color: rgba(0,0,0,.5); pointer-events: none;
   }
+
 </style>
 </head>
 <body>
   <div id="stage">
     <div class="deskicon" v-for="ic in icons" :key="ic.id" :id="ic.id"
+         v-show="ic.id !== 'icoPpt' || pptCells.length === 0"
          :data-href="ic.href" :data-player="ic.player"
          :class="{ selected: selected === ic.id }"
          :style="'--x:' + ic.x + '%;--y:' + ic.y + '%;--w:' + ic.w + 'cqw;'">
       <div class="di-img"><img :src="ic.img" :alt="ic.label"></div>
       <span class="di-label">{{ ic.label }}</span>
+    </div>
+
+    <!-- 多份课件：一份一格、各自标题；拖到回收站即删 -->
+    <div class="deskicon" v-for="pc in pptCells" :key="pc.id" :id="pc.id"
+         :data-ppt-id="pc.itemId"
+         :class="{ selected: selected === pc.id }"
+         :style="'--x:' + pc.x + '%;--y:' + pc.y + '%;--w:6.672cqw;'">
+      <div class="di-img"><img src="Atlases/WaveDashing/desktop/wavedashing_icon.png" :alt="pc.label"></div>
+      <span class="di-label">{{ pc.label }}</span>
     </div>
 
     <img id="icoRecycle" class="ico" src="Atlases/WaveDashing/desktop/recyclebin_icon.png" alt="回收站">
@@ -377,6 +405,88 @@
         var selected = ref(null);
         var clockText = ref('');
         var alignTimer = null, tickTimer = null;
+
+        // ---- 多份课件格子：数据全部来自 BerryPPTGen.readAll() ----
+        var pptCells = Vue.reactive([]);
+        // 6 份上限（与 pptgen.js 的 MAX_ITEMS 一致）：右侧 3 列 × 2 行
+        var PPT_LAYOUT = [
+          { x: 73,   y: 30 }, { x: 82.5, y: 30 }, { x: 92,   y: 30 },
+          { x: 73,   y: 52 }, { x: 82.5, y: 52 }, { x: 92,   y: 52 }
+        ];
+        function refreshPptCells() {
+          var items = (window.BerryPPTGen && window.BerryPPTGen.readAll) ? window.BerryPPTGen.readAll() : [];
+          var next = [];
+          for (var i = 0; i < items.length && i < PPT_LAYOUT.length; i++) {
+            var it = items[i];
+            next.push({
+              id: 'pptcell-' + it.id,
+              itemId: it.id,
+              label: it.label || ((it.topic || '这件事') + '与我.ppt'),
+              x: PPT_LAYOUT[i].x,
+              y: PPT_LAYOUT[i].y
+            });
+          }
+          pptCells.splice.apply(pptCells, [0, pptCells.length].concat(next));
+        }
+        window.refreshPptCells = refreshPptCells;
+
+        // 打开某一份：先把它自己的 slides 装进播放器，再打开
+        window.openPptItem = function (id, originEl) {
+          var items = (window.BerryPPTGen && window.BerryPPTGen.readAll) ? window.BerryPPTGen.readAll() : [];
+          var it = null;
+          for (var i = 0; i < items.length; i++) { if (items[i].id === id) { it = items[i]; break; } }
+          if (!it || !it.slides || !it.slides.length) return;
+          if (typeof window.BerryPPT.setSlides === 'function') window.BerryPPT.setSlides(it.slides);
+          window.BerryPPT.open(originEl);
+        };
+
+        // ---- 拖拽到回收站删除：pointer events，鼠标/触摸通用 ----
+        var drag = null;
+        function onPptPointerDown(e) {
+          var icon = e.target.closest ? e.target.closest('.deskicon[data-ppt-id]') : null;
+          if (!icon) return;
+          drag = { icon: icon, x: e.clientX, y: e.clientY, moved: false, over: false };
+          try { icon.setPointerCapture(e.pointerId); } catch (err) {}
+          icon.addEventListener('pointermove', onPptPointerMove);
+          icon.addEventListener('pointerup', onPptPointerUp);
+          icon.addEventListener('pointercancel', onPptPointerUp);
+        }
+        function onPptPointerMove(e) {
+          if (!drag) return;
+          var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+          if (!drag.moved && Math.sqrt(dx * dx + dy * dy) < 8) return;
+          if (!drag.moved) { drag.moved = true; drag.icon.classList.add('ppt-dragging'); }
+          drag.icon.style.transform = 'translate(-50%, 0) translate(' + dx + 'px,' + dy + 'px)';
+          var rec = document.getElementById('icoRecycle');
+          var hot = false;
+          if (rec) {
+            var r = rec.getBoundingClientRect();
+            hot = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+            rec.classList.toggle('drop-hot', hot);
+          }
+          drag.over = hot;
+        }
+        function onPptPointerUp() {
+          if (!drag) return;
+          var d = drag; drag = null;
+          d.icon.removeEventListener('pointermove', onPptPointerMove);
+          d.icon.removeEventListener('pointerup', onPptPointerUp);
+          d.icon.removeEventListener('pointercancel', onPptPointerUp);
+          var rec = document.getElementById('icoRecycle');
+          if (rec) rec.classList.remove('drop-hot');
+          if (!d.moved) return;  // 没真正拖动：交给 click 走选中/打开
+          window.__pptDragEndedAt = Date.now();  // 抑制紧随其后的 click
+          d.icon.classList.remove('ppt-dragging');
+          d.icon.style.transform = '';
+          if (!d.over) return;
+          var id = d.icon.getAttribute('data-ppt-id');
+          d.icon.classList.add('ppt-removing');
+          setTimeout(function () {
+            if (window.BerryPPTGen && window.BerryPPTGen.removeItem) window.BerryPPTGen.removeItem(id);
+            refreshPptCells();  // 其余格子平滑重排
+            selected.value = null;
+          }, 260);
+        }
         function tick() {
           var d = new Date();
           var h = d.getHours() % 12 || 12;
@@ -385,11 +495,15 @@
         }
         // 图标第一次点击仅选中，再次点击同一图标才进入；点空白处取消选中（与原事件委托规则一致）
         function onStageClick(e) {
+          // 刚拖拽结束的这次 click 不当作选中/打开
+          if (Date.now() - (window.__pptDragEndedAt || 0) < 350) return;
           var icon = e.target.closest ? e.target.closest('.deskicon') : null;
           if (!icon) { selected.value = null; return; }
           if (selected.value === icon.id) {
+            var pptId = icon.getAttribute('data-ppt-id');
+            if (pptId) { window.openPptItem(pptId, icon); return; }
             var player = icon.getAttribute('data-player');
-            if (player) { window.BerryPPT.open(player); return; }
+            if (player) { window.BerryPPT.open(icon); return; }
             var href = icon.getAttribute('data-href');
             if (href) window.location.href = href;
           } else {
@@ -402,6 +516,9 @@
         onMounted(function () {
           stageEl = document.getElementById('stage');
           stageEl.addEventListener('click', onStageClick);
+          // 拖拽入口也用 #stage 委托：动态课件格子无需各自绑事件
+          stageEl.addEventListener('pointerdown', onPptPointerDown);
+          refreshPptCells();
           tick();
           // 对齐到下一个整分钟，之后每 30s 兜底刷新
           alignTimer = setTimeout(function () {
@@ -410,11 +527,14 @@
           }, (60 - new Date().getSeconds()) * 1000);
         });
         onUnmounted(function () {
-          if (stageEl) stageEl.removeEventListener('click', onStageClick);
+          if (stageEl) {
+            stageEl.removeEventListener('click', onStageClick);
+            stageEl.removeEventListener('pointerdown', onPptPointerDown);
+          }
           clearTimeout(alignTimer);
           clearInterval(tickTimer);
         });
-        return { icons: ICONS, selected: selected, clockText: clockText };
+        return { icons: ICONS, pptCells: pptCells, selected: selected, clockText: clockText };
       }
     }).mount('#stage');
   })();
@@ -568,6 +688,12 @@
       var turnBox = document.getElementById('pptTurnBox');
       var cur = -1, busy = false, autoTimer = null, rendered = false;
       var slideEls = [];
+      // splash 的展开/收缩原点跟随最近一次打开的桌面格子；
+      // 默认 icoPpt 在有动态课件格子时会被隐藏（getBoundingClientRect 全 0）
+      var lastOriginEl = null;
+      function originElFor() {
+        return (lastOriginEl && lastOriginEl.isConnected) ? lastOriginEl : document.getElementById('icoPpt');
+      }
 
       // 启动遮罩（从图标中心展开背景，给 BGM 腾时间）
       var splash = document.createElement('div');
@@ -583,6 +709,7 @@
           sd.items.forEach(function (it) {
             var el = document.createElement('div');
             el.className = 'it ' + (it.cls || '');
+            if (it.key) el.dataset.key = it.key; // 供 patchImage 异步热替换
             if (it.stream) { el.classList.add('stream'); el.style.opacity = '0'; }
             el.style.left = it.x + '%';
             el.style.top = it.y + '%';
@@ -591,6 +718,11 @@
             el.style.setProperty('--d', (it.d * 1.3) + 's');
             if (it.kind === 'img') {
               el.classList.add('s-img');
+              // AI 配图走固定框：宽高由模板 ratio 定死，图按 cover 等比裁切
+              if (it.fit === 'cover') {
+                el.classList.add('cover');
+                if (it.ratio) el.style.aspectRatio = String(it.ratio);
+              }
               var img = document.createElement('img');
               img.src = it.src;
               el.appendChild(img);
@@ -598,6 +730,8 @@
               // ratio 是 w/h；百分比 padding 会按"父容器宽度"算，导致占位框被撑成整屏高，
               // 所以用 aspect-ratio 直接按自身宽度定高
               el.style.aspectRatio = String(it.ratio);
+              el.dataset.ratio = String(it.ratio);
+              if (it.fit) el.dataset.fit = it.fit;
               var inner = document.createElement('div');
               inner.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;';
               inner.textContent = it.t;
@@ -851,8 +985,11 @@
       }
 
       return {
-        open: function () {
+        open: function (originEl) {
           if (!rendered) render();
+          // setSlides() 会提前把 rendered 置 true 但不挂 splash；这里补挂，
+          // 否则从桌面格子打开时没有启动遮罩（原点也无从计算）
+          if (!splash.parentNode) document.body.appendChild(splash);
           warmSfx();  // 用户点击了图标 → 授权音频播放，顺便把所有音效 buffer 到位
           player.classList.remove('closing');
           player.classList.add('show');
@@ -861,8 +998,10 @@
 
           // splash 从图标中心展开（给 BGM 腾加载时间）
           // fixed 元素的 origin 相对于 viewport
-          var icon = document.getElementById('icoPpt');
-          var ir = icon.getBoundingClientRect();
+          var icon = (originEl && typeof originEl.getBoundingClientRect === 'function') ? originEl : originElFor();
+          if (icon && !icon.isConnected) icon = originElFor();
+          lastOriginEl = icon || null;
+          var ir = icon ? icon.getBoundingClientRect() : { left: 0, top: 0, width: 0, height: 0 };
           splash.style.transformOrigin = (ir.left + ir.width/2) + 'px ' + (ir.top + ir.height/2) + 'px';
           splash.classList.remove('show', 'fade');
           requestAnimationFrame(function () {
@@ -896,8 +1035,8 @@
           if (busy) return;
           clearTimeout(autoTimer);
           busy = true;
-          var icon = document.getElementById('icoPpt');
-          var ir = icon.getBoundingClientRect();
+          var icon = originElFor();
+          var ir = icon ? icon.getBoundingClientRect() : { left: 0, top: 0, width: 0, height: 0 };
           // 先让 splash 立刻恢复不透明（覆盖 fade 类），挡住 player
           splash.classList.remove('fade');
           splash.style.opacity = '1';  // 立刻不透明，不等 transition
@@ -934,6 +1073,9 @@
         show: function (n) { go(n); },
         // 外部 AI 重新塞 PPT 内容 → 重建 slides DOM
         setSlides: function (newSlides) {
+          // 热更新时记住播放状态：重建后原地续播，避免整屏空白
+          var wasOpen = player.classList.contains('show');
+          var keep = cur;
           SLIDES = newSlides;
           rendered = false;
           // 【安全】重建 DOM 前把播放状态归零：否则异步热更新时若正处在转场中，
@@ -954,6 +1096,7 @@
             sd.items.forEach(function (it) {
               var el = document.createElement('div');
               el.className = 'it ' + (it.cls || '');
+              if (it.key) el.dataset.key = it.key; // 供 patchImage 异步热替换
               if (it.stream) { el.classList.add('stream'); el.style.opacity = '0'; }
               el.style.left = it.x + '%';
               el.style.top = it.y + '%';
@@ -962,12 +1105,18 @@
               el.style.setProperty('--d', (it.d * 1.3) + 's');
               if (it.kind === 'img') {
                 el.classList.add('s-img');
+                if (it.fit === 'cover') {
+                  el.classList.add('cover');
+                  if (it.ratio) el.style.aspectRatio = String(it.ratio);
+                }
                 var img = document.createElement('img');
                 img.src = it.src;
                 img.onerror = function() { this.style.visibility = 'hidden'; };
                 el.appendChild(img);
               } else if (it.kind === 'ph') {
                 el.style.aspectRatio = String(it.ratio);
+                el.dataset.ratio = String(it.ratio);
+                if (it.fit) el.dataset.fit = it.fit;
                 var inner = document.createElement('div');
                 inner.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;';
                 inner.textContent = it.t;
@@ -992,6 +1141,36 @@
             turnBox.appendChild(sec);
             slideEls.push(sec);
           });
+          if (wasOpen) {
+            var target = keep >= 0 ? Math.min(keep, SLIDES.length - 1) : 0;
+            var tries = 0;
+            (function resume() {
+              if (!player.classList.contains('show')) return;
+              if (busy && tries++ < 12) { setTimeout(resume, 120); return; }
+              go(target);
+            })();
+          }
+        },
+        /** 图片异步返回后，按 data-key 热替换对应图位；占位框会就地升级成 <img> */
+        patchImage: function (key, src) {
+          if (!key || !src) return false;
+          var el = turnBox.querySelector('.it[data-key="' + key + '"]');
+          if (!el) return false;
+          var img = el.querySelector('img');
+          if (!img) {
+            el.classList.add('s-img');
+            // 占位框升级成图片时保留模板固定框：16:9 + cover，不能退回图源固有比例
+            if (el.dataset.fit === 'cover') {
+              el.classList.add('cover');
+              if (el.dataset.ratio) el.style.aspectRatio = el.dataset.ratio;
+            }
+            el.textContent = '';
+            img = document.createElement('img');
+            el.appendChild(img);
+          }
+          img.src = src;
+          img.onerror = function() { this.style.visibility = 'hidden'; };
+          return true;
         },
         rebuild: function () { this.setSlides(SLIDES); },
         get isOpen() { return player.classList.contains('show'); }
@@ -1017,20 +1196,24 @@
   })();
     // 困境检测 + PPT 生成器（外部 JS，独立 IIFE）
   </script>
-  <script src="js/api.js?v=20261002"></script>
-  <script src="js/detect.js"></script>
-  <script src="js/pptgen.js?v=20261031a"></script>
+  <script src="js/api.js?v=20261106a"></script>
+  <script src="js/detect.js?v=20261107a"></script>
+  <script src="js/pptgen.js?v=20261107f"></script>
   <script>
-    // berryos 页面一打开就自动跑：detect → generate → setSlides（如果检测到困恼的话）
+    // berryos 页面一打开：先把缓存里的多份课件铺回桌面，再跑检测补生成
     (function () {
+      function refreshDesk() {
+        if (typeof window.refreshPptCells === 'function') window.refreshPptCells();
+      }
       function tryAuto() {
         if (!window.BerryDetect || !window.BerryPPTGen) return setTimeout(tryAuto, 200);
+        // readAll() 首次调用会把 v5 的单份缓存迁移成 v6 列表，已有那份不会消失
+        window.BerryPPTGen.readAll();
+        refreshDesk();
         var r = window.BerryDetect.shouldTrigger();
         if (!r.triggered) return;
-        window.BerryPPTGen.generate(r.topic, r.rawText, r.evidence).then(function (slides) {
-          if (slides && slides.length) {
-            window.BerryPPT.setSlides(slides);
-          }
+        window.BerryPPTGen.triggerAndGenerate().then(function () {
+          refreshDesk();
         });
       }
       tryAuto();

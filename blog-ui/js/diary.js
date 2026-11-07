@@ -702,7 +702,6 @@
             scheduleGameDialogHide();
         }
     }
-// ... existing code ...
     function addUserMessage(text) {
         const row = document.createElement('div');
         row.className = 'msg-row user-row';
@@ -727,7 +726,6 @@
         quickInputBox.style.display = 'none';
         chatInput.focus();
 
-        // ... existing code ...
         try {
             const res = await api('/chat', 'POST', { content: text });
             if (res.success && res.data) {
@@ -1482,7 +1480,6 @@ function inferReplyEmotion(text) {
     // 暴露情绪词表/色板给 TextFx（日记关键词波浪高亮）
     window.__DIARY_EMOTION_WORDS = REALTIME_CONFIG.EMOTION_WORDS;
     window.__DIARY_EMOTION_COLORS = REALTIME_CONFIG.EMOTION_COLORS;
-// ... existing code ...
 
     const companionState = {
         lastAnalyzedText: '',
@@ -2233,7 +2230,6 @@ function inferReplyEmotion(text) {
         playSaveAnimation();
 
         try {
-// ... existing code ...
             const extras = [];
             for (let i = 0; i < localStorage.length; i++) {
                 const k = localStorage.key(i);
@@ -2276,14 +2272,18 @@ function inferReplyEmotion(text) {
 
                 showToast(editingDiaryId ? '更新成功！' : '保存成功！', 'success');
 
-                // ---- 困境检测 → 自动生成 PPT ----
-                // 节流：同一次保存只触发一次；且 BerryPPT 已打开时不抢
+                // ---- 困境检测 → 生成课件写进 berryos 桌面格子 ----
+                // 节流：同一次保存只触发一次；日记页不弹、不加载播放器，只把结果写进缓存
                 if (window.BerryDetect && window.BerryPPTGen && !window._pptTriggeredThisSession) {
                     window._pptTriggeredThisSession = true;
+                    // 保存成功当下先把正文快照下来：下面会清空 jbook-* 草稿，
+                    // 4 秒后的检测只能读这份快照，否则恒读到空文本。
+                    window._pptDiarySnapshot = payload.content;
                     setTimeout(async function () {
                         try {
-                            await window.BerryPPTGen.triggerAndOpen();
+                            await window.BerryPPTGen.triggerAndGenerate();
                         } catch (e) { /* 失败不打断保存流程 */ }
+                        finally { window._pptDiarySnapshot = null; }  // 检测消费完即清，刷新页面自然不存在
                     }, 4000);  // 等 Madeline 反馈 + 金羽毛流程跑完，再异步检查
                 }
                 pmCelebrate();
@@ -2454,7 +2454,6 @@ function inferReplyEmotion(text) {
             }
                 return { x: 8, y: gy };
             }
-// ... existing code ...
             function pmDetour(now) {
                 const book = document.getElementById('journalBook');
                 const r = book ? book.getBoundingClientRect() : null;
@@ -2588,7 +2587,6 @@ function inferReplyEmotion(text) {
             }
             return;
         }
-// ... existing code ...
         if (pmState.mode === 'peek') { pmState.mode = 'idle'; pmState.modeUntil = 0; }
 
         if (pmState.mode === 'sleep') {
@@ -2652,7 +2650,6 @@ function inferReplyEmotion(text) {
                 const dx = pmState.targetX - pmState.x;
                 const dy = pmState.targetY - pmState.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
-                // ... existing code ...
                 if (dist > 5) {
                     if (dx > 0.5) pmState.dir = 1;
                     else if (dx < -0.5) pmState.dir = -1;
@@ -2667,7 +2664,6 @@ function inferReplyEmotion(text) {
                     pmState.x = nx;
                     pmState.y = ny;
                 } else if (pmState.mode === 'walk') {
-// ... existing code ...
                     pmState.mode = 'idle';
                     pmState.modeUntil = now + 300 + Math.random() * 700;
                 }else if (pmState.mode === 'celebrate') {
@@ -2717,7 +2713,6 @@ function inferReplyEmotion(text) {
         if (!found) { pmState.x = 8; pmState.y = 60; }
     }
     window.addEventListener('resize', () => { pmState.y = Math.min(pmState.y, pmGroundY()); });
-    // ... existing code ...
     // ===== 金羽毛随笔弹框：程序化控制 =====
     function showFeatherNote() {
         var box = document.getElementById('featherNoteBox');
@@ -2759,7 +2754,6 @@ function inferReplyEmotion(text) {
             if (bookCur === 0) { bookGoto(1); }
         }
     });
-// ... existing code ...
     let lastComfortAt = 0;
     function pmComfort() {
         if (performance.now() - lastComfortAt < 10 * 60 * 1000) return;
@@ -2866,11 +2860,9 @@ function inferReplyEmotion(text) {
 
     // ===== 主线2：回忆书架 =====
     let editingDiaryId = null;
-    // ... existing code ...
     const shelfBtn = document.createElement('button');
     shelfBtn.id = 'shelfBtn';
     // Deleted:shelfBtn.textContent = '📚 回忆书架';
-    // ... existing code ...
     shelfBtn.title = '回忆书架';
     // Deleted:shelfBtn.innerHTML = '<img src="Atlases/Gui/collectables/cassette.png" alt="回忆书架">';
     shelfBtn.innerHTML = '<img src="celeste-collectables/cassette/idle00.png" alt="回忆书架">';
@@ -2900,7 +2892,6 @@ function inferReplyEmotion(text) {
         '</div>';
     document.body.appendChild(shelfPanel);
 
-// ... existing code ...
 
     const shelfList = shelfPanel.querySelector('#shelfList');
     const shelfDetail = shelfPanel.querySelector('#shelfDetail');
@@ -2978,12 +2969,10 @@ function inferReplyEmotion(text) {
         const created = new Date(typeof d.createDate === 'number' || /^\d+$/.test(String(d.createDate)) ? Number(d.createDate) : d.createDate);
         const days = Math.max(0, Math.floor((Date.now() - created.getTime()) / 86400000));
         if (days > 0) addMadelineMessage('这是 ' + days + ' 天前写下的……那时候的你，还好吗？', '可爱');
-        // ... existing code ...
         shelfMemoryRecall(d.content || '', days);
     }
     shelfBtn.addEventListener('click', () => { location.href = 'shelf.html'; });
     shelfPanel.querySelector('.shelf-close').addEventListener('click', () => shelfPanel.classList.remove('open'));
-// ... existing code ...
     shelfPanel.querySelector('.sd-back').addEventListener('click', shelfShowList);
     shelfList.addEventListener('click', ev => {
         const card = ev.target.closest('.shelf-card');
@@ -3115,6 +3104,8 @@ function inferReplyEmotion(text) {
         const today = new Date().toDateString();
         const lastShown = localStorage.getItem('postcardDate');
         if (lastShown !== today) {
+            // 展示前就落盘：不点 ✕ 直接刷新也不会当天重复弹；关闭按钮保留同值写入
+            localStorage.setItem('postcardDate', today);
             await showDailyPostcard();
         }
 

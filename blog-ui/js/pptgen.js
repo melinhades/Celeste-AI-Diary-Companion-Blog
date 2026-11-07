@@ -5,8 +5,9 @@
 (function () {
     'use strict';
 
-    // 缓存 key 带 v2：标题格式改为「{topic}与我」后旧缓存全部作废
-    var CACHE_KEY = 'berryos-ppt-cache-v2';
+    // v6：多份课件列表；v5 是单份，读取时迁移
+    var CACHE_KEY = 'berryos-ppt-cache-v6';
+    var LEGACY_CACHE_KEY = 'berryos-ppt-cache-v5';
 
     // ---- topic → 英文 slug（文件名用，如 凌波微步 → wavedash.ppt）----
     var TOPIC_SLUG_MAP = {
@@ -70,16 +71,18 @@
             //   → 进 p5 麻烦 Spiral('spin') → 进 p6 结尾 Rotate3D('cube')
             slots: [
                 { slotId: 'p3_title', cls: 't-head-en white', chars: true, stream: true, d: .5,  x: 5.36, y: 11.47, w: 90, max: 28 },
-                { slotId: 'p3_placeholder', kind: 'ph', cls: 'anim-rise', d: 2.5, x: 29.63, y: 21.27, w: 40.76, ratio: 10.87/6.11, t: '本月配图位' },
-                { slotId: 'p3_desc',  cls: 't-body anim-rise', d: 3.5, x: 34.43, y: 62.47, w: 33, max: 60 },
-                { slotId: 'p3_shi',   cls: 't-big anim-whoosh', chars: true, center: true, d: 5.0, x: 15, y: 73.13, w: 70, t: '这很简单！' }
+                // 媒体统一规则：固定 16:9 框、x33.5/w33 居中、y26.5 落在标题安全线以下
+                { slotId: 'p3_placeholder', kind: 'ph', cls: 'anim-rise', d: 2.5, x: 33.5, y: 26.5, w: 33, ratio: 16/9, t: '本月配图位' },
+                // 说明文字与媒体同宽同中心，且在媒体底（59.5%）下留 2.5% 安全距
+                { slotId: 'p3_desc',  cls: 't-body anim-rise', d: 3.5, x: 33.5, y: 62.0, w: 33, center: true, max: 60 },
+                { slotId: 'p3_shi',   cls: 't-big anim-whoosh', chars: true, center: true, d: 5.0, x: 15, y: 74.0, w: 70, t: '这很简单！' }
             ]
         },
         {
             bg: '#F4CCCC', tr: 'fade', dur: 10000, name: 'p4_method',
             slots: [
                 { slotId: 'p4_title', cls: 't-head anim-left', d: .25, x: 5.63, y: 11.2, w: 55, max: 16 },
-                { slotId: 'p4_placeholder', kind: 'ph', cls: 'anim-rise', d: .9, x: 29.29, y: 20.6, w: 41.4, ratio: 11.04/6.21, t: '本月配图位' },
+                { slotId: 'p4_placeholder', kind: 'ph', cls: 'anim-rise', d: .9, x: 33.5, y: 26.5, w: 33, ratio: 16/9, t: '本月配图位' },
                 { slotId: 'p4_step1', cls: 't-body', chars: true, stream: true, d: 1.8, x: 7.58, y: 63.27, w: 27, prefix: '- ', max: 28 },
                 { slotId: 'p4_step2', cls: 't-body', chars: true, stream: true, d: 3.5, x: 7.58, y: 70.5,  w: 27, prefix: '- ', max: 28 },
                 { slotId: 'p4_step3', cls: 't-body', chars: true, stream: true, d: 5.2, x: 7.58, y: 77.8,  w: 27, prefix: '- ', max: 28 },
@@ -90,17 +93,18 @@
             bg: '#FFF2CC', tr: 'spin', dur: 8500, name: 'p5_trouble',
             slots: [
                 { slotId: 'p5_head',    cls: 't-head anim-pop', d: .25, x: 5.59, y: 11.13, w: 55, t: '天堂中的麻烦？' },
-                { slotId: 'p5_ph_a',    kind: 'ph', cls: 'anim-rise', d: .9, x: 19.26, y: 30.07, w: 17.48, ratio: 4.66/4.31, t: '配图位' },
-                { slotId: 'p5_warn_a',  cls: 't-warn anim-rise', d: 1.5, x: 19.26, y: 63.6, w: 17.48, center: true },
-                { slotId: 'p5_ph_b',    kind: 'ph', cls: 'anim-rise', d: 1.3, x: 57.62, y: 30.07, w: 28.76, ratio: 7.67/4.31, t: '配图位' },
-                { slotId: 'p5_warn_b',  cls: 't-warn anim-rise', d: 1.9, x: 57.62, y: 63.6, w: 28.76, center: true }
+                // 双图统一规则：同宽同高同 y、以 50% 为轴对称（中心 28% / 72%）
+                { slotId: 'p5_ph_a',    kind: 'ph', cls: 'anim-rise', d: .9, x: 13.62, y: 29.0, w: 28.76, ratio: 16/9, t: '配图位' },
+                { slotId: 'p5_warn_a',  cls: 't-warn anim-rise', d: 1.5, x: 13.62, y: 59.5, w: 28.76, center: true },
+                { slotId: 'p5_ph_b',    kind: 'ph', cls: 'anim-rise', d: 1.3, x: 57.62, y: 29.0, w: 28.76, ratio: 16/9, t: '配图位' },
+                { slotId: 'p5_warn_b',  cls: 't-warn anim-rise', d: 1.9, x: 57.62, y: 59.5, w: 28.76, center: true }
             ]
         },
         {
             bg: '#D9D2E9', tr: 'cube', dur: null, name: 'p6_end',
             slots: [
                 { slotId: 'p6_title', cls: 't-end', chars: true, d: .25, x: 2.5, y: 10.4, w: 95, max: 28 },
-                { slotId: 'p6_bird',  kind: 'img', cls: 'anim-zoom', d: 1.4, x: 30, y: 25, w: 40, src: 'Atlases/WaveDashing/Bird Clip Art.png' }
+                { slotId: 'p6_bird',  kind: 'img', cls: 'anim-zoom', d: 1.4, x: 30, y: 27, w: 40, src: 'Atlases/WaveDashing/Bird Clip Art.png' }
             ]
         }
     ];
@@ -125,21 +129,24 @@
             '  - 讲具体的事，不说大道理——原作里从不说"希望这能帮到你"',
             '  - 不礼貌不官方不说教不鸡汤，像个真实玩家在写心得',
             '',
-            '【原作逐字风格锚定 —— 请照抄这些句式和语气】',
-            '  ✅ 原作会写：凌波微步真的好难。',
-            '  ❌ 原作绝不会写：凌波微步这一操作具备相当的难度。',
+            '【语感参考示例 —— 以下仅为语感参考，禁止复用其中任何名词或具体词】',
+            '  〔 〕里全是占位符，不是素材，绝不允许写进输出。',
+            '  示例只示范语气、断句和长度；真实内容只能来自下方的患者日记。',
             '',
-            '  ✅ 原作会写：有时候没能刷新冲刺。',
-            '  ❌ 原作绝不会写：在某些情况下冲刺刷新操作未能成功执行。',
+            '  ✅ 会写：〔主题〕真的好〔难〕。',
+            '  ❌ 绝不会写：〔主题〕这一〔事物〕具备相当的〔难度〕。',
             '',
-            '  ✅ 原作会写：而且打第九章还必须得学（这最坏了）',
-            '  ❌ 原作绝不会写：此外第九章关卡要求玩家必须掌握此技能。',
+            '  ✅ 会写：有时候没能〔做到某个动作〕。',
+            '  ❌ 绝不会写：在某些情况下〔某个操作〕未能成功执行。',
             '',
-            '  ✅ 原作会写：不可能完成的任务？',
-            '  ❌ 原作绝不会写：这似乎是一项不可能达成的挑战？',
+            '  ✅ 会写：而且〔某个环节〕还必须得〔掌握〕（这最坏了）',
+            '  ❌ 绝不会写：此外〔某个环节〕要求玩家必须掌握此技能。',
             '',
-            '  ✅ 原作会写：介绍…凌波微步.ppt!!',
-            '  ❌ 原作绝不会写：以下为该技巧的详细教学方案。',
+            '  ✅ 会写：不可能〔做到〕的〔事〕？',
+            '  ❌ 绝不会写：这似乎是一项不可能达成的挑战？',
+            '',
+            '  ✅ 会写：介绍…〔某某〕.ppt!!',
+            '  ❌ 绝不会写：以下为该〔方法〕的详细教学方案。',
             '',
             '═══════════════════════════════════════════════════════════',
             '【上世纪 AI 官样文章黑名单 —— 出现任何一条直接 0 分】',
@@ -156,69 +163,61 @@
             '',
             '═══════════════════════════════════════════════════════════',
             '【你要生成的 6 页 PPT —— 严格按 key 填，只输出纯 JSON】',
+            '  （下面 ✅ 里的〔 〕同样是占位符，只示范语气和长度；真实内容必须来自日记原文）',
             '',
             '{',
             '',
             '─── P1 封面 ───',
-            '  "p1_title":   "格式：{topic}与我，6-9字，例：凌波微步与我",',
-            '                ✅ 凌波微步与我  ❌ 关于凌波微步的学习指南',
+            '  "p1_title":   "格式：{topic}与我，6-9字，例：〔主题〕与我",',
+            '                ✅ 〔主题〕与我  ❌ 关于〔主题〕的〔正式标题〕',
             '  "p1_sub":     "副标题，像 Madeline 随手写的一句话，≤14字"',
-            '                ✅ 学不会？来看看  ❌ 学习凌波微步的实用方法',
+            '                ✅ 学不会？来看看  ❌ 学习〔主题〕的〔实用方法〕',
             '',
             '─── P2 痛点页 ───（这是情绪最高点，必须有力量）',
+            '  "p2_head":    "你在{topic}上卡壳了？ 像 Madeline 自问，≤12字"',
+            '                ✅ 你在〔主题〕上卡壳了？  ❌ 关于〔主题〕的〔困难〕分析',
             '  "p2_fact":    "事实：{topic}真的好难！ 以感叹号结尾！"',
-            '                ✅ 事实：凌波微步真的好难！',
+            '                ✅ 事实：〔主题〕真的好难！',
             '  "p2_hard1":   "第一个具体难点，从日记里扒细节，必须有场景感"',
-            '                ✅ 每次冲刺都差最后一步  ❌ 操作不够熟练',
+            '                ✅ 每次〔某个动作〕都差最后一步  ❌ 〔操作〕不够熟练',
             '  "p2_hard2":   "第二个不同维度的具体难点"',
-            '                ✅ 跳的时机老是按错  ❌ 时机掌握不好',
+            '                ✅ 〔某个时机〕老是按错  ❌ 〔时机〕掌握不好',
             '  "p2_worst":   "最难的地方！绝望感拉满，但别太长"',
-            '                ✅ 而且卡这关都三天了  ❌ 这件事对我影响很大',
+            '                ✅ 而且〔某件事〕都〔持续了多久〕  ❌ 〔这件事〕对我影响很大',
             '  "p2_impossible":"核心梗！不可能{XX}的{XX}？ 12字以内"',
             '                公式：不可能 + [否定动词] + 的 + [topic名词] + ？',
-            '                ✅ 不可能学会的凌波微步？  ❌ 这似乎不太可能做到？',
+            '                ✅ 不可能〔否定动词〕的〔主题〕？  ❌ 这似乎不太可能做到？',
+            '  "p2_tail":    "随口的补刀，≤10字，带括号"',
+            '                ✅ （这最坏了）  ❌ 〔正式总结句〕',
             '',
             '─── P3 介绍页 ───（从绝望转折到希望，这很重要）',
             '  "p3_title":   "介绍…{你想出来的解法名}!!"',
-            '                ✅ 介绍…凌波微步.ppt!!  ❌ 介绍…解决方法!!',
+            '                ✅ 介绍…〔解法名〕.ppt!!  ❌ 介绍…〔笼统名称〕!!',
             '                解法名要酷要具体，像游戏里的技能名',
             '  "p3_desc":    "解法的意义，像 Madeline 在推销自己的小发明"',
-            '                ✅ 把所有坑都帮你踩过了！  ❌ 本方案涵盖所有必要内容',
+            '                ✅ 〔具体到坑的一句话〕  ❌ 〔方案覆盖内容〕',
             '',
             '─── P4 方法页 ───（三步，必须有递进感）',
             '  "p4_title":   "{XX}方法" 简短有力',
-            '                ✅ 凌波微步.ppt  ❌ 操作步骤',
+            '                ✅ 〔解法名〕  ❌ 〔步骤说明〕',
             '  "p4_step1":   "第一步：一个具体动作"',
-            '                ✅ 靠近墙的边缘  ❌ 确保你准备好',
+            '                ✅ 靠近〔某个位置〕  ❌ 〔笼统准备〕',
             '  "p4_step2":   "第二步：承接 step1"',
-            '                ✅ 冲刺的同时按跳跃',
+            '                ✅ 〔某个动作〕的同时〔另一个动作〕',
             '  "p4_step3":   "第三步：带成了的感觉"',
-            '                ✅ 就这么跳过去了！  ❌ 完成整个操作流程',
+            '                ✅ 就这么〔成功〕了！  ❌ 〔完成整个操作流程〕',
             '',
-            '─── P5 天堂中的麻烦（红字警告）───',
-            '  "p5_sub_a":   "如果…句式，一个具体的坏情况"',
-            '                ✅ 如果跳的不够远…  ❌ 如果遇到困难…',
-            '  "p5_prevent_a":"对应的自救方法，要像游戏教程里的提示"',
-            '                ✅ 试试疯狂模式帮你刷新',
-            '  "p5_sub_b":   "另一种坏情况，和 a 不一样"',
-            '  "p5_prevent_b":"对应的自救方法"',
+            '─── P5 天堂中的麻烦（红字警告，左右两格各两行）───',
+            '  "p5_warn_a":  "如果…句式，一个具体的坏情况 + <br> + 对应的自救方法"',
+            '                ✅ 如果〔某个动作〕不够到位…<br>试试〔某个功能〕',
+            '                ❌ 如果〔泛泛情况〕…',
+            '  "p5_warn_b":  "另一种坏情况 + <br> + 对应的自救方法，和 a 不一样"',
+            '                ✅ 如果老是〔提前做某个动作〕…<br>盯着〔某个位置〕再做一次',
             '',
             '─── P6 结尾 ───（温暖收尾）',
             '  "p6_title":   "{XXXX}，快乐的{XXXX}"',
-            '                ✅ 凌波微步，快乐的你  ❌ 凌波微步，掌握技巧的你',
-            '                第二个空填你、我们、生活——抽象一点，给人希望',
-            '',
-            '─── 4 张配图的图片生成 prompt（和 Celeste 游戏截图风格贴近，英文）───',
-            '  每张图的 prompt 要让 AI 图像生成器画出和 Celeste 官方截图类似的像素风：',
-            '  关键词：celeste game style, flat 2D pixel art, blue-orange Madeline character,',
-            '          teal-purple-snowy scenery, clean composition, no text, game screenshot',
-            '  具体每张图：',
-            '  "p3_img_prompt": "Madeline the climber girl (red hair, blue jacket) standing near a snowy geodesic dome building, Internet Cafe sign visible, Celeste game pixel art style, flat 2D, teal purple snow scenery, clean background, no text, game screenshot quality"',
-            '  "p4_img_prompt": "Madeline (red hair, blue jacket) performing a wave dash wall jump mid-air, pixel art action shot, Celeste game style, blue and teal mountain background, flat 2D, dynamic pose, no text, game screenshot"',
-            '  "p5_img_a_prompt": "Madeline in trouble, slipping or failing a jump, frustrated expression, pixel art, Celeste game style, dark cave or mountain setting, flat 2D, no text, game screenshot"',
-            '  "p5_img_b_prompt": "Madeline looking determined after failure, kneeling or standing up again, pixel art, Celeste game style, snowy mountain background, flat 2D, emotional, no text, game screenshot"',
-            '',
-            '  注意：topic 如果不是"凌波微步"，把 prompt 里的 wave dash 换成具体动作。',
+            '                ✅ 〔主题〕，快乐的〔抽象词〕  ❌ 〔主题〕，〔具体结果〕的你',
+            '                第二个空填一个抽象的词，给人希望',
             '',
             '}',
             '',
@@ -344,7 +343,7 @@
             var items = slideTpl.slots.map(function (slot) {
                 // 图片槽：模板自带 src（Guy、Bird）
                 if (slot.kind === 'img') {
-                    return { kind: 'img', cls: slot.cls, d: slot.d, x: slot.x, y: slot.y, w: slot.w, src: slot.src };
+                    return { kind: 'img', key: slot.slotId, cls: slot.cls, d: slot.d, x: slot.x, y: slot.y, w: slot.w, src: slot.src };
                 }
                 // 配图位：如果 data 里有对应的图片 URL → 换成 img；没有就保持占位 ph
                 if (slot.kind === 'ph') {
@@ -359,10 +358,11 @@
                     var imgKey = slotToImg[slot.slotId];
                     var imgUrl = imgKey ? data[imgKey] : null;
                     if (imgUrl) {
-                        return { kind: 'img', cls: slot.cls, d: slot.d, x: slot.x, y: slot.y, w: slot.w, src: imgUrl };
+                        // AI 配图统一：模板给出固定 16:9 框 + cover，尺寸不再随图源固有比例漂移
+                        return { kind: 'img', key: slot.slotId, cls: slot.cls, d: slot.d, x: slot.x, y: slot.y, w: slot.w, src: imgUrl, ratio: slot.ratio, fit: 'cover' };
                     }
-                    // 没图 → 保持占位框
-                    return { kind: 'ph', cls: slot.cls, d: slot.d, x: slot.x, y: slot.y, w: slot.w, ratio: slot.ratio, t: slot.t };
+                    // 没图 → 保持占位框（key 供图片异步返回后热替换；fit/ratio 供 patchImage 复原固定框）
+                    return { kind: 'ph', key: slot.slotId, cls: slot.cls, d: slot.d, x: slot.x, y: slot.y, w: slot.w, ratio: slot.ratio, fit: 'cover', t: slot.t };
                 }
                 // 纯静态硬编码 t（p3_shi "这很简单！" / p4_tail "学会了！" / p5_head "天堂中的麻烦？"）
                 if (slot.t && !data[slot.slotId]) {
@@ -389,103 +389,195 @@
         });
     }
 
-    function readCache(topic) {
+    // ---- 缓存：v6 列表（多份课件，各自 id）----
+    // 旧 v5 是单份 {topic, slides, ts}；首次读 v6 时把旧那份迁进来，旧 key 保留不删。
+    var MAX_ITEMS = 6;
+    var removedIds = {};   // 本页内已删除/被挤出的 id：后台迟到的 AI 结果不允许把它复活
+
+    function genId() {
+        return 'ppt-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
+    }
+    function itemLabel(topic) { return (topic || '这件事') + '与我.ppt'; }
+
+    function readAll() {
         try {
-            var c = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
-            if (c && c.topic === topic && Date.now() - c.ts < 24 * 3600 * 1000) return c.slides;
+            var o = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+            if (o && Array.isArray(o.items)) {
+                return o.items.filter(function (it) {
+                    return it && it.id && Array.isArray(it.slides) && it.slides.length;
+                });
+            }
         } catch (e) {}
+        // 旧单份缓存平滑迁移：至少保证已有那份不凭空消失
+        try {
+            var old = JSON.parse(localStorage.getItem(LEGACY_CACHE_KEY) || 'null');
+            if (old && Array.isArray(old.slides) && old.slides.length) {
+                var oldTopic = old.topic || '这件事';
+                var item = { id: genId(), topic: oldTopic, label: itemLabel(oldTopic), slides: old.slides, ts: old.ts || Date.now() };
+                writeAll([item]);
+                return [item];
+            }
+        } catch (e) {}
+        return [];
+    }
+    function writeAll(items) {
+        try { localStorage.setItem(CACHE_KEY, JSON.stringify({ items: items })); } catch (e) {}
+    }
+    function saveItem(topic, slides, id) {
+        if (!slides || !slides.length) return null;
+        if (id && removedIds[id]) return null;
+        var items = readAll();
+        var item = null;
+        for (var i = 0; i < items.length; i++) {
+            if (id && items[i].id === id) { item = items[i]; break; }
+        }
+        if (item) {
+            item.topic = topic || item.topic;
+            item.label = itemLabel(item.topic);
+            item.slides = slides;
+            item.ts = Date.now();
+        } else {
+            item = { id: id || genId(), topic: topic || '这件事', label: itemLabel(topic), slides: slides, ts: Date.now() };
+            items.push(item);
+        }
+        // 超过 6 份：直接移除最早的一份（不进回收站，也不允许被后台请求复活）
+        while (items.length > MAX_ITEMS) {
+            var gone = items.shift();
+            removedIds[gone.id] = true;
+        }
+        writeAll(items);
+        return item;
+    }
+    function removeItem(id) {
+        removedIds[id] = true;
+        var items = readAll().filter(function (it) { return it.id !== id; });
+        writeAll(items);
+        return items;
+    }
+    function readCache(topic) {
+        var items = readAll();
+        for (var i = items.length - 1; i >= 0; i--) {
+            if (items[i].topic === topic && Date.now() - items[i].ts < 24 * 3600 * 1000) return items[i].slides;
+        }
         return null;
     }
-    function writeCache(topic, slides) {
-        try { localStorage.setItem(CACHE_KEY, JSON.stringify({ topic: topic, slides: slides, ts: Date.now() })); } catch (e) {}
-    }
 
-    async function generate(topic, rawText, evidence) {
-        // fallback：先从日记里扒真实句子 → 立刻返回，不卡
+    // 4 个配图位 → 这一页的标题/要点（画面描述由后端 /ppt/image 生成，前端只负责给文案）
+    var IMAGE_SLOTS = [
+        { slotId: 'p3_placeholder', urlKey: 'p3_img',   titleKey: 'p3_title', points: ['p3_desc'] },
+        { slotId: 'p4_placeholder', urlKey: 'p4_img',   titleKey: 'p4_title', points: ['p4_step1', 'p4_step2', 'p4_step3'] },
+        { slotId: 'p5_ph_a',        urlKey: 'p5_img_a', titleKey: 'p5_head',  titleFallback: '天堂中的麻烦？', points: ['p5_warn_a'] },
+        { slotId: 'p5_ph_b',        urlKey: 'p5_img_b', titleKey: 'p5_head',  titleFallback: '天堂中的麻烦？', points: ['p5_warn_b'] }
+    ];
+
+    async function generate(topic, rawText, evidence, itemId) {
+        // 本地兜底：先从日记里扒真实句子 → 立刻返回，保证播放器马上有内容
         var safe = buildSlides(buildFallbackFromDiary(topic, evidence, rawText), topic);
-        var cached = readCache(topic);
-        if (cached) return cached;
-
-        // 后台异步：先拿 AI 文本 → 再给 4 个配图位生图 → 逐步热更新
-        if (typeof window.api === 'function') {
-            (async function () {
-                var obj = null;
-                try {
-                    var res = await window.api('/ppt/generate', 'POST', {
-                        topic: topic, diary: rawText, evidence: evidence,
-                        prompt: buildPrompt(topic, evidence, rawText)
-                    }, 3000);
-                    if (res && res.success && res.data) {
-                        obj = parseAiJson(res.data.content || res.data.text || JSON.stringify(res.data));
-                    }
-                } catch (e) { /* 端点不通就跳过，obj 保持 null */ }
-
-                // 如果 AI 文本生成失败 → 用 fallback 的字，还是尝试生图
-                if (!obj) obj = buildFallbackFromDiary(topic, evidence, rawText);
-
-                // 如果 AI 端点直接返回了图片 URL（p3_img/p4_img/...）→ 直接用
-                // 如果只有 prompt → 调前端生图
-                var needImg = [];
-                var slotMap = [
-                    { promptKey: 'p3_img_prompt',     urlKey: 'p3_img' },
-                    { promptKey: 'p4_img_prompt',     urlKey: 'p4_img' },
-                    { promptKey: 'p5_img_a_prompt',   urlKey: 'p5_img_a' },
-                    { promptKey: 'p5_img_b_prompt',   urlKey: 'p5_img_b' }
-                ];
-                for (var k = 0; k < slotMap.length; k++) {
-                    if (!obj[slotMap[k].urlKey] && obj[slotMap[k].promptKey]) {
-                        needImg.push(slotMap[k]);
-                    }
-                }
-                if (needImg.length) {
-                    await generateImages(obj, needImg);
-                }
-
-                var slides = buildSlides(obj, topic);
-                writeCache(topic, slides);
-                // 热更新
-                if (window.BerryPPT && typeof window.BerryPPT.setSlides === 'function') {
-                    window.BerryPPT.setSlides(slides);
-                }
-            })();
+        // 指定 itemId（新生成一份）时不复用同主题旧缓存，避免两份内容串在一起
+        if (!itemId) {
+            var cached = readCache(topic);
+            if (cached) return cached;
         }
-        // 立即返回 fallback
+        itemId = itemId || genId();
+        // 本地兜底先落缓存：写完日记马上跳到桌面/刷新，格子里也已经有内容
+        saveItem(topic, safe, itemId);
+        if (typeof window.api !== 'function') return safe;
+
+        // 后台异步：AI 文本先到先换，图片最后补位，任何一步失败都不影响播放
+        (async function () {
+            var obj = null;
+            try {
+                // 45s：后端要等主模型返回完整 JSON；原先 3s 必然超时
+                var res = await window.api('/ppt/generate', 'POST', {
+                    topic: topic, diary: rawText, evidence: evidence,
+                    prompt: buildPrompt(topic, evidence, rawText)
+                }, 45000);
+                if (res && res.success && res.data) {
+                    obj = parseAiJson(res.data.content || res.data.text || JSON.stringify(res.data));
+                }
+            } catch (e) { /* 端点不通/超时：obj 保持 null，走本地兜底 */ }
+
+            if (!obj) obj = buildFallbackFromDiary(topic, evidence, rawText);
+
+            var slides = buildSlides(obj, topic);
+            saveItem(topic, slides, itemId);
+            // 文本热更新：播放器开着就原地续播当前页，不打断
+            if (window.BerryPPT && typeof window.BerryPPT.setSlides === 'function') {
+                window.BerryPPT.setSlides(slides);
+            }
+
+            // 图片异步：每张回来就热替换对应图位，不阻塞翻页
+            await generateImages(slides, obj, topic);
+            saveItem(topic, slides, itemId);
+        })();
+
         return safe;
     }
 
-    /**
-     * 前端生图：并发调用 text_to_image 接口
-     * 改 obj[imgKey] 为真实图片 URL（后端如果已返回 URL 就跳过）
-     */
-    async function generateImages(obj, needSlots) {
-        // 把中文 topic 换成 Celeste prompt 里的英文描述
-        var slug = obj.p3_title ? '' : ''; // slug 已在外面
-        var promptPrefix = 'celeste game style flat 2D pixel art, ';
-        // 并发生 4 张（快很多）
-        var promises = needSlots.map(function (slot) {
-            var prompt = (obj[slot.promptKey] || promptPrefix + 'Madelene in Celeste game').trim();
-            return _fetchImage(prompt).then(function (url) {
-                if (url) obj[slot.urlKey] = url;
-            }).catch(function () { /* 单张失败不阻塞其他 */ });
+    /** 并发给 4 个配图位生图；单张失败保留占位，不影响其他 */
+    async function generateImages(slides, obj, topic) {
+        // 没有播放器时（例如在日记页后台生成）也要跑：图片写进 slides 与缓存，桌面打开时才有图
+        var canPatch = !!(window.BerryPPT && typeof window.BerryPPT.patchImage === 'function');
+
+        var jobs = IMAGE_SLOTS.map(function (slot) {
+            var title = obj[slot.titleKey] || slot.titleFallback || topic;
+            var points = slot.points.map(function (k) { return obj[k] || ''; }).filter(Boolean);
+            return _fetchImage(title, points).then(function (url) {
+                if (!url) return;
+                obj[slot.urlKey] = url;
+                patchSlideImage(slides, slot.slotId, url);
+                if (canPatch) window.BerryPPT.patchImage(slot.slotId, url);
+            }).catch(function () { /* 单张失败：保持占位 */ });
         });
-        await Promise.all(promises);
+        await Promise.all(jobs);
     }
 
-    /**
-     * 实际生图请求：先试用户后端的 /ppt/image，没有就用 Trae text_to_image 代理
-     * 返回图片 URL 或 null
-     */
-    function _fetchImage(prompt) {
-        // 优先：用户自己的后端（如果部署了）
-        if (typeof window.api === 'function') {
-            return window.api('/ppt/image', 'POST', { prompt: prompt, size: 'landscape_4_3' }, 5000)
-                .then(function (res) {
-                    if (res && res.success && res.data && res.data.url) return res.data.url;
-                    if (res && res.data && (res.data.url || res.data.image)) return res.data.url || res.data.image;
-                    return null;
-                });
+    /** 把内存里的 slides 数据同步成 img，保证下一次打开/写缓存时图片还在 */
+    function patchSlideImage(slides, key, url) {
+        slides.forEach(function (sd) {
+            sd.items.forEach(function (it) {
+                if (it.key !== key) return;
+                if (it.kind === 'img') {
+                    it.src = url;
+                } else {
+                    it.kind = 'img';
+                    it.src = url;
+                    delete it.ratio;
+                    delete it.t;
+                }
+            });
+        });
+    }
+
+    /** 调后端 /ppt/image：标题+要点 → 画面描述 → Kolors → 下载落库；返回站内绝对地址或 null */
+    function _fetchImage(title, points) {
+        if (typeof window.api !== 'function') return Promise.resolve(null);
+        return window.api('/ppt/image', 'POST', { title: title, points: points }, 90000)
+            .then(function (res) {
+                // 后端返回的是 /ppt/image/{id} 站内地址，可直接给 <img src>
+                if (res && res.success && res.data && res.data.url) return res.data.url;
+                return null;
+            })
+            .catch(function () { return null; });
+    }
+
+    // 轻量「发起生成」：只产出内容并写缓存，不要求播放器存在、也不打开播放器。
+    // 日记页保存后走这条；结果由 berryos 桌面格子在下次进桌面时读缓存恢复。
+    async function triggerAndGenerate() {
+        if (!window.BerryDetect) return { triggered: false, slides: [] };
+        var result = window.BerryDetect.shouldTrigger();
+        if (!result.triggered) return { triggered: false, slides: [] };
+        var topic = result.topic || '这件事';
+        var text = result.rawText || '';
+        var evidence = result.evidence || [];
+        var itemId = genId();  // 每篇日记一份，各自 id
+        var slides = await generate(topic, text, evidence, itemId);
+        if (!slides || !slides.length) {
+            removeItem(itemId);
+            return { triggered: true, topic: topic, item: null, slides: [] };
         }
-        return Promise.resolve(null);
+        var item = saveItem(topic, slides, itemId);
+        return { triggered: true, topic: topic, item: item, slides: slides };
     }
 
     async function triggerAndOpen() {
@@ -509,7 +601,8 @@
 
     window.BerryPPTGen = {
         generate: generate, buildSlides: buildSlides,
-        triggerAndOpen: triggerAndOpen, readCache: readCache,
+        triggerAndOpen: triggerAndOpen, triggerAndGenerate: triggerAndGenerate,
+        readCache: readCache, readAll: readAll, removeItem: removeItem,
         clearCache: function () { localStorage.removeItem(CACHE_KEY); }
     };
 })();

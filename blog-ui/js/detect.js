@@ -25,6 +25,10 @@
 
     // ---- 1. 从 localStorage 提取日记全部文本 ----
     function extractDiaryText() {
+        // 优先读保存成功当下拍下的正文快照：jbook-* 草稿随后会被清空，
+        // 延迟检测不能再依赖 localStorage 里的草稿。快照为空时行为不变。
+        var snapshot = window._pptDiarySnapshot;
+        if (typeof snapshot === 'string' && snapshot.trim()) return snapshot;
         var keys = Object.keys(localStorage).filter(function (k) {
             return k.startsWith('jbook-');
         });

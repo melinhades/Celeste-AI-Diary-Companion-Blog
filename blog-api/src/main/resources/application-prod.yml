@@ -109,6 +109,12 @@ ai:
   embedding-model: ${AI_EMBEDDING_MODEL:BAAI/bge-m3}
   embed-base-url: ${AI_EMBED_BASE_URL:}
   embed-api-key: ${AI_EMBED_API_KEY:}
+  # PPT 配图：默认硅基流动 Kolors；Key 复用 AI_FAST_API_KEY（硅基流动），也可用 AI_IMAGE_API_KEY 显式覆盖
+  image-base-url: ${AI_IMAGE_BASE_URL:https://api.siliconflow.cn/v1}
+  image-api-key: ${AI_IMAGE_API_KEY:}
+  image-model: ${AI_IMAGE_MODEL:Kwai-Kolors/Kolors}
+  image-size: ${AI_IMAGE_SIZE:1344x768}
+  image-read-timeout: ${AI_IMAGE_READ_TIMEOUT:60000}
 
 # Madeline 情绪分析 v2 — 消融实验开关（全部默认为 true，置 false 即关闭对应子模块）
 # 消融实验流程：依次把每个开关置 false，跑相同 100 条输入，记录 Judge 评分变化
