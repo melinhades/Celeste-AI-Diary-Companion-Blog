@@ -61,6 +61,8 @@ public class WebMVCConfig implements WebMvcConfigurer {
                 .addPathPatterns("/roundtable/suggestions")
                 // Madeline agent：fetch POST 带 Header，走登录拦截器
                 .addPathPatterns("/agent/**")
+                // 主动消息 SSE：EventSource 带不了 Header，stream 由 ProactiveController 用 query token 手验
+                .excludePathPatterns("/proactive/stream")
                 .excludePathPatterns("/chat/test-ai");
     }
 
