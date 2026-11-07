@@ -31,7 +31,7 @@
 
     <!-- 只保留 blog-api 与 blog-admin 共同使用的依赖；模块独有依赖下沉到各自 pom。
          blog-api 独有：aop / redis(+commons-pool2) / fastjson / commons-collections / joda-time
-                        / jjwt / commons-codec / spring-security-crypto / qiniu / archunit(test)
+                        / jjwt / commons-codec / spring-security-crypto / archunit(test)
          blog-admin 独有：spring-boot-starter-security（见 blog-admin/pom.xml）
          spring-boot-starter-mail 已移除：两个模块均无 import、无 spring.mail 配置 -->
     <dependencies>
@@ -165,11 +165,6 @@
                 <groupId>io.jsonwebtoken</groupId>
                 <artifactId>jjwt-jackson</artifactId>
                 <version>0.11.5</version>
-            </dependency>
-            <dependency>
-                <groupId>com.qiniu</groupId>
-                <artifactId>qiniu-java-sdk</artifactId>
-                <version>[7.7.0, 7.7.99]</version>
             </dependency>
             <dependency>
                 <groupId>com.tngtech.archunit</groupId>

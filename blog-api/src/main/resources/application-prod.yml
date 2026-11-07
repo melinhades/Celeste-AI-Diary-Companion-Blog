@@ -73,11 +73,6 @@ jwt:
   secret: ${JWT_SECRET:CHANGE_ME_JWT_SECRET_32_BYTES_MINIMUM}
   expiration: 2592000000  # 30天，单位毫秒
 
-# 七牛云配置
-qiniu:
-  accessKey: ${QINIU_ACCESS_KEY:}
-  accessSecretKey: ${QINIU_SECRET_KEY:}
-
 # Cloudflare R2 图片存储（S3 兼容）；默认关闭，关闭或配置不全时图片自动回退存数据库
 # 启用：部署时设 R2_ENABLED=true 并注入 R2_ENDPOINT / R2_BUCKET / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY
 r2:

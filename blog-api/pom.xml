@@ -80,12 +80,6 @@
             <artifactId>spring-security-crypto</artifactId>
         </dependency>
 
-        <!-- 七牛云图片上传：QiniuUtils -->
-        <dependency>
-            <groupId>com.qiniu</groupId>
-            <artifactId>qiniu-java-sdk</artifactId>
-        </dependency>
-
         <!-- Cloudflare R2 图片上传：R2 兼容 S3 协议，用 AWS SDK v2 的 S3 客户端接入（版本由父 pom 的 BOM 锁定） -->
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
