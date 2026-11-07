@@ -628,6 +628,14 @@
     cam.y += (ty - cam.y) * k;
     clampCam();
   }
+  // 泡泡飞行中：原作 CassetteFlyCoroutine 每帧 Camera.Position = CameraTarget（无平滑），
+  // 即玩家恒在视口正中；本页 cam 存视口中心，直接对准玩家再夹紧房间边界。
+  function bubbleFlying() { return !!m && m.state === CelesteCharacter.ST.CassetteFly; }
+  function followCamBubble() {
+    cam.x = m.x;
+    cam.y = m.y;
+    clampCam();
+  }
   function toScreen(p) {
     return {
       x: (p.x - cam.x + viewW() / 2) * Z,
@@ -1036,7 +1044,7 @@
   }
 
   // ===== 死亡 / 重生 =====
-  var dust = [], time = 0, flash = 0, deathTimer = 0;
+  var dust = [], time = 0, flash = 0;
   // angle 省略 = 向上全向爆散；传入弧度 = 沿该方向的锥形（原作 Dust.Burst(pos, angle, n)）
   // 原作 Dust.Burst → ParticleTypes.Dust（ParticleTypes.Load IL）：
   //   SourceChooser = particles/smoke0..3（8×8）· Color = White · LifeMin/Max = 0.3/0.5
@@ -1068,26 +1076,48 @@
       strength: strength, clip: clipBlock || null, pad: pad || 0
     });
   }
-  // quiet=true：开局定位用，不放白闪/冻结（否则一进场先白一下再卡 0.35s）
+  // quiet=true：开局定位用，不放演出；quiet=false 仅手动重来（按 r）用瞬移。
   function respawn(quiet) {
     m.x = SPAWN.x; m.y = SPAWN.y; m.vx = 0; m.vy = 0;
     feetPrev = SPAWN.y;
+    m.scaleX = m.scaleY = 1; m.spriteY = 0;
     m.dashTime = 0; m.dashTrail.length = 0;
     m.wallSlideDir = 0; m.wallSlideTimer = 1.2; m.dashAttackTimer = 0;
     m.bodySolidFn = bodySolid;
     dreamTravelStop();   // 重生时停掉可能残留的 dreamblock_travel 循环
     dust.length = 0;
-    if (quiet) {
-      deathTimer = 0;
-      flash = 0;
-    } else {
-      deathTimer = 0.35;
-      flash = Math.max(flash, 0.35);
-    }
+    flash = 0;
+  }
+  // 死亡 → 泡泡运送（替代旧版 0.35s 白闪 + 瞬移）。
+  // 原作没有死亡泡泡；这里复用 Player.StCassetteFly=21：
+  // 0.12s 原地裹泡（BUBBLE_GRAB_TIME）→ 0.625s 二次贝塞尔 SineInOut → 0.2s fallFast → 恢复可控。
+  function beginBubbleReturn() {
+    if (!m || leaving || bubbleFlying()) return;   // 过渡期再触发判定：不重复生成泡泡
+    dreamTravelStop();
+    m.freezeTimer = 0;
+    m.dashTime = 0; m.dashTrail.length = 0;
+    m.wallSlideDir = 0; m.wallSlideTimer = 1.2; m.dashAttackTimer = 0;
+    m.dreamBlock = null;
+    dust.length = 0;
+    flash = 0;                                     // 泡泡演出不叠白闪
+    m.startCassetteFly({ x: SPAWN.x, y: SPAWN.y }); // 终点 = 原作出生点 SPAWN
+    CelesteCharacter.playBubbleReturn();            // cassette_bubblereturn 占位音
   }
   function die() {
-    if (deathTimer > 0 || leaving) return;
-    respawn();
+    if (leaving) return;
+    beginBubbleReturn();
+  }
+  // 尘土 / 梦境涟漪推进（正常帧与泡泡帧共用）
+  function stepFx(dt) {
+    for (var i = dust.length - 1; i >= 0; i--) {
+      var d = dust[i];
+      d.x += d.vx * dt; d.y += d.vy * dt; d.vy += 240 * dt; d.life -= dt;
+      if (d.life <= 0) dust.splice(i, 1);
+    }
+    for (var r = dreamRipples.length - 1; r >= 0; r--) {
+      dreamRipples[r].life -= dt;
+      if (dreamRipples[r].life <= 0) dreamRipples.splice(r, 1);
+    }
   }
 
   // ===== 进入 berryOS =====
@@ -1562,7 +1592,8 @@
     // Monocle 按 actualDepth 降序渲染（EntityList::CompareDepth = Sign(b.actualDepth - a.actualDepth)），
     // 所以常态玩家(0) 先画、块(-11000) 盖在其上；梦冲玩家(-12000) 最后画，压在块与所有块元素之上。
     var dreamDashing = m && m.state === CelesteCharacter.ST.DreamDash;
-    if (m && !dreamDashing) m.draw(ctx, toScreen, Z);   // 常态：玩家在块之后
+    var inBubble = bubbleFlying();
+    if (m && !dreamDashing && !inBubble) m.draw(ctx, toScreen, Z);   // 常态：玩家在块之后
     drawDreamBlocks();
     if (m && dreamDashing) m.draw(ctx, toScreen, Z);    // 梦冲：玩家在最前，块内清晰可见
     drawDreamRipples();                          // Displacement 近似（盖在方块/玩家之上）
@@ -1573,6 +1604,15 @@
     drawCafeFront();                             // 前墙 / 霓虹（进店后淡出）
     sky.renderFg(cam.x, cam.y);                  // purplesunset additive .25
     cam.x = camX; cam.y = camY;
+    // FormationBackdrop（depth -1999900）：黑色 rect alpha = fade * 0.5 * 0.85 = 0.425
+    // 泡泡玩家（depth -2000000）画在它之上
+    if (inBubble) {
+      ctx.globalAlpha = m.cassetteBackdrop * 0.425;
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 1;
+      m.draw(ctx, toScreen, Z);
+    }
     if (flash > 0) {
       ctx.globalAlpha = Math.min(1, flash);
       ctx.fillStyle = '#eaf6ff';
@@ -1598,12 +1638,6 @@
     time += dt;
     sky.update(dt);
 
-    if (deathTimer > 0) {
-      deathTimer -= dt;
-      if (flash > 0) flash = Math.max(0, flash - dt * 1.5);
-      return;
-    }
-
     var input = {
       left: !!(keys['a'] || keys['arrowleft']),
       right: !!(keys['d'] || keys['arrowright']),
@@ -1617,6 +1651,20 @@
       aimY: (keys['s'] || keys['arrowdown'] ? 1 : 0) - (keys['w'] || keys['arrowup'] ? 1 : 0)
     };
     jumpEdge = dashEdge = false;
+
+    // 泡泡运送：玩家不可控（引擎只跑 CassetteFlyUpdate），摄像机每帧直接跟随
+    if (bubbleFlying()) {
+      m.update(dt, {});
+      // CollectRoutine 里 ResetZoom/ZoomBack：运输期把机位缩放退回全景
+      cameraEase += (0 - cameraEase) * Math.min(1, dt * 2);
+      insideEase += (0 - insideEase) * Math.min(1, dt * 4);
+      computeZoom();
+      followCamBubble();
+      updateDreamBlocks(dt);
+      stepFx(dt);
+      if (flash > 0) flash = Math.max(0, flash - dt * 1.5);
+      return;
+    }
 
     feetPrev = m.y;
     m.update(dt, input);
@@ -1650,15 +1698,7 @@
 
     if (m.y > ROOM.h + 12) die();
 
-    for (var i = dust.length - 1; i >= 0; i--) {
-      var d = dust[i];
-      d.x += d.vx * dt; d.y += d.vy * dt; d.vy += 240 * dt; d.life -= dt;
-      if (d.life <= 0) dust.splice(i, 1);
-    }
-    for (var r = dreamRipples.length - 1; r >= 0; r--) {
-      dreamRipples[r].life -= dt;
-      if (dreamRipples[r].life <= 0) dreamRipples.splice(r, 1);
-    }
+    stepFx(dt);
     if (flash > 0) flash = Math.max(0, flash - dt * 1.5);
   }
 
@@ -1717,6 +1757,15 @@
   };
   // 原作 DreamDashedIntoSolid 失败 → Die(Vector2.Zero, false, true)
   m.onDreamDashDeath = function () { dreamTravelStop(); die(); };
+  // 泡泡到达出生点：按重生补满冲刺/体力，落地恢复可控（State 已由引擎切回 Normal）
+  m.onCassetteLand = function () {
+    m.dashes = m.maxDashes; m.stamina = 110;
+    feetPrev = m.y;
+    m.onGround = true;
+    m.bodySolidFn = bodySolid;
+    m.hair.reset(m.x, m.y, m.facing);
+    dust.length = 0;
+  };
   m.onLand = function (vy) {
     // 原作 IntroCar.GetLandSoundIndex：落到车顶播 car_down 并返回 -1（覆盖默认落地音）
     var top = carTopAt(m.x);

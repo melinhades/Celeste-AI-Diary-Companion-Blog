@@ -83,6 +83,22 @@
     const HAIR_FLASH_TIME = 0.12;              // 闪白时长
     const FREEZE_TIME = 0.05;                  // Celeste.Freeze(.05f) → 3 帧
 
+    // CassetteFly（Player.cs:404 StCassetteFly=21 + CassetteFlyCoroutine 逐字）
+    // 原作 CassetteFlyCoroutine 是 yield return 0.4f（原地展示泡泡）。
+    // 本工程按需求压到 0.12s：判定触发即起泡，只保留「泡泡成形裹住角色」的可读性。
+    const BUBBLE_GRAB_TIME = 0.12;
+    const CASSETTE_FLY_RATE = 1.6;             // cassetteFlyLerp += 1.6f * dt → 0.625s 飞完
+    const CASSETTE_FLY_SCALE = 1.25;           // Sprite.Scale = Vector2.One * 1.25f
+    const CASSETTE_FLY_SPRITE_Y = 5;           // Sprite.Y += 5f
+    const CASSETTE_FLY_FALL_WAIT = 0.2;        // 到达后 yield return 0.2f
+    const CASSETTE_PARTICLE_INTERVAL = 0.03;   // 每 0.03s 喷 2 个
+    const CASSETTE_PARTICLE_LIFE_MIN = 0.4;    // ParticleTypes.P_CassetteFly LifeMin/Max
+    const CASSETTE_PARTICLE_LIFE_MAX = 1.0;
+    const CASSETTE_PARTICLE_SPEED_MIN = 8;     // SpeedMin/Max
+    const CASSETTE_PARTICLE_SPEED_MAX = 16;
+    const CASSETTE_PARTICLE_ACCEL_Y = -24;     // Acceleration = (0, -24)
+    const CASSETTE_PARTICLE_ALPHA = 0.6;       // Color.White * 0.6
+
     // Boost / RedDash（Player.cs 第 3788–3927 行 + 安装版 IL 核对）
     const BOOST_MOVE_SPEED = 80;               // BoostMoveSpeed：BoostUpdate 逼近目标的速度
     const BOOST_TIME = 0.25;                   // BoostTime：BoostCoroutine 停驻时长，到点自动进入 Dash/RedDash
@@ -158,6 +174,7 @@
     const ST_BOOST = ST.Boost, ST_RED_DASH = ST.RedDash;
     const ST_HIT_SQUASH = ST.HitSquash, ST_LAUNCH = ST.Launch;
     const ST_DREAM_DASH = ST.DreamDash;
+    const ST_CASSETTE_FLY = ST.CassetteFly;
 
     const SCALE_RECOVER = 1.75;
 
@@ -238,7 +255,10 @@
         // dreamDashOut 在 Sprites.xml 里定义，但本次取证的 PlayerSprite.Update 未找到播放入口 → 记 gap
         dreamDashIn:   { path: 'dreamDash', delay: 0.04, frames: range(0, 3),   goto: 'dreamDashLoop' },
         dreamDashLoop: { path: 'dreamDash', delay: 0.03, frames: range(4, 16),  loop: true },
-        dreamDashOut:  { path: 'dreamDash', delay: 0.04, frames: range(17, 20), goto: null }
+        dreamDashOut:  { path: 'dreamDash', delay: 0.04, frames: range(17, 20), goto: null },
+        // CassetteFly（StCassetteFly=21）：Sprites.xml <Loop id="bubble" path="bubble" delay="0.08" />
+        // 原作 bubble 只有 1 帧，Atlas 里是单帧文件 bubble.png（没有 NN 后缀），用 single 标记单独加载。
+        bubble:        { path: 'bubble', delay: 0.08, frames: [0], loop: true, single: true }
     };
 
     const HAIR = {
@@ -394,6 +414,16 @@
             this.lastDashes = 1;                          // 原作 lastDashes：比较触发闪白
             this.hairFlashTimer = 0;                      // 原作 hairFlashTimer
             this.dashTrail = [];                          // 冲刺残影（表现层）
+
+            // CassetteFly（StCassetteFly=21）状态变量
+            this.spriteY = 0;                             // 原作 Sprite.Y（bubble 时 +5）
+            this.cassetteFly = null;                      // { begin, end, control, wait, lerp, emitTimer, arriveTimer }
+            this.bubbleParticles = [];                    // P_CassetteFly 粒子（世界坐标，随页面坐标系）
+            this.bubbleParticleTex = null;                // particles/bubble.png
+            this.onCassetteLand = null;                   // 落地回调（页面复位用）
+            // FormationBackdrop：Display=true 时 fade 以 3/s 升到 1，关掉后 3/s 退回 0
+            this.cassetteBackdrop = 0;
+            this.cassetteBackdropTarget = 0;
             this.autoJump = false;
             this.autoJumpTimer = 0;
             this.forceMoveX = 0;
@@ -948,6 +978,15 @@
                 this.freezeTimer = 0;
             }
 
+            // 原作 Player.Update：State == StCassetteFly 时只跑 CassetteFlyUpdate，
+            // 不读输入、不做碰撞、不转向（ControlLock），表现层照常更新。
+            if (this.state === ST_CASSETTE_FLY) {
+                this.cassetteFlyUpdate(dt);
+                this.updateHairColor(dt);
+                this.updateSharedVisuals(dt);
+                return;
+            }
+
             // ==== 瞄准（原作 lastAim = Input.GetAimVector(Facing)）====
             // 缺口：GetAimVector 不在官方仓库。等价实现：8 向单位化 + 零输入回落 Facing。
             let ax = input.aimX || 0, ay = input.aimY || 0;
@@ -1083,6 +1122,151 @@
                 this.hair.setColor('normal');          // 红
             }
             this.lastDashes = this.dashes;
+        }
+
+        // ===== CassetteFly（StCassetteFly=21）=====
+        // 逐行移植 Player.cs L4902-4959 的 StartCassetteFly / CassetteFlyBegin /
+        // CassetteFlyUpdate / CassetteFlyCoroutine。原作这条协程是「拿到磁带后泡泡送回
+        // 本房间出生点」的演出；本工程复用为「死亡后泡泡运送」。
+        // 注意：原作没有 Bubble 实体，泡泡只是 bubble 精灵（单帧）；没有膨胀/破裂动画。
+        // target：贝塞尔终点（本工程 = 出生点）；control：贝塞尔控制点（可省略，运行时合成）。
+        startCassetteFly(target, control) {
+            const begin = { x: this.x, y: this.y };
+            if (!control) {
+                // 原作 control = 地图 nodes[0]；本工程没有地图节点，用「中点向上拱起」的合成点
+                const d = Math.hypot(target.x - begin.x, target.y - begin.y);
+                control = {
+                    x: (begin.x + target.x) / 2,
+                    y: (begin.y + target.y) / 2 - Math.min(48, d * 0.2)
+                };
+            }
+            this.cassetteFly = {
+                begin,
+                end: { x: target.x, y: target.y },
+                control: { x: control.x, y: control.y },
+                wait: BUBBLE_GRAB_TIME,
+                lerp: 0,
+                emitTimer: CASSETTE_PARTICLE_INTERVAL,
+                arriveTimer: 0,
+                arrived: false
+            };
+            this.state = ST_CASSETTE_FLY;
+            // StartCassetteFly：Speed = Vector2.Zero；Holding?.Drop() 由页面在调用前处理
+            this.vx = 0; this.vy = 0;
+            this.onGround = false;
+            this.ducking = false;
+            this.dashTrail.length = 0;
+            // CassetteFlyBegin：Sprite.Play("bubble")；Sprite.Y += 5
+            this.sprite.play('bubble');
+            this.spriteY = CASSETTE_FLY_SPRITE_Y;
+            // CassetteFlyCoroutine 开头：Sprite.Scale = Vector2.One * 1.25（之后按 1.75/s 回弹）
+            this.scaleX = CASSETTE_FLY_SCALE;
+            this.scaleY = CASSETTE_FLY_SCALE;
+            // FormationBackdrop.Display = true；Alpha = 0.5
+            this.cassetteBackdropTarget = 1;
+            if (this.onCassetteStart) this.onCassetteStart();
+        }
+
+        cassetteFlyUpdate(dt) {
+            const cf = this.cassetteFly;
+            if (!cf) return;
+            if (cf.wait > 0) {
+                // BUBBLE_GRAB_TIME（原作 0.4f，本工程压到 0.12s）：原地裹泡，世界照常运转，玩家不可控
+                cf.wait -= dt;
+                return;
+            }
+            if (!cf.arrived) {
+                // level.OnInterval(0.03f) → Particles.Emit(P_CassetteFly, 2, Center, One*4)
+                cf.emitTimer -= dt;
+                while (cf.emitTimer <= 0) {
+                    cf.emitTimer += CASSETTE_PARTICLE_INTERVAL;
+                    this.emitBubbleParticle();
+                    this.emitBubbleParticle();
+                }
+                // cassetteFlyLerp = Calc.Approach(cassetteFlyLerp, 1f, 1.6f * dt)
+                cf.lerp = Math.min(1, cf.lerp + CASSETTE_FLY_RATE * dt);
+                const t = (1 - Math.cos(Math.PI * cf.lerp)) / 2;   // Ease.SineInOut
+                // SimpleCurve.GetPoint：二次贝塞尔 P(t) = (1-t)²·Begin + 2(1-t)t·Control + t²·End
+                const u = 1 - t;
+                this.x = u * u * cf.begin.x + 2 * u * t * cf.control.x + t * t * cf.end.x;
+                this.y = u * u * cf.begin.y + 2 * u * t * cf.control.y + t * t * cf.end.y;
+                if (cf.lerp >= 1) {
+                    // Position = cassetteFlyCurve.End；Sprite.Scale = 1.25；
+                    // Sprite.Y -= 5；Sprite.Play("fallFast")
+                    this.x = cf.end.x; this.y = cf.end.y;
+                    this.scaleX = CASSETTE_FLY_SCALE;
+                    this.scaleY = CASSETTE_FLY_SCALE;
+                    this.spriteY = 0;
+                    this.sprite.play('fallFast');
+                    cf.arrived = true;
+                    cf.arriveTimer = CASSETTE_FLY_FALL_WAIT;
+                }
+            } else {
+                // yield return 0.2f：fallFast 悬停，仍不可控
+                cf.arriveTimer -= dt;
+                if (cf.arriveTimer <= 0) {
+                    // CanRetry = true；FormationBackdrop.Display = false；State = 0；Depth = 0
+                    this.state = ST_NORMAL;
+                    this.cassetteFly = null;
+                    this.cassetteBackdropTarget = 0;
+                    this.fastJump = true;
+                    if (this.onCassetteLand) this.onCassetteLand();
+                }
+            }
+        }
+
+        // ParticleTypes.P_CassetteFly：Color=White*0.6 · Source=particles/bubble · FadeModes.Late
+        //   Life 0.4-1.0 · Size 1 ± 0.5 · Speed 8-16 · Acceleration (0,-24) · DirectionRange 2π
+        emitBubbleParticle() {
+            const a = Math.random() * Math.PI * 2;
+            const sp = CASSETTE_PARTICLE_SPEED_MIN + Math.random() * (CASSETTE_PARTICLE_SPEED_MAX - CASSETTE_PARTICLE_SPEED_MIN);
+            const life = CASSETTE_PARTICLE_LIFE_MIN + Math.random() * (CASSETTE_PARTICLE_LIFE_MAX - CASSETTE_PARTICLE_LIFE_MIN);
+            this.bubbleParticles.push({
+                // Center = Collider 中心（脚底上方 BODY_H/2）；positionRange = Vector2.One * 4
+                x: this.x + (Math.random() * 8 - 4),
+                y: this.y - BODY_H / 2 + (Math.random() * 8 - 4),
+                vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+                life: life, startLife: life,
+                size: 0.75 + Math.random() * 0.5     // Size 1 ± SizeRange 0.5
+            });
+        }
+
+        updateBubbleParticles(dt) {
+            for (let i = this.bubbleParticles.length - 1; i >= 0; i--) {
+                const p = this.bubbleParticles[i];
+                const wasAlive = p.life / p.startLife;   // 原作先记 num2 = Life/StartLife
+                p.life -= dt;
+                if (p.life <= 0) { this.bubbleParticles.splice(i, 1); continue; }
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+                p.vy += CASSETTE_PARTICLE_ACCEL_Y * dt;  // Acceleration (0, -24)
+                p.fade = Math.min(1, wasAlive / 0.25);   // FadeModes.Late：最后 25% 线性淡出
+            }
+        }
+
+        drawBubbleParticles(ctx, toScreen, zoom) {
+            const img = this.bubbleParticleTex;
+            if (!img || !this.bubbleParticles.length) return;
+            for (const p of this.bubbleParticles) {
+                const fade = p.fade === undefined ? 1 : p.fade;
+                if (fade <= 0) continue;
+                const s = 4 * p.size * zoom;             // particles/bubble 4×4
+                const q = toScreen(p);                    // 原作 Position = Round(Position)
+                ctx.globalAlpha = CASSETTE_PARTICLE_ALPHA * fade;
+                ctx.drawImage(img, Math.round(q.x - s / 2), Math.round(q.y - s / 2),
+                    Math.round(s), Math.round(s));
+            }
+            ctx.globalAlpha = 1;
+        }
+
+        // 手动重来等场景需要立刻打断泡泡运送（不跑落地演出）
+        cancelCassetteFly() {
+            if (this.state !== ST_CASSETTE_FLY) return;
+            this.state = ST_NORMAL;
+            this.cassetteFly = null;
+            this.cassetteBackdropTarget = 0;
+            this.spriteY = 0;
+            this.scaleX = 1; this.scaleY = 1;
         }
 
         // ===== NormalUpdate（完整保留，加入 wallSlide → Climb 判定）=====
@@ -1711,6 +1895,12 @@
 
             // 冲刺残影（只读当前状态，不参与物理）
             this.updateDashTrail(dt);
+
+            // FormationBackdrop.Update：fade = Approach(fade, Display?1:0, RawDeltaTime*3f)
+            this.cassetteBackdrop = approach(this.cassetteBackdrop, this.cassetteBackdropTarget, dt * 3);
+
+            // P_CassetteFly 粒子（飞行结束后仍按各自寿命继续淡出）
+            this.updateBubbleParticles(dt);
         }
 
         // ===== 冲刺残影（表现层，不改任何物理量）=====
@@ -1752,6 +1942,9 @@
 
         // ===== 动画状态机（逐条对齐 orig_UpdateSprite）=====
         updateSpriteAnim() {
+            // StCassetteFly 的贴图由 cassetteFlyUpdate 自己切（bubble → fallFast），
+            // 不走普通状态分支，否则会被 idle/fall 覆盖。
+            if (this.state === ST_CASSETTE_FLY) return;
             const S = this.sprite;
             const moveX = this._moveX, moveY = this._moveY;
 
@@ -1894,7 +2087,8 @@
             if (!this.hairHidden)
                 this.hair.draw(ctx, toScreen, zoom, this.sprite.hairMeta().bang, this.scaleX);
             const img = this.sprite.texture();
-            const p = toScreen({ x: this.x, y: this.y });
+            // 原作 Sprite.Y 是组件的本地偏移：bubble 时 +5（CassetteFlyBegin），到达时 -5
+            const p = toScreen({ x: this.x, y: this.y + this.spriteY });
             if (img) {
                 ctx.save();
                 ctx.translate(Math.round(p.x), Math.round(p.y));
@@ -1902,6 +2096,8 @@
                 ctx.drawImage(img, -16, -32);
                 ctx.restore();
             }
+            // P_CassetteFly 粒子画在人物之上（原作粒子层不会被 FormationBackdrop 压暗）
+            this.drawBubbleParticles(ctx, toScreen, zoom);
         }
     }
 
@@ -1911,27 +2107,40 @@
         const base = opts.base || 'Atlases/Gameplay/characters/player';
         const color = opts.color || (window.CelesteHair ? CelesteHair.MADELINE : '#AC3232');
         const paths = {};
+        const singlePaths = {};
         // 每套动画加载几帧：取该 path 下所有动画引用到的最大帧号 + 1
         // （climb 目录有 0-14，但本引擎只用到 dangling 的 0-9）
         for (const id of Object.keys(ANIMS)) {
             const a = ANIMS[id];
             const last = Math.max.apply(null, a.frames);
             paths[a.path] = Math.max(paths[a.path] || 0, last + 1);
+            // single：Atlas 里是单帧文件（如 bubble.png，没有 NN 后缀）
+            if (a.single) singlePaths[a.path] = true;
         }
         const textures = {};
         const jobs = [];
         for (const path of Object.keys(paths)) {
             const count = paths[path];
             textures[path] = new Array(count);
+            if (singlePaths[path]) {
+                jobs.push(loadImage(base + '/' + path + '.png')
+                    .then(img => { textures[path][0] = img; }));
+                continue;
+            }
             for (let i = 0; i < count; i++) {
                 const idx = i;
                 jobs.push(loadImage(base + '/' + path + String(idx).padStart(2, '0') + '.png')
                     .then(img => { textures[path][idx] = img; }));
             }
         }
+        // particles/bubble.png（P_CassetteFly 贴图）：与 characters/player 同级
+        const particleJob = /\/characters\/player$/.test(base)
+            ? loadImage(base.replace(/\/characters\/player$/, '') + '/particles/bubble.png')
+            : Promise.resolve(null);
         const hairTex = await CelesteHair.load(base, color);
-        await Promise.all(jobs);
+        const [, particleTex] = await Promise.all([Promise.all(jobs), particleJob]);
         const ch = new Character(textures, new CelesteHair.Hair(hairTex, opts.hairCount || 4), opts);
+        ch.bubbleParticleTex = particleTex;
         if (opts.x !== undefined) ch.x = opts.x;
         if (opts.y !== undefined) ch.y = opts.y;
         if (opts.facing) ch.facing = opts.facing;
@@ -1939,5 +2148,35 @@
         return ch;
     }
 
-    window.CelesteCharacter = { create, Character, ANIMS, HAIR, ST, STATE_NAMES };
+    // ===== cassette_bubblereturn 占位音 =====
+    // 仓库没有 event:/game/general/cassette_bubblereturn 的音频流（FMOD bank 未提取），
+    // 用 WebAudio 合成 0.4s 软 whoosh 占位；音色不代表原作，仅补上「起飞有声音」。
+    let bubbleAudioCtx = null;
+    function playBubbleReturn() {
+        if (typeof window === 'undefined') return;
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        if (!bubbleAudioCtx) { try { bubbleAudioCtx = new AC(); } catch (e) { return; } }
+        const ac = bubbleAudioCtx;
+        if (ac.state === 'suspended') { try { ac.resume(); } catch (e) {} }
+        const dur = 0.4;
+        const buf = ac.createBuffer(1, Math.floor(ac.sampleRate * dur), ac.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+        const src = ac.createBufferSource();
+        src.buffer = buf;
+        const bp = ac.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.Q.value = 0.9;
+        bp.frequency.setValueAtTime(1400, ac.currentTime);
+        bp.frequency.exponentialRampToValueAtTime(420, ac.currentTime + dur);
+        const gain = ac.createGain();
+        gain.gain.setValueAtTime(0.0001, ac.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.14, ac.currentTime + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + dur);
+        src.connect(bp); bp.connect(gain); gain.connect(ac.destination);
+        src.start();
+    }
+
+    window.CelesteCharacter = { create, Character, ANIMS, HAIR, ST, STATE_NAMES, playBubbleReturn };
 })();

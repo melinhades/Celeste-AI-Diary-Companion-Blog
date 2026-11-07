@@ -43,7 +43,7 @@
     }
   </style>
   <!-- 从 index 的鸟图标飞过来后接着显示同款加载层（视觉见 css/index-bird.css） -->
-  <link rel="stylesheet" href="css/index-bird.css?v=20261106a">
+  <link rel="stylesheet" href="css/index-bird.css?v=20261107a">
   <!-- 复用原实时聊天室（messages.html）的玻璃聊天面板 -->
   <link rel="stylesheet" href="css/messages.css?v=20261015a">
   <style>
@@ -242,9 +242,9 @@
 
   <script src="js/lib/sfx.js?v=20261107a"></script>
   <script src="js/celeste-hair.js"></script>
-  <script src="js/celeste-character.js?v=20261107d"></script>
+  <script src="js/celeste-character.js?v=20261107e"></script>
   <script src="js/bird-motion.js?v=20261031a"></script>
-  <script src="js/page-loading.js?v=20261106d"></script>
+  <script src="js/page-loading.js?v=20261107a"></script>
   <script>
   (async function () {
     'use strict';
@@ -866,6 +866,16 @@
       cam.y += (m.y + SPAWN.y - vh * CAM_LEAD_Y - cam.y) * k;
       cam.x = Math.min(Math.max(cam.x, 0), b.x);
       cam.y = Math.min(Math.max(cam.y, 0), b.y);
+    }
+
+    // 泡泡飞行中：摄像机每帧直接对准玩家（原作 CassetteFlyCoroutine：
+    // level.Camera.Position = CameraTarget，无平滑），夹在房间边界内。
+    function bubbleFlying() { return !!m && m.state === CelesteCharacter.ST.CassetteFly; }
+    function followCamBubble() {
+      const b = camBounds();
+      const vw = W / Z, vh = H / Z;
+      cam.x = Math.min(Math.max(m.x + SPAWN.x - vw * 0.5, 0), b.x);
+      cam.y = Math.min(Math.max(m.y + SPAWN.y - vh * 0.5, 0), b.y);
     }
 
     // ===== 聊天互动：草莓跟随 / 水母 / 金羽毛 StarFly =====
@@ -1659,9 +1669,19 @@
       // 聊天互动物件：羽毛/草莓在人物之下；水母 Depth -5 → 人物之上
       drawFeathers();
       drawBerries();
-      if (fly) drawFly(); else m.draw(ctx, toScreen, Z);
+      const inBubble = bubbleFlying();
+      if (fly) drawFly(); else if (!inBubble) m.draw(ctx, toScreen, Z);
       drawJellies();
       drawForegrounds();                             // purplesunset（additive .25）盖在关卡之上
+      // FormationBackdrop（depth -1999900）：fade 3/s 升到 1，黑 rect 的 alpha = fade * 0.5 * 0.85
+      // 覆盖整个世界，泡泡玩家（depth -2000000）画在它之上。
+      if (inBubble) {
+        ctx.globalAlpha = m.cassetteBackdrop * 0.425;
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, W, H);
+        ctx.globalAlpha = 1;
+        m.draw(ctx, toScreen, Z);
+      }
       if (flash > 0) {
         ctx.globalAlpha = Math.min(1, flash);
         ctx.fillStyle = '#eaf6ff';
@@ -1697,6 +1717,8 @@
     }
 
     function respawn() {
+      // 手动重来：若正在泡泡运送，立即打断（不跑落地演出）
+      if (m) m.cancelCassetteFly();
       // 飞行中坠落/重来：静默收掉星飞并清空跟随轨迹（草莓/水母不结算、不清空）
       endFly(true);
       heldJelly = null;                        // 手上的水母留在原地（不结算、不回收）
@@ -1719,10 +1741,58 @@
       flash = Math.max(flash, 0.35);
     }
 
+    // 死亡 → 泡泡运送（替代旧版「0.35s 白闪 + 瞬移」）。
+    // 原作没有死亡泡泡；这里复用 Player.StCassetteFly=21 的演出：
+    // 0.12s 原地裹泡（BUBBLE_GRAB_TIME）→ 0.625s 二次贝塞尔 SineInOut 飞回出生点 → 0.2s fallFast → 恢复可控。
+    function beginBubbleReturn() {
+      if (!m || bubbleFlying()) return;        // 过渡期再触发判定：不重复生成泡泡
+      endFly(true);
+      heldJelly = null;                        // StartCassetteFly 的 Holding?.Drop()
+      m.holdSlowFall = false; m.holdCannotDuck = false;
+      leader.past.length = 0; leader.acc = 0;
+      m.freezeTimer = 0;
+      m.dashTime = 0; m.dashTrail.length = 0;
+      m.wallSlideDir = 0; m.wallSlideTimer = 1.2; m.dashAttackTimer = 0;
+      hitstop = 0;
+      gliderBoostTimer = 0;
+      flash = 0;                               // 泡泡演出不叠白闪
+      // 死亡点可能已越出房间左右边界（虚空坠落发生在房间内，x 一般没问题，仍夹一下）
+      m.x = Math.max(BOUND.x0, Math.min(BOUND.x1, m.x));
+      m.startCassetteFly({ x: 0, y: 0 });      // 终点 = 出生点（本工程 entryPoint）
+      CelesteCharacter.playBubbleReturn();     // cassette_bubblereturn 占位音
+    }
+
+    // 粒子 / 尘土推进（正常帧与泡泡帧共用）
+    function stepFx(dt) {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        p.vy += 12 * dt; p.life -= dt;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+      for (let i = dust.length - 1; i >= 0; i--) {
+        const d = dust[i];
+        d.x += d.vx * dt; d.y += d.vy * dt; d.vy += 240 * dt; d.life -= dt;
+        if (d.life <= 0) dust.splice(i, 1);
+      }
+    }
+
     function tick(dt) {
       time += dt;
       updateLayers(dt);
 
+      // 泡泡运送：玩家不可控（引擎只跑 CassetteFlyUpdate），摄像机每帧直接跟随
+      if (bubbleFlying()) {
+        m.update(dt, {});        // 引擎忽略输入；泡泡粒子在 updateSharedVisuals 内推进
+        followCamBubble();
+        stepFx(dt);
+        if (flash > 0) flash = Math.max(0, flash - dt * 1.5);
+        if (toastTimer > 0) {
+          toastTimer -= dt;
+          if (toastTimer <= 0) toastEl.classList.remove('show');
+        }
+        return;
+      }
       if (deathTimer > 0) { deathTimer -= dt; return; }
       // FlyFeather.CollectRoutine：收集瞬间冻结 0.05s（原作 yield 0.05f）
       if (hitstop > 0) { hitstop -= dt; return; }
@@ -1775,21 +1845,11 @@
       // 拾起虚空之心（飞行中不判定）
       if (!fly && !heart.collected && Math.abs(m.x - heart.x) < 24 && Math.abs(m.y - heart.y) < 30) collectHeart();
 
-      // 掉出房间底部（世界 y 56 是地板线）—— 飞行期不判定坠落
-      if (!fly && m.y > 96) respawn();
+      // 掉出房间底部（世界 y 56 是地板线）—— 飞行期不判定坠落；死亡改走泡泡运送
+      if (!fly && m.y > 96) beginBubbleReturn();
 
       // 粒子 / 尘土
-      for (let i = particles.length - 1; i >= 0; i--) {
-        const p = particles[i];
-        p.x += p.vx * dt; p.y += p.vy * dt;
-        p.vy += 12 * dt; p.life -= dt;
-        if (p.life <= 0) particles.splice(i, 1);
-      }
-      for (let i = dust.length - 1; i >= 0; i--) {
-        const d = dust[i];
-        d.x += d.vx * dt; d.y += d.vy * dt; d.vy += 240 * dt; d.life -= dt;
-        if (d.life <= 0) dust.splice(i, 1);
-      }
+      stepFx(dt);
 
       if (flash > 0) flash = Math.max(0, flash - dt * 1.5);
       if (toastTimer > 0) {
@@ -2223,6 +2283,15 @@
       m.setCeiling(ceilingY);             // 头部碰撞（原作 OnCollideV 的 Speed.Y < 0 分支）
       m.setBodySolid(bodySolidFn);        // push / edge / edgeBack / dangling 的身体盒探针
       m.onLand = vy => { if (vy >= 80) spawnDust(m.x, m.y, 8); };
+      m.onCassetteLand = () => {
+        // 到达出生点：按重生补满冲刺/体力，落地后恢复可控（State 已回引擎切回 Normal）
+        m.dashes = m.maxDashes; m.stamina = 110;
+        feetPrev = m.y;
+        m.onGround = true;
+        m.bodySolidFn = bodySolidFn;
+        m.hair.reset(m.x, m.y, m.facing);
+        dust.length = 0; particles.length = 0;
+      };
       snapCam();
 
       window.__scene = {
