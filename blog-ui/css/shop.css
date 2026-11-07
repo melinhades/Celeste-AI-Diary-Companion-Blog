@@ -74,12 +74,15 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 #sceneZoom { position:fixed; inset:0; z-index:1; overflow:hidden; pointer-events:none; will-change:transform; }
 #hallCanvas { position:absolute; left:0; top:0; image-rendering:pixelated; pointer-events:none; }
 #gameStage { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; image-rendering:pixelated; z-index:2; }
-/* Oshiro 登场演出的聚光/暗场（VertexLight + Lighting.Alpha） */
-#introLight {
-    position:absolute; inset:0; z-index:6; pointer-events:none; opacity:0;
-    transition:opacity .45s ease;
-    background:radial-gradient(circle at 50% 50%, rgba(255,246,214,.10) 0, rgba(255,240,196,.05) 46%, rgba(4,3,12,.84) 78%, rgba(3,2,9,.94) 100%);
+/* ===== 光照 RT / Bloom（对齐 Celeste.LightingRenderer + BloomRenderer）=====
+   hallLight：320×184 黑底，按 Lighting.Alpha（area_3 DarknessAlpha=0.15）整屏压暗，灯位用 destination-out 挖亮；
+   hallBloom：BloomBase=0 / Strength=1，bloomgradient 以 mix-blend-mode:screen 叠加（灯笼 BloomPoint 半径 8、Oshiro 聚光 16）。
+   z-index:5 覆盖 hallCanvas/gameStage 与 Oshiro，灯笼(6)/introFx(7) 在其上；必须覆盖 body 继承的 pixelated。 */
+#hallLight, #hallBloom {
+    position:absolute; left:0; top:0; z-index:5; pointer-events:none;
+    image-rendering:auto;
 }
+#hallBloom { mix-blend-mode:screen; }
 #introFx { position:absolute; inset:0; width:100%; height:100%; z-index:7; pointer-events:none; }
 /* 开场跳过层 */
 #introSkip {
@@ -104,7 +107,9 @@ body.intro #sceneZoom #gameStage { opacity:0; }
 }
 /* 灯体绕挂点（holder 挂环）倾摆，holder 固定 —— 对齐原版只旋转 lantern Sprite 而 holder 不动 */
 .lantern-body { transform-origin:50% 30%; will-change:transform; }
-/* bloom 辉光：径向渐变近似 BloomRenderer 的高斯模糊 bloomgradient；明暗由 JS 按 0.95+Sin(t)*0.05 呼吸 */
+/* 灯笼辉光：DOM 径向渐变承载柔光（BloomPoint(0.8, 8) 直接贴 bloomgradient 在 16px 直径下
+   核心不透明 → 退化成硬边白球；真实 BloomRenderer 是整张光 RT 高斯模糊后才出光），
+   明暗由 JS 按 0.95+Sin(t)*0.05 呼吸并与 nonSpotlightAlphaMultiplier 相乘 */
 .lantern-glow {
     position:absolute; left:50%; top:56%; width:320%; height:260%;
     transform:translate(-50%,-50%); pointer-events:none;

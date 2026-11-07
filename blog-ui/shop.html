@@ -8,7 +8,7 @@
     <link rel="icon" href="icon/OIP.webp?v=20261105a" type="image/webp">
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/text-fx.css?v=20261004a">
-<link rel="stylesheet" href="css/shop.css?v=20261105a">
+<link rel="stylesheet" href="css/shop.css?v=20261107a">
 
 </head>
 <body>
@@ -35,7 +35,11 @@
     <canvas id="hallCanvas" width="320" height="184"></canvas>
     <canvas id="gameStage"></canvas>
     <img id="pixelOshiro" src="Atlases/Gameplay/characters/oshiro/oshiro41.png" alt="Oshiro" title="Oshiro" loading="lazy" decoding="async" style="display:none">
-    <div id="introLight"></div>
+    <!-- 光照 RT（320×184 半分辨率）：LightingRenderer 的 BaseColor=Black + DarknessAlpha=0.15 压暗，灯位用 destination-out 挖亮 -->
+    <canvas id="hallLight"></canvas>
+    <!-- BloomRenderer：BloomBase=0 / Strength=1，bloomgradient 以 screen 叠加（Oshiro 聚光 BloomPoint 半径 16；
+         灯笼柔光由 .lantern-glow 的 DOM 径向渐变承担，避免 8px BloomPoint 放大成硬边白球） -->
+    <canvas id="hallBloom"></canvas>
     <canvas id="introFx"></canvas>
     <!-- lvl_0x-a 的 2 盏 resortLantern：holder 挂架 + lantern00..02 灯体，混合叠放 -->
     <div class="resort-lantern" data-lantern="0">
@@ -94,14 +98,14 @@
     <div class="hg-poem-tip">点击继续</div>
 </div>
 
-<script src="js/api.js?v=20261002"></script>
+<script src="js/api.js?v=20261106a"></script>
 <script src="js/text-fx.js?v=20261005b"></script>
 <script src="js/vue.global.prod.js?v=20261008a"></script>
 <script src="js/celeste-hair.js?v=8"></script>
-<script src="js/celeste-character.js?v=8"></script>
+<script src="js/celeste-character.js?v=20261106a"></script>
 <script src="js/celeste-dust-bunny.js?v=20261103b"></script>
 <script src="js/gapless-audio.js?v=20261028b"></script>
-<script src="js/shop.js?v=20261106a"></script>
+<script src="js/shop.js?v=20261107a"></script>
 <script src="js/seed.js?v=20261101c"></script>
 </body>
 </html>

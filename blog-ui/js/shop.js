@@ -499,8 +499,9 @@
     }
     // ===== resortLantern 运行时状态机（逐字段对齐 REA: Celeste.ResortLantern）=====
     //   .ctor  : Wiggler.Create(this, freq=2.5, amp=1.2, cb, false, false) + StartZero=true
-    //            VertexLight(White, 0.95, 32, 64) + BloomPoint(0.8, 8)（房间 dark=false → 无遮罩暗场，
-    //            灯笼可见的"光影"即 bloom 辉光 + 呼吸 alpha，非聚光暗场）
+    //            VertexLight(White, 0.95, 32, 64) + BloomPoint(0.8, 8)（lvl_0x-a 非 Dark 房间 →
+    //            Lighting.Alpha = area_3 DarknessAlpha 0.15：整屏 15% 压暗，灯笼用 32/64 半径挖亮；
+    //            BloomPoint 的柔光由 DOM .lantern-glow 承载，见 shop.css / renderLight）
     //   Update : collideTimer-=dt; alphaTimer+=dt; alpha=0.95+Sin(alphaTimer*1.0)*0.05（同写 light/bloom.Alpha）
     //            Wiggler: sineAdd=2π*1.2, inc=1/2.5, value=Cos(sineCounter)*Counter; Rotation=value*mult*30°
     //   OnPlayer: collideTimer<=0 && player.Speed!=Zero → collideTimer=0.5, mult=Choose(±1), wiggler.Start()
@@ -515,6 +516,7 @@
             wx: ent.x,                     // 灯笼碰撞盒中心（世界 X = 房间原生 X）
             wy: ent.y - ROOM_FLOOR_Y,      // 世界 Y（脚底 y=0 = 地板 152）→ 48-152 = -104
             collideTimer: 0,
+            curAlpha: 1,                   // IL: VertexLight/BloomPoint.Alpha = 0.95+Sin(t)*0.05（供光照 RT 使用）
             alphaTimer: i * 1.3,           // 两盏错相位，避免同步呼吸
             wig: { inc: 1 / 2.5, add: Math.PI * 2 * 1.2, sine: Math.PI / 2, counter: 0, value: 0, mult: 1, active: false }
         });
@@ -535,7 +537,9 @@
         if (L.collideTimer > 0) L.collideTimer = Math.max(0, L.collideTimer - dt);
         L.alphaTimer += dt;
         var alpha = 0.95 + Math.sin(L.alphaTimer * 1.0) * 0.05;       // IL: 0.95 + Sin(t)*0.05 → [0.90,1.00]
-        if (L.glow) L.glow.style.opacity = alpha.toFixed(3);
+        L.curAlpha = alpha;
+        // DOM 柔光跟随呼吸；SetSpotlight 时 nonSpotlightAlphaMultiplier 归 0 → 同步压灭
+        if (L.glow) L.glow.style.opacity = (alpha * LIGHT.nsMul).toFixed(3);
         var w = L.wig;
         if (w.active) {
             w.sine += w.add * dt;
@@ -553,6 +557,142 @@
     LANTERN_STATE.forEach(function (L) {
         L.el.addEventListener('click', function (e) { e.stopPropagation(); lanternBump(L); });
     });
+    // ===== 光照 / Bloom：对齐 Celeste.LightingRenderer + BloomRenderer =====
+    // REA：chapter 3 的 area_3 → DarknessAlpha=0.15、BloomBase=0、BloomStrength=1（AreaData.cs L916-918）；
+    //      GameplayBuffers.Light = 320×180，LightingRenderer.BaseColor = Black、Alpha 默认 0.1 由 LevelLoader
+    //      L312 改为 areaData.DarknessAlpha；光源 additive 写入 Light RT，Render 时用 InvertDither +
+    //      DestinationTransparencySubtract 把未被照亮的像素压暗 Lighting.Alpha。
+    // 这里用等价近似：整屏铺黑 alpha=Lighting.Alpha，再 destination-out 在灯位按 Start/End 半径线性挖亮；
+    // bloom 用 BloomPoint 半径 + util/bloomgradient，以 mix-blend-mode:screen 叠加（BlurredScreenToMask→AdditiveMaskToScreen）。
+    var hallLight = document.getElementById('hallLight');
+    var hallBloom = document.getElementById('hallBloom');
+    var lightCtx = hallLight ? hallLight.getContext('2d') : null;
+    var bloomCtx = hallBloom ? hallBloom.getContext('2d') : null;
+    var LIGHT = {
+        enabled: !!(lightCtx && bloomCtx),
+        baseAlpha: 0.15,          // area_3 DarknessAlpha
+        alpha: 0.15,              // Level.Lighting.Alpha
+        bloomStrength: 1,
+        bloom: true,              // BloomRenderer（低端/减动效关闭）
+        rtScale: 1,               // 光照 RT 分辨率系数（0.5 → 160×92）
+        nsMul: 1,                 // nonSpotlightAlphaMultiplier：SetSpotlight 时 2/s → 0
+        inSpot: false,
+        spot: null,               // { x, y, alpha }：Oshiro VertexLight(White, 1, 32, 64)
+        degraded: false,
+        perfFrames: 0, perfTime: 0
+    };
+    (function initLightQuality() {
+        var mobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth < 820;
+        var cores = navigator.hardwareConcurrency || 4;
+        var reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+        LIGHT.rtScale = (mobile || cores <= 4) ? 0.5 : 1;
+        LIGHT.bloom = !reduced && cores > 2;
+    })();
+    var bloomImg = null;
+    (function loadBloomGradient() {
+        var im = new Image();
+        im.onload = function () { bloomImg = im; };
+        im.onerror = function () { bloomImg = null; };
+        im.src = 'Atlases/Gameplay/util/bloomgradient.png';
+    })();
+    // 光照画布与房间同尺寸（CSS 由 roomGeo 决定），内部 RT 按 rtScale 降分辨率
+    function layoutLight() {
+        if (!LIGHT.enabled) return;
+        recalcRoomGeo();
+        var w = Math.max(2, Math.round(HALL_W * LIGHT.rtScale));
+        var h = Math.max(2, Math.round(HALL_H * LIGHT.rtScale));
+        [[hallLight, lightCtx], [hallBloom, bloomCtx]].forEach(function (pair) {
+            var c = pair[0], x = pair[1];
+            if (!c || !x) return;
+            c.style.left = roomGeo.ox + 'px';
+            c.style.top = roomGeo.oy + 'px';
+            c.style.width = (HALL_W * roomGeo.s) + 'px';
+            c.style.height = (HALL_H * roomGeo.s) + 'px';
+            if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+            x.imageSmoothingEnabled = true;
+        });
+    }
+    // 线性衰减：0..StartRadius 全亮，StartRadius..EndRadius 线性到 0（LightingRenderer.SetGradient）
+    function lightCarve(c, x, y, alpha, startR, endR) {
+        if (alpha <= 0 || endR <= 0) return;
+        var g = c.createRadialGradient(x, y, 0, x, y, endR);
+        g.addColorStop(0, 'rgba(0,0,0,1)');
+        g.addColorStop(Math.min(1, startR / endR), 'rgba(0,0,0,1)');
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        c.globalAlpha = Math.min(1, alpha);
+        c.fillStyle = g;
+        c.beginPath();
+        c.arc(x, y, endR, 0, Math.PI * 2);
+        c.fill();
+    }
+    // BloomPoint：bloomgradient 以 Radius*2 为直径（BloomRenderer.Apply 的 num = 1/gradient.Width）
+    function bloomPoint(c, x, y, alpha, radius) {
+        if (!bloomImg || alpha <= 0 || radius <= 0) return;
+        var d = radius * 2;
+        c.globalAlpha = Math.max(0, Math.min(1, alpha)) * LIGHT.bloomStrength;
+        c.drawImage(bloomImg, x - radius, y - radius, d, d);
+    }
+    function lightStep(dt) {
+        if (!LIGHT.enabled) return;
+        // nonSpotlightAlphaMultiplier：SetSpotlight 时 2/s 归 0，Unset 时 2/s 回 1（LightingRenderer.Update）
+        if (dt > 0) {
+            var target = LIGHT.inSpot ? 0 : 1;
+            if (LIGHT.nsMul < target) LIGHT.nsMul = Math.min(target, LIGHT.nsMul + dt * 2);
+            else LIGHT.nsMul = Math.max(target, LIGHT.nsMul - dt * 2);
+            // 自适应降级：连续 90 帧平均 >22ms → 光照 RT 减半 + 关 bloom（只降一次）
+            if (!LIGHT.degraded) {
+                LIGHT.perfFrames++;
+                LIGHT.perfTime += dt;
+                if (LIGHT.perfFrames >= 90) {
+                    if (LIGHT.perfTime / LIGHT.perfFrames > 0.022) {
+                        LIGHT.rtScale = 0.5;
+                        LIGHT.bloom = false;
+                        LIGHT.degraded = true;
+                        layoutLight();
+                    }
+                    LIGHT.perfFrames = 0; LIGHT.perfTime = 0;
+                }
+            }
+        }
+        renderLight();
+    }
+    function renderLight() {
+        if (!LIGHT.enabled) return;
+        var a = Math.min(1, Math.max(0, LIGHT.alpha + (ambientA || 0)));   // IL: Lighting.Alpha += 0.5，4/s 衰减
+        lightCtx.setTransform(LIGHT.rtScale, 0, 0, LIGHT.rtScale, 0, 0);
+        lightCtx.globalCompositeOperation = 'source-over';
+        lightCtx.globalAlpha = 1;
+        lightCtx.clearRect(0, 0, HALL_W, HALL_H);
+        if (a > 0.002) {
+            lightCtx.fillStyle = 'rgba(0,0,0,' + a.toFixed(4) + ')';
+            lightCtx.fillRect(0, 0, HALL_W, HALL_H);
+        }
+        lightCtx.globalCompositeOperation = 'destination-out';
+        // resortLantern：VertexLight(White, 0.95+Sin(t)*0.05, 32, 64)
+        for (var i = 0; i < LANTERN_STATE.length; i++) {
+            var L = LANTERN_STATE[i];
+            var la = (L.curAlpha == null ? 1 : L.curAlpha) * LIGHT.nsMul;
+            lightCarve(lightCtx, L.wx, ROOM_FLOOR_Y + L.wy, la, 32, 64);
+        }
+        // Oshiro 聚光：VertexLight((0,-8), White, 1, 32, 64)
+        if (LIGHT.spot) lightCarve(lightCtx, LIGHT.spot.x, LIGHT.spot.y, SPOT.alpha, 32, 64);
+        lightCtx.globalCompositeOperation = 'source-over';
+        lightCtx.globalAlpha = 1;
+
+        if (!bloomCtx) return;
+        bloomCtx.setTransform(LIGHT.rtScale, 0, 0, LIGHT.rtScale, 0, 0);
+        bloomCtx.globalCompositeOperation = 'source-over';
+        bloomCtx.globalAlpha = 1;
+        bloomCtx.clearRect(0, 0, HALL_W, HALL_H);
+        // 灯笼的 BloomPoint(0.8, 8) 不再直贴 bloomgradient：16px 直径下贴图核心完全不透明，
+        // 放大后就是硬边白球（真机逐层对照已确认）；灯笼柔光改由 .lantern-glow 的 DOM 渐变承担。
+        if (LIGHT.bloom && bloomImg && LIGHT.spot) {
+            // IL: BloomPoint((0,-8), 1, 16)；UnsetSpotlight 后 bloom 1→0，但 light.Alpha 保持 1
+            bloomPoint(bloomCtx, LIGHT.spot.x, LIGHT.spot.y, SPOT.bloomAlpha, 16);
+        }
+        bloomCtx.globalAlpha = 1;
+    }
+    layoutLight();   // 主循环可能在阵容资源之前启动，先把光照画布铺到房间矩形上
     function layoutHall() {
         recalcRoomGeo();
         hallCanvas.style.width = (HALL_W * roomGeo.s) + 'px';
@@ -561,6 +701,7 @@
         hallCanvas.style.top = roomGeo.oy + 'px';
         layoutOshiroSize();
         layoutLanterns();
+        layoutLight();
     }
     // ===== Oshiro 精灵：96×96 帧，origin (0.5, 0.667)，前台站位 (184,152) =====
     var osAtDesk = false;
@@ -574,7 +715,7 @@
         var p = nXY(184, ROOM_FLOOR_Y);
         pixelOshiro.style.display = 'block';
         pixelOshiro.style.left = (p.x - 48 * roomGeo.s) + 'px';
-        pixelOshiro.style.top = (p.y - 64 * roomGeo.s) + 'px';
+        pixelOshiro.style.top = (p.y - 64 * roomGeo.s + osYOff * roomGeo.s) + 'px';
         osAtDesk = true;
     }
     // 初始位置：前台（仅开场演出/召唤后显示）
@@ -812,13 +953,19 @@
     // ===== CS03_OshiroLobby 开场复刻（REA：Locked→Shake→Lighting/VertexLight→ZoomTo((170,126),2,0.5)→
     //       Shake→Sprite.Visible + Play("appear")→sparks→1.4s→UnsetSpotlight→ZoomBack→Textbox） =====
     var sceneZoom = document.getElementById('sceneZoom');
-    var introLight = document.getElementById('introLight');
     var introFx = document.getElementById('introFx');
     var introSkip = document.getElementById('introSkip');
     var fxctx = introFx.getContext('2d');
     var introActive = false;
     var introRun = 0;
+    var madeline = null;                 // 由主循环的 CelesteCharacter.create 赋值（cutWalkTo / playOshiroIntro 共用同一实例）
     var fxParts = [], fxRunning = false;
+    var introLock = false;               // IL: player.StateMachine.Locked = true
+    var introWalk = null;                // IL: DummyWalkTo 的目标（64 px/s）
+    var osYOff = 0;                      // IL: oshiro.Y -= 16 / Approach(Y, from, 40*dt)
+    var SPOT = { lift: 0, alpha: 0, bloomAlpha: 0 };  // IL: light.Position 从 target-UnitY*48 滑到 target；alpha/bloomAlpha 进光照 RT
+    var ambientA = 0;                    // IL: Lighting.Alpha += 0.5，再以 4/s 衰减
+    var sparkAcc = 0, sparksOn = false;  // IL: createSparks && OnInterval(0.025)
     var cam = { k:1, fx:0, fy:0, sx:0, sy:0 };
     function resizeFx() {
         introFx.width = window.innerWidth;
@@ -865,24 +1012,31 @@
             })(t0);
         });
     }
-    function oshiroSpotXY() { return nXY(184, 136); }
+    // IL: VertexLight 局部坐标 (0,-8)，实体 Y 再上浮 16 → 世界 y = 脚底 - 24；
+    // 入场时 light.Position 从 target - UnitY*48 滑到 target。
     function setSpot() {
-        var p = oshiroSpotXY(), r = Math.max(120, 52 * roomGeo.s);
-        introLight.style.background =
-            'radial-gradient(circle at ' + p.x + 'px ' + p.y + 'px,' +
-            'rgba(255,246,214,.16) 0px, rgba(255,238,190,.07) ' + (r * 0.55) + 'px,' +
-            'rgba(4,3,12,.84) ' + (r * 1.45) + 'px, rgba(3,2,9,.94) 100%)';
+        // 直接写进 320×184 光照 RT（不再每帧重建 CSS radial-gradient）
+        LIGHT.spot = {
+            x: 184,
+            y: ROOM_FLOOR_Y + osYOff - 8 + SPOT.lift    // IL: VertexLight 局部 (0,-8)，实体上浮 16
+        };
     }
-    function spawnSparks() {
-        var p = oshiroSpotXY();
-        for (var i = 0; i < 28; i++) {
-            fxParts.push({
-                x: p.x, y: p.y,
-                vx: (Math.random() - 0.5) * 190,
-                vy: (Math.random() - 0.72) * 190,
-                age: 0, ttl: 0.32 + Math.random() * 0.3
-            });
-        }
+    // IL: CS03.Update — createSparks && Level.OnInterval(0.025)：每 25ms 1 枚，
+    // 位置 = 脚底 + (0,-12) + 独立 ±(4..12)，方向朝外；P_AppearSpark: life .4-.7, speed 30-60, accel (0,200)
+    function emitSpark() {
+        var foot = nXY(184, ROOM_FLOOR_Y);
+        var offX = (4 + Math.random() * 8) * (Math.random() < 0.5 ? -1 : 1) * roomGeo.s;
+        var offY = (4 + Math.random() * 8) * (Math.random() < 0.5 ? -1 : 1) * roomGeo.s;
+        var cx = foot.x, cy = foot.y + (osYOff - 12) * roomGeo.s;
+        var px = cx + offX, py = cy + offY;
+        var ang = Math.atan2(py - cy, px - cx);
+        var spd = (30 + Math.random() * 30) * roomGeo.s;
+        fxParts.push({
+            x: px, y: py,
+            vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
+            age: 0, ttl: 0.4 + Math.random() * 0.3,
+            size0: 8 * roomGeo.s * (0.6 + Math.random() * 0.6)
+        });
         if (!fxRunning) { fxRunning = true; requestAnimationFrame(fxLoop); }
     }
     function fxLoop(now) {
@@ -893,19 +1047,66 @@
         }
         fxctx.clearRect(0, 0, introFx.width, introFx.height);
         var dt = 1 / 60;
+        // IL: Lighting.Alpha += 0.5，随后以 4/s 衰减（约 0.125s）——直接叠加到光照 RT 的 alpha 上（不再用暖色遮罩）
+        if (ambientA > 0) ambientA = Math.max(0, ambientA - 4 * dt);
+        if (sparksOn) {
+            sparkAcc += dt;
+            while (sparkAcc >= 0.025) { sparkAcc -= 0.025; emitSpark(); }
+        }
         for (var i = fxParts.length - 1; i >= 0; i--) {
             var p = fxParts[i];
             p.age += dt;
             if (p.age >= p.ttl) { fxParts.splice(i, 1); continue; }
-            p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 26 * dt;
-            var size = 3 * roomGeo.s * (1 - p.age / p.ttl);
+            p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 200 * roomGeo.s * dt;
+            var size = p.size0 * (1 - p.age / p.ttl);
             if (size < 1) size = 1;
-            fxctx.fillStyle = 'rgba(255,248,226,' + (1 - p.age / p.ttl).toFixed(3) + ')';
+            fxctx.fillStyle = 'rgba(255,252,238,' + (1 - p.age / p.ttl).toFixed(3) + ')';
             fxctx.fillRect(p.x - size / 2, p.y - size / 2, size, size);
         }
         requestAnimationFrame(fxLoop);
     }
     function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+    // IL: Player.DummyWalkTo —— 以 64 px/s 逼近目标；walkBackwards 时保持朝右倒退
+    function cutWalkTo(target, backwards) {
+        return new Promise(function (resolve) {
+            if (Math.abs(madeline.x - target) < 0.5) { resolve(); return; }
+            introWalk = { target: target, backwards: !!backwards, resolve: resolve };
+        });
+    }
+    function easeCubeOut(t) { return 1 - Math.pow(1 - t, 3); }
+    function easeCubeIn(t) { return t * t * t; }
+    // IL: Tween.Create(Oneshot, CubeOut/CubeIn, 0.5s)：light.Alpha/bloom.Alpha 与
+    // light.Position = Lerp(target-UnitY*48, target, t.Percent)
+    function spotTween(a0, a1, lift0, lift1, dur, ease) {
+        return new Promise(function (resolve) {
+            var t0 = performance.now();
+            (function tick(now) {
+                var t = Math.min(1, (now - t0) / dur), e = ease(t);
+                var closing = a1 < a0;
+                // IL tween1：light.Alpha = bloom.Alpha = t.Percent；tween2：只让 bloom 1→0，light 保持 1
+                SPOT.bloomAlpha = a0 + (a1 - a0) * e;
+                SPOT.alpha = closing ? a0 : SPOT.bloomAlpha;
+                SPOT.lift = lift0 + (lift1 - lift0) * e;
+                // IL: SetSpotlight 时 Lighting.Alpha → 1；UnsetSpotlight 时回到 startLightAlpha（0.15）
+                LIGHT.alpha = LIGHT.baseAlpha + (1 - LIGHT.baseAlpha) * (closing ? 1 - e : e);
+                setSpot();
+                if (t < 1) requestAnimationFrame(tick); else resolve();
+            })(t0);
+        });
+    }
+    // IL: while (oshiro.Y != from) oshiro.Y = Approach(Y, from, DeltaTime*40)
+    function osReturnY() {
+        return new Promise(function (resolve) {
+            if (osYOff >= 0) { osYOff = 0; osShowAtDesk(); resolve(); return; }
+            var last = performance.now();
+            (function tick(now) {
+                var dt = Math.min((now - last) / 1000, 0.05); last = now;
+                osYOff = Math.min(0, osYOff + 40 * dt);
+                osShowAtDesk();
+                if (osYOff < 0) requestAnimationFrame(tick); else resolve();
+            })(last);
+        });
+    }
     // IL: CS03 在 UnsetSpotlight 后是 Textbox.Say(..., ZoomOut)——
     // 对白期间镜头仍保持 2× 近景，玩家关闭文本框后才 ZoomBack。
     function holdZoomUntilDialogClosed() {
@@ -915,16 +1116,19 @@
             if (!dlg.classList.contains('show')) back();
         });
         var timer = setTimeout(back, 12000);
-        function back() {
+        async function back() {
             if (done) return;
             done = true;
             obs.disconnect();
             clearTimeout(timer);
             if (introActive || run !== introRun) return;
+            await wait(200);                                   // IL: ZoomOut → yield 0.2
+            if (introActive || run !== introRun) return;
             document.body.classList.remove('intro');
-            camTo(window.innerWidth / 2, window.innerHeight / 2, 1, 520).then(function () {
-                if (!introActive && run === introRun) resetCam();
-            });
+            await camTo(window.innerWidth / 2, window.innerHeight / 2, 1, 500);  // IL: ZoomBack(0.5)
+            if (introActive || run !== introRun) return;
+            await wait(200);                                   // IL: yield 0.2
+            if (!introActive && run === introRun) resetCam();
         }
         obs.observe(dlg, { attributes: true, attributeFilter: ['class'] });
     }
@@ -932,7 +1136,14 @@
         introRun++;
         introActive = false;
         introSkip.style.display = 'none';
-        introLight.style.opacity = '0';
+        // IL: OnEnd / skip —— 解除锁定，把提灯/上浮/火花/光照恢复到常态
+        introLock = false;
+        if (introWalk) { var w = introWalk; introWalk = null; w.resolve(); }
+        osYOff = 0; SPOT.lift = 0; SPOT.bloomAlpha = 0; ambientA = 0;
+        LIGHT.alpha = LIGHT.baseAlpha; LIGHT.inSpot = false;
+        // IL: UnsetSpotlight 之后 VertexLight 仍留在 Oshiro 身上（light.Alpha=1），只解除聚光状态
+        if (SPOT.alpha > 0) setSpot(); else LIGHT.spot = null;
+        sparksOn = false; sparkAcc = 0;
         fxParts.length = 0;
         fxctx.clearRect(0, 0, introFx.width, introFx.height);
         osShowAtDesk();
@@ -953,7 +1164,7 @@
     introSkip.addEventListener('click', function (e) { e.stopPropagation(); skipIntro(); });
     document.addEventListener('keydown', function (e) { if (introActive && e.key === 'Escape') skipIntro(); });
     async function playOshiroIntro() {
-        if (introActive) return;
+        if (introActive || !madeline) return;   // 角色实例尚未加载完时不启动演出
         var id = ++introRun;
         introActive = true;
         document.body.classList.add('intro');
@@ -964,36 +1175,61 @@
         osSummoned = false;
         osAtDesk = false;
         resetCam();
+        osYOff = 0; SPOT.lift = 0; SPOT.alpha = 0; SPOT.bloomAlpha = 0; ambientA = 0;
+        LIGHT.alpha = LIGHT.baseAlpha; LIGHT.spot = null; LIGHT.inSpot = false;
+        sparksOn = false; sparkAcc = 0;
+        introLock = true;                                // IL: State=11 + Locked=true
         setSpot();
-        introLight.style.opacity = '0';
         fxParts.length = 0;
         if (!fxRunning) { fxRunning = true; requestAnimationFrame(fxLoop); }
 
-        await wait(420); if (id !== introRun) return;   // 0.5s：玩家就位
-        introLight.style.opacity = '1';                 // VertexLight + Lighting.Alpha
-        introShake(0.22);
-        await wait(950); if (id !== introRun) return;   // 1.4s
-        introShake(0.3);
-
-        // ZoomTo((170,126), zoom 2, 0.5s)
-        await camTo(nXY(170, 126).x, nXY(170, 126).y, 2, 520);
+        // IL: yield 0.5 → player.DummyWalkTo(oshiro.X - 16) → Facing = Right
+        await wait(500); if (id !== introRun) return;
+        await Promise.race([cutWalkTo(184 - 16), wait(4000)]);
         if (id !== introRun) return;
-        await wait(620); if (id !== introRun) return;   // 0.6s
-        introShake(0.3);
+        introWalk = null;
+        madeline.facing = 1;
 
-        // Sprite.Visible = true; Play("appear")（0-30 帧，约 2.48s）
+        // IL: sfx.Play(sequence_oshiro_intro) → yield 1.4（本地无该音源，见 docs 素材缺口）
+        await wait(1400); if (id !== introRun) return;
+        introShake(0.3);                                 // IL: level.Shake()
+        ambientA = 0.5;                                  // IL: Lighting.Alpha += 0.5（4/s 衰减）
+
+        // IL: oshiro.Y -= 16；light 从上方 48px 滑入，Alpha/Bloom 0→1（CubeOut 0.5s）
+        // IL: NPC03_Oshiro_Lobby 构造函数 Sprite.Visible=false，此处只亮灯，立绘仍隐藏
+        osYOff = -16;
+        LIGHT.inSpot = true;                             // IL: SetSpotlight → 其它灯 2/s 淡出
+        await spotTween(0, 1, -48, 0, 500, easeCubeOut);
+        if (id !== introRun) return;
+        await wait(200); if (id !== introRun) return;    // IL: yield 0.2
+
+        // IL: ZoomTo((170,126), 2, 0.5)（SineInOut）
+        await camTo(nXY(170, 126).x, nXY(170, 126).y, 2, 500);
+        if (id !== introRun) return;
+        await wait(600); if (id !== introRun) return;    // IL: yield 0.6
+        introShake(0.3);                                 // IL: level.Shake()
+
+        // IL: Sprite.Visible = true; Play("appear")（0-30 帧，约 2.48s）
         osShowAtDesk();
         osSetSrc(OS_SRC.appear);
-        await wait(650); if (id !== introRun) return;   // 0.6s
-        spawnSparks();
-        await wait(450); if (id !== introRun) return;   // sparks 0.4s
-        await wait(250); if (id !== introRun) return;   // 0.2s
-        introShake(0.3);
-        await wait(1400); if (id !== introRun) return;  // 1.4s
+        // IL: player.DummyWalkToExact(X - 12, walkBackwards)
+        await Promise.race([cutWalkTo(madeline.x - 12, true), wait(1000)]);
+        if (id !== introRun) return;
+        introWalk = null;
+        madeline.facing = 1;
 
-        // UnsetSpotlight → Textbox.Say(..., ZoomOut)：先对白，关闭后再拉回镜头
-        introLight.style.opacity = '0';
-        await wait(220); if (id !== introRun) return;
+        await wait(600); if (id !== introRun) return;    // IL: yield 0.6（shaking）
+        sparksOn = true; sparkAcc = 0;                   // IL: createSparks = true
+        await wait(400); if (id !== introRun) return;    // IL: yield 0.4
+        sparksOn = false;                                // IL: createSparks = false
+        await wait(200); if (id !== introRun) return;    // IL: yield 0.2
+        introShake(0.3);                                 // IL: level.Shake() + Rumble
+        await wait(1400); if (id !== introRun) return;   // IL: yield 1.4
+
+        // IL: UnsetSpotlight → bloom 1→0（CubeIn 0.5s），Y 以 40/s 归位
+        LIGHT.inSpot = false;                            // IL: UnsetSpotlight → 其它灯 2/s 恢复
+        await Promise.all([spotTween(1, 0, 0, 0, 500, easeCubeIn), osReturnY()]);
+        if (id !== introRun) return;
         finishIntro(true);
     }
     function startShopScene() {
@@ -1247,9 +1483,27 @@
                 .then(function (im) { GUI_HEART_FRAMES.fake[i] = im; });
         })(fi);
 
-        // IL: Poem.BeforeRender 粒子贴图 Atlas["snow"]（8x8）
+        // IL: Poem.BeforeRender 的粒子贴图是 `OVR.Atlas["snow"]`。OVR 由 `Graphics/Atlases/Overworld`
+        // 加载（见 Celeste.OVR.Load），不是 Gameplay/particles/snow.png。
+        // Overworld/snow.png 是 256×256 的柔和白色光斑；Gameplay 版只有 8×8、可透明像素仅 3×2，
+        // 用它绘制会被竖向压成 1px 细丝，几乎看不见 —— 这是上一版“没有粒子”的直接原因。
         var snowImg = null;
-        loadImg('Atlases/Gameplay/particles/snow.png').then(function (im) { snowImg = im; });
+        // 素材兜底：Overworld 缺失 → Gameplay → 程序化软光斑（可替换钩子，不静默省略）
+        loadImg('Atlases/Overworld/snow.png').then(function (im) {
+            if (im) { snowImg = im; return; }
+            loadImg('Atlases/Gameplay/particles/snow.png').then(function (fb) {
+                snowImg = fb || makeSnowFallback();
+            });
+        });
+        function makeSnowFallback() {
+            var c = document.createElement('canvas'); c.width = 64; c.height = 64;
+            var g2 = c.getContext('2d');
+            var grd = g2.createRadialGradient(32, 32, 0, 32, 32, 32);
+            grd.addColorStop(0, 'rgba(255,255,255,1)');
+            grd.addColorStop(1, 'rgba(255,255,255,0)');
+            g2.fillStyle = grd; g2.fillRect(0, 0, 64, 64);
+            return c;
+        }
 
         // ===== 灰尘兔（Celeste.DustGraphic）· 第三章轨道运动 =====
         // 取证（§22.6）：DustGraphic 全库 4 个宿主 —— credits 的 DustyRoutine + 第三章三种 spinner：
@@ -1402,7 +1656,7 @@
                 spinFrames: fake ? null : GUI_HEART_FRAMES[color],
                 frameI: 0, frameT: 0, delay: GUI_FRAME_DELAY,
                 anim: 'spin', animDone: false,
-                tint: (color === 'yellow' && !fake) ? 0.6 : 1,   // IL: (AreaMode==2 && !fake) ? 0.6
+                tint: (fake || color === 'yellow') ? 1 : 0.6,    // IL: (AreaMode==CSide || IsFake) ? 1 : 0.6
                 title: title || '', desc: desc || '',
                 textAlpha: 1, particleSpeed: 1, shake: 0,        // IL: TextAlpha / ParticleSpeed / Shake
                 breakT: 0, breakFade: 1,                         // 假心 break：帧计时 / 末段淡出
@@ -1602,6 +1856,8 @@
             p.imageSmoothingEnabled = true;
             var snow = tintCopy(snowImg, col);
             if (snow) {
+                // IL: mTexture.DrawCentered(position, color, scale, rotation) —— 贴图原始尺寸（1920 空间）× scale
+                var sw = snow.width * g, sh = snow.height * g;
                 for (var i = 0; i < poem.particles.length; i++) {
                     var pt = poem.particles[i];
                     var e = sineIn(pt.p);
@@ -1614,7 +1870,7 @@
                     p.rotate(Math.atan2(-pt.dir.y, -pt.dir.x));       // IL: Rotation = Angle(-Direction)
                     p.globalAlpha = Math.max(0, 1 - e);               // IL: Color = Poem.Color * (1-e)
                     p.scale(sx, sy);
-                    p.drawImage(snow, -4, -4, 8, 8);
+                    p.drawImage(snow, -sw / 2, -sh / 2, sw, sh);
                     p.restore();
                 }
                 p.globalAlpha = 1;
@@ -1872,9 +2128,27 @@
 
         // ===== 真心收集仪式（IL: HeartGem.CollectRoutine 时间轴） =====
         function startRealRitual() {
-            recordHeart();                                        // 收下的瞬间就计入心门颗数
             ritual = { kind: 'real', phase: 'freeze', t: 0, introA: null, loopA: null };
             freezeT = 0.2;                                        // IL: Celeste.Freeze(0.2)
+            // IL: CollectRoutine 第 0 帧即播放 crystalheart_*_get（intro→loop 为同一 FMOD event）
+            if (window.__audioGestured) {
+                try {
+                    ritual.introA = new Audio('celeste-sounds/' + heartSfxBase(heart.color) + 'intro.wav');
+                    ritual.introA.volume = 0.85;
+                    ritual.introA.play().catch(function () {});
+                    // IL: event 的 intro 段落自然结束后才进入 loop；本地拆成两个 wav，用 ended 接续
+                    ritual.introA.addEventListener('ended', startRealLoop);
+                } catch (e) {}
+            }
+        }
+        function startRealLoop() {
+            if (!ritual || ritual.kind !== 'real' || ritual.phase === 'poemout') return;
+            if (!(window.__audioGestured && window.GaplessAudio)) return;
+            try {
+                if (ritual.loopA) return;
+                ritual.loopA = window.GaplessAudio.loop('celeste-sounds/' + heartSfxBase(heart.color) + 'loop.wav', { volume: 0.3 });
+                var lp = ritual.loopA.start(); if (lp && lp.catch) lp.catch(function () {});
+            } catch (e) {}
         }
         function realAfterFreeze() {
             ritual.phase = 'slow'; ritual.t = 0;
@@ -1884,24 +2158,12 @@
             flashA = 1;                                           // IL: level.Flash(White, drawPlayer:false)
             backdropTarget = 1;                                   // IL: FormationBackdrop.Display=true; Alpha=1
             heart.mode = 'none';                                  // IL: Visible = false（连白心一起隐去）
-            if (window.__audioGestured) {
-                try {
-                    ritual.introA = new Audio('celeste-sounds/' + heartSfxBase(heart.color) + 'intro.wav');
-                    ritual.introA.volume = 0.85;
-                    ritual.introA.play().catch(function () {});
-                } catch (e) {}
-            }
         }
         function realPoemPhase() {
             ritual.phase = 'poem';
             timeRate = 1; frozen = true;                          // IL: TimeRate=1; level.Frozen = true
-            if (window.__audioGestured && window.GaplessAudio) {
-                try {
-                    // 心之仪式的 loop 在音频渲染线程内回绕，节点之间不再有 element 起播的卡顿
-                    ritual.loopA = window.GaplessAudio.loop('celeste-sounds/' + heartSfxBase(heart.color) + 'loop.wav', { volume: 0.3 });
-                    var lp = ritual.loopA.start(); if (lp && lp.catch) lp.catch(function () {});
-                } catch (e) {}
-            }
+            recordHeart();                                        // IL: RegisterAsCollected —— 在慢放结束、Frozen 之后写入
+            if (!ritual.introA) startRealLoop();                  // 无 intro 时直接 loop；有 intro 时由 ended 接续
             showPoem(true);
             openPoem(heart.color, heart.title, heart.desc, 'real');   // IL: new Poem(text, mode, tint)
         }
@@ -1967,7 +2229,10 @@
                 } else if (ritual.phase === 'slow') {
                     ritual.t += rdt;
                     timeRate = approach(timeRate, 0, rdt * 0.25); // IL: 2s 内 TimeRate→0
-                    if (ritual.t >= 2) realPoemPhase();
+                    if (ritual.t >= 2) { ritual.phase = 'settle'; ritual.t = 0; }
+                } else if (ritual.phase === 'settle') {
+                    ritual.t += rdt;
+                    if (ritual.t >= 1 / 60) realPoemPhase();       // IL: 慢放后额外 yield null 一帧
                 } else if (ritual.phase === 'poemout') {
                     if (!poem) { frozen = false; ritual = null; }  // 淡出结束 → 解除 Frozen
                 }
@@ -2045,7 +2310,7 @@
         }
 
         // ===== 主循环 =====
-        var madeline = null, last = 0;
+        var last = 0;   // madeline 在外层作用域声明，供开场演出复用
         CelesteCharacter.create({
             base: 'Atlases/Gameplay/characters/player',
             color: CelesteHair.MADELINE, x: 100, y: 0
@@ -2083,7 +2348,27 @@
                     aimX: (keys['d'] || keys['arrowright'] ? 1 : 0) - (keys['a'] || keys['arrowleft'] ? 1 : 0),
                     aimY: (keys['s'] || keys['arrowdown'] ? 1 : 0) - (keys['w'] || keys['arrowup'] ? 1 : 0)
                 };
+                if (introLock) {
+                    // IL: State=11 + Locked=true —— 演出期间玩家不接受按键，只走脚本 DummyWalkTo
+                    input = { left: false, right: false, down: false, up: false,
+                        jumpHeld: false, jumpPressed: false, grabHeld: false, grabPressed: false,
+                        dashPressed: false, aimX: 0, aimY: 0 };
+                    if (introWalk) {
+                        var wdir = (introWalk.target > madeline.x) ? 1 : -1;
+                        input.right = wdir > 0; input.left = wdir < 0; input.aimX = wdir;
+                    }
+                }
                 madeline.update(edt, input);
+                if (introWalk) {
+                    // IL: DummyMaxSpeed = 64；抵达后 DummyMoving = false
+                    if (madeline.vx > 64) madeline.vx = 64;
+                    if (madeline.vx < -64) madeline.vx = -64;
+                    if (introWalk.backwards) madeline.facing = 1;
+                    if (Math.abs(madeline.x - introWalk.target) <= 1) {
+                        madeline.vx = 0;
+                        var wcb = introWalk; introWalk = null; wcb.resolve();
+                    }
+                }
                 if (madeline.y < CEIL_Y) { madeline.y = CEIL_Y; if (madeline.vy < 0) madeline.vy = 0; }
             }
             jumpEdge = false; dashEdge = false;
@@ -2133,8 +2418,11 @@
                         else startFakeRitual();
                     } else if (heart.bounceSfxDelay <= 0) {
                         heart.bounceSfxDelay = 0.1;
-                        // IL: moveWiggleDir = (Center - player.Center).UnitY（决定心被顶开的方向）
-                        heart.moveDir.y = (HEART_POS.y < madeline.y - BODY_H / 2) ? -1 : 1;
+                        // IL: moveWiggleDir = (Center - player.Center).SafeNormalize(Vector2.UnitY)
+                        var dxh = HEART_POS.x - madeline.x, dyh = HEART_POS.y - (madeline.y - BODY_H / 2);
+                        var lh = Math.sqrt(dxh * dxh + dyh * dyh);
+                        heart.moveDir.x = lh < 1e-4 ? 0 : dxh / lh;
+                        heart.moveDir.y = lh < 1e-4 ? 1 : dyh / lh;
                         pointBounce(madeline);
                         wigStart(heart.scaleWig);
                         wigStart(heart.moveWig);
@@ -2183,7 +2471,9 @@
                 var amp = 3 * Z * (shakeT / 0.3);
                 ctx.translate((Math.random() * 2 - 1) * amp, (Math.random() * 2 - 1) * amp);
             }
-            // shine 粒子（缺口：ParticleType 参数未取证 → 白色小光点上飘淡出近似）
+            // shine 粒子（IL: ParticleTypes 静态初始化 —— P_BlueShine Size=1、#5caefa/白 Blink、InAndOut、
+            //   Direction=-π/2、Range=1.3962634(±40°)、Speed 5-10、Life 0.6-1；每 0.1s Emit(1, Center, One*8)。
+            //   本地无对应粒子贴图，仍用 2px 白点近似）
             shines.forEach(function (sh) {
                 var p = toScreen(sh);
                 ctx.fillStyle = 'rgba(255,255,255,' + (0.85 * (1 - sh.t / sh.ttl)).toFixed(3) + ')';
@@ -2197,8 +2487,9 @@
                 var img = frames && frames[SPIN_SEQ[heart.frameI]];
                 if (img) {
                     var bob = Math.sin(heart.timer * 2) * 2;    // IL: UnitY * (sin(timer*2)*2)
+                    var mvx = -8 * heart.moveWig.value * heart.moveDir.x;
                     var mvy = -8 * heart.moveWig.value * heart.moveDir.y;
-                    var hp = toScreen({ x: HEART_POS.x, y: HEART_POS.y + bob + mvy });
+                    var hp = toScreen({ x: HEART_POS.x + mvx, y: HEART_POS.y + bob + mvy });
                     var sc = 1 + 0.25 * heart.scaleWig.value;
                     var w = img.width * Z * sc, h = img.height * Z * sc;
                     if (heart.mode === 'real') {
@@ -2215,8 +2506,12 @@
             if (ritual && ritual.kind === 'real' && ritual.phase === 'freeze') {
                 var wImg = heartFrames.white[SPIN_SEQ[heart.frameI]];
                 if (wImg) {
+                    // IL: HeartGem.Update —— white.Position = sprite.Position；white.Scale = sprite.Scale
                     var wsc = 1 + 0.25 * heart.scaleWig.value;
-                    var wp = toScreen({ x: HEART_POS.x, y: HEART_POS.y });
+                    var wBob = Math.sin(heart.timer * 2) * 2;
+                    var wmvx = -8 * heart.moveWig.value * heart.moveDir.x;
+                    var wmvy = -8 * heart.moveWig.value * heart.moveDir.y;
+                    var wp = toScreen({ x: HEART_POS.x + wmvx, y: HEART_POS.y + wBob + wmvy });
                     var ww = wImg.width * Z * wsc, wh = wImg.height * Z * wsc;
                     ctx.drawImage(wImg, wp.x - ww / 2, wp.y - wh / 2, ww, wh);
                 }
@@ -2296,6 +2591,8 @@
             }
             // Poem（GUI 240px 巨大心 + 80 粒子；文字由 DOM overlay 同步透明度）
             drawPoem();
+            // 光照 RT + Bloom 后处理（独立画布，不改变上面的演出绘制顺序）
+            lightStep(rdt);
             requestAnimationFrame(frame);
         }
     })();
