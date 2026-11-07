@@ -2349,6 +2349,75 @@ function inferReplyEmotion(text) {
         poseReturn: '',
         wasHopping: false
     };
+
+    // ===== Badeline 替班（临时测试版）=====
+    // 镜之房间（celeste-mirror.js / shelf 的 mirror 房间）在 stage='appeared' 后写入标记；
+    // 日记页只替班一次（appeared → diaryShown），刷新即恢复 Madeline；
+    // 同时提供「恢复 Madeline」按钮与 1 小时自然过期，避免卡死在 Badeline 状态。
+    // 注意：键名与 stage 必须和 celeste-mirror.js 里的 STORY_KEY 保持一致。
+    const SHIFT_KEY = 'badelineMirrorStoryV1';
+    const SHIFT_TTL = 60 * 60 * 1000;
+    function readShiftDiary() {
+        try {
+            const raw = localStorage.getItem(SHIFT_KEY);
+            if (!raw) return null;
+            const s = JSON.parse(raw);
+            if (!s || !s.stage || !s.expiresAt || Date.now() > s.expiresAt) {
+                localStorage.removeItem(SHIFT_KEY);
+                return null;
+            }
+            return s;
+        } catch (e) { return null; }
+    }
+    function saveShiftDiary(stage) {
+        try {
+            const now = Date.now();
+            localStorage.setItem(SHIFT_KEY, JSON.stringify({ stage, updatedAt: now, expiresAt: now + SHIFT_TTL }));
+        } catch (e) {}
+    }
+    function clearShiftDiary() {
+        try { localStorage.removeItem(SHIFT_KEY); } catch (e) {}
+    }
+    let shiftState = readShiftDiary();
+    let PM_BADELINE_STANDIN = false;
+    if (shiftState && shiftState.stage === 'appeared') {
+        PM_BADELINE_STANDIN = true;
+        saveShiftDiary('diaryShown');      // 只替班这一屏，刷新后回 Madeline
+    } else if (shiftState && shiftState.stage === 'diaryShown') {
+        clearShiftDiary();                 // 第二次进入：恢复 Madeline 并清掉标记
+        shiftState = null;
+    }
+    if (PM_BADELINE_STANDIN) {
+        pmCurName = 'badeline';
+        pm.src = 'celeste-player/badeline/lookingUp_f.gif';
+        pm.alt = 'Badeline';
+        pm.title = 'Badeline 在替班';
+        pmState.mode = 'badeline';
+        pmState.dir = 1;
+        // 128px 立绘按脚底贴地摆放（默认 y 是按 56px 算的，直接沿用会溢出屏幕）
+        pmState.y = window.innerHeight - (pm.offsetHeight || 128) - 8;
+        pm.style.transform = 'translate(' + Math.round(pmState.x) + 'px,' + Math.round(pmState.y) + 'px)';
+        const resetBtn = document.createElement('button');
+        resetBtn.type = 'button';
+        resetBtn.textContent = '恢复 Madeline';
+        resetBtn.style.cssText = 'position:fixed;right:14px;top:14px;z-index:900;padding:6px 12px;border-radius:999px;' +
+            'border:1px solid rgba(190,150,255,.55);background:rgba(28,12,50,.8);color:#e8dcff;' +
+            'font-size:12px;letter-spacing:.12em;cursor:pointer;';
+        resetBtn.addEventListener('click', () => {
+            clearShiftDiary();
+            PM_BADELINE_STANDIN = false;
+            pmCurName = '';
+            pm.alt = 'Madeline';
+            pm.title = '点我聊天';
+            pmState.mode = 'walk';
+            pmState.dir = 1;
+            pmState.modeUntil = 0;
+            pmState.targetX = null;
+            pmSetSrc(PM_SRC.move);
+            resetBtn.remove();
+        });
+        document.body.appendChild(resetBtn);
+    }
     // ===== 布局缓存：禁区 rect / 精灵尺寸 300ms 刷新一次，帧循环不再触发强制布局 =====
     let layoutCache = { rects: [], bw: 56, bh: 56, groundY: 0, ts: -1e9 };
     function refreshLayoutCache() {
@@ -2385,6 +2454,7 @@ function inferReplyEmotion(text) {
         refreshLayoutCache();
     }
     function pmSetSrc(name) {
+        if (PM_BADELINE_STANDIN) return;   // 替班期间不被 Madeline 的换帧逻辑覆盖
         if (pmFrameTimer) { clearInterval(pmFrameTimer); pmFrameTimer = null; }
         const frames = PM_FRAMES[name];
         if (frames) {
@@ -2551,7 +2621,7 @@ function inferReplyEmotion(text) {
     // 走 requestMode（冷却 + 驻留仲裁）：不再裸调 enterMode，避免高优先级模式
     // （peek/celebrate）被低优先级动作瞬间顶掉，也避免连续消息导致动作刷屏
     function pmReactToEmotion(em) {
-        if (chatOpen || pmState.mode === 'sleep' || pmState.mode === 'celebrate') return;
+        if (PM_BADELINE_STANDIN || chatOpen || pmState.mode === 'sleep' || pmState.mode === 'celebrate') return;
         const now = performance.now();
         if (isPositive(em)) {
             if (Math.random() < 0.5) {
@@ -2635,6 +2705,13 @@ function inferReplyEmotion(text) {
     function pmLoop(now) {
         const dt = Math.min(0.05, (now - pmLast) / 1000);
         pmLast = now;
+
+        // Badeline 替班：保持站位不动，不跑 Madeline 行为树
+        if (PM_BADELINE_STANDIN) {
+            pm.style.transform = 'translate(' + Math.round(pmState.x) + 'px,' + Math.round(pmState.y) + 'px)';
+            requestAnimationFrame(pmLoop);
+            return;
+        }
 
         if (pmState.poseUntil > 0 && now >= pmState.poseUntil) {
             pmState.poseUntil = 0;
@@ -2843,6 +2920,7 @@ function inferReplyEmotion(text) {
     }
     let pmClickTimer = null;
     pm.addEventListener('click', () => {
+        if (PM_BADELINE_STANDIN) return;
         if (pmClickTimer) return;
         pmClickTimer = setTimeout(() => {
             pmClickTimer = null;

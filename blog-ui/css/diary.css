@@ -56,8 +56,15 @@ body.emotion-hopeful   .content-editor { border-color: #3498DB; }
   transition:opacity 1.2s ease;
   pointer-events:none;
 }
+/* 情绪氛围图只做轻量染色：0.35 时 sad/angry/lonely 这类暗场图会把整张房间背景
+   压成一片深色。参照不叠图的那几档（默认/开心/满足/希望），统一收到 0.15。 */
 #emotion-bg.show {
-  opacity:0.35;
+  opacity:0.15;
+}
+/* 平静用的 bg_calm 是全套里最亮的一张（均值 ≈176,211,211），同样透明度下
+   它把房间染成黄绿最明显，单独再收一档。 */
+body.emotion-calm #emotion-bg.show {
+  opacity:0.10;
 }
 
 /* ===== 情绪场景背景色（半透明蒙色，叠在 diary-bg.jpg 上渐入渐出） ===== */
@@ -606,6 +613,11 @@ body::before {
     user-select: none;
     -webkit-user-drag: none;
 }
+/* Badeline 替班：32px 原图 4 倍整数放大（与 shelf 立绘同量级），保持像素边缘 */
+#pixelMadeline[src*="badeline/"] {
+    width: 128px !important;
+    height: 128px !important;
+}
 #pixelMadeline[src*="madeline-sitdown.gif"],
 #pixelMadeline[src*="madeline-sleep.gif"],
 #pixelMadeline[src*="madeline-wakeup.gif"],
@@ -705,13 +717,13 @@ body::before {
         drop-shadow(0 0 10px rgba(200,235,255,1)) drop-shadow(0 0 24px rgba(120,190,255,.8));
 }
 /* ===== Celeste 日记本 ===== */
-/* 书页贴底，但底部 48px 淡出到背景：既不留纸边硬白线，也不在书页下方露缝 */
+/* 书页直接贴到视口底：页脚完整显示，底部不留硬白线。
+   之前用 mask 把最后 48px 淡出到透明来"藏"白边，结果连带把页脚也削掉了，
+   而且透明区会透出下面 #bg-snow-front 的白色雪带 —— 白边反而更明显。 */
 #journalStage { position:fixed; left:0; right:0; bottom:0; width:100%; margin:0; z-index:5; display:flex; justify-content:center; pointer-events:none; }
 #journalBook { position:relative; perspective:1800px; pointer-events:auto; margin-left:80px; }
 .book-page {
     position:relative; width:100%;
-    -webkit-mask-image:linear-gradient(to bottom, #000 calc(100% - 48px), transparent 100%);
-    mask-image:linear-gradient(to bottom, #000 calc(100% - 48px), transparent 100%);
     transition:transform .55s cubic-bezier(.3,.7,.25,1), opacity .5s ease;
     will-change:transform, opacity;
 }
