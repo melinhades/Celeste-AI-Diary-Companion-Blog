@@ -44,16 +44,6 @@ public class DiaryChatLogService {
         );
     }
 
-    /** 记录用户反馈（前端点 👍/👎 后调） */
-    public void recordFeedback(Long logId, String feedback) {
-        DiaryChatLog e = logMapper.selectById(logId);
-        if (e != null) {
-            e.setUserFeedback(feedback);
-            e.setCreatedAt(LocalDateTime.now());
-            logMapper.updateById(e);
-        }
-    }
-
     /** 按 sessionId 找到本用户最后一条日志写反馈（不依赖 logId，前端只带 sessionId 更稳） */
     public void recordFeedbackBySession(String sessionId, String feedback) {
         DiaryChatLog last = logMapper.selectOne(

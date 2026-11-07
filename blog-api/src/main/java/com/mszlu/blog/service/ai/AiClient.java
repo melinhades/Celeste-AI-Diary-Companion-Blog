@@ -247,17 +247,6 @@ public class AiClient {
         return new KeyProbe(null, err);
     }
 
-    /**
-     * 用调用方提供的 Key 做一次最小化 chat 探测（不落库、不计入熔断、不占全局限速）。
-     * 供「安装自定义 Key」页面的“测试连接”使用。
-     *
-     * @param key 待验证的 Key
-     * @return null 表示连通；否则返回可直接展示给用户的错误原因
-     */
-    public String testKey(String key) {
-        return probeKey(key).error;
-    }
-
     /** 用指定模型对 Key 做最小 chat 探测（安装成功后“测试所选模型”用），返回 null = 通过 */
     public String testKeyModel(String key, String provider, String model) {
         String k = key == null ? "" : key.trim();
