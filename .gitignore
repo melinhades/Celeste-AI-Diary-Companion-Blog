@@ -87,3 +87,9 @@ __pycache__/
 
 ### Trae 本地配置（写死本机路径，不入仓） ###
 .trae/mcp.json
+
+### 本地实验素材（体积大 / 可再生的验证产物，不入仓） ###
+docs/ppt-sample/
+docs/celeste-rea/
+badeline-crawlout-scale-before-after.png
+docs/screenshots/*-compare.png
