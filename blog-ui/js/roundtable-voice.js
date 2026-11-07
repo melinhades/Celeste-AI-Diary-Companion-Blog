@@ -340,6 +340,30 @@
         // 否则交给泵把全文念完（chars 耗尽自动收声）——长句自然会播更多声
     }
 
+    /* AI 标记触发的独立音效：[sfx:yolo] / [sfx:granny_haha]
+       与逐字 blip 互斥：先停当前朗读泵，再单独放一声，避免人声叠在一起 */
+    function playSpecial(kind) {
+        if (!maySound()) return false;
+        cur = null;
+        stopPump();
+        if (kind === 'yolo') {
+            silenceOthers(chTheo);
+            chTheo.silence();
+            chTheo.playSolo(THEO_BASE + 'yolo/yolo_solo.wav', pickRate([0.92, 1.02]), 0.85);
+            return true;
+        }
+        if (kind === 'granny_haha') {
+            silenceOthers(chGranny);
+            chGranny.silence();
+            /* gap：原作事件是 event:/char/granny/laugh_firstphrase，仓库无完整 oneha 事件文件，
+               只有 oneha 单字切片（24 段 × 0.155s）；这里用 firstphrase 完整笑保证“一声笑”的听感 */
+            chGranny.playSolo(GRAN_BASE + 'laugh/first_phrase/laugh_firstphrase.wav',
+                pickRate([0.95, 1.06]), 0.9);
+            return true;
+        }
+        return false;
+    }
+
     // 散会：Theo 最后一次发言透着累 → yolo_solo（整场最多一次）
     function meetingEnd(transcript) {
         if (!maySound() || theoSoloUsed) return;
@@ -382,6 +406,7 @@
         pushText: pushText,
         end: end,
         meetingEnd: meetingEnd,
+        playSpecial: playSpecial,
         stopAll: stopAll,
         infer: infer,
         // 暴露判定函数便于测试/调参

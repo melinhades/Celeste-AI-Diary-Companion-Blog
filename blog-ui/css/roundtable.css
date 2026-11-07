@@ -213,6 +213,17 @@
         position:absolute; inset:0; z-index:0; pointer-events:none;
         background:none;
     }
+    /* 特殊音效覆盖层：YOLO 绿色像素粒子 / Granny "HA" 字，随 .scene-wrap 一起缩放 */
+    .sfx-layer { position:absolute; inset:0; z-index:3; pointer-events:none; overflow:hidden; }
+    .sfx-p {
+        position:absolute; width:4px; height:4px; border-radius:1px;
+        will-change:transform,opacity;
+    }
+    .sfx-ha {
+        position:absolute; width:44px; height:28px;
+        image-rendering:pixelated; image-rendering:crisp-edges;
+        will-change:transform;
+    }
     .studio-main > .stage-head,
     .studio-main > #transcript,
     .studio-main > .interject-row,
@@ -632,4 +643,9 @@
     }
     .scene-fs-host:fullscreen .rt-fs-exit { display:block; }
     .rt-fs-exit:hover { color:#ffe36d; border-color:rgba(255,227,109,.7); background:rgba(20,26,50,.78); }
+
+    /* ===== 临时真机对比开关：URL 加 ?nofx=1 时关掉雪 / 玻璃模糊（.rt-nofx 由 head 内联脚本挂到 html 上）。
+       只为在真机 DevTools 里开关比对 paint 成本用，不做任何观感调优；保留不删。 ===== */
+    html.rt-nofx #snowCanvas { display:none !important; }
+    html.rt-nofx * { backdrop-filter:none !important; -webkit-backdrop-filter:none !important; }
 

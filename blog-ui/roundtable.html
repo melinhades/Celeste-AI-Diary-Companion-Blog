@@ -6,9 +6,13 @@
     <link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48">
     <link rel="icon" href="icon/OIP.webp?v=20261105a" type="image/webp">
     <title>AI 圆桌会议 · Celeste Blog</title>
+    <!-- 临时真机对比开关：?nofx=1 一键关雪 / 玻璃模糊 / backdrop-filter，方便 DevTools 里开关比对；保留不删 -->
+    <script>
+        if (/[?&]nofx=1(?:&|$)/.test(location.search)) document.documentElement.classList.add('rt-nofx');
+    </script>
     <link rel="stylesheet" href="css/common.css?v=20261104a">
     <link rel="stylesheet" href="css/text-fx.css?v=20261004a">
-    <link rel="stylesheet" href="css/roundtable.css?v=20261031a">
+    <link rel="stylesheet" href="css/roundtable.css?v=20261107b">
 </head>
 <body>
     <canvas id="snowCanvas" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;"></canvas>
@@ -99,6 +103,7 @@
                             <canvas class="scene-layer" id="sceneCanvas" width="1152" height="720"></canvas>
                             <div class="scene-scrim"></div>
                             <div id="transcript"></div>
+                            <div class="sfx-layer" id="sfxLayer" aria-hidden="true"></div>
                             <button type="button" class="rt-fs-exit" id="fsExit" title="退出全屏 (Esc)">⛶ 退出全屏</button>
                             <div class="interject-row" id="interjectRow" style="display:none;">
                                 <input type="text" id="interjectInput" maxlength="300" placeholder="以「你」的身份插一句话，下一个发言间隙插入…（Enter 发送）" autocomplete="off">
@@ -142,21 +147,23 @@
         </div>
     </div>
 
-<script src="js/api.js?v=20261002"></script>
-<script src="js/lib/store.js?v=20261028b"></script>
+<script src="js/api.js?v=20261106a"></script>
+<script src="js/lib/store.js?v=20261106a"></script>
 <script src="js/text-fx.js?v=20261005b"></script>
 <script src="js/auth.js?v=20261104a"></script>
 <script src="js/badeline-voice.js?v=20261002b"></script>
-<script src="js/roundtable-voice.js?v=20261004c"></script>
+<script src="js/roundtable-voice.js?v=20261107a"></script>
 <script src="js/roundtable-portraits.js?v=20261004f"></script>
+<script src="js/roundtable-sfx.js?v=20261107a"></script>
 <script src="js/bird-motion.js?v=20261031b"></script>
 <script src="js/roundtable-bird.js?v=20261031a"></script>
 <script src="js/felt-piano.js?v=20261003"></script>
 <script src="js/roundtable-scenes.js?v=20261004"></script>
 <script src="js/vue.global.prod.js?v=20261008a"></script>
 <script src="js/roundtable-1.js?v=20261015a"></script>
-<script src="js/roundtable-2.js?v=20261015c"></script>
-<script src="js/roundtable-3.js?v=20261106c"></script>
+<script src="js/badeline-crawlout.js?v=20261107b"></script>
+<script src="js/roundtable-2.js?v=20261107b"></script>
+<script src="js/roundtable-3.js?v=20261107a"></script>
 <script src="js/seed.js?v=20261101c"></script>
 </body>
 </html>

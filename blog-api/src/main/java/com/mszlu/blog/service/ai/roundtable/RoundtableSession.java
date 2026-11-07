@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -71,6 +72,9 @@ public class RoundtableSession {
 
     /** 逐字稿（按时间顺序，含主持/AI/人类） */
     private final List<Map<String, Object>> transcript = new ArrayList<>();
+
+    /** 特殊音效冷却：speakerId → 上次触发时间戳（毫秒），同一角色两次触发之间需间隔 SFX_COOLDOWN_MS */
+    private final Map<String, Long> sfxLastAt = new ConcurrentHashMap<>();
 
     /** 最终评分结果（finish 前填充） */
     private Map<String, Object> score;

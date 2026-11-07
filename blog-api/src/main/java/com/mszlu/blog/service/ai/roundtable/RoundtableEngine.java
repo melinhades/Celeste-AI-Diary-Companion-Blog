@@ -23,8 +23,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Executor;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 圆桌讨论引擎（demo 版）。
@@ -93,6 +96,14 @@ public class RoundtableEngine {
     private static final int SUMMARY_MAX_CHARS = 400;
     /** 评审均分低于此值触发主持人反思追问 */
     private static final int REFLECT_BELOW = 70;
+
+    /** AI 特殊音效标记：[sfx:yolo] / [sfx:granny_haha]；容忍全角冒号/括号、大小写、落在句中 */
+    private static final Pattern SFX_MARKER = Pattern.compile(
+            "[\\[［]\\s*sfx\\s*[:：]\\s*([a-zA-Z_\\-]+)\\s*[\\]］]", Pattern.CASE_INSENSITIVE);
+    /** 同一轮发言最多触发的特殊音效次数 */
+    private static final int SFX_MAX_PER_TURN = 1;
+    /** 同一角色两次特殊音效的最小间隔（毫秒），防刷屏 */
+    private static final long SFX_COOLDOWN_MS = 30_000L;
 
     /** 六个评分维度，顺序即前端展示顺序 */
     private static final String[] SCORE_KEYS = {"conclusion", "evidence", "diversity", "focus", "interaction", "practical"};
@@ -649,13 +660,22 @@ public class RoundtableEngine {
         return false;
     }
 
-    /** 一条发言：turn_start → 若干 delta（伪流式逐字）→ turn_end，同时入逐字稿 */
+    /** 一条发言：turn_start →（可选特殊音效 →）若干 delta（伪流式逐字）→ turn_end，同时入逐字稿 */
     private boolean pushSpeech(RoundtableSession session,
                                RoundtablePersonas persona, String role, String content) throws InterruptedException {
+        // 先抠出 [sfx:...] 标记：正文/逐字稿只保留干净文本，音效事件单独下发
+        String[] sfxKind = new String[1];
+        content = stripSfxMarkers(content, sfxKind);
         long ts = System.currentTimeMillis();
         if (sendEvent(session, "turn_start", mapOf(
                 "speakerId", persona.getId(), "role", role, "name", persona.getEnName(),
                 "color", persona.getColor(), "ts", ts))) return true;
+
+        // 冷却闸门在服务端：同一角色冷却内静默丢弃，不播也不下发
+        if (sfxKind[0] != null && allowSfx(session, persona.getId(), ts)) {
+            if (sendEvent(session, "sfx", mapOf(
+                    "speakerId", persona.getId(), "kind", sfxKind[0], "ts", ts))) return true;
+        }
 
         int len = content.length();
         for (int i = 0; i < len; i += CHUNK_CHARS) {
@@ -667,6 +687,49 @@ public class RoundtableEngine {
 
         session.addSpeech(persona.getId(), persona.getEnName(), persona.getColor(), role, content);
         return sendEvent(session, "turn_end", mapOf("speakerId", persona.getId(), "ts", ts));
+    }
+
+    /**
+     * 抠出内容里的 [sfx:xxx] 标记并从正文删除，只取第一个可识别标记。
+     * 容错：全角冒号“：”/全角括号［］、任意大小写、标记落在句中等；未识别的 sfx 标记也一律剥离，
+     * 避免漏显成正文。
+     */
+    private static String stripSfxMarkers(String content, String[] outKind) {
+        if (content == null) return "";
+        Matcher m = SFX_MARKER.matcher(content);
+        StringBuilder sb = new StringBuilder(content.length());
+        int last = 0;
+        int accepted = 0;
+        while (m.find()) {
+            sb.append(content, last, m.start());
+            if (accepted < SFX_MAX_PER_TURN) {
+                String kind = normalizeSfxKind(m.group(1));
+                if (kind != null) {
+                    outKind[0] = kind;
+                    accepted++;
+                }
+            }
+            last = m.end();
+        }
+        sb.append(content, last, content.length());
+        return sb.toString().trim();
+    }
+
+    /** 标记别名归一：yolo / theo_yolo → yolo；granny_haha / haha / laugh / granny_laugh → granny_haha */
+    private static String normalizeSfxKind(String raw) {
+        String k = raw == null ? "" : raw.toLowerCase(Locale.ROOT);
+        if ("yolo".equals(k) || "theo_yolo".equals(k)) return "yolo";
+        if ("granny_haha".equals(k) || "haha".equals(k) || "laugh".equals(k) || "granny_laugh".equals(k))
+            return "granny_haha";
+        return null;
+    }
+
+    /** 冷却闸门：同角色冷却内直接丢弃；通过则登记本次触发时间戳 */
+    private static boolean allowSfx(RoundtableSession session, String speakerId, long now) {
+        Long prev = session.getSfxLastAt().get(speakerId);
+        if (prev != null && now - prev < SFX_COOLDOWN_MS) return false;
+        session.getSfxLastAt().put(speakerId, now);
+        return true;
     }
 
     private List<String> drainInterjections(RoundtableSession session) throws InterruptedException {

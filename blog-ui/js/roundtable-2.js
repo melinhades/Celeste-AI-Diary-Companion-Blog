@@ -437,9 +437,17 @@ initHeader();
         $('studio').classList.toggle('spotlight', !!$('seats').querySelector('.seat.speaking'));
     }
 
-    function stickBottom() {
+    let lastScrollAt = 0;
+    let transcriptCH = 0;      // 缓存 #transcript 可视高，避免每字都读一次布局
+    window.addEventListener('resize', function () { transcriptCH = 0; });
+    // 打字机每字都会让内容变长；滚动读/写节流到 ~5 次/秒，且只在接近底部时跟随
+    function stickBottom(force) {
         const box = $('transcript');
-        box.scrollTop = box.scrollHeight;
+        const now = Date.now();
+        if (!force && now - lastScrollAt < 200) return;
+        lastScrollAt = now;
+        if (!transcriptCH) transcriptCH = box.clientHeight;
+        if (force || box.scrollTop + transcriptCH >= box.scrollHeight - 80) box.scrollTop = box.scrollHeight;
     }
 
     function addSystemLine(text, cls) {
@@ -449,7 +457,7 @@ initHeader();
         // 单对话模式：系统消息也只保留最新一条
         $('transcript').innerHTML = '';
         $('transcript').appendChild(d);
-        stickBottom();
+        stickBottom(true);
         return d;
     }
 
@@ -465,6 +473,8 @@ initHeader();
     // 说话中：按最新一句切换气泡+席位的头像情绪
     function updatePortraitEmotion(speakerId, fullText) {
         if (!window.RoundtableVoice || !window.RoundtablePortraits) return;
+        // 特殊音效演出期间（yolo / laugh）不要被逐字情绪立刻顶掉头像
+        if (window.RoundtableSfx && RoundtableSfx.isSuppressing(speakerId)) return;
         const emo = RoundtableVoice.infer(speakerId, lastSentence(fullText));
         if (!emo || !activeBubble || activeBubble._emotion === emo) return;
         activeBubble._emotion = emo;
@@ -536,6 +546,8 @@ initHeader();
         $('transcript').innerHTML = '';
         $('transcript').appendChild(d);
         activeBubble = d.querySelector('.b-bubble');
+        // 新一轮开始：特殊音效「每轮最多一次」计数器复位
+        if (window.RoundtableSfx) RoundtableSfx.onTurnStart(ev.speakerId);
         // 分句播放器状态
         activeBubble._rawFull = '';      // 含模型标签的原始累积
         activeBubble._clean = '';        // 清洗后全文
@@ -544,6 +556,8 @@ initHeader();
         activeBubble._seg = null;        // 当前正在打的句段
         activeBubble._segMarked = '';
         activeBubble._segK = 0;
+        activeBubble._segUnits = null;   // 已渲染句段的逐字单元（增量揭示用）
+        activeBubble._segUI = 0;
         activeBubble._segPause = 0;
         activeBubble._timer = null;
         activeBubble._ending = false;
@@ -561,6 +575,14 @@ initHeader();
                 anim.play('normal');
                 if (seatAnims[ev.speakerId]) seatAnims[ev.speakerId].play('normal');
             }
+            // Badeline 开口 = 从自己的 textbox 里爬出来再落回立绘槽（共用模块）
+            if (!replayMode && ev.speakerId === 'badeline' && window.BadelineCrawlOut) {
+                const tb = d, portrait = d.querySelector('.tb-portrait');
+                setTimeout(() => {
+                    if (!tb.isConnected) return;
+                    window.BadelineCrawlOut.play({ box: tb, portrait: portrait, anchor: portrait });
+                }, 220);
+            }
         }
         if (ev.speakerId !== 'host') setSeatState(ev.speakerId, 'speaking');
         // 主持鸟行为树：主持人开口=鸟代言鸣叫；用户插话=冲刺到用户席位
@@ -571,7 +593,7 @@ initHeader();
         // 说话音效：把上一句全文交给引擎（奶奶 oneha 剧情触发判定用）；回放时引擎自动静音
         const prev = meeting && meeting.transcript.length ? meeting.transcript[meeting.transcript.length - 1].content : '';
         if (window.RoundtableVoice && !replayMode) RoundtableVoice.start(ev.speakerId, prev);
-        stickBottom();
+        stickBottom(true);
     }
 
     // ===== 字体动画：{~波浪~} {*抖动*} {!弹跳!}（解析/渲染统一走公共模块 js/text-fx.js） =====
@@ -668,25 +690,85 @@ initHeader();
         b._seg = waiting.slice(0, seg.len);
         b._segMarked = (b._meta.role === 'user') ? b._seg : markRound(b._seg);
         b._segK = 0; b._segPause = seg.pause;
+        buildSeg(b);
         typeOne(b);
+    }
+
+    /* ===== 增量打字机：整段只 renderFxText 一次，之后只切换可见性 =====
+       旧实现每个字都把「已显示全文 + 本句前缀」整个 innerHTML 重建一遍，
+       长台词退化成 O(L²) 的 span 创建 + 每字一次强制重排；现在整句一次性
+       渲染并插入，逐字只把字符从隐藏节点搬到可见节点（或解除 .fx-ch 的隐藏）。
+       最终形态仍由 finishSpeech 整段重渲一次，与旧版逐字重建的收尾完全一致。 */
+    function buildSeg(b) {
+        const wrap = document.createElement('span');
+        wrap.className = 'fx-seg';
+        wrap.innerHTML = renderFxText(b._segMarked);
+        const units = [];
+        (function collect(node) {
+            let c = node.firstChild;
+            while (c) {
+                const next = c.nextSibling;
+                if (c.nodeType === 3) {
+                    const parent = c.parentNode;
+                    // .fx-ch 内的文本属于该 span 自己，不重复拆
+                    if (!(parent && parent.classList && parent.classList.contains('fx-ch')) && c.data) {
+                        const vis = document.createTextNode('');
+                        const hidBox = document.createElement('span');
+                        hidBox.style.display = 'none';
+                        const hid = document.createTextNode(c.data);
+                        hidBox.appendChild(hid);
+                        node.insertBefore(vis, c);
+                        node.insertBefore(hidBox, c);
+                        node.removeChild(c);
+                        for (let i = 0; i < c.data.length; i++) units.push({ vis: vis, hid: hid });
+                    }
+                } else if (c.nodeType === 1) {
+                    if (c.classList && c.classList.contains('fx-ch')) {
+                        c.style.display = 'none';
+                        units.push({ el: c });
+                    } else {
+                        collect(c);
+                    }
+                }
+                c = next;
+            }
+        })(wrap);
+        b._segUnits = units;
+        b._segUI = 0;
+        b.appendChild(wrap);
+    }
+    function revealNext(b) {
+        const u = b._segUnits && b._segUnits[b._segUI];
+        if (!u) return false;
+        b._segUI++;
+        if (u.el) { u.el.style.display = ''; return true; }
+        if (!u.hid.data) return false;
+        // 按 UTF-16 码元逐个搬，和 _segK 的计数口径一致（逐字节奏不变）
+        u.vis.appendData(u.hid.data.slice(0, 1));
+        u.hid.deleteData(0, 1);
+        return true;
     }
     function typeOne(b) {
         var ch = b._seg[b._segK];
         b._segK++;
         b._shownRaw += ch;
-        activeBubble.innerHTML = renderFxText(b._shownMarked + b._segMarked.slice(0, b._segK));
+        while (b._segUI < b._segK && revealNext(b)) {}   // 只揭示，不重建 DOM
         if (window.RoundtableVoice && !b._replay) RoundtableVoice.pushText(ch);
         if (b._segK % 3 === 0) updatePortraitEmotion(b._meta.speakerId, b._shownRaw);
         stickBottom();
         if (b._segK >= b._seg.length) {
             b._shownMarked += b._segMarked;                   // 一句固化，再开下一句
             b._seg = null;
+            b._segUnits = null;
             updatePortraitEmotion(b._meta.speakerId, b._shownRaw);
             b._timer = setTimeout(function () { pump(b); }, b._segPause || 0);
         } else {
             b._timer = setTimeout(function () { pump(b); }, SPEAK_CHAR_MS());
         }
     }
+
+    // [sfx:yolo] / [sfx:granny_haha] 兜底剥离：后端已单独下发 sfx 事件，正常不会漏进正文
+    const SFX_TAG_RE = /[\[［]\s*sfx\s*[:：]\s*[a-zA-Z_\-]+\s*[\]］]/gi;
 
     function appendDelta(ev) {
         replayMode = ev && Object.prototype.hasOwnProperty.call(ev, 'replay') ? !!ev.replay : false;
@@ -696,7 +778,7 @@ initHeader();
         }
         var b = activeBubble;
         b._rawFull += ev.text;
-        b._clean = stripSpeakerPrefix(b._rawFull);
+        b._clean = stripSpeakerPrefix(b._rawFull).replace(SFX_TAG_RE, '');
         if (b._replay || b._meta.role === 'user') {
             // 回放瞬时全显；用户自己的话本就完整上屏，不装打字机
             b._shownRaw = b._clean;
@@ -868,6 +950,11 @@ initHeader();
             if (window.RoundtableBird) RoundtableBird.focusSeat(d.speakerId);
         });
         es.addEventListener('turn_start', e => beginSpeech(JSON.parse(e.data)));
+        es.addEventListener('sfx', e => {
+            if (replayMode) return;
+            const d = JSON.parse(e.data);
+            if (window.RoundtableSfx) RoundtableSfx.trigger(d.kind, d.speakerId);
+        });
         es.addEventListener('delta', e => appendDelta(JSON.parse(e.data)));
         es.addEventListener('turn_end', e => endSpeech(JSON.parse(e.data)));
         es.addEventListener('notice', e => addSystemLine(JSON.parse(e.data).text));

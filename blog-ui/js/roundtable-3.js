@@ -2,6 +2,8 @@
     (function () {
         const cv = document.getElementById('snowCanvas');
         if (!cv) return;
+        // 临时真机对比开关：?nofx=1 时雪与雾整层不启动（CSS 已隐藏 canvas，这里再省掉渲染循环）
+        if (document.documentElement.classList.contains('rt-nofx')) return;
         function go() {
             if (!(window.CelesteSnow && window.CelesteSnow.attach)) return;
             window.CelesteSnow.attach(cv, { particleStyle: 'dots', count: 70 });
