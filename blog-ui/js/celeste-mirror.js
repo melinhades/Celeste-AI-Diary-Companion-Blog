@@ -25,7 +25,7 @@ var ctx_ready = false;
 var W = 0, H = 0, Z = 1;
 // 嵌入模式配置：drawBadeline=false 屏蔽自带 BadelineDummy（交 DOM 版）；
 // onBreak=碎裂帧回调；onEnd=EndCutscene/OnEnd 帧回调（音乐起播点）；onDone=收尾归位后回调
-var SCENE = { drawBadeline: true, onBreak: null, onEnd: null, onDone: null, autoStart: true, sting1Src: null };
+var SCENE = { drawBadeline: true, onBreak: null, onEnd: null, onDone: null, autoStart: true, sting1Src: null, booted: false };
 var _assetsReady = false, _sceneReady = false;
 
 /* =====================================================================
@@ -71,6 +71,10 @@ Object.keys(BD_ANIM).forEach(function (a) {
     want('bd:' + a + ':' + i, BASE + 'characters/badeline/' + a + ('0' + i).slice(-2) + '.png');
   }
 });
+// 剧情版 Badeline：fallSlow = jumpSlow02-03（漂浮）；curl = duck（被吸进去时的蜷缩压缩）
+want('sb:fall0', BASE + 'characters/badeline/jumpSlow02.png');
+want('sb:fall1', BASE + 'characters/badeline/jumpSlow03.png');
+want('sb:curl', BASE + 'characters/badeline/duck.png');
 // 星星背景 bgs/02/stars（a/b/c 各 0-3）—— Celeste.StarsBG.ctor:
 // textures = [ GetAtlasSubtextures("bgs/02/stars/a"), .../b, .../c ]，每组 4 帧
 var STAR_GROUPS = {
@@ -769,6 +773,283 @@ function emitVanish(x, y) {
 }
 
 /* =====================================================================
+   8.5 梦境剧情（测试版）：Badeline 穿进梦块 → 消失
+   ---------------------------------------------------------------------
+   mirror 房间不出现 Madeline，也不播出场/台词；出场与「亲爱的，祝你好梦」
+   交给宿主 dream 场景（shelf.js）在切回雪夜时播放。
+   出场参数取自 docs/badeline-appear-rea.md（CS10_BadelineHelps.BadelineAppears）：
+     Scale=1 直接生成，无闪光；Displacement.AddBurst(.5, 8→32, .5)
+     FloatTo(player.Center + (18,-10))，FloatSpeed 120 / FloatAccel 240
+     悬浮正弦 0.25Hz、Floatness 2→4→2；P_Vanish 12 颗（见 emitPVanish）
+   状态机（localStorage，60 分钟过期）：sleep → dived → appeared → diaryShown
+   dived 由 mirror 写入；appeared 由 dream 场景播完出场后写入
+   ===================================================================== */
+var STORY_KEY = 'badelineMirrorStoryV1';
+var STORY_TTL = 60 * 60 * 1000;
+var STORY = { stage: 'sleep', gen: 0, hostGet: null, hostHide: null, hostDone: null };
+var PENDING_STORY_ENTER = false;
+
+function storyRead() {
+  try {
+    var raw = localStorage.getItem(STORY_KEY);
+    if (!raw) return null;
+    var s = JSON.parse(raw);
+    if (!s || !s.stage) { localStorage.removeItem(STORY_KEY); return null; }
+    if (!s.expiresAt || Date.now() > s.expiresAt) { localStorage.removeItem(STORY_KEY); return null; }
+    return s;
+  } catch (e) { return null; }
+}
+function storyWrite(stage) {
+  var now = Date.now();
+  STORY.stage = stage;
+  try {
+    localStorage.setItem(STORY_KEY, JSON.stringify({
+      stage: stage, updatedAt: now, expiresAt: now + STORY_TTL
+    }));
+  } catch (e) {}
+}
+function storyReset() {
+  try { localStorage.removeItem(STORY_KEY); } catch (e) {}
+  STORY.stage = 'sleep';
+  STORY.gen++;
+  sbClear();
+  storySyncBar();
+}
+
+// 剧情版 Badeline（和过场里的 BD 分开，互不干扰）
+var SB = {
+  alive: false, x: 0, y: 0, anim: 'fallSlow', frame: 0, t: 0,
+  scaleX: -1, alpha: 1, size: 1, sx: 1, sy: 1, sineT: 0, floatness: 2, hair: null
+};
+var SB_FALL = ['sb:fall0', 'sb:fall1'];
+var SB_CURL = ['sb:curl'];
+
+function sbFrames() { return SB.anim === 'curl' ? SB_CURL : SB_FALL; }
+function sbPlay(a) { if (SB.anim === a) return; SB.anim = a; SB.t = 0; SB.frame = 0; }
+function sbClear() {
+  SB.alive = false; SB.hair = null;
+  SB.alpha = 1; SB.size = 1; SB.sx = 1; SB.sy = 1;
+}
+// 生成时头发必须已经在头上（穿走第一帧就可见）：reset 后先空跑几秒模拟让它收敛
+function settleHair(h, x, y, facing) {
+  if (!h) return;
+  h.reset(x, y, facing);
+  for (var i = 0; i < 90; i++) h.update(Math.round(x), Math.round(y), facing, 0, 0, 0.05, 1);
+}
+function sbSpawn(x, y, scaleX) {
+  SB.alive = true; SB.x = x; SB.y = y; SB.scaleX = scaleX || -1;
+  SB.alpha = 1; SB.size = 1; SB.sx = 1; SB.sy = 1; SB.floatness = 2;
+  SB.sineT = Math.random() * 4;
+  sbPlay('fallSlow');
+  SB.hair = makeHair();
+  settleHair(SB.hair, x, y, SB.scaleX);
+}
+
+function sbUpdate(dt) {
+  if (!SB.alive) return;
+  SB.t += dt;
+  var d = SB.anim === 'dreamDash' ? 0.03 : 0.1;
+  var n = sbFrames().length;
+  SB.frame = Math.floor(SB.t / d) % n;
+  SB.sineT += dt * 0.25;                  // 0.25Hz
+  if (SB.hair) {
+    SB.hair.update(Math.floor(SB.x), Math.floor(SB.y), SB.scaleX < 0 ? -1 : 1, 0, 0, dt, 1);
+  }
+}
+function sbDraw() {
+  if (!SB.alive) return;
+  var x = Math.floor(SB.x);
+  var y = Math.floor(SB.y);
+  if (SB.anim === 'fallSlow') y += Math.round(Math.sin(SB.sineT * Math.PI * 2) * SB.floatness);
+  if (!cull(x - 24, y - 52, 48, 56)) return;
+  ctx.globalAlpha = Math.max(0, Math.min(1, SB.alpha));
+  if (SB.hair) SB.hair.draw(ctx, function (n) { return toScreen(n.x, n.y); }, Z * cam.zoom, 0, SB.size * SB.sx);
+  var keys = sbFrames(), img = IMG[keys[SB.frame]];
+  if (img) {
+    var p = toScreen(x, y);
+    var w = S(32) * SB.size * SB.sx, h = S(32) * SB.size * SB.sy;
+    ctx.save();
+    ctx.translate(Math.round(p.x), Math.round(p.y));
+    ctx.scale(SB.scaleX < 0 ? -1 : 1, 1);
+    ctx.drawImage(img, -Math.round(w / 2), -Math.round(h), Math.round(w), Math.round(h));
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// 穿走：① 贴近块面 → ② 被吸进去（加速 + 收缩）→ ③ 块面吞没（淡出）。
+// 安静的穿走：不加粒子、不加气泡/文字、不加音效。
+function* storyDive(from) {
+  var gen = STORY.gen;
+  var start = from || { x: MIRROR.x, y: MIRROR.y };
+  sbSpawn(start.x, start.y, -1);
+  yield 0.05;
+  if (gen !== STORY.gen) return;
+
+  // ① 飞向梦块底边（FloatTo：速度上限 120，加速度 240）
+  var ex = DREAM.x + DREAM.w * 0.55, ey = DREAM.y + DREAM.h + 5;
+  var speed = 0, guard = 0;
+  while (guard++ < 260) {
+    var dx = ex - SB.x, dy = ey - SB.y, d = Math.hypot(dx, dy);
+    if (d < 0.8) break;
+    speed = approach(speed, 120, 240 * DT);
+    var step = Math.min(d, speed * DT);
+    SB.x += dx / d * step; SB.y += dy / d * step;
+    SB.floatness = approach(SB.floatness, 4, 8 * DT);
+    yield null;
+    if (gen !== STORY.gen) return;
+  }
+  SB.x = ex; SB.y = ey;
+  sbPlay('fallSlow');
+  yield 0.16;
+  if (gen !== STORY.gen) return;
+
+  // ② 被吸进去：换成蜷缩帧，0.18s 内加速上提，纵向压缩、横向略张
+  sbPlay('curl');
+  var t = 0, y0 = SB.y, y1 = DREAM.y + DREAM.h + 1;
+  while (t < 0.18) {
+    t += DT;
+    var e2 = Math.min(1, t / 0.18), k2 = e2 * e2;
+    SB.y = y0 + (y1 - y0) * k2;
+    SB.sy = 1 - 0.28 * k2;
+    SB.sx = 1 + 0.12 * k2;
+    yield null;
+    if (gen !== STORY.gen) return;
+  }
+  SB.y = y1;
+
+  // ③ 块面吞没：继续没入梦块，整体收缩 + 淡出
+  t = 0;
+  var y2 = DREAM.y + DREAM.h * 0.5;
+  while (t < 0.34) {
+    t += DT;
+    var e3 = Math.min(1, t / 0.34);
+    SB.y = y1 + (y2 - y1) * e3;
+    SB.size = 1 - 0.55 * e3;
+    SB.sy = 0.72 - 0.16 * e3;
+    SB.sx = 1.12 - 0.24 * e3;
+    SB.alpha = 1 - e3;
+    yield null;
+    if (gen !== STORY.gen) return;
+  }
+
+  sbClear();
+  storyWrite('dived');
+  storySyncBar();
+  if (STORY.hostDone) setTimeout(STORY.hostDone, 0);   // 演完才允许宿主切场景（回 dream）
+}
+
+// 手动恢复入口：状态非 sleep 时在房间右下角出现
+var storyBarBtn = null;
+function storySyncBar() {
+  if (!cv) return;
+  var parent = cv.parentElement;
+  if (!parent) return;
+  if (STORY.stage === 'sleep') {
+    if (storyBarBtn) { storyBarBtn.remove(); storyBarBtn = null; }
+    return;
+  }
+  if (storyBarBtn) return;
+  storyBarBtn = document.createElement('button');
+  storyBarBtn.type = 'button';
+  storyBarBtn.textContent = '恢复 Madeline';
+  storyBarBtn.style.cssText = 'position:absolute;right:12px;bottom:12px;z-index:6;' +
+    'padding:5px 11px;border-radius:999px;border:1px solid rgba(190,150,255,.55);' +
+    'background:rgba(28,12,50,.82);color:#e8dcff;font:12px/1.2 "CelesteZH","Segoe UI",sans-serif;' +
+    'letter-spacing:.08em;cursor:pointer;';
+  storyBarBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    storyReset();
+  });
+  parent.appendChild(storyBarBtn);
+}
+
+// 重进 mirror 房间：只同步状态；出场/台词由 dream 场景（宿主）负责
+function storyEnter() {
+  if (!SCENE.booted) { PENDING_STORY_ENTER = true; return; }
+  var s = storyRead();
+  STORY.stage = s ? s.stage : 'sleep';
+  STORY.gen++;
+  sbClear();
+  storySyncBar();
+}
+
+function storyCanDive() {
+  if (STORY.stage !== 'sleep' || SB.alive) return false;
+  if (CUT.done) return true;
+  return !!(STORY.hostGet && STORY.hostGet());
+}
+function storySetHost(getFn, hideFn, doneFn) {
+  STORY.hostGet = getFn || null;
+  STORY.hostHide = hideFn || null;
+  STORY.hostDone = doneFn || null;
+}
+
+// 梦块点击热区（DOM overlay，跟随相机）。热区严格贴块体，四周只留 2 世界像素容差；
+// pointer-events 常开：即使当前不可穿（状态非 sleep / 过场未结束），点击也会被吃掉，
+// 不会穿透到 #mirrorRoom 背景触发 goBack（旧版热区不生效时的表现）。
+var dreamHit = null, dreamHitSig = '';
+var DREAM_HIT_PAD = 2;                    // 世界像素
+function storyEnsureHit() {
+  if (dreamHit || !cv) return;
+  var parent = cv.parentElement;
+  if (!parent) return;
+  dreamHit = document.createElement('div');
+  dreamHit.id = 'msDreamHit';
+  // 比自由游荡的 .badeline-wrap.free(z-index:10) 高：Badeline 本人/名字标签不再盖住梦块热区
+  dreamHit.style.cssText = 'position:absolute;z-index:11;pointer-events:auto;';
+  parent.appendChild(dreamHit);
+  function diveFrom() {
+    if (!storyCanDive()) return;
+    var h = STORY.hostGet ? STORY.hostGet() : null;
+    var from = null;
+    if (h) from = worldFromScreen(h.x, h.y);
+    if (STORY.hostHide) STORY.hostHide();   // 即使此刻不在场，也压掉正在进行的召唤
+    startCoro(storyDive(from));
+  }
+  // 捕获阶段兜底：聊天面板(#blChat / #badelineDialog, z-index:1600) 若在小窗口盖到梦块，
+  // 普通冒泡会被它吃掉（实测中心点命中 .bl-name、外侧命中 .blClose）。这里按点是否落在
+  // 梦块矩形内先行截获，保证「点块 = 穿走」，而不是关闭聊天/退出房间。
+  parent.addEventListener('pointerdown', function (e) {
+    if (!dreamHit) return;
+    var r = dreamHit.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
+    e.stopPropagation();
+    e.preventDefault();
+    diveFrom();
+  }, true);
+  dreamHit.addEventListener('pointerdown', function (e) {
+    e.stopPropagation();
+    e.preventDefault();
+    diveFrom();
+  });
+}
+function storySyncHit() {
+  if (!dreamHit) return;
+  var p = toScreen(DREAM.x - DREAM_HIT_PAD, DREAM.y - DREAM_HIT_PAD);
+  var w = Math.round(S(DREAM.w + DREAM_HIT_PAD * 2)), h = Math.round(S(DREAM.h + DREAM_HIT_PAD * 2));
+  var armed = storyCanDive();
+  var sig = Math.round(p.x) + ',' + Math.round(p.y) + ',' + w + ',' + h + ',' + (armed ? 1 : 0);
+  if (sig === dreamHitSig) return;
+  dreamHitSig = sig;
+  dreamHit.style.left = Math.round(p.x) + 'px';
+  dreamHit.style.top = Math.round(p.y) + 'px';
+  dreamHit.style.width = w + 'px';
+  dreamHit.style.height = h + 'px';
+  dreamHit.style.cursor = armed ? 'pointer' : 'default';
+}
+
+// 屏幕 CSS px → 世界坐标（宿主 DOM Badeline 交给 canvas 时用）
+function worldFromScreen(sx, sy) {
+  var z = Z * cam.zoom;
+  return {
+    x: cam.x + (sx - W / 2 - cam.sx) / z,
+    y: cam.y + (sy - H / 2 - cam.sy) / z
+  };
+}
+
+
+/* =====================================================================
    9. 场景：星星背景 / 房间图层 / 贴花 / 悬浮碎块 / 前景雾 / 暗角
    ---------------------------------------------------------------------
    房间全部内容（bg 瓦片 + bg 贴花 + 实体层 + fg 瓦片）来自 2-OldSite.bin lvl_d3；
@@ -1278,12 +1559,14 @@ function render() {
   mirrorDraw();
   drawDream();
   bdDraw();
+  sbDraw();
   drawParts();
   drawFgDecals();
 
   drawParallax('mist', '#8156e1', 0.8, 0.5, 0.5, 16, 8, true, true, tGlobal);
   drawParallax('mist', '#e15698', 0.8, 0.25, 0.25, 4, 4, true, true, tGlobal);
   drawVignette();
+  storySyncHit();
 
   if (DBG) drawDebug();
 }
@@ -1307,6 +1590,7 @@ function update(dt) {
   dreamUpdate(dt);
   mirrorUpdate(dt);
   bdUpdate(dt);
+  sbUpdate(dt);
   updateParts(dt);
   updateCamShake(dt);
 }
@@ -1348,6 +1632,9 @@ function resetScene() {
   cam.x = 160; cam.y = 216; cam.zoom = 1; cam.sx = 0; cam.sy = 0;
   cam.shakeT = 0; cam.shakeAmt = 0;
   CUT.started = false; CUT.done = false;
+  STORY.gen++;
+  sbClear();
+  storySyncBar();
   showHint();
 }
 
@@ -1389,12 +1676,24 @@ function boot() {
     PENDING_STATE = null;
     applyStateNow(st[0], st[1]);
   }
+  storyEnsureHit();
+  SCENE.booted = true;
+  if (PENDING_STORY_ENTER) { PENDING_STORY_ENTER = false; storyEnter(); }
+  // 测试入口：?story=dived 预置状态（独立页验证用，不影响正常进入）
+  if (SCENE.autoStart) {
+    var qs = /[?&]story=(dived)/.exec(location.search);
+    if (qs) { storyWrite(qs[1]); storyEnter(); }
+  }
   loadHair(function () {
     MIRROR.refl.hair = makeHair();
     if (MIRROR.refl.hair) MIRROR.refl.hair.reset(MIRROR.refl.x, MIRROR.refl.y, -1);
     if (BD.alive && !BD.hair) {           // 快进期间生成的 Badeline：补上头发
       BD.hair = makeHair();
       if (BD.hair) BD.hair.reset(BD.x, BD.y, -1);
+    }
+    if (SB.alive && !SB.hair) {           // 出场先于头发就绪：补上
+      SB.hair = makeHair();
+      settleHair(SB.hair, SB.x, SB.y, SB.scaleX);
     }
     autoHook();                            // 头发就绪后再做无头快进
   });
@@ -1495,9 +1794,24 @@ window.MirrorScene = {
   },
   resize: function () { resize(); },
   isReady: function () { return _sceneReady; },
+  // —— 梦境剧情（测试版）——
+  // 重进房间时由宿主调用：按 localStorage 状态播出场 / 补位
+  storyEnter: storyEnter,
+  // 当前剧情状态（sleep / dived / appeared / diaryShown）
+  storyStage: function () { var s = storyRead(); return s ? s.stage : 'sleep'; },
+  // 宿主（dream 场景）在出场播完后写入 appeared；TTL 与其他写入点一致
+  storyMark: function (stage) { storyWrite(stage); storySyncBar(); },
+  // 手动恢复：清空状态、撤下剧情 Badeline（右下角按钮同此入口）
+  storyReset: storyReset,
+  // 宿主把 DOM Badeline 的当前位置（CSS px，脚底）交给 canvas，并声明隐藏方式
+  setHostBadeline: storySetHost,
   // 诊断快照：宿主页无头验证/排错用（过场协程是否在推进、碎镜是否发生）
   dbg: function () {
-    return { cut: CUT.started, done: CUT.done, smashed: MIRROR.smashed, coros: coros.length, t: +tGlobal.toFixed(2) };
+    return {
+      cut: CUT.started, done: CUT.done, smashed: MIRROR.smashed, coros: coros.length, t: +tGlobal.toFixed(2),
+      story: [STORY.stage, SB.alive, +SB.x.toFixed(0), +SB.y.toFixed(0), +SB.alpha.toFixed(2)],
+      sb: [SB.anim, sbFrames()[SB.frame], !!IMG[sbFrames()[SB.frame]], !!SB.hair, +SB.size.toFixed(2)]
+    };
   },
   // 游戏像素 → canvas CSS 像素缩放因子（Z = H/180）：宿主用它把 DOM 人物尺寸对齐过场里 32px 角色
   scale: function () { return Z; },

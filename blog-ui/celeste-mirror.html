@@ -63,7 +63,7 @@
   <button id="replay" type="button">重播（R）</button>
   <label><input type="checkbox" id="sfx" checked> 声音</label>
   <label><input type="checkbox" id="debug"> 判定框（梦块 / 镜框 / 视野）</label>
-  <span style="color:var(--dim);font-size:12.5px">无 Madeline：点击即触发破碎 → Badeline 出场 → 上方梦块由暗淡转为激活</span>
+  <span style="color:var(--dim);font-size:12.5px">本房间没有 Madeline；破碎镜过场后点击上方梦块，Badeline 贴近块面 → 被吸进去 → 被吞没。出场与台词在 dream 雪夜场景播放</span>
 </div>
 
 <div class="wrap">
@@ -159,6 +159,8 @@ objects/mirror/glassbreak00-09  54&times;29   break 帧 0-8 / broken 帧 9
 characters/badeline/idle00-08   32&times;32   delay .10
 characters/badeline/runFast00-11 32&times;32  delay .05
 characters/badeline/jumpFast00-01 32&times;32 delay .10（BreakRoutine 只播这两帧）
+characters/badeline/jumpSlow02-03 32&times;32 delay .10（剧情悬浮）
+characters/badeline/duck.png      32&times;32   蜷缩帧（穿块前被吸住/压缩）
 characters/player/hair00.png    10&times;10   Badeline 头发：<code>HairColor = #9B3FB5</code>，Border = Black
 objects/dreamblock/particles    21&times;7    3 个 7&times;7 子图，索引顺序 [14,7,0,7]
 bgs/02/stars/a0-3 b0-3 c0-3     15&times;15   Style.Backgrounds = stars
@@ -187,15 +189,18 @@ lvl_d3 关键实体：
 
   <p class="foot">
     与原生的一处差别：原作的倒影会在 <code>BeforeRender</code> 里实时镜像玩家（<code>X - player.X</code>、<code>player.Y - Y</code>），
-    玩家还会在 <code>DummyRunTo</code> 里自己走到镜前。这一页没有 Madeline，所以倒影固定为 Badeline 自己的 idle 循环，
+    玩家还会在 <code>DummyRunTo</code> 里自己走到镜前。本页不再放睡姿 Madeline（剧情版口径：房间只有 Badeline），倒影固定为 Badeline 自己的 idle 循环，
     并在 <code>BreakRoutine</code> 里按同样的 <code>32px/s</code> 走到玻璃中心 —— 这也是原作里“镜中的她先靠近、再碎、再冲出来”的那段。<br>
     另两处小改动：① 开场机位取 <code>(160,216)</code>，让「上方暗淡梦块 + 镜子」同框（原作相机跟玩家，大致在 240 附近；
-    过场 <code>ZoomTo</code> 的目标仍是原作硬值 <code>(160,240)</code>）；② 结尾没有玩家可跟，用 1.2s 把镜头挪到 <code>(160,196)</code> 收尾。
+    过场 <code>ZoomTo</code> 的目标仍是原作硬值 <code>(160,240)</code>）；② 结尾没有玩家可跟，用 1.2s 把镜头挪到 <code>(160,196)</code> 收尾。<br>
+    剧情测试版：Badeline 出场后点击上方梦块，她会贴近块面 → 被吸进去 → 被块面吞没（无粒子/气泡/音效）；
+    本房间到此为止，不播出场、不说台词。状态写在 <code>localStorage["badelineMirrorStoryV1"]</code>（60 分钟过期）：
+    这里只写 <code>dived</code>；切回 dream 雪夜后由宿主播 REA 出场与「亲爱的，祝你好梦」，播完才写 <code>appeared</code>。
   </p>
 </div>
 
 <script src="js/celeste-hair.js"></script>
 <script src="js/celeste-mirror-map.js"></script>
-<script src="js/celeste-mirror.js"></script>
+<script src="js/celeste-mirror.js?v=20261107e"></script>
 </body>
 </html>

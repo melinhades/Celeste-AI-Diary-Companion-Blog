@@ -1371,6 +1371,14 @@ function stopPeSnow() {
             badelineWrap.addEventListener('animationend', onRise);
             if (window.__mirrorBGM) window.__mirrorBGM.refresh(); // 切入阶段2（2:11–4:25）
             openChat();
+            // 剧情版 mirror 房间保持安静：不摆聊天气泡/台词面板遮住梦块（点块才是这一段的交互）
+            if (window.MirrorScene && MirrorScene.storyStage && MirrorScene.storyStage() === 'sleep') {
+                setTimeout(function () {
+                    var blp = document.getElementById('blChat');
+                    if (blp) blp.classList.remove('vis', 'show');
+                    if (window.__blDialogKill) window.__blDialogKill();
+                }, 1500);
+            }
             // 召唤动画（badelineRise 0.9s）走完后，启动自由游荡（模式 A 标记）
             setTimeout(function () {
                 if (window.__badelineStartFreeRoam) window.__badelineStartFreeRoam(50, 50, false, true);
@@ -1463,6 +1471,8 @@ function stopPeSnow() {
                     blPanel.classList.remove('vis');
                     blPanel.classList.remove('show');
                     if (window.__badelineLeaveRoom) window.__badelineLeaveRoom();   // 行为树复位（wrap 移回镜面）
+                    badelineWrap.style.display = '';   // 剧情穿走后隐藏过的立绘，重新进房时复位
+                    if (window.MirrorScene.storyEnter) window.MirrorScene.storyEnter();   // 持久化剧情：dived→出场
                     busy = false;   // 每次进入都可敲镜：完好渲染→重演完整过场；已破渲染→直接召唤
                     var tries = 0;
                     (function align() {   // 等房间布局完成（canvas 有非零尺寸）再摆镜子命中区
@@ -1627,8 +1637,9 @@ function stopPeSnow() {
         });
 
         // ===== 自由游荡模式启动：DOM 移到 #mirrorRoom 子级，开启 .free 类 =====
+        var storyHidden = false;   // 剧情穿走后压制 DOM 立绘（重进房间时由 stopFreeRoam 解除）
         function startFreeRoam(initialX, initialY, withFade, fromSummon) {
-            if (roaming) return;
+            if (roaming || storyHidden) return;
             wrap.classList.remove('done');    /* 离镜面：移除驻留态，由 inline transform 接管 */
             room.appendChild(wrap);
             wrap.classList.add('free');
@@ -1640,6 +1651,7 @@ function stopPeSnow() {
             wrap.style.transition = 'opacity .8s ease';   /* 位置全由 rAF transform 驱动，杜绝 left/top transition */
             wrap.style.left = '0';
             wrap.style.top = '0';
+            wrap.style.display = '';
             render();
             if (withFade) {
                 wrap.style.opacity = '0';
@@ -1652,6 +1664,7 @@ function stopPeSnow() {
         }
         function stopFreeRoam() {
             roaming = false; inDialog = false; summonedMode = false; pendingRoll = false;
+            storyHidden = false;   // 进房/离房复位：下次敲镜可正常召唤
             if (rafId) { /* 主循环保留，供下次进房复用 */ }
             st.tx = st.ty = null;
             wrap.classList.remove('free');
@@ -1667,6 +1680,26 @@ function stopPeSnow() {
         // ===== 钩子暴露 =====
         window.__badelineStartFreeRoam = startFreeRoam;
         window.__badelineLeaveRoom = stopFreeRoam;
+        // 梦境剧情（mirror 房间测试版）：把 DOM 立绘的当前位置（房间 CSS px，脚底）交给 canvas，
+        // 穿走时由 canvas 接管演出，DOM 立绘就地隐藏，避免出现两个 Badeline。
+        if (window.MirrorScene && window.MirrorScene.setHostBadeline) {
+            window.MirrorScene.setHostBadeline(function () {
+                if (!roaming || storyHidden) return null;
+                var size = wrap.offsetHeight || 128;
+                return { x: st.x, y: st.y + size / 2 };
+            }, function () {
+                stopFreeRoam();
+                storyHidden = true;
+                wrap.style.display = 'none';
+                // 穿走这一段是安静的：收起对话面板与字幕，不留任何气泡
+                var blp = document.getElementById('blChat');
+                if (blp) blp.classList.remove('vis', 'show');
+                if (window.__blDialogKill) window.__blDialogKill();
+            }, function () {
+                // 穿越演完再切场景：回雪夜 → 由 dream 场景播 Badeline 出场与台词
+                if (window.__heartDoorGoBack) window.__heartDoorGoBack();
+            });
+        }
         // closeChat 钩子：模式 A 返回 'summoned'（让外部走 byeSheLeaves 让她走）；模式 B 返回 'free'（恢复游荡）
         // Canvas 模式例外：镜子已碎、她常驻房间，关面板不退场（旧版失误），双击本人可重开聊天面板
         window.__badelineCloseChat = function () {
@@ -1911,6 +1944,204 @@ function stopPeSnow() {
             });
         }
 
+        // ===== 梦境剧情：Badeline 在睡着的 Madeline 旁突然出现（REA）+「亲爱的，祝你好梦」 =====
+        // mirror 房间只负责穿块，不出现 Madeline；出场与台词在切回雪夜时由这里播放。
+        // 参数取自 docs/badeline-appear-rea.md：
+        //   Scale=1 直接生成（无闪光）；AddBurst(.5, 8→32)；FloatTo(Center+(18,-10))、FloatSpeed 120 / Accel 240；
+        //   悬浮正弦 0.25Hz、Floatness 2→4→2；P_Vanish 12 颗 1px 白点、5–10px/s、Life .6–1.2s、
+        //   每 .1s 在 #6F2399/#EC76F7 切换、末 25% 淡出。
+        var DS_STORY_KEY = 'badelineMirrorStoryV1';
+        var DS_STORY_TEXT = '亲爱的，祝你好梦';
+        var dsLeft = scene.querySelector('.ds-left');
+        var dsStory = { img: null, bubble: null, ring: null, parts: null, btn: null,
+            playing: false, shown: false, timers: [], anims: [] };
+
+        function dsStoryStage() {
+            if (window.MirrorScene && window.MirrorScene.storyStage) return window.MirrorScene.storyStage();
+            try {
+                var r = JSON.parse(localStorage.getItem(DS_STORY_KEY) || 'null');
+                if (!r || !r.stage) return 'sleep';
+                if (r.expiresAt && Date.now() > r.expiresAt) { localStorage.removeItem(DS_STORY_KEY); return 'sleep'; }
+                return r.stage;
+            } catch (e) { return 'sleep'; }
+        }
+        function dsClearTimers() {
+            dsStory.timers.forEach(clearTimeout);
+            dsStory.timers = [];
+            dsStory.anims.forEach(function (a) { try { a.cancel(); } catch (e) {} });
+            dsStory.anims = [];
+        }
+        function dsEnsureEls() {
+            if (!dsLeft || dsStory.img) return;
+            var img = document.createElement('img');
+            img.id = 'dsBadeline';
+            img.alt = 'Badeline';
+            img.src = 'celeste-player/badeline/lookingUp_f.gif';
+            img.style.cssText = 'position:absolute;z-index:5;pointer-events:none;display:none;' +
+                'image-rendering:pixelated;transform-origin:50% 100%;';
+            dsLeft.appendChild(img);
+            dsStory.img = img;
+        }
+        function dsClearVisuals() {
+            dsClearTimers();
+            dsStory.playing = false; dsStory.shown = false;
+            if (dsStory.img) { dsStory.img.style.display = 'none'; dsStory.img.style.opacity = '0'; }
+            if (dsStory.bubble) dsStory.bubble.remove();
+            if (dsStory.ring) dsStory.ring.remove();
+            if (dsStory.parts) dsStory.parts.remove();
+            dsStory.bubble = dsStory.ring = dsStory.parts = null;
+        }
+        // 位置：Badeline 脚底 = Madeline 脚底右移 18 世界像素、上浮 10 世界像素（REA FloatTo 目标）
+        function dsPlace() {
+            if (!dsLeft || !dsMadeline || !dsStory.img) return null;
+            var lr = dsLeft.getBoundingClientRect();
+            var mr = dsMadeline.getBoundingClientRect();
+            if (!mr.width) return null;
+            var ws = mr.width / 32;                       // 1 游戏像素 = 多少 CSS 像素
+            var footX = (mr.left - lr.left) + mr.width / 2 + 18 * ws;
+            var footBottom = (lr.bottom - mr.bottom) + 10 * ws;
+            dsStory.img.style.width = Math.round(mr.width) + 'px';
+            dsStory.img.style.height = Math.round(mr.height) + 'px';
+            dsStory.img.style.left = Math.round(footX - mr.width / 2) + 'px';
+            dsStory.img.style.bottom = Math.round(footBottom) + 'px';
+            return { lr: lr, mr: mr, ws: ws, footX: footX, footBottom: footBottom };
+        }
+        function dsParticles(cx, topY, ws) {
+            var box = document.createElement('div');
+            box.style.cssText = 'position:absolute;inset:0;z-index:5;pointer-events:none;';
+            dsLeft.appendChild(box);
+            for (var i = 0; i < 12; i++) {
+                var a = Math.random() * Math.PI * 2;
+                var dist = rndPx(8, 32) * ws;
+                var dx = Math.cos(a) * dist, dy = Math.sin(a) * dist;
+                var life = rndPx(0.6, 1.2);
+                var dot = document.createElement('i');
+                dot.style.cssText = 'position:absolute;width:2px;height:2px;border-radius:1px;' +
+                    'left:' + cx + 'px;top:' + topY + 'px;' +
+                    'background:' + (i % 2 ? '#EC76F7' : '#6F2399') + ';';
+                box.appendChild(dot);
+                var colors = ['#6F2399', '#EC76F7'];
+                var frames = [];
+                for (var k = 0; k <= 10; k++) {
+                    frames.push({
+                        backgroundColor: colors[k % 2],
+                        transform: 'translate(' + (dx * k / 10) + 'px,' + (dy * k / 10) + 'px)',
+                        opacity: k >= 8 ? (10 - k) / 2.5 : 1
+                    });
+                }
+                dsStory.anims.push(dot.animate(frames, { duration: life * 1000, easing: 'linear', fill: 'forwards' }));
+            }
+            dsStory.parts = box;
+            dsStory.timers.push(setTimeout(function () { if (box.parentNode) box.remove(); }, 1400));
+        }
+        function rndPx(a, b) { return a + Math.random() * (b - a); }
+        function dsShowBubble(cx, bottomPx) {
+            var b = document.createElement('div');
+            b.textContent = DS_STORY_TEXT;
+            b.style.cssText = 'position:absolute;z-index:6;pointer-events:none;white-space:nowrap;' +
+                'padding:7px 14px;border-radius:4px;background:rgba(16,8,26,.9);' +
+                'border:1px solid #9B3FB5;box-shadow:0 0 0 2px rgba(6,6,20,.6);' +
+                'color:#F2E9FF;font:13px "Renogare","CelesteZH","Microsoft YaHei",sans-serif;' +
+                'letter-spacing:1px;opacity:0;transform:translate(-50%,6px);';
+            b.style.left = Math.round(cx) + 'px';
+            b.style.bottom = Math.round(bottomPx) + 'px';
+            dsLeft.appendChild(b);
+            dsStory.bubble = b;
+            dsStory.timers.push(setTimeout(function () {
+                b.animate([{ opacity: 0, transform: 'translate(-50%,6px)' },
+                           { opacity: 1, transform: 'translate(-50%,0)' }],
+                          { duration: 250, easing: 'ease-out', fill: 'forwards' });
+            }, 850));
+            dsStory.timers.push(setTimeout(function () {
+                b.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 500, easing: 'ease-in', fill: 'forwards' });
+            }, 4250));
+            dsStory.timers.push(setTimeout(function () { if (b.parentNode) b.remove(); }, 4850));
+        }
+        // dived → 播 REA 出场；appeared → 静态补位（不重复演出）
+        function dsMaybeStory() {
+            if (!scene.classList.contains('show') || !dsLeft || !dsMadeline) return;
+            if (dsStory.playing) return;
+            dsEnsureEls();
+            var stage = dsStoryStage();
+            dsSyncResetBtn(stage !== 'sleep');
+            if (stage === 'sleep' || stage === 'diaryShown') { dsClearVisuals(); return; }
+            if (stage === 'appeared') {                 // 已出场过：只补一个静态立绘
+                var pos = dsPlace();
+                if (!pos) return;
+                dsStory.img.style.display = 'block';
+                dsStory.img.style.opacity = '1';
+                dsStory.img.style.transform = 'none';
+                dsStory.shown = true;
+                return;
+            }
+            // stage === 'dived'：出场
+            var p = dsPlace();
+            if (!p) { dsStory.timers.push(setTimeout(dsMaybeStory, 120)); return; }
+            dsStory.playing = true;
+            dsStory.img.style.display = 'block';
+            dsStory.img.style.opacity = '0';
+            dsStory.img.style.transform = 'scale(.3)';
+            // Scale=1 直接生成：0.5s 内从 .3 放大到 1（无闪光）
+            var intro = dsStory.img.animate(
+                [{ opacity: 0, transform: 'scale(.3)' }, { opacity: 1, transform: 'scale(1)' }],
+                { duration: 500, easing: 'cubic-bezier(.2,.9,.2,1)', fill: 'forwards' });
+            dsStory.anims.push(intro);
+            // Displacement.AddBurst(.5, 8→32)：半径 8→32 世界像素
+            var ring = document.createElement('div');
+            var d1 = 64 * p.ws, cx = p.footX, topY = p.lr.height - (p.footBottom + p.mr.height * 0.5);
+            ring.style.cssText = 'position:absolute;z-index:5;pointer-events:none;border-radius:50%;' +
+                'border:2px solid #dcb4ff;width:' + d1 + 'px;height:' + d1 + 'px;' +
+                'left:' + (cx - d1 / 2) + 'px;top:' + (p.mr.top - p.lr.top + p.mr.height * 0.3) + 'px;' +
+                'transform:scale(.25);opacity:1;';
+            dsLeft.appendChild(ring);
+            dsStory.ring = ring;
+            dsStory.anims.push(ring.animate(
+                [{ transform: 'scale(.25)', opacity: 1 }, { transform: 'scale(1)', opacity: 0 }],
+                { duration: 500, easing: 'ease-out', fill: 'forwards' }));
+            dsStory.timers.push(setTimeout(function () { if (ring.parentNode) ring.remove(); }, 520));
+            // P_Vanish：12 颗 1px 白点（贴图染色 → 紫）
+            dsParticles(cx, topY, p.ws);
+            // 落地后 0.25Hz 正弦悬浮（Floatness 2→4→2 在 1s 内收敛）
+            dsStory.timers.push(setTimeout(function () {
+                dsStory.img.style.opacity = '1';
+                dsStory.img.style.transform = '';
+                dsStory.anims.push(dsStory.img.animate(
+                    [{ transform: 'translateY(1px)' }, { transform: 'translateY(-3px)' }, { transform: 'translateY(1px)' }],
+                    { duration: 4000, iterations: Infinity, easing: 'ease-in-out' }));
+            }, 520));
+            // 出场播完（0.9s）写入 appeared；台词随后出现并持续约 3.4s
+            dsStory.timers.push(setTimeout(function () {
+                dsStory.shown = true;
+                dsStory.playing = false;
+                if (window.MirrorScene && window.MirrorScene.storyMark) window.MirrorScene.storyMark('appeared');
+                dsSyncResetBtn(true);
+                dsShowBubble(p.footX, p.footBottom + p.mr.height + 8);
+            }, 900));
+        }
+        function dsSyncResetBtn(show) {
+            if (!show) { if (dsStory.btn) dsStory.btn.style.display = 'none'; return; }
+            if (!dsStory.btn && dsLeft) {
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.textContent = '恢复 Madeline';
+                btn.style.cssText = 'position:absolute;right:12px;bottom:12px;z-index:14;' +
+                    'padding:5px 10px;border:1px solid rgba(255,255,255,.22);border-radius:4px;' +
+                    'background:rgba(12,8,20,.72);color:rgba(255,255,255,.72);cursor:pointer;' +
+                    'font:12px "Renogare","CelesteZH","Microsoft YaHei",sans-serif;';
+                btn.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    if (window.MirrorScene && window.MirrorScene.storyReset) window.MirrorScene.storyReset();
+                    else { try { localStorage.removeItem(DS_STORY_KEY); } catch (err) {} }
+                    dsClearVisuals();
+                    dsSyncResetBtn(false);
+                });
+                dsLeft.appendChild(btn);
+                dsStory.btn = btn;
+            }
+            if (dsStory.btn) dsStory.btn.style.display = '';
+        }
+        document.addEventListener('mirrorstory:back', dsMaybeStory);
+
         // 逐帧驱动：只更新 dream 场景内的大火（shelf 上的草莓篝火维持原 FIRE_FRAMES 动画，互不干扰）
         function playSeq(list, ms, loop) {
             clearInterval(timer);
@@ -1979,6 +2210,7 @@ function stopPeSnow() {
                 setTimeout(function () {
                     if (waking) return;
                     document.body.classList.add('dream-active');
+                    setTimeout(dsMaybeStory, 100);   // 刷新后状态仍是 dived 时补播出场
                     framesReady.then(function () {
                         if (!scene.classList.contains('show')) return;
                         dsFire.src = FRAMES[8];               // 篝火直接全燃
@@ -2028,6 +2260,7 @@ function stopPeSnow() {
             waking = false;
             if (dsMadeline) { dsMadeline.classList.remove('waking'); madelineIntent = SLEEP_GIF; dsMadeline.src = SLEEP_GIF; }
             dsFire.src = FRAMES[0];
+            dsClearVisuals();   // 离梦即清：Badeline / 气泡 / 粒子都不留在 shelf 正页
         }
     })();
 
@@ -2136,10 +2369,20 @@ function stopPeSnow() {
         // Player::OnCollideH / OnCollideV（State == StStarFly 分支）：
         //   starFlyTimer < 0.2 → Speed.axis = 0；否则 Speed.axis *= -0.5 + feather_state_bump
         var WALL_REST = 0.5, WALL_DEAD = 0.2;
-        // 碰撞半径（世界像素）：羽毛 Hitbox(20,20,-10,-10) 半宽 10 + starFlyHitbox(8,8,-4,-10) 半宽 4
-        var COLLECT_R = 14;
+        // 收集判定按矩形，不是圆形：FlyFeather.Hitbox(20,20,-10,-10) 对角 starFlyHitbox(8,8,-4,-10)。
+        // 原位正弦只动 sprite、不动实体 Position ⇒ 判定框始终留在锚点上（点击检测也按锚点，不含浮动偏移）。
+        var HIT_HW = 10, HIT_HH = 10;   // 羽毛 20×20 的半宽 / 半高（世界像素）
+        var ORB_HALF = 4;               // starFlyHitbox 8×8 的半宽
+        // FlyFeather..ctor：new SineWave(0.6f, 0).Randomize() → 0.6 Hz / ±2 世界像素 / 相位 [0,4π)
+        var SINE_FREQ = 0.6, SINE_AMP = 2;
         // StarFlyUpdate 收尾：|Speed.X| 夹到 140；按住 ↑ 则 Speed.Y = -100；Speed.Y > 0 → 0
         var EXIT_X = 140, EXIT_UP = 100;
+        // 四种提前结束把状态交回普通状态时的入口速度（Player::Jump / WallJump / ClimbBegin / StartDash）
+        var JUMP_V = 105;               // JumpSpeed = -105（Jump / WallJump 共用）
+        var JUMP_VX = 8;                // Jump 水平分量：Speed.X = 8 * Input.MoveX
+        var WALLJUMP_VX = 108;          // WallJumpHSpeed = 108，方向背离墙
+        var DASH_V = 240;               // DashSpeed = 240
+        var GROUND_SNAP = 3;            // OnGround(3) / WallJumpCheck 的 3 世界像素窗口
         var EXIT_TTL = 0.35;           // 交回普通状态后余晖的存活时间（原作交给 gravity）
         var GRAV = 900, MAX_FALL = 160;    // Player 普通状态 gravity / maxFall
         // 像素倍率：场景其它美术都是 3 倍（篝火 64→~200px、Madeline 32→~100px），
@@ -2192,11 +2435,14 @@ function stopPeSnow() {
         var CW = 1, CH = 1, painted = false;
         var feathers = [], placed = [], orb = null, parts = [], slashes = [], exits = [];
         var keys = {}, keysActive = false;
+        var jumpEdge = false, dashEdge = false;   // Input.Jump.Pressed / Input.Dash.Pressed 边沿
         var ptr = null, ptrLast = null;    // 指针速度（≈ 原作的 player.Speed，决定 SlashFx 朝向）
         var cv = null, ctx2 = null, hint = null, shakeTimer = null;
         var starGlow = null, starGlowSize = 0;   // starFlyBloom 的柔光贴图（随 FSIZE 重建）
         var TINTS = {};
         var DIR_KEYS = { arrowup: 1, arrowdown: 1, arrowleft: 1, arrowright: 1, w: 1, a: 1, s: 1, d: 1 };
+        // 原作默认动作键：跳跃 Space/C、冲刺 X/K、抓墙 Shift/Z（只在飞行期拦截默认行为）
+        var ACTION_KEYS = { ' ': 1, c: 1, x: 1, k: 1, shift: 1, z: 1 };
 
         // ---------- 小工具 ----------
         function approach(a, b, d) { return a < b ? Math.min(a + d, b) : Math.max(a - d, b); }
@@ -2399,7 +2645,7 @@ function stopPeSnow() {
             if (!hint) {
                 hint = document.createElement('div');
                 hint.id = 'featherFlyHint';
-                hint.textContent = '方向键 / WASD 操控 · Esc 让羽毛回来';
+                hint.textContent = '方向键 / WASD 操控 · 空格跳 · Shift 抓 · X 冲刺 · Esc 让羽毛回来';
                 scene.appendChild(hint);
             }
             hint.classList.toggle('show', !!on);
@@ -2524,7 +2770,9 @@ function stopPeSnow() {
             host.appendChild(b);
             var f = {
                 el: b, cvs: cvs, ctx: null, sprS: SPR_S, cssPx: FSIZE,
-                x: p.x, y: p.y, phase: Math.random() * Math.PI * 2,
+                x: p.x, y: p.y,
+                // SineWave.Randomize：counter = Random * 4π（不是 2π），0～2 个整周期的随机起点
+                phase: Math.random() * Math.PI * 4,
                 state: 'idle', respawnAt: 0, burstAt: 0, burstAng: 0,
                 wigT: -1, wigDur: 1, wigFreq: 4, drawn: -1, tf: ''
             };
@@ -2544,8 +2792,16 @@ function stopPeSnow() {
             var im = f.state === 'idle' ? IMG.frames[idx] : IMG.outline;
             if (im && im.naturalWidth) c.drawImage(im, 0, 0, size, size);
         }
+        // FlyFeather.Hitbox(20,20,-10,-10) 的点击判定：以羽毛锚点为中心 ±10 世界像素的正方形。
+        // sprite 本身 32×32（外圈只是美术），正弦浮动也只改 sprite 的 translateY ⇒ 判定框固定在锚点。
+        function inCollectBox(f, e) {
+            var b = left.getBoundingClientRect(), fc = featherCenter(f);
+            return Math.abs(e.clientX - b.left - fc.x) <= HIT_HW * PXF &&
+                   Math.abs(e.clientY - b.top - fc.y) <= HIT_HH * PXF;
+        }
         function onFeatherClick(f, e) {
             if (!active || f.state !== 'idle' || orb) return;
+            if (!inCollectBox(f, e)) return;
             startStarFly(f, e);
         }
         // FlyFeather::OnPlayer → CollectRoutine（两击共用同一条协程）：
@@ -2587,8 +2843,9 @@ function stopPeSnow() {
                     drawFeather(f, idx); f.drawn = -2;
                 }
                 // UpdateY：sprite.Y = SineWave.Value * 2（SineWave.Value = sin(counter) ∈ [-1,1] → ±2 世界像素）
+                // counter = 2π * 0.6 * t + φ，φ 来自 Randomize 的 [0,4π)；只动 sprite，判定框不动
                 var bob = f.state === 'idle'
-                    ? Math.round(Math.sin(clock * 0.001 * Math.PI * 2 * 0.6 + f.phase) * 2 * PXF)
+                    ? Math.round(Math.sin(clock * 0.001 * Math.PI * 2 * SINE_FREQ + f.phase) * SINE_AMP * PXF)
                     : 0;
                 // wiggler.MoveNext：Value = cos(sineCounter) * Counter，Counter 从 1 线性衰减到 0
                 // → Scale = One * (1 + Value * 0.2)，重生瞬间是 1.2 倍，随后带余弦抖动收回
@@ -2611,6 +2868,8 @@ function stopPeSnow() {
         // StartStarFly → StateMachine.State = 19；StarFlyBegin 里 timer=FLY_TIME / Bloom(0,-6,r16,α→0.7)；
         // 变形期由 StarFlyCoroutine 卡住：startStarFly 播完（4×0.08）=0.32s → Speed 已归零 → 再等 0.1s
         function startStarFly(f, e) {
+            // 收起按钮焦点：否则飞行结束后再按 Space，浏览器会把它当成按钮的默认激活 → 又收集一次
+            if (f.el.blur) f.el.blur();
             var c = featherCenter(f);
             var ax = axisX(), ay = axisY();
             var l = Math.sqrt(ax * ax + ay * ay);
@@ -2657,8 +2916,11 @@ function stopPeSnow() {
             }
         }
         function stepOrb(dt) {
-            if (!orb) return;
+            if (!orb) { jumpEdge = dashEdge = false; return; }
             var o = orb;
+            // Input.Jump.Pressed / Input.Dash.Pressed 都是边沿：本帧读走就清；变形期不进入 StarFlyUpdate
+            var jumpPressed = jumpEdge, dashPressed = dashEdge;
+            jumpEdge = dashEdge = false;
             o.glow = approach(o.glow, 0.7, dt * 2);       // starFlyBloom.Alpha = Approach(..., 0.7, 2*dt)
 
             if (o.charge < CHARGE) {
@@ -2724,6 +2986,20 @@ function stopPeSnow() {
                 else { o.mx = 0; o.my = 0; }               // SafeNormalize → Zero，下帧重取输入朝向
             }
 
+            // StarFlyUpdate 的四条提前结束（Player.cs:4760-4808），按原作顺序判定：
+            //   1) Jump.Pressed + OnGround(3)       → Jump
+            //   2) Jump.Pressed + WallJumpCheck(±1) → WallJump
+            //   3) Grab.Check + ClimbCheck(±1)     → 抓墙
+            //   4) CanDash                          → StartDash
+            // 撞墙本身只反弹（上面已处理），不结束飞行。
+            // 页面没有实心块 ⇒ 左屏下边界当地面、左右边界当可抓/可蹬的墙。
+            var gnd = o.y >= h - R - GROUND_SNAP * PXF;
+            var wall = o.x <= R + GROUND_SNAP * PXF ? -1 : (o.x >= w - R - GROUND_SNAP * PXF ? 1 : 0);
+            if (jumpPressed && gnd) { endFly(false, 'jump'); return; }
+            if (jumpPressed && wall) { endFly(false, 'walljump', wall); return; }
+            if ((keys.shift || keys.z) && wall) { endFly(false, 'grab'); return; }
+            if (dashPressed) { endFly(false, 'dash'); return; }
+
             // Scene.OnInterval(0.02) → Emit(P_Flying, 1, Center, One*2, Angle(-Speed))
             o.emitT += dt;
             while (o.emitT >= 0.02) {
@@ -2748,27 +3024,47 @@ function stopPeSnow() {
                 var f = feathers[k];
                 if (f.state !== 'idle') continue;
                 var fc = featherCenter(f);
-                if (Math.hypot(fc.x - o.x, fc.y - o.y) > COLLECT_R * PXF) continue;
+                // 同一套 Hitbox 判定：20×20 羽毛盒 vs 8×8 starFlyHitbox ⇒ 半宽 10+4、半高 10+4 的矩形重叠
+                if (Math.abs(fc.x - o.x) > (HIT_HW + ORB_HALF) * PXF ||
+                    Math.abs(fc.y - o.y) > (HIT_HH + ORB_HALF) * PXF) continue;
                 o.timer = FLY_TIME; o.flash = false; o.warnT = 0; o.warned = false;
                 collect(f, true, Math.atan2(o.my, o.mx));   // 原作此处 playerSpeed = 当前飞行 Speed
             }
         }
         // StarFlyEnd：P_Boost ×12 + 交回普通状态。
-        // 原作在此处夹取 Speed（|Speed.X|≤140、按住 ↑ 则 Speed.Y=-100、向下速度归零），
+        // 计时到 / Esc：原作在此处夹取 Speed（|Speed.X|≤140、按住 ↑ 则 Speed.Y=-100、向下速度归零）。
+        // 四种提前结束则由各自入口给速度（Player.cs:4760-4808）：
+        //   jump     Player::Jump      → Speed = (8*MoveX, -105)
+        //   walljump Player::WallJump  → Speed = (-墙侧*108, -105)
+        //   grab     Player::ClimbBegin→ Speed = Zero（贴墙抓住）
+        //   dash     Player::StartDash → Speed = DashDir * 240
         // 随后由 gravity 接管——页面里用一段带重力的余晖把“被抛出去”读出来。
-        function endFly(silent) {
-            var ay = axisY();          // 必须在 bindActive(false) 清空 keys 之前读（原作此处看 Input.MoveY）
+        function endFly(silent, mode, wallDir) {
+            var ax = axisX(), ay = axisY(), din = inputDir();   // 必须在 bindActive(false) 清空 keys 之前读
             bindActive(false);
             showHint(false);
             stopLoops();               // 飞行循环 0.2s 淡出（silent 的 exitDream 也要停）
+            jumpEdge = dashEdge = false;
             if (!orb) return;
             var o = orb;
             orb = null;
             if (silent) return;
             var vx = o.mx * o.len, vy = o.my * o.len;
-            if (ay === -1) vy = -EXIT_UP * PXF;                      // Input.MoveY == -1
-            if (vy > 0) vy = 0;                                     // Speed.Y > 0 → 0
-            if (Math.abs(vx) > EXIT_X * PXF) vx = (vx < 0 ? -1 : 1) * EXIT_X * PXF;
+            if (mode === 'jump') {
+                vx = ax * JUMP_VX * PXF; vy = -JUMP_V * PXF;
+            } else if (mode === 'walljump') {
+                vx = -wallDir * WALLJUMP_VX * PXF; vy = -JUMP_V * PXF;
+            } else if (mode === 'grab') {
+                vx = 0; vy = 0;
+            } else if (mode === 'dash') {
+                // Input.GetDashVector()：有方向输入就取八向；没有就 UnitX * Facing（页面用水平速度方向当朝向）
+                var dd = din || { x: o.mx < 0 ? -1 : 1, y: 0 };
+                vx = dd.x * DASH_V * PXF; vy = dd.y * DASH_V * PXF;
+            } else {
+                if (ay === -1) vy = -EXIT_UP * PXF;                  // Input.MoveY == -1
+                if (vy > 0) vy = 0;                                  // Speed.Y > 0 → 0
+                if (Math.abs(vx) > EXIT_X * PXF) vx = (vx < 0 ? -1 : 1) * EXIT_X * PXF;
+            }
             emit(PT.boost, 12, o.x, o.y, 4 * PXF, Math.atan2(-o.my, -o.mx));   // Angle(-Speed)
             exits.push({ x: o.x, y: o.y, vx: vx, vy: vy, t: 0, ttl: EXIT_TTL });
             sfx('end');
@@ -2983,8 +3279,17 @@ function stopPeSnow() {
             if (k === 'escape') { e.preventDefault(); e.stopPropagation(); endFly(false); return; }
             if (e.repeat) return;
             if (DIR_KEYS[k]) { keys[k] = true; e.preventDefault(); e.stopPropagation(); }
+            else if (ACTION_KEYS[k]) {
+                keys[k] = true;
+                if (k === ' ' || k === 'c') jumpEdge = true;      // Input.Jump.Pressed
+                if (k === 'x' || k === 'k') dashEdge = true;       // Input.Dash.Pressed
+                e.preventDefault(); e.stopPropagation();           // Space 默认滚页 / 会触发聚焦按钮
+            }
         }
-        function onKeyUp(e) { var k = (e.key || '').toLowerCase(); if (DIR_KEYS[k]) keys[k] = false; }
+        function onKeyUp(e) {
+            var k = (e.key || '').toLowerCase();
+            if (DIR_KEYS[k] || ACTION_KEYS[k]) keys[k] = false;
+        }
         function bindActive(on) {
             if (on === keysActive) return;
             keysActive = on;
@@ -3081,7 +3386,7 @@ function stopPeSnow() {
             resizeCanvas();
             for (var k = 0; k < feathers.length; k++) applyScale(feathers[k]);
         });
-        window.addEventListener('blur', function () { keys = {}; });
+        window.addEventListener('blur', function () { keys = {}; jumpEdge = dashEdge = false; });
         // 切走标签页时 rAF 会停，循环轨必须自己收掉；回来若还在飞就续上
         document.addEventListener('visibilitychange', function () {
             if (document.hidden) stopLoops();
@@ -4103,6 +4408,8 @@ function stopPeSnow() {
             if (window.__blDialogKill) window.__blDialogKill();
             if (window.__mirrorBGM) window.__mirrorBGM.exit();
             if (window.__mirrorScene) window.__mirrorScene.leave();   // Canvas 镜子房间：离开复位
+            // 切回雪夜：dream 场景据此播 Badeline 出场（stage=dived 时）或补位（appeared 时）
+            document.dispatchEvent(new CustomEvent('mirrorstory:back'));
             if (window.__dreamBGM) window.__dreamBGM.resume();   // 回雪夜：Starjump 从暂停处续播
             if (window.CampfireAudio) window.CampfireAudio.resume();    // 回雪夜：篝火接着烧
             if (window.__badelineLeaveRoom) window.__badelineLeaveRoom();
