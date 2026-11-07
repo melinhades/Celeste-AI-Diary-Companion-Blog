@@ -95,14 +95,6 @@ MAP.decalsBg.concat(MAP.decalsFg).forEach(function (d) { want('decal:' + d[0], d
 want('mist', 'Atlases/Misc/mist.png');
 want('vignette', 'Atlases/Misc/vignette.png');
 
-var sfxEnter = null;
-(function () {
-  try {
-    sfxEnter = new Audio('celeste-sounds/dreamblock/dreamblock_enter_01.wav');
-    sfxEnter.volume = 0.55;
-  } catch (e) { sfxEnter = null; }
-})();
-
 /* =====================================================================
    2. 坐标 / 相机（Celeste Camera.Position 为视口中心；Zoom 缩放视野）
    ===================================================================== */
@@ -282,7 +274,10 @@ var DREAM_TEX_SX = [14, 7, 0, 7];
 var DREAM = {
   x: 120, y: 128, w: 80, h: 64,
   playerHasDreamDash: false,
-  animTimer: 0, wobbleFrom: 0, wobbleTo: 0, wobbleEase: 0,
+  animTimer: 0,
+  wobbleFrom: Math.random() * Math.PI * 2,
+  wobbleTo: Math.random() * Math.PI * 2,
+  wobbleEase: 0,
   whiteFill: 0, whiteHeight: 1,
   shakeX: 0, shakeY: 0,
   shaker: null,
@@ -301,7 +296,7 @@ function dreamSetup() {
     var color;
     if (DREAM.playerHasDreamDash) color = pickOne(DREAM_LAYER_COLORS[layer]);
     else {
-      var v = Math.round(192 * (0.5 + layer / 2 * 0.5));      // LightGray 逐层变亮
+      var v = Math.round(211 * (0.5 + layer / 2 * 0.5));      // LightGray = 211，逐层变亮
       color = 'rgb(' + v + ',' + v + ',' + v + ')';
     }
     DREAM.particles.push({
@@ -679,9 +674,14 @@ function updateParts(dt) {
     var p = parts[i];
     p.life -= dt;
     if (p.life <= 0) { parts.splice(i, 1); continue; }
+    if (p.pv) p.age += dt;
     p.x += p.vx * dt; p.y += p.vy * dt;
     p.vy += (p.g || 0) * dt;
-    if (p.drag) {
+    if (p.pv) {
+      // P_Vanish：SpeedMultiplier 0.3 → 每帧速度 ×0.3^dt（约 1.204/s 指数衰减）
+      var k0 = Math.pow(0.3, dt);
+      p.vx *= k0; p.vy *= k0;
+    } else if (p.drag) {
       var k = Math.max(0, 1 - p.drag * dt);
       p.vx *= k; p.vy *= k;
     }
@@ -696,6 +696,18 @@ function updateParts(dt) {
 function drawParts() {
   for (var i = 0; i < parts.length; i++) {
     var p = parts[i];
+    if (p.pv) {
+      // P_Vanish：1px 白点贴图，每 0.1s 在 #6F2399 / #EC76F7 之间切换，末段 25% 淡出
+      var ps = toScreen(p.x, p.y);
+      var c02 = (Math.floor(p.age / 0.1) % 2) === 0 ? '#6F2399' : '#EC76F7';
+      var rem = p.life / p.max;
+      var a02 = rem < 0.25 ? rem / 0.25 : 1;
+      ctx.globalAlpha = Math.max(0, Math.min(1, a02));
+      ctx.fillStyle = c02;
+      var sz02 = Math.max(1, Math.round(Z * cam.zoom));
+      ctx.fillRect(Math.round(ps.x), Math.round(ps.y), sz02, sz02);
+      continue;
+    }
     var img = IMG[p.tex];
     if (!img) continue;
     var s = toScreen(p.x, p.y);
@@ -1149,7 +1161,6 @@ function* activateBlock() {
   b.playerHasDreamDash = true;
   dreamSetup();                                 // Setup()：换成彩色粒子
   b.whiteHeight = 1; b.whiteFill = 1;
-  playSfx('enter');                             // event:/game/03_dream/dreamblock_enter
   p = 1;
   var interval = 0;
   while (p > 0) {
@@ -1220,7 +1231,6 @@ function mkSfx(key, src, vol) {
 }
 mkSfx('mirror', 'ambience/mirror_sequence.wav', 0.7);
 mkSfx('sting', 'celeste-sounds/dreamblock/dreamblock_exit_01.wav', 0.5);
-mkSfx('enter', 'celeste-sounds/dreamblock/dreamblock_enter_01.wav', 0.6);
 
 function playSfx(key) {
   if (!sfxOn) return;
