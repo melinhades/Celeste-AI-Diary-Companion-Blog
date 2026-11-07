@@ -271,16 +271,26 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
  *   --bd-size：canvas 模式下由 shelf.js 按 32(游戏像素精灵框)×Z(房间高/180) 动态设置，
  *             与镜子里画的人物大小严格一致；DOM 回退模式无此变量 → 仍用 128px
  */
+/*
+ * shelf 专用常量：镜厅里站着的 Badeline 本体缩放（0.7 = 缩小 30%）。
+ * 只作用于本元素；锚点放在脚底（left:50%; top:100%; translate(-50%,-100%)），
+ * 不参与 dream 立绘、圆桌会议立绘、日记页立绘。
+ */
 #badelineImg {
-    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
-    width: var(--bd-size, 128px); height: var(--bd-size, 128px);
+    --bd-body-scale: 0.70;
+    position: absolute; left: 50%; top: 100%; transform: translate(-50%,-100%);
+    width: calc(var(--bd-size, 128px) * var(--bd-body-scale));
+    height: calc(var(--bd-size, 128px) * var(--bd-body-scale));
     object-fit: contain;
     image-rendering: pixelated;
     cursor: pointer;
     user-select: none;
     -webkit-user-drag: none;
 }
-#badelineImg.big { width: var(--bd-size, 128px); height: var(--bd-size, 128px); }   /* lookingUp 和 spin/sleep/roll 同尺寸 */
+#badelineImg.big {
+    width: calc(var(--bd-size, 128px) * var(--bd-body-scale));
+    height: calc(var(--bd-size, 128px) * var(--bd-body-scale));
+}   /* lookingUp 和 spin/sleep/roll 同尺寸 */
 
 /* ===== Badeline 聊天面板：镜子召唤后出现 ===== */
 #blChat {
@@ -384,12 +394,31 @@ html, body { overflow-x: hidden; }
 }
 .ds-world > .ds-left, .ds-world > #mirrorRoom { width:100vw; height:100vh; flex-shrink:0; position:relative; overflow:hidden; }
 .ds-world.panned { transform:translateX(calc(-100vw - var(--bridge-w))); }
-/* 过渡区（真实缓冲区域，宽 --bridge-w ≥ 镜子 384px）：
-   两色渐变 #20175e → #010104，节奏为"先快速变黑再缓入右色"：前 1/5 就压到近黑，余下长尾缓慢趋近 #010104，
-   缓冲带以右侧暗色为主导 */
+/* 过渡区（真实缓冲区域，宽 --bridge-w ≥ 镜子 384px）
+   左接缝：旧版在这里直接铺 #20175e 平色，但左屏 scene.png 的右缘逐行颜色差异很大（顶部极光偏青、
+   底部偏紫），于是 100vw 处是一条硬切竖缝。现在用 ::before 把左屏"最后 1px 可见列"横向拉开：
+   --bridge-skin-* 由 shelf.js 按 cover 的缩放/裁切实时算出，逐行颜色与左屏右缘完全对齐。
+   右接缝：渐变终点改成镜之房间画布左缘的实测色 #0a070f（旧 #010104 会亮出一整条竖带）。 */
 .ds-bridge {
     width:var(--bridge-w); height:100vh; flex-shrink:0; position:relative; overflow:hidden;
-    background:linear-gradient(90deg, #20175e 0%, #0a0830 14%, #040314 32%, #02020a 55%, #010104 100%);
+    /* 兜底：JS 还没算好皮肤尺寸前，用同色长尾，右侧不再亮一档 */
+    background:linear-gradient(90deg, #20175e 0%, #0a0830 14%, #040314 32%, #02020a 55%, #0a070f 100%);
+}
+.ds-bridge::before {
+    content:''; position:absolute; left:0; top:0; width:1px; height:100%;
+    transform-origin:left center;
+    transform:scaleX(var(--bridge-skin-scale, 0));
+    background-image:url('../celeste-gui/dream/scene.png');
+    background-repeat:no-repeat;
+    background-position:var(--bridge-skin-x, 0px) bottom;
+    background-size:var(--bridge-skin-w, 0px) var(--bridge-skin-h, 0px);
+    pointer-events:none;
+}
+.ds-bridge::after {
+    content:''; position:absolute; inset:0; pointer-events:none;
+    /* 首段全透明，保证与左屏右缘像素级接上；前 1/5 快速压暗，余下长尾交给镜之房间 */
+    background:linear-gradient(90deg, rgba(10,7,15,0) 0%, rgba(10,7,15,.14) 7%,
+        rgba(10,7,15,.55) 17%, rgba(10,7,15,.88) 30%, #0a070f 52%, #0a070f 100%);
 }
 
 /* ===== 心门（游戏截图蓝色光柱 · 全高占满右侧） =====

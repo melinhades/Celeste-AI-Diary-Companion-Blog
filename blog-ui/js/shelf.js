@@ -1090,6 +1090,23 @@ function stopPeSnow() {
         // 3) 对话框组件：官方 badeline 文本框 + 立绘逐帧动画（120ms/帧，对齐 Madeline 对话框）
         var blDialog = document.getElementById('badelineDialog');
         var blDialogImg = document.getElementById('blDialogImg');
+        var blDialogPortrait = document.getElementById('badelineDialogPortrait');
+        // 生气 / 无语类情绪 → 追加一次"从文本框爬出"演出（共用模块见 js/badeline-crawlout.js）
+        var BL_CRAWL_EMO = {
+            angry: 1, angryAlt: 1, yell: 1, freakA: 1, freakB: 1, freakC: 1,
+            sigh: 1, scoff: 1, upset: 1
+        };
+        function blCrawlOut(wait, token) {
+            if (!window.BadelineCrawlOut) return;
+            setTimeout(function () {
+                if (token !== blDialogToken || !blDialog.classList.contains('show')) return;
+                window.BadelineCrawlOut.play({
+                    box: blDialog,
+                    portrait: blDialogPortrait,
+                    anchor: blDialogPortrait
+                });
+            }, wait || 0);
+        }
         var blDialogText = document.getElementById('badelineDialogText');
         var blHeadImg = document.getElementById('blHeadImg');
         var blAnimTimer = null, blCurEmo = 'normal';
@@ -1179,8 +1196,10 @@ function stopPeSnow() {
             if (!text) return;
             if (!BL_PORTRAIT_FRAMES[emo]) { emo = blInferEmotion(text); aiLocked = false; }
             var my = blDialogToken;
+            var wasOpen = blDialog.classList.contains('show');
             blDialogOpen();
             blStartPortrait(emo);
+            if (BL_CRAWL_EMO[emo]) blCrawlOut(wasOpen ? 130 : 330, my);   // 等框体入场后再露头
             // 驱动大立绘 emo 切换（之前对话期间大立绘完全冻结，只有右下角小头像切表情）
             if (window.__badelineOnEmotion) window.__badelineOnEmotion(emo);
             clearTimeout(blDialogHideTimer);
@@ -1228,8 +1247,6 @@ function stopPeSnow() {
             blInput.value = '';
             blAdd('user', v);
             blPush('user', v);
-            // 玩家提出"dream 模式"：标记镜子刷新判定，下次进 dream 时 50% 复原 / 50% 保持破碎
-            if (/dream/i.test(v)) { Store.set(Store.KEYS.MIRROR_REROLL, '1'); }
             blSending = true;
             blSendBtn.disabled = true;
             var ld = blAdd('loading', '……');
@@ -1292,7 +1309,7 @@ function stopPeSnow() {
             setTimeout(function () {
                 mirror.classList.remove('summoned');
                 mirror.classList.remove('bye');
-                // 镜子保持破碎（打破后不再自动复原，直到"dream 模式"刷新判定）；碎帧留在镜面
+                // 破碎事实已写入 localStorage，永不复原；下次进房按 5:5 决定「这趟显示破/完好」
                 busy = false;
                 if (window.__mirrorBGM) window.__mirrorBGM.refresh(); // 她离开 → 回阶段1（0:00–2:11）
             }, 750);
@@ -1303,9 +1320,14 @@ function stopPeSnow() {
             if (ev) ev.stopPropagation();
             if (busy) return;
             busy = true;
-            // Canvas 模式：触发 MirrorScene 完整碎镜过场，破碎那一刻经 onBreak→summon() 召唤（BGM/对话不变）
+            // Canvas 模式：触发 MirrorScene 完整碎镜过场。
+            // BGM 时序对齐原作：敲镜 = DreamMirror.InteractRoutine 的 Audio.SetMusic(null)
+            // （旧曲 ALLOWFADEOUT 淡出）→ 过场期间静默只留 sting/碎镜音 → OnEnd 才起下一段
             if (CANVAS_MIRROR) {
                 if (window.MirrorScene.isReady()) {
+                    // 本次进房按「已破」渲染：结果已在场，敲镜只召唤，不重播完整破碎过场
+                    if (window.__mirrorRoomBroken) { summon(); return; }
+                    if (window.__mirrorBGM) window.__mirrorBGM.beginCut();   // 先淡出旧曲，再开演
                     window.MirrorScene.reset();     // 告别后再敲：先复位成完好镜，干净重演整段过场
                     window.MirrorScene.breakNow();
                     // 调试专用：?ff=秒 —— 无头验证时同步快进过场（真实浏览器无此参数，行为不变）
@@ -1381,6 +1403,8 @@ function stopPeSnow() {
             });
             var msCanvasEl = document.getElementById('mirrorScene');
             var msInited = false;
+            // 本次停留是否按「已破」渲染：每次进房只掷一次，停留期间不再重掷（否则会闪烁）
+            var roomShowsBroken = false;
             function msPosition() {
                 var r = window.MirrorScene.mirrorRect && window.MirrorScene.mirrorRect();
                 if (!r || !r.width) return false;
@@ -1398,15 +1422,39 @@ function stopPeSnow() {
                     if (!msInited) {
                         msInited = true;
                         window.MirrorScene.init(msCanvasEl, {
-                            drawBadeline: false, autoStart: false,
-                            onBreak: function () { summon(); }
+                            // 过场期间 Badeline 由 canvas 按世界坐标绘制（绝对锚定在镜心），
+                            // 不再用 DOM wrap 相对 #shelfMirror 定位 —— 相机 zoom/pan 时不会脱节
+                            drawBadeline: true, autoStart: false,
+                            // 真实碎裂帧：写入不可逆事实（镜子已破 + 梦块已激活），并让本次停留剩余时间
+                            // 按已破处理 —— 之后再敲镜只召唤，不再重播完整过场
+                            onBreak: function () {
+                                Store.setFlag(Store.KEYS.MIRROR_BROKEN, true);
+                                Store.setFlag(Store.KEYS.DREAM_DASH, true);
+                                roomShowsBroken = true;
+                                window.__mirrorRoomBroken = true;
+                            },
+                            // IL: CS02_Mirror.OnEnd → Music = event:/music/lvl2/mirror → Apply(false) 直接起播。
+                            // 这一帧对应过场真正的结束点；仓库缺 lvl2/mirror 音源，用 p2 兜底（见 docs）。
+                            onEnd: function () {
+                                if (window.__mirrorBGM) window.__mirrorBGM.endCut('p2');   // 硬起下一段，无淡入
+                            },
+                            // 过场收尾：相机已回到进房机位 → 对齐 DOM 命中区 → 走既有召唤演出（Badeline 从镜中升起）
+                            onDone: function () {
+                                msPosition();
+                                summon();
+                            }
                         });
                     }
                     window.MirrorScene.reset();
-                    // canvas 模式无「破碎延续」：清掉 DOM 时代的持久化残留 → 刷新/重进 100% 完好镜
-                    Store.remove(Store.KEYS.MIRROR_BROKEN);
-                    Store.remove(Store.KEYS.MIRROR_REROLL);
-                    // 重置 DOM 镜子态：上次召唤后未告别就回书架，重进时完好镜 + 她不在场 + 对话/演出收起
+                    // 持久化事实：镜子已破 / 梦块已激活（不可逆）。5:5 只作用于「本次进房怎么渲染」：
+                    // 每次进房掷一次，停留期间保持；未掷中已破就呈现完好镜，敲镜仍可正常重演过场。
+                    // 梦块激活不受 5:5 影响：只要事实发生过，房间里的果冻就保持已激活的彩色终态。
+                    var brokenFact = Store.getFlag(Store.KEYS.MIRROR_BROKEN);
+                    var dashFact = Store.getFlag(Store.KEYS.DREAM_DASH) || brokenFact;
+                    roomShowsBroken = brokenFact && Math.random() < 0.5;
+                    window.__mirrorRoomBroken = roomShowsBroken;
+                    window.MirrorScene.applyState(roomShowsBroken, dashFact);
+                    // 重置 DOM 镜子态：上次召唤后未告别就回书架，重进时她不在场 + 对话/演出收起
                     mirror.classList.remove('summoned');
                     mirror.classList.remove('bye');
                     badelineWrap.classList.remove('done');
@@ -1415,7 +1463,7 @@ function stopPeSnow() {
                     blPanel.classList.remove('vis');
                     blPanel.classList.remove('show');
                     if (window.__badelineLeaveRoom) window.__badelineLeaveRoom();   // 行为树复位（wrap 移回镜面）
-                    busy = false;   // 每次进入都可重新敲镜（播放一遍完整过场）
+                    busy = false;   // 每次进入都可敲镜：完好渲染→重演完整过场；已破渲染→直接召唤
                     var tries = 0;
                     (function align() {   // 等房间布局完成（canvas 有非零尺寸）再摆镜子命中区
                         if (msPosition() || ++tries > 30) return;
@@ -3117,13 +3165,6 @@ function stopPeSnow() {
         document.addEventListener('dream:exiting', function () { nightBoost.stopIdle(); });
         // 记梦入口：点击 dream 场景现有的绿色篝火本身
         document.getElementById('dsFire').addEventListener('click', function () {
-            // 镜子刷新机制：玩家提出过"dream 模式"后再次进 dream → 50% 保持破碎 / 50% 恢复完好
-            if (Store.getFlag(Store.KEYS.MIRROR_REROLL)) {
-                Store.remove(Store.KEYS.MIRROR_REROLL);
-                if (Store.getFlag(Store.KEYS.MIRROR_BROKEN) && Math.random() < 0.5) {
-                    Store.remove(Store.KEYS.MIRROR_BROKEN);   // 恢复完好（呈现于下次进镜之房间）
-                }
-            }
             loadDreams().then(function () { openPanel(jPanel); });
         });
 
@@ -3346,6 +3387,33 @@ function stopPeSnow() {
             Sfx.fire(name, { dir: DIR, volume: VOL });
         }
         window.__hdSfx = { play: play };
+    })();
+
+    // ===== 双屏接缝：把左侧梦境屏右缘的 1px 色带按 cover 口径铺进过渡区 =====
+    // .ds-left 用 background: url(scene.png) center bottom / cover，不同宽高比下可见右缘并不是
+    // 图片最右列（窄屏左右各裁掉一段）。这里实时复算显示尺寸与裁切偏移，让 1px 皮肤元素
+    // 正好取到「可见右缘那一列」，再由 .ds-bridge::before 的 scaleX 横铺，接缝两侧颜色连续。
+    (function () {
+        var left = document.querySelector('.ds-world > .ds-left');
+        var bridge = document.querySelector('.ds-bridge');
+        if (!left || !bridge) return;
+        var IW = 2540, IH = 1429;   // celeste-gui/dream/scene.png 原生尺寸
+        function layout() {
+            var cw = left.clientWidth, ch = left.clientHeight;
+            var bw = bridge.clientWidth;
+            if (cw < 2 || ch < 2 || bw < 1) return;
+            var k = Math.max(cw / IW, ch / IH);       // 与 CSS cover 同口径
+            var dw = IW * k, dh = IH * k;
+            // center bottom 布局下，左屏右缘可见点在图片显示宽度里的位置 = (cw + dw) / 2；
+            // 1px 元素把该点对到 x=1，正好露出一列，再 scaleX(bw) 展开成整条缓冲带
+            bridge.style.setProperty('--bridge-skin-w', dw + 'px');
+            bridge.style.setProperty('--bridge-skin-h', dh + 'px');
+            bridge.style.setProperty('--bridge-skin-x', (1 - (cw + dw) / 2) + 'px');
+            bridge.style.setProperty('--bridge-skin-scale', String(bw));
+        }
+        layout();
+        window.addEventListener('resize', layout);
+        if (typeof ResizeObserver === 'function') new ResizeObserver(layout).observe(left);
     })();
 
     // ===== 心门：初始全空 → 每达成一次解锁条件逐颗点亮 → 四心填满自动播放一次性分裂 → 点击进门 =====
@@ -4072,14 +4140,40 @@ function stopPeSnow() {
     // 阶段2（四心齐 · Badeline 解锁）：2:11–4:25 循环
     // 实现：WebAudio 按秒切片 → AudioBufferSourceNode loop=true 采样级无缝循环；
     //       解码失败降级 HTMLAudio + 60ms 轮询回跳；加载失败静默（不影响页面其他功能）
+    // ---------------------------------------------------------------------
+    // 镜子过场 BGM 时序（源自 Celeste.dll，取证见 docs/celeste-shelf-mirror-rea.md）：
+    //   1. 敲镜 = DreamMirror.InteractRoutine → Audio.SetMusic(null)
+    //      → Stop(currentMusic, ALLOWFADEOUT)：旧曲淡出（时长在 FMOD 事件里，代码无毫秒值）
+    //   2. CS02_Mirror 过场全程不设 Music：只有 pt1 / sequence_mirror / pt2 三个音效
+    //   3. OnEnd → Music.Event = event:/music/lvl2/mirror; Apply(false) → start() 直接起播
+    //      没有淡入也没有 crossfade（旧轨此时已是 null，Stop 不会再作用）
+    // 本仓库只有 bgm/Resurrections.mp3：p1 充当前半段，p2 是 lvl2/mirror 的替身
+    // （该事件音源缺失，补档时只改 SRC/P 或接一处独立音源，不要在别处静默换曲）。
     (function () {
         var SRC = 'bgm/Resurrections.mp3';
         var P = { p1: { start: 0, end: 131 }, p2: { start: 131, end: 265 } }; // 2:11=131s，4:25=265s
         var VOL = 0.32;
+        // IL 只给了 STOP_MODE.ALLOWFADEOUT，毫秒值在 FMOD 事件资源里查不到。
+        // 这里取 1.0s（与 pt1 sting 的 1.0s 前奏同拍），要精确复刻时只改这一个常量。
+        var FADE_SEC = 1.0;
         var actx = null, master = null;
         var bufs = {}, ready = false, failed = false, loading = false;
         var cur = null, curPhase = null, wantOn = false;
+        var cutSilent = false;      // 过场静默期：拒绝任何 playPhase/refresh 起播
+        var fadeTimer = null;       // 淡出结束的定时器（停源 + 复位增益）
         var fbAudio = null, fbPhase = null, fbTimer = null;
+
+        function clearFade() {
+            if (fadeTimer) { clearTimeout(fadeTimer); fadeTimer = null; }
+        }
+        function resetGain() {
+            if (!master || !actx) return;
+            try {
+                var now = actx.currentTime;
+                master.gain.cancelScheduledValues(now);
+                master.gain.setValueAtTime(VOL, now);
+            } catch (e) {}
+        }
 
         function ensureCtx() {
             if (actx) return actx;
@@ -4114,9 +4208,9 @@ function stopPeSnow() {
                 .then(function (buf) {
                     ['p1', 'p2'].forEach(function (k) { bufs[k] = sliceBuffer(buf, P[k].start, P[k].end); });
                     ready = true;
-                    if (wantOn) playPhase(phaseOf());
+                    if (wantOn && !cutSilent) playPhase(phaseOf());   // 过场静默期解码完成也不起播
                 })
-                .catch(function () { failed = true; if (wantOn) fbStart(phaseOf()); });
+                .catch(function () { failed = true; if (wantOn && !cutSilent) fbStart(phaseOf()); });
         }
         // 按秒切片：采样级精确（无缝循环的关键——loop 在切片端点处零间隙）
         function sliceBuffer(buf, s, e) {
@@ -4131,9 +4225,10 @@ function stopPeSnow() {
         }
 
         function playPhase(ph) {
-            if (!ready || !wantOn) return;
+            if (!ready || !wantOn || cutSilent) return;
             if (curPhase === ph && cur) return;      // 已在播该片段
             stopCur();
+            resetGain();                             // 淡出后 master 可能停在 0：起播前复位
             curPhase = ph;
             try {
                 cur = actx.createBufferSource();
@@ -4150,6 +4245,7 @@ function stopPeSnow() {
 
         // 降级路径：HTMLAudio + 60ms 轮询回跳（循环点可能有极短接缝，属可接受降级）
         function fbStart(ph) {
+            if (cutSilent) return;
             if (!fbAudio) {
                 try {
                     fbAudio = new Audio(SRC);
@@ -4159,6 +4255,7 @@ function stopPeSnow() {
                 } catch (e) { fbAudio = null; return; }
             }
             fbPhase = ph;
+            try { fbAudio.volume = VOL; } catch (e) {}   // 上一次淡出可能把音量压到 0
             var seg = P[ph];
             var seek = function () {
                 try { fbAudio.currentTime = seg.start; } catch (e) {}
@@ -4180,8 +4277,55 @@ function stopPeSnow() {
             if (fbTimer) { clearInterval(fbTimer); fbTimer = null; }
         }
 
+        // 敲镜 → 旧曲淡出并进入静默期（IL: Audio.SetMusic(null) → STOP_MODE.ALLOWFADEOUT）
+        function beginCut() {
+            if (cutSilent) return;
+            cutSilent = true;
+            clearFade();
+            var durMs = FADE_SEC * 1000;
+            // WebAudio：master 线性拉到 0（不改各 buffer 的音量，结束后统一停源）
+            if (ready && cur && master && actx) {
+                try {
+                    var now = actx.currentTime;
+                    master.gain.cancelScheduledValues(now);
+                    master.gain.setValueAtTime(master.gain.value, now);
+                    master.gain.linearRampToValueAtTime(0, now + FADE_SEC);
+                } catch (e) {}
+            }
+            // HTMLAudio 降级：没有 gain 节点，按同一时程压 volume
+            if (fbAudio) {
+                var v0 = fbAudio.volume, t0 = Date.now();
+                (function step() {
+                    if (!fbAudio) return;
+                    var k = Math.min(1, (Date.now() - t0) / durMs);
+                    try { fbAudio.volume = Math.max(0, v0 * (1 - k)); } catch (e) {}
+                    if (k < 1) setTimeout(step, 50);
+                })();
+            }
+            fadeTimer = setTimeout(function () {
+                fadeTimer = null;
+                stopCur();
+                fbStop();
+                resetGain();
+            }, durMs + 30);
+        }
+        // 过场结束 → 硬起下一段（IL: OnEnd 的 Apply(false) 直接 start，无淡入/非 crossfade）
+        // ph 缺省按 .summoned 判定；shelf 的召唤比 OnEnd 晚 1.2s（等相机归位），所以显式传 'p2'
+        function endCut(ph) {
+            clearFade();
+            cutSilent = false;
+            resetGain();
+            if (!wantOn) return;
+            ph = ph || phaseOf();
+            if (ready) playPhase(ph);
+            else if (failed) fbStart(ph);
+        }
+
         function enter() {
             wantOn = true;
+            cutSilent = false;      // 重新进房：无论上次是否停在静默期，都复位
+            clearFade();
+            resetGain();
             preload();
             // 压过全站 BGM，避免两首叠播
             var bp = document.getElementById('bgmPlayer');
@@ -4191,23 +4335,27 @@ function stopPeSnow() {
         }
         function exit() {
             wantOn = false;
+            cutSilent = false;
+            clearFade();
             stopCur();
             fbStop();
+            resetGain();
             var bp = document.getElementById('bgmPlayer');
             if (bp && window.__mirrorBGMDucked) { bp.play().catch(function () {}); window.__mirrorBGMDucked = false; }
         }
         document.addEventListener('visibilitychange', function () {
             if (document.hidden) { stopCur(); fbStop(); }
-            else if (wantOn) { if (ready) playPhase(phaseOf()); else if (failed) fbStart(phaseOf()); }
+            else if (wantOn && !cutSilent) { if (ready) playPhase(phaseOf()); else if (failed) fbStart(phaseOf()); }
         });
 
         window.__mirrorBGM = {
-            enter: enter, exit: exit,
-            refresh: function () { if (wantOn) { ready ? playPhase(phaseOf()) : (failed && fbStart(phaseOf())); } },
-            // 自检：切片时长 / 当前阶段 / 上下文状态
+            enter: enter, exit: exit, beginCut: beginCut, endCut: endCut,
+            refresh: function () { if (wantOn && !cutSilent) { ready ? playPhase(phaseOf()) : (failed && fbStart(phaseOf())); } },
+            // 自检：切片时长 / 当前阶段 / 上下文状态 / 是否处于过场静默
             status: function () {
                 return {
-                    ready: ready, failed: failed, wantOn: wantOn,
+                    ready: ready, failed: failed, wantOn: wantOn, cutSilent: cutSilent,
+                    fadeSec: FADE_SEC,
                     phase: curPhase || (fbPhase ? 'fb-' + fbPhase : null),
                     ctxState: actx ? actx.state : null,
                     p1Len: bufs.p1 ? bufs.p1.duration : 0,
