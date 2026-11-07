@@ -3,7 +3,8 @@
    本脚本负责动画层的三件事：
      1. 在 #ldSnowCanvas 上画雪花（与 article.js 的登录页口径一致：80 片、1~4px、风摆）；
      2. 暴露 PageLoading.ready()：宿主在场景/数据就绪后调用，等两帧（确保首帧已经画到
-        屏幕上）再加 .done 淡出，650ms 后从 DOM 移除；
+        屏幕上）再加 .done：光晕先暗 320ms，整层再淡出 650ms（延迟 320ms），
+        合计 970ms 后从 DOM 移除；
      3. 暴露 PageLoading.show() / reset()：给 index 页的「点鸟飞走后铺加载层」用。
         这类覆盖层在 body 顶部带 data-standby，加载完成前先不显示、也不启动 15s 兜底
         （否则用户还没点，15s 后兜底就把层从 DOM 里删了）。
@@ -14,7 +15,13 @@
     'use strict';
 
     var OVERLAY_ID = 'pageLoadingOverlay';
-    var FADE_MS = 650;
+    /* 退场分两段（数值与 css 里的 transition 一一对应，改这里要同步两份 CSS）：
+       1) GLOW_MS：光晕/点阵星/雪/人物先暗下去，暗底留着；
+       2) FADE_DELAY_MS 后整层再淡出 FADE_MS。合计 EXIT_MS 后从 DOM 移除。 */
+    var GLOW_MS = 320;           // 0.8s 精灵循环的 4/10 拍
+    var FADE_DELAY_MS = 320;     // 光晕退净再开始淡出，避免两段重叠成硬边
+    var FADE_MS = 650;           // 沿用原退场时长
+    var EXIT_MS = Math.max(GLOW_MS, FADE_DELAY_MS + FADE_MS);
     var FALLBACK_MS = 15000;
     var MIN_VISIBLE_MS = 1700;   // 至少可见两轮（0.8s × 2 = 1.6s），数据早到也不能一闪而过
 
@@ -68,12 +75,10 @@
         overlay.removeAttribute('data-standby');
         overlay.setAttribute('aria-hidden', 'false');
         startSnow();
-        // 从透明淡入（.done 可能在 bfcache 恢复时还挂着）
+        // 撤掉退场类并清掉旧的内联透明度：入场全部交给 CSS 分层动画，
+        // 暗底首帧即铺满，不会先闪出点鸟后的原图
         overlay.classList.remove('done');
-        overlay.style.opacity = '0';
-        requestAnimationFrame(function () {
-            requestAnimationFrame(function () { overlay.style.opacity = ''; });
-        });
+        overlay.style.opacity = '';
     }
 
     /* ---------- 退场：ready() → 两帧 → 淡出 → 移除 ---------- */
@@ -93,7 +98,7 @@
                     setTimeout(function () {
                         stopSnow();
                         if (el.parentNode) el.parentNode.removeChild(el);
-                    }, FADE_MS);
+                    }, EXIT_MS);
                 });
             });
         }, wait);

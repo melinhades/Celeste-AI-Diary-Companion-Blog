@@ -84,7 +84,32 @@
         background-color: #050514;
         display: flex; flex-direction: column;
         align-items: center; justify-content: center;
+        transition: none;   /* 暗底首帧即实心，内容分层进场；退场过渡写在 .done 上 */
     }
+    /* 进场：总长 640ms（短于退场 970ms），光晕 → 星星 → 雪 → 人物 → 文字依次拉起 */
+    #articleLoadingOverlay::before { animation: ldEnterFade .26s ease-out backwards; }
+    #articleLoadingOverlay #ldSnowCanvas { animation: ldEnterFade .28s ease-out .2s backwards; }
+    /* 退场分两段（与 js/article.js 的 ARTICLE_LOADING_* 常量同值）：
+       光晕/星/雪/人物先暗 320ms，暗底留到第二段，延迟 320ms 再整层淡出 650ms */
+    #articleLoadingOverlay.done {
+        opacity: 0; pointer-events: none;
+        transition: opacity .65s ease .32s;
+    }
+    #articleLoadingOverlay::before,
+    #articleLoadingOverlay .ld-stars,
+    #articleLoadingOverlay .ld-stars2,
+    #articleLoadingOverlay #ldSnowCanvas,
+    #articleLoadingOverlay .ld-snow-strip,
+    #articleLoadingOverlay .loading-madeline,
+    #articleLoadingOverlay .loading-text { transition: opacity .32s ease-out; }
+    #articleLoadingOverlay.done::before,
+    #articleLoadingOverlay.done #ldSnowCanvas,
+    #articleLoadingOverlay.done .ld-snow-strip,
+    #articleLoadingOverlay.done .loading-madeline,
+    #articleLoadingOverlay.done .loading-text { opacity: 0; }
+    /* 星星挂 starTwinkle 无限动画，退场时停掉动画才能把透明度真正压到 0 */
+    #articleLoadingOverlay.done .ld-stars,
+    #articleLoadingOverlay.done .ld-stars2 { opacity: 0; animation: none; }
     /* 登录页同款夜空：月光晕 */
     #articleLoadingOverlay::before {
         content: ''; position: absolute; inset: 0; pointer-events: none;
@@ -101,14 +126,14 @@
                     82vw 18vh 0 rgba(255,255,255,.4), 46vw 12vh 0 rgba(255,255,255,.55), 90vw 40vh 0 1px rgba(255,255,255,.6),
                     8vw 34vh 0 rgba(255,255,255,.45), 68vw 30vh 0 rgba(255,255,255,.5), 24vw 46vh 0 1px rgba(255,255,255,.65),
                     94vw 8vh 0 rgba(255,255,255,.4), 52vw 40vh 0 rgba(255,255,255,.35), 16vw 16vh 0 rgba(255,255,255,.5);
-        animation: starTwinkle 4.5s ease-in-out infinite;
+        animation: ldEnterFade .3s ease-out .1s backwards, starTwinkle 4.5s ease-in-out .4s infinite;
     }
     #articleLoadingOverlay .ld-stars2 {
         box-shadow: 20vw 12vh 0 rgba(255,255,255,.5), 42vw 5vh 0 1px rgba(255,255,255,.7), 72vw 22vh 0 rgba(255,255,255,.45),
                     6vw 26vh 0 rgba(255,255,255,.5), 60vw 34vh 0 rgba(255,255,255,.4), 86vw 12vh 0 1px rgba(255,255,255,.6),
                     30vw 38vh 0 rgba(255,255,255,.35), 96vw 30vh 0 rgba(255,255,255,.45), 48vw 24vh 0 rgba(255,255,255,.5),
                     14vw 42vh 0 rgba(255,255,255,.3), 64vw 10vh 0 rgba(255,255,255,.4), 38vw 48vh 0 rgba(255,255,255,.35);
-        animation: starTwinkle 6s ease-in-out 1.6s infinite;
+        animation: ldEnterFade .3s ease-out .1s backwards, starTwinkle 6s ease-in-out 1.6s infinite;
     }
     /* 加载层内雪花画布 + 底部雪带（登录页同款） */
     #articleLoadingOverlay #ldSnowCanvas {
@@ -117,7 +142,7 @@
     #articleLoadingOverlay .ld-snow-strip {
         position: absolute; left: 0; right: 0; bottom: 0; height: 80px;
         background: url('../celeste-areas/snow-front.webp') repeat-x bottom/220px auto;
-        animation: snowDrift 45s linear infinite;
+        animation: ldEnterFadeHalf .28s ease-out .2s backwards, snowDrift 45s linear infinite;
         opacity: .5; pointer-events: none;
     }
     @keyframes snowDrift { from{background-position-x:0} to{background-position-x:-440px} }
@@ -125,6 +150,7 @@
     #articleLoadingOverlay .loading-madeline {
         width: 120px; height: 120px;
         position: relative; overflow: hidden; z-index: 1;
+        animation: ldEnterRise .26s ease-out .3s backwards;
     }
     #articleLoadingOverlay .loading-madeline-sprite {
         position: absolute; top: 0; left: 0;
@@ -144,10 +170,15 @@
         letter-spacing: 3px;
         text-shadow: 0 0 12px rgba(255,227,109,0.4);
         position: relative; z-index: 1;
+        animation: ldEnterRise .24s ease-out .4s backwards;
     }
     #articleLoadingOverlay .loading-dots::after {
         content: ''; animation: dots 1.5s steps(4, end) infinite;
     }
+    /* 进场：光晕/星/雪纯淡入；人物/文字再叠 8px 上浮 */
+    @keyframes ldEnterFade { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes ldEnterFadeHalf { from { opacity: 0; } to { opacity: .5; } }
+    @keyframes ldEnterRise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes dots {
         0%   { content: ''; }
         25%  { content: '.'; }

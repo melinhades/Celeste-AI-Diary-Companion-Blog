@@ -1,6 +1,11 @@
     // ===== 加载层：最短可见时长 + 空闲预热图集 =====
     // 数据早到时也不能只跑一轮就撤（0.8s × 2 = 1.6s，至少两轮）
     const ARTICLE_LOADING_MIN_MS = 1700;
+    // 退场两段（与 css/article.css 的 transition 同值）：光晕先暗 320ms，整层再延迟 320ms 淡出 650ms
+    const ARTICLE_LOADING_GLOW_MS = 320;
+    const ARTICLE_LOADING_FADE_DELAY_MS = 320;
+    const ARTICLE_LOADING_FADE_MS = 650;
+    const ARTICLE_LOADING_EXIT_MS = Math.max(ARTICLE_LOADING_GLOW_MS, ARTICLE_LOADING_FADE_DELAY_MS + ARTICLE_LOADING_FADE_MS);
     const articleOverlayShownAt = performance.now();
     (function () {
         const img = document.querySelector('#articleLoadingOverlay .loading-madeline-sprite');
@@ -147,9 +152,12 @@
         api(`/articles/article/view/${articleId}`, 'POST').then(res => {
             const overlay = document.getElementById('articleLoadingOverlay');
             if (overlay) {
-                // 至少可见两轮：未跑满就把剩余时间等完再移除
+                // 至少可见两轮：未跑满就把剩余时间等完，再加 .done 走两段退场
                 const wait = Math.max(0, ARTICLE_LOADING_MIN_MS - (performance.now() - articleOverlayShownAt));
-                setTimeout(() => overlay.remove(), wait);
+                setTimeout(() => {
+                    overlay.classList.add('done');
+                    setTimeout(() => overlay.remove(), ARTICLE_LOADING_EXIT_MS);
+                }, wait);
             }
             if (!res.success) {
                 headerStatus.value = 'error';

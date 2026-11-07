@@ -84,10 +84,35 @@
     align-items: center;
     justify-content: center;
     opacity: 1;
-    transition: opacity .65s ease;
+    transition: none;   /* 进场不走整层淡入：暗底首帧即实心，内容分层进场；退场过渡写在 .done 上 */
 }
 #pageLoadingOverlay[data-standby] { display: none; }
-#pageLoadingOverlay.done { opacity: 0; pointer-events: none; }
+/* 进场：总长 640ms（短于退场 970ms），光晕 → 星星 → 雪 → 人物 → 文字依次拉起；
+   暗底首帧就是实心 #050514，不会透出原图，也不会白闪 */
+#pageLoadingOverlay::before { animation: ldEnterFade .26s ease-out backwards; }
+#pageLoadingOverlay #ldSnowCanvas { animation: ldEnterFade .28s ease-out .2s backwards; }
+/* 退场第一段：光晕/点阵星/雪/人物先暗下去（320ms，与 js/page-loading.js 的 GLOW_MS 同值），
+   暗底留到第二段再整层淡出；pointer-events 立即关闭，淡出期间不挡已就绪的内容 */
+#pageLoadingOverlay.done {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .65s ease .32s;   /* FADE_MS / FADE_DELAY_MS */
+}
+#pageLoadingOverlay::before,
+#pageLoadingOverlay .ld-stars,
+#pageLoadingOverlay .ld-stars2,
+#pageLoadingOverlay #ldSnowCanvas,
+#pageLoadingOverlay .ld-snow-strip,
+#pageLoadingOverlay .loading-madeline,
+#pageLoadingOverlay .loading-text { transition: opacity .32s ease-out; }
+#pageLoadingOverlay.done::before,
+#pageLoadingOverlay.done #ldSnowCanvas,
+#pageLoadingOverlay.done .ld-snow-strip,
+#pageLoadingOverlay.done .loading-madeline,
+#pageLoadingOverlay.done .loading-text { opacity: 0; }
+/* 星星挂 ldStarTwinkle 无限动画，退场时停掉动画才能把透明度真正压到 0 */
+#pageLoadingOverlay.done .ld-stars,
+#pageLoadingOverlay.done .ld-stars2 { opacity: 0; animation: none; }
 #pageLoadingOverlay::before {
     content: '';
     position: absolute;
@@ -111,14 +136,14 @@
                 82vw 18vh 0 rgba(255,255,255,.4), 46vw 12vh 0 rgba(255,255,255,.55), 90vw 40vh 0 1px rgba(255,255,255,.6),
                 8vw 34vh 0 rgba(255,255,255,.45), 68vw 30vh 0 rgba(255,255,255,.5), 24vw 46vh 0 1px rgba(255,255,255,.65),
                 94vw 8vh 0 rgba(255,255,255,.4), 52vw 40vh 0 rgba(255,255,255,.35), 16vw 16vh 0 rgba(255,255,255,.5);
-    animation: ldStarTwinkle 4.5s ease-in-out infinite;
+    animation: ldEnterFade .3s ease-out .1s backwards, ldStarTwinkle 4.5s ease-in-out .4s infinite;
 }
 #pageLoadingOverlay .ld-stars2 {
     box-shadow: 20vw 12vh 0 rgba(255,255,255,.5), 42vw 5vh 0 1px rgba(255,255,255,.7), 72vw 22vh 0 rgba(255,255,255,.45),
                 6vw 26vh 0 rgba(255,255,255,.5), 60vw 34vh 0 rgba(255,255,255,.4), 86vw 12vh 0 1px rgba(255,255,255,.6),
                 30vw 38vh 0 rgba(255,255,255,.35), 96vw 30vh 0 rgba(255,255,255,.45), 48vw 24vh 0 rgba(255,255,255,.5),
                 14vw 42vh 0 rgba(255,255,255,.3), 64vw 10vh 0 rgba(255,255,255,.4), 38vw 48vh 0 rgba(255,255,255,.35);
-    animation: ldStarTwinkle 6s ease-in-out 1.6s infinite;
+    animation: ldEnterFade .3s ease-out .1s backwards, ldStarTwinkle 6s ease-in-out 1.6s infinite;
 }
 #pageLoadingOverlay #ldSnowCanvas {
     position: absolute;
@@ -134,7 +159,7 @@
     bottom: 0;
     height: 80px;
     background: url('../celeste-areas/snow-front.webp') repeat-x bottom/220px auto;
-    animation: ldSnowDrift 45s linear infinite;
+    animation: ldEnterFadeHalf .28s ease-out .2s backwards, ldSnowDrift 45s linear infinite;
     opacity: .5;
     pointer-events: none;
 }
@@ -145,6 +170,7 @@
     position: relative;
     overflow: hidden;
     z-index: 1;
+    animation: ldEnterRise .26s ease-out .3s backwards;
 }
 #pageLoadingOverlay .loading-madeline-sprite {
     position: absolute;
@@ -171,9 +197,14 @@
     text-shadow: 0 0 12px rgba(255, 227, 109, .4);
     position: relative;
     z-index: 1;
+    animation: ldEnterRise .24s ease-out .4s backwards;
 }
 #pageLoadingOverlay .loading-dots::after { content: ''; animation: ldDots 1.5s steps(4, end) infinite; }
 
+/* 进场：光晕/星/雪纯淡入；人物/文字再叠 8px 上浮，分层感更明确 */
+@keyframes ldEnterFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ldEnterFadeHalf { from { opacity: 0; } to { opacity: .5; } }
+@keyframes ldEnterRise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes ldSnowDrift { from { background-position-x: 0; } to { background-position-x: -440px; } }
 @keyframes ldStarTwinkle { 0%, 100% { opacity: .25; } 50% { opacity: .9; } }
 @keyframes ldDots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
