@@ -128,6 +128,10 @@
         const BIRD_ID = '__bird__';
         const BIRD_NAME = 'bird';
 
+        // 历史点赞补刷开关：默认 false（打开页面不为旧点赞刷心）；
+        // 需要补历史时在地址栏临时加 ?heartbackfill=1 即可，不必改代码。
+        const LIKE_HEART_BACKFILL = /[?&]heartbackfill=1(?:&|$)/.test(location.search);
+
         function pad(n) { return String(n).padStart(2, '0'); }
         function fmtClock(ts) {
             const d = new Date(Number(ts));
@@ -195,6 +199,8 @@
                 let myUserId = null;
                 let myNickname = null;
                 const seenIds = {};   // 简单去重（历史和实时推送可能重叠）
+                const seenLikeIds = new Set();   // 点赞刷心事件去重（重连不重复刷）
+                let unreadTimer = null;          // 场景页未读轮询（复用 auth.js refreshBell）
                 let lastTs = 0, lastSender = null;   // 时间分组 + 连续消息合并
                 let typingHideTimer = null;
 
@@ -503,6 +509,24 @@
                             }
                         } catch (err) {}
                     });
+                    es.addEventListener('like', e => {
+                        try {
+                            const p = JSON.parse(e.data);
+                            if (String(p.fromUserId) === String(myUserId)) return;   // 自己点自己不刷
+                            // 同一条点赞只刷一次：重连/重复投递都靠 id 去重
+                            const key = String(p.id != null ? p.id : p.fromUserId + ':' + p.articleId + ':' + p.ts);
+                            if (seenLikeIds.has(key)) return;
+                            if (seenLikeIds.size > 400) seenLikeIds.clear();
+                            seenLikeIds.add(key);
+                            const n = Math.max(1, Number(p.count) || 1);
+                            if (window.ChatScene && typeof window.ChatScene.spawnLikeHearts === 'function') {
+                                window.ChatScene.spawnLikeHearts(n);
+                                console.info('[like-heart] spawn +' + n);
+                            }
+                            unread.value = Number(unread.value || 0) + 1;   // 角标立即 +1，30s 轮询会校正
+                            if (pane.value === 'notify') loadNotify();
+                        } catch (err) {}
+                    });
                     es.addEventListener('typing', e => {
                         try {
                             const p = JSON.parse(e.data);
@@ -597,6 +621,11 @@
                         window.addEventListener('keydown', onSceneKeydown);
                         window.addEventListener('chat:reveal', onChatReveal);
                         syncChatHiddenClass();
+                        // 场景页没有页头铃铛：给隐藏的 #bellBadge 拉起 auth.js 的同一套未读轮询
+                        if (loggedIn.value && typeof refreshBell === 'function') {
+                            refreshBell();
+                            unreadTimer = setInterval(refreshBell, 30000);
+                        }
                     }
                     if (!loggedIn.value) return;
                     // 当前用户 id + 昵称（区分自己/他人气泡，渲染自己的头像与名字）
@@ -606,6 +635,16 @@
                             myNickname = res.data.nickname || res.data.account || '我';
                         }
                     });
+                    // 历史点赞补刷：默认关闭，仅 ?heartbackfill=1 时按通知里的点赞条数一次刷出
+                    if (LIKE_HEART_BACKFILL) {
+                        api('/notifications/list', 'GET').then(res => {
+                            if (!res.success || !Array.isArray(res.data)) return;
+                            const n = res.data.filter(x => x.type === 'like').length;
+                            if (n > 0 && window.ChatScene && typeof window.ChatScene.spawnLikeHearts === 'function') {
+                                window.ChatScene.spawnLikeHearts(n);
+                            }
+                        });
+                    }
                     // 历史消息（早 -> 晚）
                     api('/realtime-chat/history', 'GET').then(res => {
                         if (res.success && Array.isArray(res.data)) {
@@ -636,6 +675,7 @@
                 });
                 onUnmounted(() => {
                     if (es) es.close();
+                    if (unreadTimer) clearInterval(unreadTimer);
                     clearTimeout(typingHideTimer);
                     window.removeEventListener('keydown', onSceneKeydown);
                     window.removeEventListener('chat:reveal', onChatReveal);
