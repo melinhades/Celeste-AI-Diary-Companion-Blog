@@ -67,8 +67,8 @@ public class DiaryChatPersonaChecker {
      * 句级流式复核：只调一次模型，不重生成。
      * 通过时 finalResponse 即原句；未通过时 suggestion 供调用方替换（可能为空）。
      */
-    public CheckResult checkOnce(String text, String systemPrompt, String userContext, String intentType) {
-        return runCheck(text, systemPrompt, userContext, intentType);
+    public CheckResult checkOnce(String text, String systemPrompt, String userContext, String intentType, boolean mustSpeak) {
+        return runCheck(text, systemPrompt, userContext, intentType, mustSpeak);
     }
 
     public static class CheckResult {
@@ -126,6 +126,11 @@ public class DiaryChatPersonaChecker {
     }
 
     private CheckResult runCheck(String response, String systemPrompt, String userContext, String intentType) {
+        return runCheck(response, systemPrompt, userContext, intentType, false);
+    }
+
+    private CheckResult runCheck(String response, String systemPrompt, String userContext, String intentType,
+                                 boolean mustSpeak) {
         String checkerPrompt = "你是 Madeline 人设检查器。判断以下回复是否符合规则，输出严格 JSON。\n\n" +
                 "【Madeline 人设与红线规则】\n" +
                 "- 温柔、坚定、不否定用户感受\n" +
@@ -141,9 +146,14 @@ public class DiaryChatPersonaChecker {
                 "- Q1 该追问：用户写了模糊情绪（我很烦）→ 追问具体点\n" +
                 "- Q2 该追问：用户主动提问 → 回答后追问\n" +
                 "- Q3 该追问：用户文本出现矛盾点 → 追问矛盾\n" +
-                "- Q4 该追问：用户提到历史事件 → 关联后追问\n\n" +
+                "- Q4 该追问：用户提到历史事件 → 关联后追问\n" +
+                (mustSpeak
+                        ? "- 本轮已判定必须开口（mustSpeak=true）：不得用 S1/S2/S3「该沉默」判定不通过，只能用 R1-R6 判定\n"
+                        : "") +
+                "\n" +
                 "【用户日记文本】：" + truncate(userContext, 500) + "\n" +
                 "【用户意图】：" + intentType + "\n" +
+                "【本轮开口要求】：" + (mustSpeak ? "必须开口，禁止判为沉默" : "可选，允许沉默") + "\n" +
                 "【Madeline 当前回复】：" + truncate(response, 500) + "\n\n" +
                 "输出格式（严格 JSON）：\n" +
                 "{\n" +

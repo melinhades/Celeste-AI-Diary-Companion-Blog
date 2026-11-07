@@ -895,11 +895,12 @@ public class DiaryServiceImpl implements DiaryService {
                             if (cut <= 0) break;
                             String sentence = rawBuf.substring(0, cut);
                             rawBuf.delete(0, cut);
-                            String out = gateSentence(sentence, systemPrompt.toString(), reactSnippet,
-                                    intent, sessionId, strictCheck, filterReason);
-                            if (out.isEmpty()) continue;
-                            emitStreamDelta(response, out, emotionEmitted, emotionOut, firstDeltaMs, t0);
-                            emitted.append(out);
+                            String[] emitText = {""};
+                            String clean = gateSentence(sentence, systemPrompt.toString(), reactSnippet,
+                                    intent, sessionId, strictCheck, mustSpeak, filterReason, emitText);
+                            if (emitText[0].isEmpty()) continue;
+                            emitStreamDelta(response, emitText[0], emotionEmitted, emotionOut, firstDeltaMs, t0);
+                            emitted.append(clean);
                         }
                     } catch (java.io.IOException io) {
                         aborted[0] = true;
@@ -928,16 +929,17 @@ public class DiaryServiceImpl implements DiaryService {
             if (!silent[0] && rawBuf.length() > 0) {
                 String tail = rawBuf.toString();
                 rawBuf.setLength(0);
-                String out = gateSentence(tail, systemPrompt.toString(), reactSnippet,
-                        intent, sessionId, strictCheck, filterReason);
-                if (!out.isEmpty()) {
+                String[] emitText = {""};
+                String clean = gateSentence(tail, systemPrompt.toString(), reactSnippet,
+                        intent, sessionId, strictCheck, mustSpeak, filterReason, emitText);
+                if (!emitText[0].isEmpty()) {
                     try {
-                        emitStreamDelta(response, out, emotionEmitted, emotionOut, firstDeltaMs, t0);
+                        emitStreamDelta(response, emitText[0], emotionEmitted, emotionOut, firstDeltaMs, t0);
                     } catch (java.io.IOException io) {
                         log.info("日记伴侣 SSE 输出中断 sessionId={}", sessionId);
                         return;
                     }
-                    emitted.append(out);
+                    emitted.append(clean);
                 }
             }
 
@@ -1029,23 +1031,61 @@ public class DiaryServiceImpl implements DiaryService {
 
     /**
      * 句级闸门：正常句子走本地正则即时放行；命中风险特征（或用户本轮本身是高危文本）才调一次模型复核。
-     * 复核不通过时用 suggestion 替换（没有 suggestion 则用安全兜底句），保证发出去的句子都是最终文本。
+     *
+     * 双轨返回值：
+     *   return 值 = 剥离 [m:表情] 后的纯文本，用于落库 / 记忆 / done.len；
+     *   emitText[0] = 实际下发文本，放行时保留原句里的 [m:表情]，供前端 feeder 换脸。
+     * 复核不通过时用 suggestion 替换；S1-S3「该沉默」在句级不生效（危机已由 crisisRisk 前置拦截）；
+     * R1-R6 硬红线且没有 suggestion 时才用安全兜底句，其余未知原因放行原句。
      */
     private String gateSentence(String sentence, String systemPrompt, String reactSnippet,
-                                String intent, String sessionId, boolean strictCheck, String[] filterReason) {
+                                String intent, String sessionId, boolean strictCheck, boolean mustSpeak,
+                                String[] filterReason, String[] emitText) {
         String s = INLINE_MOOD_MARKER.matcher(sentence).replaceAll("").trim();
+        emitText[0] = "";
         if (s.isEmpty()) return "";
-        if (!strictCheck && !DiaryChatPersonaChecker.localRedlineHit(s)) return s;
+        if (!strictCheck && !DiaryChatPersonaChecker.localRedlineHit(s)) {
+            emitText[0] = sentence.trim();
+            return s;
+        }
 
         DiaryChatPersonaChecker.CheckResult check =
-                personaChecker.checkOnce(s, systemPrompt, reactSnippet, intent);
-        if (check.pass) return check.finalResponse;
+                personaChecker.checkOnce(s, systemPrompt, reactSnippet, intent, mustSpeak);
+        if (check.pass) {
+            if (check.finalResponse == null || check.finalResponse.equals(s)) {
+                // 未改写 → 下发保留 [m:表情] 的原句
+                emitText[0] = sentence.trim();
+                return s;
+            }
+            String rewritten = INLINE_MOOD_MARKER.matcher(check.finalResponse).replaceAll("").trim();
+            emitText[0] = rewritten;
+            return rewritten;
+        }
 
         filterReason[0] = check.failReason;
+        String reason = check.failReason == null ? "" : check.failReason.trim().toUpperCase();
+        // S1-S3 是「该沉默」规则：整轮危机已由 crisisRisk 前置拦截，句级再据此拦截会把
+        // 正常倾诉的每一句都替换成「嗯，我在听～」，这里直接放行
+        if (reason.startsWith("S")) {
+            emitText[0] = sentence.trim();
+            return s;
+        }
+
         String suggestion = check.suggestion == null ? ""
                 : INLINE_MOOD_MARKER.matcher(check.suggestion).replaceAll("").trim();
         log.warn("流式句子未过人格检查 sessionId={}, 原因={}", sessionId, check.failReason);
-        return suggestion.isEmpty() ? "嗯，我在听～" : suggestion;
+        if (!suggestion.isEmpty()) {
+            emitText[0] = suggestion;
+            return suggestion;
+        }
+        // R1-R6 硬红线且没有改写建议 → 保留安全兜底，不放行原句
+        if (reason.startsWith("R")) {
+            emitText[0] = "嗯，我在听～";
+            return "嗯，我在听～";
+        }
+        // 判定原因不明（裁判输出缺字段等）→ 放行原句，不再整段替换
+        emitText[0] = sentence.trim();
+        return s;
     }
 
     /** 逐句下发：首句前先发 emotion，并记录首字延迟 */
@@ -1345,6 +1385,7 @@ public class DiaryServiceImpl implements DiaryService {
         // ===== 对话历史（先解析，供「上次互动」用） =====
         List<AiMessage> history = new ArrayList<>();
         String lastAssistant = null;
+        String sessionAnchor = null;
         if (historyJson != null && !historyJson.isBlank()) {
             try {
                 List<JSONObject> arr = JSON.parseArray(historyJson, JSONObject.class);
@@ -1356,6 +1397,7 @@ public class DiaryServiceImpl implements DiaryService {
                         String r = "assistant".equals(o.getString("role")) ? "assistant" : "user";
                         history.add(new AiMessage(r, c));
                         if ("assistant".equals(r)) lastAssistant = c;
+                        if ("user".equals(r) && sessionAnchor == null) sessionAnchor = c.trim();
                     }
                 }
             } catch (Exception ignored) {
@@ -1364,6 +1406,7 @@ public class DiaryServiceImpl implements DiaryService {
         if (history.size() > 10) {
             history = new ArrayList<>(history.subList(history.size() - 10, history.size()));
         }
+        if (sessionAnchor == null || sessionAnchor.isBlank()) sessionAnchor = message.trim();
         if (lastAssistant != null) {
             lastAssistant = lastAssistant.trim();
             if (lastAssistant.length() > 60) lastAssistant = lastAssistant.substring(0, 60) + "…";
@@ -1387,6 +1430,7 @@ public class DiaryServiceImpl implements DiaryService {
         messages.add(new AiMessage("user", message.trim()));
 
         String reply = aiClient.chat(messages);
+        String rawReply = reply;
         if (reply == null || reply.isBlank()) {
             reply = "……信号不好。别以为这样就能跳过这段对话。";
         }
@@ -1399,8 +1443,29 @@ public class DiaryServiceImpl implements DiaryService {
             emotion = em.group(1).toLowerCase();
             reply = reply.substring(em.end()).trim();
         }
+        boolean blankReplyFallback = false;
         if (reply.isBlank()) {
             reply = "……";
+            blankReplyFallback = true;
+        }
+        try {
+            String filterReason = (rawReply == null || rawReply.isBlank()) ? "empty_fallback"
+                    : (blankReplyFallback ? "blank_fallback"
+                    : (!emotion.isEmpty() ? "emotion_marker_stripped" : "ok"));
+            writeRawModelLog(userId,
+                    "badeline:" + Integer.toHexString(userId.hashCode()) + ":"
+                            + Integer.toHexString(sessionAnchor.hashCode()),
+                    Math.max(1, history.size() / 2 + 1),
+                    "badeline",
+                    "source=chat;stage=" + state[2] + ";promptHash="
+                            + Integer.toHexString(messages.get(0).getContent().hashCode()),
+                    message.trim(),
+                    joinSystemMessages(messages),
+                    rawReply,
+                    reply,
+                    filterReason);
+        } catch (Exception e) {
+            log.warn("badelineChat 日志写入失败: {}", e.getMessage());
         }
         java.util.Map<String, Object> data = new java.util.HashMap<>();
         data.put("message", reply);
@@ -1430,15 +1495,29 @@ public class DiaryServiceImpl implements DiaryService {
         String snippet = content.length() > 1500 ? content.substring(0, 1500) : content;
         Persona persona = personaService.getActive(user.getId());
         List<Memory> memories = memoryService.getRelevant(user.getId(), snippet);
-        String reply = aiClient.chat(new ArrayList<>(java.util.Arrays.asList(
-                new AiMessage("user", PromptBuilder.dreamReading(persona, memories, userName, snippet)))));
+        String prompt = PromptBuilder.dreamReading(persona, memories, userName, snippet);
+        String rawReply = aiClient.chat(new ArrayList<>(java.util.Arrays.asList(
+                new AiMessage("user", prompt))));
+        String reply = rawReply;
+        boolean emptyFallback = false;
         if (reply == null || reply.isBlank()) {
             reply = "……我记得这个梦的感觉。等天亮了，我们再慢慢说。";
+            emptyFallback = true;
+        }
+        String finalReply = reply.trim();
+        try {
+            writeRawModelLog(user.getId(), "dream:" + (dreamId == null ? "unknown" : dreamId), 1,
+                    "dream_read",
+                    "source=read_dream;role=user_prompt;promptHash=" + Integer.toHexString(prompt.hashCode()),
+                    snippet, prompt, rawReply, finalReply,
+                    emptyFallback ? "empty_fallback" : "ok");
+        } catch (Exception e) {
+            log.warn("saveDream 日志写入失败: {}", e.getMessage());
         }
 
         java.util.Map<String, Object> data = new java.util.HashMap<>();
         data.put("id", dreamId);
-        data.put("message", reply.trim());
+        data.put("message", finalReply);
         return Result.success(data);
     }
 
@@ -1505,8 +1584,11 @@ public class DiaryServiceImpl implements DiaryService {
         }
 
         String reply = aiClient.chat(messages);
+        String rawReply = reply;
+        boolean emptyFallback = false;
         if (reply == null || reply.isBlank()) {
             reply = "……梦里那么能跑，醒了倒没话了？";
+            emptyFallback = true;
         }
         reply = reply.trim();
         String emotion = "";
@@ -1516,13 +1598,70 @@ public class DiaryServiceImpl implements DiaryService {
             emotion = em.group(1).toLowerCase();
             reply = reply.substring(em.end()).trim();
         }
-        if (reply.isBlank()) reply = "……";
+        boolean blankReplyFallback = false;
+        if (reply.isBlank()) {
+            reply = "……";
+            blankReplyFallback = true;
+        }
+        try {
+            String filterReason = emptyFallback ? "empty_fallback"
+                    : (blankReplyFallback ? "blank_fallback"
+                    : (!emotion.isEmpty() ? "emotion_marker_stripped" : "ok"));
+            writeRawModelLog(userId, "night:" + dream.getId(), Math.max(1, history.size() / 2 + 1),
+                    "dream_night",
+                    "source=night_talk;promptHash="
+                            + Integer.toHexString(messages.get(0).getContent().hashCode()),
+                    say.isEmpty() ? "（开场）" : say,
+                    joinSystemMessages(messages),
+                    rawReply, reply, filterReason);
+        } catch (Exception e) {
+            log.warn("dreamNightTalk 日志写入失败: {}", e.getMessage());
+        }
 
         java.util.Map<String, Object> data = new java.util.HashMap<>();
         data.put("message", reply);
         data.put("emotion", emotion);
         data.put("dreamId", dream.getId());
         return Result.success(data);
+    }
+
+    /**
+     * 写入 AI 原始输出日志。任何异常都必须吞掉，绝不能影响回复主流程。
+     */
+    private void writeRawModelLog(String userId, String sessionId, int turnId, String triggerType,
+                                  String triggerDetail, String userDraft, String systemPrompt,
+                                  String modelRaw, String filteredResponse, String filterReason) {
+        try {
+            DiaryChatLog logEntity = new DiaryChatLog();
+            logEntity.setUserId(userId);
+            logEntity.setSessionId(sessionId);
+            logEntity.setTurnId(turnId);
+            logEntity.setTriggerType(triggerType);
+            logEntity.setTriggerDetail(triggerDetail);
+            logEntity.setUserDraft(userDraft);
+            logEntity.setSystemPrompt(systemPrompt);
+            logEntity.setModelRaw(modelRaw);
+            logEntity.setFilteredResponse(filteredResponse);
+            logEntity.setFilterReason(filterReason);
+            chatLogService.write(logEntity);
+        } catch (Exception e) {
+            log.warn("模型原始输出日志写入失败 sessionId={}: {}", sessionId, e.getMessage());
+        }
+    }
+
+    /**
+     * 拼接下发给模型的全部 system 消息，仅用于日志，不参与模型调用。
+     */
+    private String joinSystemMessages(List<AiMessage> messages) {
+        StringBuilder sb = new StringBuilder();
+        if (messages == null) return "";
+        for (AiMessage m : messages) {
+            if (m != null && "system".equals(m.getRole()) && m.getContent() != null) {
+                if (sb.length() > 0) sb.append("\n\n");
+                sb.append(m.getContent());
+            }
+        }
+        return sb.toString();
     }
 
     /**
