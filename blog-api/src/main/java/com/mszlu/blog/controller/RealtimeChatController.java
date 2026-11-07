@@ -54,8 +54,11 @@ public class RealtimeChatController {
     private final AtomicLong idGen = new AtomicLong(1);
     /** 最近消息（有界，超出丢弃最旧） */
     private final CopyOnWriteArrayList<Map<String, Object>> history = new CopyOnWriteArrayList<>();
-    /** 在线连接：emitter -> 心跳任务（移除时用来取消定时任务） */
-    private final Map<SseEmitter, ScheduledExecutorService> clients = new ConcurrentHashMap<>();
+    /** 一个在线连接：登录用户 id + 心跳任务（移除时用来取消定时任务） */
+    public record Client(String userId, ScheduledExecutorService heartbeat) {}
+
+    /** 在线连接：emitter -> 连接信息（按 userId 可定向投递，如点赞事件） */
+    private final Map<SseEmitter, Client> clients = new ConcurrentHashMap<>();
     /** 每个 emitter 独立的心跳调度器（连接关闭即 shutdown） */
     private final ScheduledExecutorService cleaner = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "realtime-chat-cleaner");
@@ -83,7 +86,7 @@ public class RealtimeChatController {
             t.setDaemon(true);
             return t;
         });
-        clients.put(emitter, heartbeat);
+        clients.put(emitter, new Client(String.valueOf(user.getId()), heartbeat));
 
         // 连上立刻推一条 presence，让新客户端知道当前在线数
         try {
@@ -190,10 +193,26 @@ public class RealtimeChatController {
         }
     }
 
+    /**
+     * 向指定登录用户推送一个事件（如点赞成功后给自己的作者刷心）。
+     * 只投递给该 userId 的连接，不广播。
+     */
+    public void sendToUser(String userId, String eventName, Object payload) {
+        if (userId == null || userId.isEmpty()) return;
+        for (Map.Entry<SseEmitter, Client> entry : clients.entrySet()) {
+            if (!userId.equals(entry.getValue().userId())) continue;
+            try {
+                entry.getKey().send(SseEmitter.event().name(eventName).data(payload));
+            } catch (Exception e) {
+                removeClient(entry.getKey());
+            }
+        }
+    }
+
     private void removeClient(SseEmitter emitter) {
-        ScheduledExecutorService heartbeat = clients.remove(emitter);
-        if (heartbeat != null) {
-            heartbeat.shutdownNow();
+        Client client = clients.remove(emitter);
+        if (client != null) {
+            client.heartbeat().shutdownNow();
         }
         // 延迟 100ms 再广播在线数，等本次遍历中的其他移除也完成
         cleaner.schedule(this::broadcastPresence, 100, TimeUnit.MILLISECONDS);

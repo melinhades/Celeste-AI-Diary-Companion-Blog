@@ -1,6 +1,7 @@
 package com.mszlu.blog.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.mszlu.blog.controller.RealtimeChatController;
 import com.mszlu.blog.dao.mapper.ArticleLikeMapper;
 import com.mszlu.blog.dao.mapper.ArticleMapper;
 import com.mszlu.blog.dao.mapper.NotificationMapper;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -33,6 +35,9 @@ public class LikeServiceImpl implements LikeService {
 
     @Autowired
     private SysUserService sysUserService;
+
+    @Autowired
+    private RealtimeChatController realtimeChatController;
 
     @Override
     public Result toggle(String articleId, SysUser user) {
@@ -57,6 +62,19 @@ public class LikeServiceImpl implements LikeService {
                 n.setIsRead(0);
                 n.setCreateDate(System.currentTimeMillis());
                 notificationMapper.insert(n);
+
+                // 只在「别人点赞成功」后追加实时事件，不改点赞业务本身：
+                // 定向推给文章作者，前端据此在铭记场景里刷 1 颗心（自我点赞不进入此分支）
+                Map<String, Object> payload = new LinkedHashMap<>();
+                payload.put("id", n.getId());
+                payload.put("articleId", articleId);
+                payload.put("articleTitle", article.getTitle());
+                payload.put("fromUserId", String.valueOf(user.getId()));
+                payload.put("fromName", user.getNickname() != null && !user.getNickname().isEmpty()
+                        ? user.getNickname() : user.getAccount());
+                payload.put("count", 1);
+                payload.put("ts", System.currentTimeMillis());
+                realtimeChatController.sendToUser(article.getAuthorId(), "like", payload);
             }
         }
         return info(articleId, user);
