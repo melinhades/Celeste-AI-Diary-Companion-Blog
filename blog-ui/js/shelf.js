@@ -1022,15 +1022,8 @@ function stopPeSnow() {
             '镜子碎了也没关系，我帮你看着你自己。'
         ];
 
-        // ===== Badeline 聊天：方案C 关系状态由服务端从日记推导，心光谱随请求带上 =====
-        var blPanel = document.getElementById('blChat');
-        var blMsgs = document.getElementById('blMsgs');
-        var blInput = document.getElementById('blInput');
-        var blSendBtn = document.getElementById('blSend');
-        var blHist = Store.getJson(Store.KEYS.BADELINE_CHAT_LOG, []);
-        if (!Array.isArray(blHist)) blHist = [];
-        var blSending = false;
-
+        // ===== Badeline 聊天：面板/对话框/流式演出抽到共用模块 js/badeline-panel.js =====
+        // 页面只保留动作树钩子：开面板放大立绘、关面板退场/恢复游荡、情绪驱动动作；历史与请求体由模块处理
         function heartsPayload() {
             var h = Store.getJson(Store.KEYS.HEART_DOOR_HEARTS, null);
             if (!h || !h.length) {
@@ -1039,270 +1032,27 @@ function stopPeSnow() {
             }
             return JSON.stringify(Array.isArray(h) ? h.slice(-4) : []);
         }
-        function blPersist() {
-            Store.set(Store.KEYS.BADELINE_CHAT_LOG, blHist.slice(-20));
-        }
-        function blAdd(role, text, emo) {
-            var d = document.createElement('div');
-            d.className = 'bl-msg ' + role;
-            if (role === 'assistant' && emo && BL_EMO_ZH[emo]) {
-                var tag = document.createElement('span');
-                tag.className = 'bl-emo';
-                tag.textContent = BL_EMO_ZH[emo];
-                d.appendChild(tag);
-            }
-            if (window.TextFx && role === 'assistant') {
-                d.insertAdjacentHTML('beforeend', TextFx.render(TextFx.autoMark(text)));  // 历史气泡也带三种动画
-            } else {
-                d.appendChild(document.createTextNode(text));
-            }
-            blMsgs.appendChild(d);
-            blMsgs.scrollTop = blMsgs.scrollHeight;
-            return d;
-        }
-        function blPush(role, text) {
-            blHist.push({ role: role, content: text });
-            blPersist();
-        }
-
-        // ===== Badeline 情绪对话框系统（参照 diary 页 Madeline gameDialog 架构） =====
-        // 1) 情绪分类：celeste-portraits/badeline/ 下 15 组帧序列，键 = AI 情绪标记，值 = 帧数
-        var BL_PORTRAIT_FRAMES = {
-            normal: 7, sad: 5, angry: 7, angryAlt: 7, yell: 7,
-            worried: 7, worriedAlt: 7, upset: 7, concerned: 7,
-            sigh: 14, serious: 30, scoff: 14,
-            freakA: 11, freakB: 19, freakC: 18
-        };
-        var BL_EMO_ZH = {
-            normal: '平静', sad: '低落', angry: '恼火', angryAlt: '强压怒火', yell: '喊叫',
-            worried: '不安', worriedAlt: '强装镇定', upset: '委屈', concerned: '关切',
-            sigh: '叹息', serious: '认真', scoff: '嘲弄',
-            freakA: '崩溃边缘', freakB: '风暴', freakC: '失控'
-        };
-        Object.keys(BL_PORTRAIT_FRAMES).forEach(function (e) {
-            var im = new Image(); im.src = 'celeste-portraits/badeline/' + e + '00.png'; // 预热每种情绪首帧
-        });
-        // 2) 情绪 ↔ 台词 关系：AI 标记（res.data.emotion）优先，缺失时按台词关键词推断兜底
-        //    （推断词表由 js/badeline-voice.js 工具类统一维护）
-        function blInferEmotion(t) {
-            return window.BadelineVoice ? BadelineVoice.infer(t) : 'normal';
-        }
-        // 3) 对话框组件：官方 badeline 文本框 + 立绘逐帧动画（120ms/帧，对齐 Madeline 对话框）
-        var blDialog = document.getElementById('badelineDialog');
-        var blDialogImg = document.getElementById('blDialogImg');
-        var blDialogPortrait = document.getElementById('badelineDialogPortrait');
-        // 生气 / 无语类情绪 → 追加一次"从文本框爬出"演出（共用模块见 js/badeline-crawlout.js）
-        var BL_CRAWL_EMO = {
-            angry: 1, angryAlt: 1, yell: 1, freakA: 1, freakB: 1, freakC: 1,
-            sigh: 1, scoff: 1, upset: 1
-        };
-        function blCrawlOut(wait, token) {
-            if (!window.BadelineCrawlOut) return;
-            setTimeout(function () {
-                if (token !== blDialogToken || !blDialog.classList.contains('show')) return;
-                window.BadelineCrawlOut.play({
-                    box: blDialog,
-                    portrait: blDialogPortrait,
-                    anchor: blDialogPortrait
-                });
-            }, wait || 0);
-        }
-        var blDialogText = document.getElementById('badelineDialogText');
-        var blHeadImg = document.getElementById('blHeadImg');
-        var blAnimTimer = null, blCurEmo = 'normal';
-        var blDialogToken = 0, blDialogHideTimer = null;
-        var blQueue = Promise.resolve();
-        function blStartPortrait(emo) {
-            if (!BL_PORTRAIT_FRAMES[emo]) emo = 'normal';
-            blCurEmo = emo;
-            clearInterval(blAnimTimer);
-            var n = BL_PORTRAIT_FRAMES[emo], fi = 0;
-            var set = function (i) {
-                var s = 'celeste-portraits/badeline/' + emo + String(i).padStart(2, '0') + '.png';
-                blDialogImg.src = s; blHeadImg.src = s;
-            };
-            set(0);
-            for (var k = 1; k < n; k++) { var im = new Image(); im.src = 'celeste-portraits/badeline/' + emo + String(k).padStart(2, '0') + '.png'; }
-            blAnimTimer = setInterval(function () { fi = (fi + 1) % n; set(fi); }, 120);
-        }
-        function blStopPortrait() {
-            clearInterval(blAnimTimer); blAnimTimer = null;
-            var s = 'celeste-portraits/badeline/' + blCurEmo + '00.png';
-            blDialogImg.src = s; blHeadImg.src = s;
-        }
-        // 文本框弹出/收起音效（复用官方 textbox in/out 音效，音量压低）
-        function blTextboxSfx(which) {
-            Sfx.play('textbox/ui_game_textbox_madeline_' + which + '.wav', { volume: 0.4 });
-        }
-        // 4) 说话声：真实音效文件 —— 由专用工具类 js/badeline-voice.js 提供
-        //    情绪map（badeline-sounds/ 文件夹名）+ pre+abcabc 循环 + sad_solo 特殊音效，
-        //    语速/音量档位与逐字节奏（每 3 字一声）均对齐 diary 页 Madeline 方案
-        function blResetVoiceSeq() { BadelineVoice.resetSeq(); }   /* blDoSpeak 每句调用 */
-        function blVoice(emo) { BadelineVoice.play(emo); }
-        function blDialogOpen() {
-            if (!blDialog.classList.contains('show')) blTextboxSfx('in');
-            blDialog.classList.add('show');
-            blPanel.classList.add('dialog-live');
-        }
-        var blQuickMode = false;
-        function blDialogClose() {
-            clearTimeout(blDialogHideTimer);
-            blStopPortrait();
-            if (blDialog.classList.contains('show')) blTextboxSfx('out');
-            blDialog.classList.remove('show');
-            blPanel.classList.remove('dialog-live');
-            // 单击 quickTalk 结束 → 通知动作树恢复（面板会话的关闭不走这条通知）
-            if (blQuickMode) {
-                blQuickMode = false;
-                if (window.__badelineTalkEnded) window.__badelineTalkEnded();
-            }
-        }
-        // 动作树单击 Badeline：只弹原作对话框，不开历史面板
-        window.__badelineQuickTalk = function (text) {
-            text = String(text || '').trim();
-            if (!text) { if (window.__badelineTalkEnded) window.__badelineTalkEnded(); return; }
-            blQuickMode = true;
-            var emo = window.BadelineVoice ? BadelineVoice.infer(text) : 'normal';
-            blSpeak(text, emo, false);
-        };
-        blDialog.addEventListener('click', function () {
-            blDialogToken++;      // 点一下 = 打断：正在打的字立刻停下（对齐 Madeline 的世代号机制）
-            blDialogClose();
-        });
-        window.__blDialogKill = function () { blDialogToken++; blDialogClose(); };
-        function blSplitPages(t) {
-            var parts = t.split(/(?<=[。！？!?…\n])/).map(function (s) { return s.trim(); }).filter(Boolean);
-            var merged = [];
-            parts.forEach(function (p) {
-                var last = merged[merged.length - 1];
-                if (last !== undefined && last.length < 12 && last.length + p.length <= 26) merged[merged.length - 1] = last + p;
-                else merged.push(p);
-            });
-            var out = [];
-            merged.forEach(function (s) {
-                if (s.length <= 42) { out.push(s); return; }
-                for (var i = 0; i < s.length; i += 42) out.push(s.slice(i, i + 42));
-            });
-            return out.length ? out : [t];
-        }
-        function blSleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
-        // 5) 演出：入队串行 → 弹框 → 立绘动画 → 逐字（每 3 字一声 blip）→ 结束定格 → 6s 自动收起
-        //    aiLocked=true 表示情绪来自 AI 情绪分析标记（全句锁定）；否则逐句本地推断切换音色（对齐 Madeline）
-        function blSpeak(text, emo, aiLocked) {
-            blQueue = blQueue.then(function () { return blDoSpeak(text, emo, aiLocked); }).catch(function () {});
-        }
-        async function blDoSpeak(text, emo, aiLocked) {
-            text = String(text || '').replace(/[（(][^（）()]*[）)]/g, '').trim(); // 动作旁白不上屏（对齐 Madeline）
-            if (!text) return;
-            if (!BL_PORTRAIT_FRAMES[emo]) { emo = blInferEmotion(text); aiLocked = false; }
-            var my = blDialogToken;
-            var wasOpen = blDialog.classList.contains('show');
-            blDialogOpen();
-            blStartPortrait(emo);
-            if (BL_CRAWL_EMO[emo]) blCrawlOut(wasOpen ? 130 : 330, my);   // 等框体入场后再露头
-            // 驱动大立绘 emo 切换（之前对话期间大立绘完全冻结，只有右下角小头像切表情）
-            if (window.__badelineOnEmotion) window.__badelineOnEmotion(emo);
-            clearTimeout(blDialogHideTimer);
-            var pages = blSplitPages(text);
-            for (var p = 0; p < pages.length; p++) {
-                if (my !== blDialogToken) return;
-                var fpage = window.TextFx ? TextFx.autoMark(pages[p]) : pages[p];  // 无标记台词自动补三种动画
-                if (window.TextFx) { TextFx.set(blDialogText, ''); blDialogText.classList.add('tfx-typing'); }
-                else blDialogText.textContent = '';
-                blResetVoiceSeq();     /* 每句重置序列：per→A→B→C→A→B→C…（句子过短只播 per 也不强求循环） */
-                var voiceEmo = emo, sentenceBuf = '', sc = 0;
-                for (var ci = 0; ci < fpage.length; ci++) {
-                    if (my !== blDialogToken) return;
-                    var ch = fpage[ci];
-                    if (window.TextFx) TextFx.set(blDialogText, fpage.slice(0, ci + 1));
-                    else blDialogText.textContent += ch;
-                    /* 动画标记符 { } ~ * 不参与音色逻辑；结尾定界 ! 紧跟 } 也不是句读 */
-                    var isMark = ch === '{' || ch === '}' || ch === '~' || ch === '*';
-                    var isSentEnd = /[。！？!?]/.test(ch) && fpage[ci + 1] !== '}';
-                    if (isSentEnd) {
-                        /* 句末：AI 未锁定时按本句关键词重推断音色（立绘保持 AI 标记不变） */
-                        if (!aiLocked) {
-                            var inf = BadelineVoice.infer(sentenceBuf);
-                            if (inf) voiceEmo = inf;
-                        }
-                        sentenceBuf = '';
-                    } else if (!isMark && !/[\s，,、；;：:（）()*「」·—。！？!?…]/.test(ch)) {
-                        sentenceBuf += ch;
-                        sc++;
-                        if (sc % 3 === 1) blVoice(voiceEmo);
-                    }
-                    await blSleep(45 + Math.random() * 20);
-                }
-                if (window.TextFx) { TextFx.set(blDialogText, fpage); blDialogText.classList.remove('tfx-typing'); }
-                if (p < pages.length - 1) await blSleep(900 + Math.random() * 500);
-            }
-            if (my === blDialogToken) {
-                blStopPortrait();
-                blDialogHideTimer = setTimeout(blDialogClose, 6000);
-            }
-        }
-        function blSendMsg() {
-            var v = blInput.value.trim();
-            if (!v || blSending) return;
-            blInput.value = '';
-            blAdd('user', v);
-            blPush('user', v);
-            blSending = true;
-            blSendBtn.disabled = true;
-            var ld = blAdd('loading', '……');
-            DiaryApi.badelineChat(v, blHist, heartsPayload())
-                .then(function (res) {
-                    ld.remove();
-                    var m = (res && res.success && res.data && res.data.message)
-                        ? res.data.message
-                        : '……（她别过脸去，没接话。）';
-                    var aiEmo = (res && res.success && res.data) ? BadelineVoice.normalize(res.data.emotion) : null;
-                    var emo = aiEmo || blInferEmotion(m); // AI 情绪分析标记优先（归一化），缺失按台词推断
-                    blAdd('assistant', m, emo);
-                    blPush('assistant', m);
-                    blSpeak(m, emo, !!aiEmo);   // 情绪立绘 + 逐字演出（AI 标记锁定音色）
-                    // 生气类情绪 → 通知动作树：对话结束恢复后走 roll 链
-                    if (window.__badelineOnEmotion) window.__badelineOnEmotion(emo);
-                })
-                .finally(function () {
-                    blSending = false;
-                    blSendBtn.disabled = false;
-                    blInput.focus();
-                });
-        }
-        blSendBtn.addEventListener('click', blSendMsg);
-        blInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') blSendMsg(); });
-
-        function openChat() {
-            // 进入聊天面板：唯一放大入口（换动作图不再改尺寸）
-            var bImg = document.getElementById('badelineImg');
-            if (bImg) bImg.classList.add('big');
-            if (!blHist.length) {
-                var line = LINES[Math.floor(Math.random() * LINES.length)];
-                blAdd('assistant', line);
-                blPush('assistant', line);
-                blSpeak(line);   // 开场白也走游戏对话框演出
-            } else if (!blMsgs.children.length) {
-                // 她记得上次说到哪
-                blHist.slice(-6).forEach(function (m) {
-                    blAdd(m.role === 'assistant' ? 'assistant' : 'user', m.content);
-                });
-            }
-            blPanel.classList.add('show');
-            requestAnimationFrame(function () { requestAnimationFrame(function () { blPanel.classList.add('vis'); }); });
-            setTimeout(function () { blInput.focus(); }, 300);
-        }
-        function closeChat() {
-            blDialogToken++;      // 她走了：作废没说完的话并收起对话框
-            blDialogClose();
-            blPanel.classList.remove('vis');
-            setTimeout(function () {
-                blPanel.classList.remove('show');
+        var blApi = BadelinePanel.mount({
+            openingLines: LINES,
+            payload: heartsPayload,
+            onOpen: function () {
+                var bImg = document.getElementById('badelineImg');
+                if (bImg) bImg.classList.add('big');
+            },
+            onClose: function () {
                 // 动作树接管：模式 A（召唤出来）让她走 byeSheLeaves；模式 B（自由游荡）恢复游荡
-                var mode = window.__badelineCloseChat ? window.__badelineCloseChat() : 'summoned';
-                if (mode === 'summoned') byeSheLeaves();
-            }, 260);
-        }
+                if (window.__badelineCloseChat) return window.__badelineCloseChat();
+                return 'summoned';
+            },
+            onSummoned: byeSheLeaves,
+            onEmotion: function (emo) { if (window.__badelineOnEmotion) window.__badelineOnEmotion(emo); },
+            onTalkEnd: function () { if (window.__badelineTalkEnded) window.__badelineTalkEnded(); }
+        });
+        // 动作树 / 剧情段仍按原钩子调用面板
+        window.__badelineOpenChat = blApi.openChat;
+        window.__badelineQuickTalk = blApi.quickTalk;
+        window.__blDialogKill = blApi.killDialog;
+
         function isMirrorBroken() {
             return Store.getFlag(Store.KEYS.MIRROR_BROKEN);
         }
@@ -1317,7 +1067,6 @@ function stopPeSnow() {
                 if (window.__mirrorBGM) window.__mirrorBGM.refresh(); // 她离开 → 回阶段1（0:00–2:11）
             }, 750);
         }
-        document.getElementById('blClose').addEventListener('click', closeChat);
 
         mirror.addEventListener('click', function (ev) {
             if (ev) ev.stopPropagation();
@@ -1373,7 +1122,7 @@ function stopPeSnow() {
             };
             badelineWrap.addEventListener('animationend', onRise);
             if (window.__mirrorBGM) window.__mirrorBGM.refresh(); // 切入阶段2（2:11–4:25）
-            openChat();
+            blApi.openChat();
             // 剧情版 mirror 房间保持安静：不摆聊天气泡/台词面板遮住梦块（点块才是这一段的交互）
             if (window.MirrorScene && MirrorScene.storyStage && MirrorScene.storyStage() === 'sleep') {
                 setTimeout(function () {
@@ -1401,8 +1150,6 @@ function stopPeSnow() {
                 return true;
             }
         };
-        // 暴露 openChat 给动作树 IIFE 调用（点击 Badeline 本人时触发对话）
-        window.__badelineOpenChat = openChat;
 
         // ===== Canvas 镜子房间挂载点：panRight 调 enter、goBack 调 leave（在 dream IIFE 里接） =====
         if (CANVAS_MIRROR) {
@@ -1469,10 +1216,7 @@ function stopPeSnow() {
                     mirror.classList.remove('summoned');
                     mirror.classList.remove('bye');
                     badelineWrap.classList.remove('done');
-                    blDialogToken++;      // 作废没说完的话
-                    blDialogClose();
-                    blPanel.classList.remove('vis');
-                    blPanel.classList.remove('show');
+                    blApi.reset();        // 作废没说完的话，静默收起面板与对话框
                     if (window.__badelineLeaveRoom) window.__badelineLeaveRoom();   // 行为树复位（wrap 移回镜面）
                     badelineWrap.style.display = '';   // 剧情穿走后隐藏过的立绘，重新进房时复位
                     if (window.MirrorScene.storyEnter) window.MirrorScene.storyEnter();   // 持久化剧情：dived→出场

@@ -87,6 +87,91 @@ window.DiaryApi = (function () {
                 hearts: heartsPayload
             }, 15000);
         },
+        /**
+         * Badeline 对话流式版：POST + SSE，逐帧回调 onEvent({ type, data })。
+         * 帧类型 emotion / delta / done / error；任何失败（HTTP、断流、超时）都会补一帧 error。
+         */
+        badelineChatStream: function (message, historyList, heartsPayload, onEvent, externalCtrl) {
+            var emit = typeof onEvent === 'function' ? onEvent : function () {};
+            if (typeof fetch !== 'function') {
+                emit({ type: 'error', data: '网络错误' });
+                return Promise.resolve();
+            }
+            var headers = { 'Content-Type': 'application/json' };
+            var token = null;
+            try { token = localStorage.getItem('token'); } catch (e) {}
+            if (token) headers['Authorization'] = token;
+
+            var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+            // 页面可以把同一轮的 AbortController 交进来（日记页的「打断」按钮复用 Madeline 那套）
+            if (externalCtrl) {
+                if (externalCtrl.signal.aborted) { try { ctrl && ctrl.abort(); } catch (e) {} }
+                else if (ctrl) externalCtrl.signal.addEventListener('abort', function () { try { ctrl.abort(); } catch (e) {} });
+            }
+            var stallTimer = null;
+            function armStall() {
+                if (!ctrl) return;
+                clearTimeout(stallTimer);
+                stallTimer = setTimeout(function () {
+                    try { ctrl.abort(); } catch (e) {}
+                }, 30000);
+            }
+            function parseFrame(frame) {
+                var event = 'message', data = [];
+                frame.split(/\r?\n/).forEach(function (line) {
+                    if (line.indexOf('event:') === 0) event = line.slice(6).trim();
+                    else if (line.indexOf('data:') === 0) data.push(line.slice(5).replace(/^ /, ''));
+                });
+                if (!data.length) return;
+                emit({ type: event, data: data.join('\n') });
+            }
+
+            armStall();
+            return fetch((typeof BASE_URL !== 'undefined' ? BASE_URL : '') + '/diary/badeline-chat/stream', {
+                method: 'POST',
+                headers: headers,
+                signal: ctrl ? ctrl.signal : undefined,
+                body: JSON.stringify({
+                    message: message,
+                    history: recentHistory(historyList),
+                    hearts: heartsPayload
+                })
+            }).then(function (resp) {
+                if (!resp.ok || !resp.body) throw new Error('流式不可用 HTTP ' + resp.status);
+                var reader = resp.body.getReader();
+                var decoder = new TextDecoder('utf-8');
+                var buf = '';
+                function pump() {
+                    return reader.read().then(function (chunk) {
+                        if (chunk.done) {
+                            buf += decoder.decode();
+                            if (buf.trim()) parseFrame(buf);
+                            return;
+                        }
+                        armStall();
+                        buf = (buf + decoder.decode(chunk.value, { stream: true })).replace(/\r\n/g, '\n');
+                        var idx;
+                        while ((idx = buf.indexOf('\n\n')) >= 0) {
+                            parseFrame(buf.slice(0, idx));
+                            buf = buf.slice(idx + 2);
+                        }
+                        return pump();
+                    });
+                }
+                return pump();
+            }).catch(function (err) {
+                // 外部（打断按钮）主动掐断 → 报 abort，调用方据此保留已显示内容且不提示失败
+                var byUser = !!(externalCtrl && externalCtrl.signal.aborted);
+                emit({
+                    type: 'error',
+                    data: byUser ? 'abort'
+                        : ((err && err.name === 'AbortError') ? 'timeout'
+                        : ((err && err.message) || '网络错误'))
+                });
+            }).finally(function () {
+                clearTimeout(stallTimer);
+            });
+        },
         /** 梦境夜话：message 传空串 = 请她主动开一次口 */
         dreamNightTalk: function (dreamId, message, historyList) {
             return call('/diary/dream-night-talk', 'POST', {

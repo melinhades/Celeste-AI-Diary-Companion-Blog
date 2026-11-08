@@ -29,16 +29,14 @@
         sad: SOLO_DIR                            /* 特殊伤心 → sad_solo 单文件 */
     };
 
-    // 3) 中文情绪词 → 标记（AI 情绪分析结果归一化用，与 BL_EMO_ZH 对齐）
-    var ZH_ALIAS = {
-        '平静': 'normal', '低落': 'sad', '恼火': 'angry', '强压怒火': 'angryAlt',
-        '喊叫': 'yell', '不安': 'worried', '强装镇定': 'worriedAlt', '委屈': 'upset',
-        '关切': 'concerned', '叹息': 'sigh', '认真': 'serious', '嘲弄': 'scoff',
-        '崩溃边缘': 'freakA', '风暴': 'freakB', '失控': 'freakC',
-        '伤心': 'sad', '难过': 'sad'
-    };
-
-    // 4) 节奏参数：playbackRate 随情绪微调（参考 diary 页 VOICE_RATE 档位风格）
+    // AI 情绪分析结果归一化：英文标记 / 中文情绪词 → 15 种立绘标签；无法识别返回 null
+    // 统一走共享层（js/lib/emotion-map.js）：19 键并集 + 中文别名 → 她真正拥有的 15 键
+    function normalize(raw) {
+        if (!window.EmotionMap) return null;
+        var key = EmotionMap.normalize(raw, 'badeline');
+        return key ? EmotionMap.keyFor('badeline', key) : null;
+    }
+    // 3) 节奏参数：playbackRate 随情绪微调（参考 diary 页 VOICE_RATE 档位风格）
     var VOICE_RATE = {
         normal: [0.92, 1.04], angry: [0.95, 1.08], angryAlt: [0.93, 1.05], yell: [1.0, 1.14],
         worried: [0.88, 1.0], worriedAlt: [0.86, 0.98], upset: [0.85, 0.96],
@@ -68,15 +66,6 @@
 
     function resetSeq() { seq = 0; }
 
-    // AI 情绪分析结果归一化：英文标记 / 中文情绪词 → 15 种立绘标签；无法识别返回 null
-    function normalize(raw) {
-        var s = String(raw || '').trim();
-        if (!s) return null;
-        var k = s.toLowerCase();
-        if (EMOTION_MAP[k]) return k;
-        return ZH_ALIAS[s] || null;
-    }
-
     // 本地情绪分析兜底（AI 未给标记时）：按台词关键词推断标记
     function infer(t) {
         t = String(t || '');
@@ -96,6 +85,7 @@
         try {
             // 手势解锁双通道：pointerdown/keydown 标记 + Chrome User Activation（CDP 点击等场景兜底）
             if (!window.__audioGestured && !(navigator.userActivation && navigator.userActivation.hasBeenActive)) return;
+            emo = normalize(emo) || emo;      // 中文别名 / 并集键先落到 15 键，音效目录表本身不动
             var dir = EMOTION_MAP[emo] || 'normal';
             if (dir === SOLO_DIR) {
                 /* sad_solo：仅 AI 检测到特殊伤心时触发，单文件直达，不参与循环 */

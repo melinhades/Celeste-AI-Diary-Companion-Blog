@@ -670,9 +670,19 @@ body::before {
     line-height: 1.7;
     word-break: break-word;
 }
+/* 中断/续接控制条：Madeline 与 Badeline 共用同一条，固定在两人对话框的右下角位置 */
+#companionControls {
+    position: fixed;
+    bottom: 42px;
+    right: max(12px, calc((100vw - 860px) / 2));
+    z-index: 2000;
+    display: none;
+    gap: 8px;
+}
 @media (max-width: 640px) {
     #gameDialog { padding: 14px 18px; min-height: 104px; gap: 12px; }
     #gameDialogPortrait { width: 72px; height: 72px; }
+    #companionControls { bottom: 34px; right: 12px; }
 }
 @keyframes pageIn {
     from { transform: perspective(800px) rotateX(-38deg) translateY(-8px); opacity: 0; }

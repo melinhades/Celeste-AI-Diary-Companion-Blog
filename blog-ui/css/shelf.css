@@ -1,5 +1,5 @@
 /* TextFx：Badeline 对话框/气泡内动画词的专属紫（普通文字仍为原色） */
-#badelineDialogText, .bl-msg.assistant, .nt-row.bl .nt-bub { --c:#D678DB; }
+.nt-row.bl .nt-bub { --c:#D678DB; }
 
 * { box-sizing:border-box; margin:0; padding:0; }
 /* 字体：全部本地文件，杜绝外网依赖（Google Fonts 是 render-blocking，被墙时整页字体回退） */
@@ -8,7 +8,7 @@
 @font-face { font-family:'Press Start 2P'; src:url('../celeste-font-en/PressStart2P-Regular.ttf') format('truetype'); font-weight:400; font-style:normal; font-display:swap; }
 body { min-height:100vh; background:url('../celeste-gui/shelf-screen.webp') center/cover no-repeat fixed; font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif; opacity:0; animation:pageFadeIn .8s ease forwards; }
 /* 梦境场景 + 两个弹层：显式声明字体（此前靠继承，任一中间层被覆盖就整体回退到系统字体） */
-#dreamScene, .dream-panel, #badelineDialog, #blChat {
+#dreamScene, .dream-panel {
     font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif;
 }
 /* #world 宽 200% 必然横向溢出：禁掉横向滚动，防止点击门时浏览器把页面带着横滚（scrollLeft 残留会让镜之房间错位露出 body 背景） */
@@ -289,82 +289,6 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 }
 #badelineImg.big {
     --bd-body-scale: 1;   /* 聊天面板展开时的放大态（常态 0.70）；只由面板进出切换，动作切换不碰 */
-}
-
-/* ===== Badeline 聊天面板：镜子召唤后出现 ===== */
-#blChat {
-    position: fixed;
-    left: 50%;
-    bottom: 84px;
-    width: min(92vw, 520px);
-    z-index: 1600;
-    background: rgba(16, 10, 28, .93);
-    border: 2px solid rgba(205, 182, 255, .5);
-    border-radius: 10px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, .6), 0 0 18px rgba(205, 182, 255, .18);
-    display: none;
-    flex-direction: column;
-    overflow: hidden;
-    opacity: 0;
-    transform: translateX(-50%) translateY(16px);
-    transition: opacity .25s ease, transform .25s ease;
-}
-#blChat.show { display: flex; }
-#blChat.vis { opacity: 1; transform: translateX(-50%) translateY(0); }
-#blChat .bl-head {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 14px;
-    border-bottom: 1px solid rgba(205, 182, 255, .25);
-}
-#blChat .bl-head img { width: 40px; height: 40px; image-rendering: pixelated; border-radius: 6px; background: rgba(0,0,0,.4); object-fit: cover; }
-#blChat .bl-name { flex: 1; color: #cdb6ff; font-family: 'Renogare','CelesteZH','Microsoft YaHei',sans-serif; font-size: 16px; letter-spacing: 1px; text-shadow: 0 0 10px rgba(205,182,255,.4); }
-#blChat .bl-close { background: none; border: none; color: rgba(205,182,255,.6); font-size: 16px; cursor: pointer; }
-#blChat .bl-close:hover { color: #cdb6ff; }
-#blMsgs { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; max-height: 40vh; min-height: 110px; overflow-y: auto; }
-.bl-msg { max-width: 86%; padding: 8px 12px; border-radius: 10px; font-size: 13px; line-height: 1.7; word-break: break-word; font-family: 'Renogare','CelesteZH','Microsoft YaHei',sans-serif; white-space: pre-wrap; }
-.bl-msg.assistant { align-self: flex-start; color: #e8ddff; background: rgba(205,182,255,.12); border: 1px solid rgba(205,182,255,.28); }
-.bl-msg.user { align-self: flex-end; color: #ffe36d; background: rgba(255,230,109,.1); border: 1px solid rgba(255,230,109,.3); }
-.bl-msg.loading { color: rgba(232,221,255,.5); font-style: italic; }
-#blChat .bl-input { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid rgba(205,182,255,.25); }
-#blInput { flex: 1; padding: 9px 10px; border: 1px solid rgba(205,182,255,.4); border-radius: 6px; background: rgba(205,182,255,.1); color: #efe7ff; font-size: 13px; outline: none; font-family: 'Renogare','CelesteZH','Microsoft YaHei',sans-serif; }
-#blInput:focus { border-color: #cdb6ff; background: rgba(205,182,255,.18); }
-#blInput::placeholder { color: rgba(232,221,255,.35); }
-#blSend { padding: 9px 16px; border: none; border-radius: 6px; background: #8a5cff; color: #fff; cursor: pointer; font-size: 14px; letter-spacing: 1px; font-family: 'Renogare','CelesteZH',sans-serif; box-shadow: inset 0 -2px rgba(0,0,0,.35); }
-#blSend:hover:not(:disabled) { background: #9d7bff; }
-#blSend:disabled { opacity: .5; cursor: not-allowed; }
-.bl-emo { display: inline-block; font-size: 10px; color: #b79aff; border: 1px solid rgba(183,154,255,.45); border-radius: 8px; padding: 0 6px; margin-right: 6px; vertical-align: 1px; opacity: .9; }
-
-/* ===== Badeline 游戏对话框：官方文本框 + 情绪立绘（演出层；聊天面板让位上移） ===== */
-#badelineDialog {
-    position: fixed;
-    left: 50%;
-    bottom: 26px;
-    transform: translateX(-50%) translateY(24px);
-    width: min(94vw, 900px);
-    min-height: 128px;
-    z-index: 1600;
-    display: flex;
-    align-items: center;
-    gap: 18px;
-    padding: 20px 30px;
-    background: url('../celeste-portraits/textbox/badeline.png') center / 100% 100% no-repeat;
-    opacity: 0;
-    pointer-events: none;
-    cursor: pointer;
-    transition: opacity .25s ease, transform .25s ease;
-}
-#badelineDialog.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
-#badelineDialogPortrait { width: 92px; height: 92px; flex-shrink: 0; border-radius: 6px; overflow: hidden; }
-#badelineDialogPortrait img { width: 100%; height: 100%; object-fit: cover; display: block; }
-#badelineDialogName { color: #cdb6ff; font-family: 'Press Start 2P', monospace; font-size: 13px; margin-bottom: 5px; }
-#badelineDialogText { color: #f2ecff; font-family: 'Renogare','CelesteZH','Microsoft YaHei',sans-serif; font-size: 14px; line-height: 1.7; word-break: break-word; }
-#blChat.dialog-live { bottom: 178px; }
-@media (max-width: 640px) {
-    #badelineDialog { padding: 14px 18px; min-height: 104px; gap: 12px; }
-    #badelineDialogPortrait { width: 72px; height: 72px; }
-    #blChat.dialog-live { bottom: 150px; }
 }
 
 /* ===== 横向世界：书架（单屏，常规态） ===== */

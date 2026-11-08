@@ -8,9 +8,10 @@
     <title>Madeline - 写日记</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Patrick+Hand&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/chat-widget.css?v=20261025a">
-    <link rel="stylesheet" href="css/diary.css?v=20261108b">
+    <link rel="stylesheet" href="css/diary.css?v=20261108c">
     <link rel="stylesheet" href="css/text-fx.css?v=20261004a">
     <link rel="stylesheet" href="css/diary-inline.css?v=20261015a">
+    <link rel="stylesheet" href="css/badeline-panel.css?v=20261108a">
     
 
 </head>
@@ -30,11 +31,12 @@
             <div id="gameDialogName">Madeline</div>
             <div id="gameDialogText"></div>
         </div>
-        <!-- P3.4 中断/续接按钮 -->
-        <div id="companionControls" style="position:absolute; bottom:12px; right:12px; z-index:10; display:flex; gap:8px;">
-            <button id="interruptBtn" style="padding:6px 12px; background:#e74c3c; color:#fff; border:none; border-radius:4px; cursor:pointer; font-family:'Renogare',sans-serif; font-size:12px;">⏸️ 打断她</button>
-            <button id="resumeBtn" style="display:none; padding:6px 12px; background:#3498db; color:#fff; border:none; border-radius:4px; cursor:pointer; font-family:'Renogare',sans-serif; font-size:12px;">💬 继续</button>
-        </div>
+    </div>
+    <!-- 中断/续接：Madeline 与 Badeline 共用同一条控制条（谁在说就控制谁），
+         放在 body 层，两个人各自的对话框都能用同一套按钮 -->
+    <div id="companionControls">
+        <button id="interruptBtn" style="padding:6px 12px; background:#e74c3c; color:#fff; border:none; border-radius:4px; cursor:pointer; font-family:'Renogare',sans-serif; font-size:12px;">⏸️ 打断她</button>
+        <button id="resumeBtn" style="display:none; padding:6px 12px; background:#3498db; color:#fff; border:none; border-radius:4px; cursor:pointer; font-family:'Renogare',sans-serif; font-size:12px;">💬 继续</button>
     </div>
     <div id="featherApp" style="display:contents">
     <button id="featherGameBtn" title="金羽毛" style="position:fixed; top:14px; right:16px; z-index:900; width:64px; height:64px; padding:0; background:transparent; border:none; cursor:pointer; transition:transform .3s ease, filter .3s ease; filter:drop-shadow(0 4px 12px rgba(255,170,60,.6));" @click="onFeatherBtn">
@@ -110,6 +112,11 @@
     </div>
 
     <script src="js/api.js?v=20261106a"></script>
+    <script src="js/lib/diaryApi.js?v=20261108b"></script>
+    <script src="js/lib/sfx.js?v=20261031a"></script>
+    <script src="js/badeline-voice.js"></script>
+    <script src="js/lib/emotion-map.js?v=20261108a"></script>
+    <script src="js/badeline-panel.js?v=20261108b"></script>
     <script src="js/text-fx.js?v=20261102a"></script>
     <script src="js/feather-game.js"></script>
     <script src="js/feather-trigger.js"></script>
@@ -117,7 +124,7 @@
     <script src="js/madeline-mood.js?v=20261009a"></script>
     
 <script src="js/snow-effect.js?v=20261106c"></script><script src="js/snow-bgm.js?v=20261106c"></script>
-    <script src="js/diary.js?v=20261108d"></script>
+    <script src="js/diary.js?v=20261108f"></script>
     <script src="js/detect.js?v=20261107a"></script>
     <script src="js/diary-1.js?v=20261015a"></script>
     <script src="js/pptgen.js?v=20261107f"></script>

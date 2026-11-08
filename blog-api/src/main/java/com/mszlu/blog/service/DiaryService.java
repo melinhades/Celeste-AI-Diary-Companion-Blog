@@ -60,6 +60,13 @@ public interface DiaryService {
     /** Badeline 影子聊天：自适应人格（方案C 关系状态 + 四旋钮），hearts 为前端心之水晶 JSON 数组字符串；返回 message / emotion(立绘情绪标记，可为空) / stage */
     Result badelineChat(String message, String historyJson, String heartsJson);
 
+    /**
+     * Badeline 影子聊天流式版：SSE 帧 emotion / delta / done / error。
+     * 准备工作每次请求现算，与阻塞版共用同一套逻辑。
+     */
+    void badelineChatStream(String message, String historyJson, String heartsJson,
+                            jakarta.servlet.http.HttpServletResponse response);
+
     Result featherKeyword();
 
     /** 心之水晶：一天一颗（服务端按 user_id + 自然日幂等），颜色只看当天日记的情绪标注 */

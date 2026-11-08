@@ -20,6 +20,7 @@ import com.mszlu.blog.service.ai.BadelineStageRules;
 import com.mszlu.blog.service.diarychat.*;
 import com.mszlu.blog.dao.pojo.DiaryChatLog;
 import com.mszlu.blog.dao.pojo.DiaryChatSession;
+import com.mszlu.blog.utils.EmotionKeys;
 import com.mszlu.blog.utils.UserThreadLocal;
 import com.mszlu.blog.vo.Result;
 import com.mszlu.blog.vo.params.CompanionParam;
@@ -54,10 +55,16 @@ public class DiaryServiceImpl implements DiaryService {
     /**
      * 流式反馈行首情绪标记容错正则：
      * 标准写法 [emotion:不安]，也兜住模型偶尔写错的 [不安] / [emotion：不安]。
-     * 只认伴侣专用的 7 种白名单情绪，避免误剥正文里的方括号内容。
+     * 认伴侣七种中文标签 + 19 键并集的英文键（中文七词仍是别名），避免误剥正文里的方括号内容。
      */
     private static final java.util.regex.Pattern STREAM_EMOTION_PREFIX = java.util.regex.Pattern.compile(
-            "^\\s*\\[\\s*(?:emotion\\s*[:：]\\s*)?(默认|不安|惊讶|怨恨|不开心|可爱|无语)\\s*\\]\\s*");
+            "^\\s*\\[\\s*(?:emotion\\s*[:：]\\s*)?(默认|不安|惊讶|怨恨|不开心|可爱|无语|[A-Za-z][A-Za-z0-9_-]{0,19})\\s*\\]\\s*");
+    /**
+     * Badeline 行首情绪标记（英文键 [emotion:sad]），阻塞版与流式版共用同一份口径。
+     * 流式下必须等右括号出现再放行，避免标记漏进正文。
+     */
+    private static final java.util.regex.Pattern BADELINE_EMOTION_PREFIX = java.util.regex.Pattern.compile(
+            "^\\s*\\[emotion\\s*[:：]\\s*([a-zA-Z][a-zA-Z0-9_-]{0,19})\\]\\s*");
     /**
      * 正文里的句内情绪切换标记（AI 自行判断插入）：[m:不安] / [m：不安]，
      * 兼容模型误写成 [emotion:不安] 的情况。落库与记忆提取前必须剥掉，用户永远看不到。
@@ -1021,7 +1028,8 @@ public class DiaryServiceImpl implements DiaryService {
         // —— 收尾事件（sessionId/turnId 回传给前端，后续请求带回来） ——
         try {
             sseEvent(response, "done",
-                    "{\"emotion\":\"" + emotionOut[0] + "\",\"len\":" + finalText.length() +
+                    "{\"emotion\":\"" + emotionOut[0] + "\",\"label\":\"" + emotionOut[0] + "\"" +
+                    ",\"len\":" + finalText.length() +
                     ",\"sessionId\":\"" + sessionId + "\",\"turnId\":" + turnId +
                     ",\"firstDeltaMs\":" + firstDeltaMsVal +
                     ",\"totalMs\":" + (System.currentTimeMillis() - t0) + "}");
@@ -1196,15 +1204,10 @@ public class DiaryServiceImpl implements DiaryService {
         int s = Math.max(0, idx - 3);
         return s < idx && NEGATION_BEFORE.matcher(draft.substring(s, idx)).find();
     }
-    /** 情绪白名单校验：AI 给的标签不合法就回落默认 */
+    /** 情绪白名单校验：19 键并集 + 中文七词别名；输出仍是原来的中文标签，历史语义不变 */
     private String normalizeHerEmotion(String emotion) {
-        String[] valid = {"默认", "不安", "惊讶", "怨恨", "不开心", "可爱", "无语"};
-        if (emotion != null) {
-            for (String v : valid) {
-                if (v.equals(emotion.trim())) return v;
-            }
-        }
-        return "默认";
+        String label = EmotionKeys.madelineLabel(emotion);
+        return label == null ? "默认" : label;
     }
 
     @Override
@@ -1369,16 +1372,32 @@ public class DiaryServiceImpl implements DiaryService {
         }
     }
 
-    @Override
-    public Result badelineChat(String message, String historyJson, String heartsJson) {
-        SysUser user = UserThreadLocal.get();
-        if (user == null) {
-            return Result.fail(403, "未登录");
+    /** Badeline 每次请求即时构建的上下文；禁止缓存——提示词跟着当下日记状态走 */
+    private static final class BadelinePrompt {
+        final String userId;
+        final String message;
+        final List<AiMessage> messages;
+        final String stage;
+        final String sessionAnchor;
+        final int turnId;
+        BadelinePrompt(String userId, String message, List<AiMessage> messages,
+                       String stage, String sessionAnchor, int turnId) {
+            this.userId = userId;
+            this.message = message;
+            this.messages = messages;
+            this.stage = stage;
+            this.sessionAnchor = sessionAnchor;
+            this.turnId = turnId;
         }
+    }
+
+    /**
+     * Badeline 聊天准备：登录校验之后的所有「每次请求重算」逻辑。
+     * 近十篇日记、关系状态、历史解析、提示词、RAG、消息组装全部现算，不做任何缓存/模板复用。
+     */
+    private BadelinePrompt prepareBadelinePrompt(SysUser user, String message,
+                                                 String historyJson, String heartsJson) {
         String userId = user.getId();
-        if (message == null || message.trim().isEmpty()) {
-            return Result.fail(400, "消息不能为空");
-        }
         String userName = user.getNickname() != null && !user.getNickname().isBlank()
                 ? user.getNickname() : user.getAccount();
 
@@ -1454,7 +1473,22 @@ public class DiaryServiceImpl implements DiaryService {
         messages.addAll(history);
         messages.add(new AiMessage("user", message.trim()));
 
-        String reply = aiClient.chat(messages);
+        return new BadelinePrompt(userId, message.trim(), messages, state[2],
+                sessionAnchor, Math.max(1, history.size() / 2 + 1));
+    }
+
+    @Override
+    public Result badelineChat(String message, String historyJson, String heartsJson) {
+        SysUser user = UserThreadLocal.get();
+        if (user == null) {
+            return Result.fail(403, "未登录");
+        }
+        if (message == null || message.trim().isEmpty()) {
+            return Result.fail(400, "消息不能为空");
+        }
+        BadelinePrompt ctx = prepareBadelinePrompt(user, message, historyJson, heartsJson);
+
+        String reply = aiClient.chat(ctx.messages);
         String rawReply = reply;
         if (reply == null || reply.isBlank()) {
             reply = "……信号不好。别以为这样就能跳过这段对话。";
@@ -1462,8 +1496,7 @@ public class DiaryServiceImpl implements DiaryService {
         reply = reply.trim();
         // 情绪标记：提示词要求首行 [emotion:xxx]，剥离后下发给前端驱动立绘；缺失则前端按台词自行推断
         String emotion = "";
-        java.util.regex.Matcher em = java.util.regex.Pattern
-                .compile("^\\[emotion\\s*:\\s*([a-zA-Z]{1,12})\\]\\s*").matcher(reply);
+        java.util.regex.Matcher em = BADELINE_EMOTION_PREFIX.matcher(reply);
         if (em.find()) {
             emotion = em.group(1).toLowerCase();
             reply = reply.substring(em.end()).trim();
@@ -1477,15 +1510,14 @@ public class DiaryServiceImpl implements DiaryService {
             String filterReason = (rawReply == null || rawReply.isBlank()) ? "empty_fallback"
                     : (blankReplyFallback ? "blank_fallback"
                     : (!emotion.isEmpty() ? "emotion_marker_stripped" : "ok"));
-            writeRawModelLog(userId,
-                    "badeline:" + Integer.toHexString(userId.hashCode()) + ":"
-                            + Integer.toHexString(sessionAnchor.hashCode()),
-                    Math.max(1, history.size() / 2 + 1),
+            writeRawModelLog(ctx.userId,
+                    badelineSessionId(ctx),
+                    ctx.turnId,
                     "badeline",
-                    "source=chat;stage=" + state[2] + ";promptHash="
-                            + Integer.toHexString(messages.get(0).getContent().hashCode()),
-                    message.trim(),
-                    joinSystemMessages(messages),
+                    "source=chat;stage=" + ctx.stage + ";promptHash="
+                            + Integer.toHexString(ctx.messages.get(0).getContent().hashCode()),
+                    ctx.message,
+                    joinSystemMessages(ctx.messages),
                     rawReply,
                     reply,
                     filterReason);
@@ -1495,8 +1527,190 @@ public class DiaryServiceImpl implements DiaryService {
         java.util.Map<String, Object> data = new java.util.HashMap<>();
         data.put("message", reply);
         data.put("emotion", emotion);
-        data.put("stage", state[2]);
+        data.put("stage", ctx.stage);
         return Result.success(data);
+    }
+
+    /** Badeline 聊天日志的稳定会话键（同一用户 + 同一会话起点） */
+    private String badelineSessionId(BadelinePrompt ctx) {
+        return "badeline:" + Integer.toHexString(ctx.userId.hashCode()) + ":"
+                + Integer.toHexString(ctx.sessionAnchor.hashCode());
+    }
+
+    /**
+     * Badeline 影子聊天流式版：SSE 边生成边推。
+     * 事件帧：emotion（情绪，可能缺席）/ delta（文本增量）/ done（结束元信息）/ error（失败）。
+     * 准备逻辑与阻塞版共用 prepareBadelinePrompt，每次请求现算。
+     */
+    @Override
+    public void badelineChatStream(String message, String historyJson, String heartsJson,
+                                   jakarta.servlet.http.HttpServletResponse response) {
+        response.setContentType("text/event-stream;charset=UTF-8");
+        response.setHeader("Cache-Control", "no-cache");
+        response.setHeader("X-Accel-Buffering", "no");
+
+        SysUser user = UserThreadLocal.get();
+        if (user == null) {
+            sseError(response, "未登录");
+            return;
+        }
+        if (message == null || message.trim().isEmpty()) {
+            sseError(response, "消息不能为空");
+            return;
+        }
+
+        BadelinePrompt ctx;
+        try {
+            ctx = prepareBadelinePrompt(user, message, historyJson, heartsJson);
+        } catch (Exception e) {
+            log.warn("badeline 流式准备失败 userId={}", user.getId(), e);
+            sseError(response, "准备对话失败");
+            return;
+        }
+
+        StringBuilder full = new StringBuilder();      // 模型原始输出（日志用）
+        StringBuilder rawBuf = new StringBuilder();    // 尚未处理的流片段
+        StringBuilder emitted = new StringBuilder();   // 已放行文本
+        boolean[] headDone = {false};                  // 头部 [emotion:xxx] 是否已解析完
+        boolean[] emotionSent = {false};
+        boolean[] aborted = {false};                   // 客户端断开
+        boolean[] failed = {false};                    // 上游/生成失败
+        String[] streamRet = {null};                   // streamChat 返回值：null = 上游中途失败
+        String[] emotionOut = {""};
+
+        try {
+            streamRet[0] = aiClient.streamChat(ctx.messages, delta -> {
+                if (delta == null || delta.isEmpty()) return;
+                full.append(delta);
+                rawBuf.append(delta);
+                try {
+                    // 1) 头部压住：标记闭合前不发任何字节，绝不让 [emotion:xxx] 漏进正文
+                    if (!headDone[0]) {
+                        String s = rawBuf.toString();
+                        int i = 0;
+                        while (i < s.length() && Character.isWhitespace(s.charAt(i))) i++;
+                        if (i >= s.length()) { rawBuf.setLength(0); return; }
+                        if (i > 0) { rawBuf.delete(0, i); s = rawBuf.toString(); }
+                        if (s.charAt(0) == '[') {
+                            int close = s.indexOf(']');
+                            if (close < 0) {
+                                // 闭合符还没吐出来：继续压住；超过 32 字仍无闭合则按普通正文处理
+                                if (s.length() < 32) return;
+                            } else {
+                                java.util.regex.Matcher em = BADELINE_EMOTION_PREFIX.matcher(s);
+                                if (em.lookingAt()) {
+                                    emotionOut[0] = em.group(1).toLowerCase();
+                                    rawBuf.setLength(0);
+                                    rawBuf.append(s.substring(em.end()));
+                                }
+                            }
+                        }
+                        headDone[0] = true;
+                    }
+
+                    if (!emotionSent[0]) {
+                        if (!emotionOut[0].isEmpty()) sseEvent(response, "emotion", emotionOut[0]);
+                        emotionSent[0] = true;
+                    }
+                    if (rawBuf.length() > 0) {
+                        String out = rawBuf.toString();
+                        rawBuf.setLength(0);
+                        if (emitted.length() == 0) out = out.stripLeading();   // 对齐阻塞版 reply.trim()
+                        if (!out.isEmpty()) {
+                            sseEvent(response, "delta", out);
+                            emitted.append(out);
+                        }
+                    }
+                } catch (java.io.IOException io) {
+                    aborted[0] = true;
+                    throw new RuntimeException("client disconnected", io);
+                }
+            });
+        } catch (Exception e) {
+            if (aborted[0]) {
+                log.info("badeline 流式输出中断（客户端断开） userId={}", ctx.userId);
+            } else {
+                failed[0] = true;
+                log.warn("badeline 流式反馈中断 userId={}", ctx.userId, e);
+            }
+        }
+
+        // 客户端中途断开：不再写响应；原始模型输出照常落日志，收尾完整
+        if (aborted[0]) {
+            safeWriteBadelineLog(ctx, full.toString(), emitted.toString(), "client_aborted");
+            return;
+        }
+        // streamChat 返回 null 表示上游中途失败/未拿到内容：即使已有部分文本，也要以 error 收口
+        if (streamRet[0] == null) failed[0] = true;
+
+        // 流在情绪标记中途结束：宁可丢弃残片，也不把 "[emotion:sa" 当正文发出去
+        if (!headDone[0] && rawBuf.length() > 0
+                && rawBuf.charAt(0) == '[' && rawBuf.indexOf("]") < 0) {
+            rawBuf.setLength(0);
+        } else if (rawBuf.length() > 0) {
+            String tail = rawBuf.toString();
+            rawBuf.setLength(0);
+            try {
+                if (!emotionSent[0]) {
+                    if (!emotionOut[0].isEmpty()) sseEvent(response, "emotion", emotionOut[0]);
+                    emotionSent[0] = true;
+                }
+                if (emitted.length() == 0) tail = tail.stripLeading();
+                if (!tail.isEmpty()) {
+                    sseEvent(response, "delta", tail);
+                    emitted.append(tail);
+                }
+            } catch (java.io.IOException io) {
+                log.info("badeline SSE 收尾写入中断 userId={}", ctx.userId);
+                safeWriteBadelineLog(ctx, full.toString(), emitted.toString(), "client_aborted");
+                return;
+            }
+        }
+
+        String filterReason;
+        if (failed[0]) filterReason = "stream_error";
+        else if (full.length() == 0) filterReason = "empty_fallback";
+        else if (emitted.length() == 0) filterReason = "blank_fallback";
+        else if (!emotionOut[0].isEmpty()) filterReason = "emotion_marker_stripped";
+        else filterReason = "ok";
+        safeWriteBadelineLog(ctx, full.toString(), emitted.toString(), filterReason);
+
+        if (failed[0] || full.length() == 0) {
+            sseError(response, "生成失败");
+            return;
+        }
+
+        java.util.Map<String, Object> done = new java.util.HashMap<>();
+        done.put("emotion", emotionOut[0]);
+        String label = EmotionKeys.badelineLabel(emotionOut[0]);
+        done.put("label", label == null ? "" : label);
+        done.put("stage", ctx.stage);
+        done.put("len", emitted.length());
+        try {
+            sseEvent(response, "done", JSON.toJSONString(done));
+        } catch (java.io.IOException io) {
+            log.info("badeline SSE done 写入中断 userId={}", ctx.userId);
+        }
+    }
+
+    /** 流式链路里写日志：任何异常都吞掉，不影响收尾 */
+    private void safeWriteBadelineLog(BadelinePrompt ctx, String raw, String filtered, String reason) {
+        try {
+            writeRawModelLog(ctx.userId, badelineSessionId(ctx), ctx.turnId, "badeline",
+                    "source=chat;stage=" + ctx.stage + ";promptHash="
+                            + Integer.toHexString(ctx.messages.get(0).getContent().hashCode()),
+                    ctx.message, joinSystemMessages(ctx.messages), raw, filtered, reason);
+        } catch (Exception e) {
+            log.warn("badelineChatStream 日志写入失败: {}", e.getMessage());
+        }
+    }
+
+    /** 流式链路里发 error 帧：HTTP 保持 200，让前端仍能读到事件体 */
+    private void sseError(jakarta.servlet.http.HttpServletResponse response, String msg) {
+        try {
+            sseEvent(response, "error", msg);
+        } catch (java.io.IOException ignored) {
+        }
     }
 
     /**

@@ -6,6 +6,7 @@ import com.mszlu.blog.dao.pojo.SysUser;
 import com.mszlu.blog.service.ai.AiClient;
 import com.mszlu.blog.service.ai.AiMessage;
 import com.mszlu.blog.service.ai.PromptBuilder;
+import com.mszlu.blog.utils.EmotionKeys;
 import com.mszlu.blog.utils.UserThreadLocal;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,7 +14,6 @@ import org.springframework.stereotype.Component;
 
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -28,9 +28,6 @@ public class MadelineAgentEngine {
 
     /** 决策循环硬上限：防工具来回踢皮球烧 token */
     private static final int MAX_STEPS = 6;
-
-    private static final List<String> MOOD_WHITELIST =
-            Arrays.asList("默认", "可爱", "不安", "不开心", "惊讶", "怨恨", "无语");
 
     @Autowired
     private AiClient aiClient;
@@ -190,7 +187,7 @@ public class MadelineAgentEngine {
             }
         }
         try {
-            sseEvent(response, "done", "{\"mood\":\"" + mood + "\"}");
+            sseEvent(response, "done", "{\"mood\":\"" + mood + "\",\"label\":\"" + mood + "\"}");
         } catch (Exception ignored) {
             // 客户端已断开，无需再发
             log.debug("SSE done 帧写入失败，客户端可能已断开", ignored);
@@ -213,9 +210,10 @@ public class MadelineAgentEngine {
         }
     }
 
-    /** 情绪白名单归一：非法值一律「默认」 */
+    /** 情绪白名单归一：19 键并集 + 中文七词别名；非法值一律「默认」，输出仍是中文标签 */
     private String normalizeMood(String mood) {
-        return mood != null && MOOD_WHITELIST.contains(mood) ? mood : "默认";
+        String label = EmotionKeys.madelineLabel(mood);
+        return label == null ? "默认" : label;
     }
 
     /** 写一个 SSE 事件帧：event: <name>\n[data: ...]\n\n。多行 data 按 \n 拆分，与 diary 链路同协议。 */

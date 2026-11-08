@@ -16,6 +16,7 @@ import com.mszlu.blog.service.PersonaService;
 import com.mszlu.blog.service.ai.AiClient;
 import com.mszlu.blog.service.ai.AiMessage;
 import com.mszlu.blog.service.ai.PromptBuilder;
+import com.mszlu.blog.utils.EmotionKeys;
 import com.mszlu.blog.utils.UserThreadLocal;
 import com.mszlu.blog.vo.Result;
 import com.mszlu.blog.vo.params.ChatMessageVo;
@@ -94,12 +95,9 @@ public class ChatServiceImpl implements ChatService {
             String r = obj.getString("reply");
             if (r != null && !r.isBlank()) reply = r.trim();
             String em = obj.getString("emotion");
-            String[] valid = {"默认", "不安", "惊讶", "怨恨", "不开心", "可爱", "无语"};
-            if (em != null) {
-                for (String v : valid) {
-                    if (v.equals(em.trim())) { emotion = v; break; }
-                }
-            }
+            // 白名单：19 键并集 + 中文七词别名；输出仍是原来的中文标签
+            String label = EmotionKeys.madelineLabel(em);
+            if (label != null) emotion = label;
             // AI 主动发起金羽毛呼吸邀请（提示词约束为低情绪漩涡场景才 true）
             feather = obj.getBooleanValue("feather");
             // 提醒工具：对方托付了"到点叫我"就落 reminder 表，到期由定时任务派发

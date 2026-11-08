@@ -151,6 +151,16 @@ public class DiaryController {
         return diaryService.badelineChat(param.getMessage(), param.getHistory(), param.getHearts());
     }
 
+    /**
+     * Badeline 影子聊天流式版：SSE（text/event-stream）边生成边推。
+     * 事件帧：emotion（情绪，可能缺席）/ delta（文本增量）/ done（结束元信息）/ error（失败）。
+     */
+    @PostMapping(value = "badeline-chat/stream")
+    public void badelineChatStream(@RequestBody BadelineChatParam param,
+                                   jakarta.servlet.http.HttpServletResponse response) {
+        diaryService.badelineChatStream(param.getMessage(), param.getHistory(), param.getHearts(), response);
+    }
+
     /** 情绪统计：各情绪分布 + 按月趋势 */
     @GetMapping("emotion-stats")
     public Result emotionStats() {

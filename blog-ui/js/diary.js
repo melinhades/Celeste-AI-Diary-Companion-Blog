@@ -231,8 +231,14 @@
         '无语': 'celeste-portraits/madeline/deadpan00.png'
     };
     const PORTRAIT_FRAMES = { normal: 7, panic: 5, surprised: 7, angry: 7, sad: 7, peaceful: 4, deadpan: 9 };
+    // 情绪口径统一收口到共享层 js/lib/emotion-map.js：
+    // 英文键 / 中文别名 → 玛德琳七键 → 页面沿用的中文标签；共享层缺席时原样返回（等价未接入）
+    function moodLabel(raw) {
+        return window.EmotionMap ? EmotionMap.labelFor('madeline', raw) : raw;
+    }
     // 立绘帧循环统一交给 MadelineMood 工具类（句内情绪切换时要随时换帧序）
     function startPortraitAnim(emotion) {
+        emotion = moodLabel(emotion);
         if (window.MadelineMood) MadelineMood.startPortrait(gameDialogPortraitImg, emotion);
         else gameDialogPortraitImg.src = avatarMap[emotion] || avatarMap['默认'];
     }
@@ -273,6 +279,7 @@
     };
 
     function updateThemeByEmotion(emotion) {
+        emotion = moodLabel(emotion);
         const scene = emotionSceneMap[emotion] || emotion || '默认';
         document.body.className = 'emotion-' + (sceneClassMap[scene] || 'default');
         setAvatar(emotion);
@@ -332,6 +339,7 @@
     syncChatViewport();
 
     function setAvatar(emotion) {
+        emotion = moodLabel(emotion);
         const src = avatarMap[emotion] || avatarMap['默认'];
         floatAvatar.src = src;
         chatAvatar.src = src;
@@ -349,6 +357,7 @@
     });
 
     function newMadelineRow(emotion) {
+        emotion = moodLabel(emotion);
         const row = document.createElement('div');
         row.style.display = 'flex';
         row.style.alignItems = 'flex-start';
@@ -450,6 +459,7 @@
      * 返回 { append(text), finish(), done }；append 可在打字过程中随时追加。
      */
     function startStreamingMadeline(emotion) {
+        emotion = moodLabel(emotion);
         let pending = '';      // 待打字的字符缓冲（已剥离情绪标记的纯文本）
         let finished = false;  // 流是否已结束（不再有新 delta）
         let typedCount = 0;    // 已打出的字符数
@@ -462,6 +472,7 @@
 
         // 真正执行一次情绪切换：立绘帧 + 气泡头像 + 像素小人 + 后续音色
         function applyMood(emo) {
+            emo = moodLabel(emo);
             emo = window.MadelineMood ? MadelineMood.normalize(emo) : (emo || '默认');
             if (useGameDialog && myToken === gameDialogToken) startPortraitAnim(emo);
             if (rowAvatar && window.MadelineMood) rowAvatar.src = MadelineMood.avatarSrc(emo);
@@ -667,6 +678,7 @@
         }
     }
     async function doAddMadelineMessage(text, emotion, forceGameDialog) {
+        emotion = moodLabel(emotion);
         text = String(text || '').replace(/[（(][^（）()]*[）)]/g, '').trim();
         if (!text) return;
         await waitUserPause(6000);
@@ -701,6 +713,7 @@
             let voiceEmotion = segmentLocked ? emotion : inferReplyEmotion(msg);
             // 到点的 AI 句内情绪切换：立绘 + 头像 + 像素小人 + 后续音色
             const applyMood = (emo) => {
+                emo = moodLabel(emo);
                 emo = window.MadelineMood ? MadelineMood.normalize(emo) : (emo || '默认');
                 if (useGameDialog && myToken === gameDialogToken) startPortraitAnim(emo);
                 if (window.MadelineMood) avImg.src = MadelineMood.avatarSrc(emo);
@@ -961,7 +974,7 @@
         // 第一条 agent-step 到达即视为“已有真实内容”，撤掉发送占位
         clearChatPlaceholder();
         // 情绪联动：像素小人/立绘立刻反应（与 [m:情绪] 标记同通道的效果）
-        if (window.MadelineMood && mood) pmReactToEmotion(MadelineMood.normalize(mood));
+        if (window.MadelineMood && mood) pmReactToEmotion(MadelineMood.normalize(moodLabel(mood)));
         if (!agentStepRow) {
             agentStepRow = document.createElement('div');
             agentStepRow.className = 'agent-step';
@@ -1443,7 +1456,7 @@
     // 语气采样（目录/语速/音量）统一收口在 MadelineMood 工具类，
     // 句内情绪切换时音色跟着标记走；window.playSpeakSound 保留给羽毛游戏等旧调用
     function playSpeakSound(emotion) {
-        if (window.MadelineMood) MadelineMood.blip(emotion);
+        if (window.MadelineMood) MadelineMood.blip(moodLabel(emotion));
     }
     window.playSpeakSound = playSpeakSound;
 // ===== 回复语气推理：从她说的话推断语气，逐句切换音色 =====
@@ -1494,7 +1507,7 @@ function inferReplyEmotion(text) {
         isBubbling = true;
 
         createBubbleElement();
-        const em = emotion || '默认';
+        const em = moodLabel(emotion || '默认') || '默认';
         bubbleEl.querySelector('img').src = avatarMap[em] || avatarMap['默认'];
 
         // 清空内容但保留 avatar
@@ -1533,6 +1546,17 @@ function inferReplyEmotion(text) {
     // P3.1 新增：SSE 订阅主动消息推送（替代原轮询逻辑）
     let proactiveEventSource = null;
     const bubbleSaid = [];
+
+    // 主动说话的归属：她本人（替班或面板打开）在场时，同一批主动台词走她的渲染，
+    // 否则仍交给 Madeline —— 触发机制是同一套，只是把话交给当前在场的人
+    async function companionSay(msg, emotion) {
+        const p = window.__diaryBadelinePanel;
+        if (p && (p.isOpen() || PM_BADELINE_STANDIN)) {
+            p.say(msg);
+            return;
+        }
+        await addMadelineMessage(msg, emotion || '默认');
+    }
     
     function subscribeProactiveStream() {
         const token = localStorage.getItem('token');
@@ -1551,7 +1575,7 @@ function inferReplyEmotion(text) {
                 if (bubbleSaid.indexOf(msg) === -1) {
                     bubbleSaid.push(msg);
                     if (bubbleSaid.length > 8) bubbleSaid.shift();
-                    await addMadelineMessage(msg, data.emotion || '默认');
+                    await companionSay(msg, data.emotion || '默认');
                 }
             } catch (err) {
                 console.warn('主动消息处理失败:', err);
@@ -1595,33 +1619,47 @@ function inferReplyEmotion(text) {
     if (interruptBtn) {
         interruptBtn.addEventListener('click', () => {
             if (companionState.preRunAbort) {
+                // 同一套中断：Madeline 与 Badeline 都从这里掐断当前这一轮
                 companionState.preRunAbort.abort();
                 companionState.preRunAbort = null;
                 interruptBtn.style.display = 'none';
                 resumeBtn.style.display = 'inline-block';
-                console.log('已中断 Madeline 回复');
+                if (companionControls) companionControls.style.display = 'flex';  // 让「继续」留在原地
+                console.log('已中断本轮回复');
             }
         });
     }
     
     if (resumeBtn) {
         resumeBtn.addEventListener('click', () => {
+            resumeBtn.style.display = 'none';
+            // 谁被打断就让谁接着说：共用同一个按钮，不另做一套
+            if (companionState.abortOwner === 'badeline') {
+                companionState.abortOwner = null;
+                const p = window.__diaryBadelinePanel;
+                if (p && p.resumeLast) p.resumeLast();
+                return;
+            }
             const lastDraft = contentInput.value.trim();
             if (lastDraft) {
                 triggerAiAnalysis(lastDraft, 'resume');
-                resumeBtn.style.display = 'none';
             }
         });
     }
     
     // 监听 companionState.phase 变化，显示/隐藏中断按钮
     function updateCompanionControls() {
-        if (companionState.phase === 'REPLYING' && companionState.preRunAbort) {
+        const busy = companionState.phase === 'REPLYING' && companionState.preRunAbort;
+        // 中断后「继续」按钮还没点掉：控制条继续留在原位，不能跟着一起消失
+        const awaitingResume = resumeBtn && resumeBtn.style.display !== 'none';
+        if (busy) {
             if (companionControls) companionControls.style.display = 'flex';
             if (interruptBtn) interruptBtn.style.display = 'inline-block';
             if (resumeBtn) resumeBtn.style.display = 'none';
-        } else {
-            if (companionControls) companionControls.style.display = 'none';
+        } else if (awaitingResume) {
+            if (companionControls) companionControls.style.display = 'flex';
+        } else if (companionControls) {
+            companionControls.style.display = 'none';
         }
     }
     
@@ -1705,6 +1743,8 @@ function inferReplyEmotion(text) {
         // v3 预跑（边写边预跑）：首次触发后标记，fetch 存 AbortController 供中断重启
         preRunTriggered: false,
         preRunAbort: null,
+        // 当前这一轮流式是谁在说（打断/继续按钮据此派回原主人）
+        abortOwner: null,
         preRunDraftLenAtStart: 0
     };
     // ===== 本地快速情绪分析（每次输入都触发） =====
@@ -1879,6 +1919,7 @@ function inferReplyEmotion(text) {
             // v3 预跑：用 AbortController 存句柄，供 input handler 触发中断
             const abortCtrl = new AbortController();
             companionState.preRunAbort = abortCtrl;
+            companionState.abortOwner = 'madeline';   // 打断/继续派回这一轮的主人
 
             const resp = await fetch(BASE_URL + '/diary/companion/stream', {
                 method: 'POST',
@@ -2032,6 +2073,7 @@ function inferReplyEmotion(text) {
             // 统一释放决策锁：无论成功/失败/中断，都在这里解冻并决定是否补读
             // v3 预跑：先清 abort 句柄（否则下次 input 又会误判「还在预跑」）
             companionState.preRunAbort = null;
+            if (companionState.abortOwner === 'madeline') companionState.abortOwner = null;
             releaseReply();
 
             // v3 预跑重启：input handler 在 REPLYING 阶段触发了 abort 并设了 pendingPreRunRestart
@@ -2342,7 +2384,7 @@ function inferReplyEmotion(text) {
             '<div class="sb-straw"><img src="celeste-collectables/strawberry.png" alt="strawberry"><span id="sbCount">0</span></div>';
         document.body.appendChild(w);
         w.addEventListener('click', () => {
-            addMadelineMessage('为草莓数欢呼吧！那是你成长过程的见证', '可爱');
+            badelineSay('为草莓数欢呼吧！那是你成长过程的见证');
         });
         refreshShopUI();
         // 草莓数变化（写日记/草莓籽组合/商店消费）时实时刷新这一栏
@@ -3115,7 +3157,16 @@ function inferReplyEmotion(text) {
     }
     let pmClickTimer = null;
     pm.addEventListener('click', () => {
-        if (PM_BADELINE_STANDIN) return;
+        if (PM_BADELINE_STANDIN) {
+            // 替班期间单击她本人 → 打开她自己的面板（走她的流式接口与提示词）
+            if (pmClickTimer) return;
+            pmClickTimer = setTimeout(() => {
+                pmClickTimer = null;
+                const p = window.__diaryBadelinePanel;
+                if (p && !p.isOpen()) p.openChat();
+            }, 260);
+            return;
+        }
         if (pmClickTimer) return;
         pmClickTimer = setTimeout(() => {
             pmClickTimer = null;
@@ -3126,6 +3177,12 @@ function inferReplyEmotion(text) {
     // 双击像素 Madeline → 开关聊天历史记录框
     pm.addEventListener('dblclick', () => {
         if (pmClickTimer) { clearTimeout(pmClickTimer); pmClickTimer = null; }
+        if (PM_BADELINE_STANDIN) {
+            // 替班期间双击也归她：不要再打开 Madeline 的聊天历史
+            const p = window.__diaryBadelinePanel;
+            if (p && !p.isOpen()) p.openChat();
+            return;
+        }
         toggleChat();
     });
 
@@ -3367,7 +3424,7 @@ function inferReplyEmotion(text) {
                         editingDiaryId = d.id;
                         titleInput.value = d.title || '';
                         contentInput.value = d.content || '';
-                        addMadelineMessage('从书架翻出来啦，改完记得 SAVE 哦。', '可爱');
+                        badelineSay('从书架翻出来啦，改完记得 SAVE 哦。');
                     }
                 }
             });
@@ -3559,7 +3616,7 @@ function inferReplyEmotion(text) {
     function idleCare() {
         if (!chatOpen && contentInput.value.trim() && performance.now() - lastIdleCare > 5 * 60 * 1000) {
             lastIdleCare = performance.now();
-            addMadelineMessage(idleCareLines[Math.floor(Math.random() * idleCareLines.length)], '可爱');
+            companionSay(idleCareLines[Math.floor(Math.random() * idleCareLines.length)], '可爱');
         }
         idleCareTimer = setTimeout(idleCare, 180000);
     }
@@ -3569,7 +3626,54 @@ function inferReplyEmotion(text) {
             idleCareTimer = setTimeout(idleCare, 180000);
         }, { passive: true })
     );
-        initStrawberryShop();
+    // 她的台词走共享面板的对话框渲染（她的头像 / 名字 / 音色）；模块缺席时退回原来的管线
+    function badelineSay(text) {
+        var p = window.__diaryBadelinePanel;
+        if (p) { p.say(text); return; }
+        addMadelineMessage(text, '可爱');
+    }
+
+    // ===== Badeline 面板：日记页独立挂载，走她自己的流式接口与提示词 =====
+    // 面板与对话框的 DOM 由共享模块按书架页同一份结构注入，日记页这边不复制 shelf.js 的面板代码。
+    // 打断 / 继续复用上面 Madeline 那套：一轮流式把 AbortController 交给同一个 companionState。
+    if (window.BadelinePanel) {
+        window.__diaryBadelinePanel = BadelinePanel.mount({
+            openingLines: [
+                '……你还在写啊。',
+                '别停，我听着呢。',
+                '这一页，比昨天诚实。',
+                '写不下去就写我。反正我也住在这儿。'
+            ],
+            // 日记页没有书架那套心光谱数据；关系状态由后端从日记推导
+            payload: function () { return '[]'; },
+            // 日记页没有立绘尺寸切换与退场演出，面板自己成立
+            onOpen: function () {},
+            // 关面板即收工：掐断这一轮，并把打断/继续那条控制条还原
+            abortOnClose: true,
+            onClose: function () {
+                if (companionState.abortOwner === 'badeline') {
+                    companionState.abortOwner = null;
+                    companionState.preRunAbort = null;
+                    releaseReply();
+                    if (resumeBtn) resumeBtn.style.display = 'none';
+                }
+                return 'free';
+            },
+            onStreamStart: function (ctrl) {
+                if (companionState.preRunAbort) return;   // Madeline 正在说：这一轮不抢打断条
+                companionState.abortOwner = 'badeline';
+                companionState.preRunAbort = ctrl;
+                companionState.phase = 'REPLYING';
+            },
+            onStreamEnd: function (aborted, ctrl) {
+                if (companionState.abortOwner !== 'badeline') return;
+                if (companionState.preRunAbort === ctrl) companionState.preRunAbort = null;
+                releaseReply();
+                if (!aborted) companionState.abortOwner = null;  // 被打断时留给「继续」认领
+            }
+        });
+    }
+    initStrawberryShop();
     })();
 
 })();
