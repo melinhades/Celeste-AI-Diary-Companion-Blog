@@ -44,6 +44,16 @@
         <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
     </Match>
 
+    <!-- 向量存储值对象（VectorHit / VectorQuery / VectorRecord）：内部检索链路的只读载体。
+         queryVector / embedding 由调用方构建后只读；MysqlVectorStore 在召回循环里逐条取
+         query.getQueryVector() 比对，getter 做防御性拷贝会退化成每条候选一次数组复制。
+         VectorHit 的 memory / chunk 按设计直接复用刚查出的实体（免二次查库），深拷贝才会
+         改变运行时行为。三者的字段语义都是「构造后不再被调用方修改」，故按 DTO 噪音排除。 -->
+    <Match>
+        <Class name="~com\.mszlu\.blog\.service\.vector\.(VectorHit|VectorQuery|VectorRecord)"/>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    </Match>
+
     <!-- ========== 临时排除（附移除条件） ========== -->
 
     <!-- 含未提交 faceEmotion WIP 改动的冻结类，WIP 合并后逐个移除本条目 -->
