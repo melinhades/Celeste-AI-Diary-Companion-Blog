@@ -35,6 +35,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -317,27 +318,65 @@ public class MemoryServiceImpl implements MemoryService {
     private static final Pattern SENTENCE = Pattern.compile("[^。！？!?\\n]+[。！？!?\\n]?");
     private static final int CHUNK_MAX = 110;
     private static final int CHUNKS_PER_DIARY = 8;
+    /** 同一篇日记的「替换分片 / 删除分片」互斥，固定数量避免锁对象无限增长 */
+    private static final Object[] DIARY_LOCKS = new Object[64];
+    /** 已删除日记的短期墓碑：拦住删除之后才被调度执行的异步分片任务 */
+    private static final Map<String, Long> DELETED_DIARIES = new ConcurrentHashMap<>();
+    private static final long DELETED_DIARY_TTL_MS = 30 * 60 * 1000L;
+
+    static {
+        for (int i = 0; i < DIARY_LOCKS.length; i++) {
+            DIARY_LOCKS[i] = new Object();
+        }
+    }
+
+    private static Object diaryLock(String diaryId) {
+        return DIARY_LOCKS[Math.floorMod(diaryId.hashCode(), DIARY_LOCKS.length)];
+    }
 
     @Override
     @Async("aiExecutor")
     public void chunkDiary(String userId, String diaryId, String title, String content) {
         try {
-            if (content == null || content.trim().length() < 20) return;
-
-            // 覆盖旧分片（同一篇日记编辑重存时）
-            vectorStore.delete(VectorCollection.DIARY, userId, diaryId);
-
-            for (String piece : splitChunks(content)) {
-                float[] vec = aiClient.embed((title != null ? title + "：" : "") + piece, userId);
-                if (vec == null) continue;
-                vectorStore.upsert(VectorRecord.forChunk(VectorCollection.DIARY, userId, "diary",
-                        diaryId, title, piece, System.currentTimeMillis(), vec));
+            if (diaryId == null) return;
+            List<VectorRecord> records = new ArrayList<>();
+            // 阶段一：先全部嵌入成功；任一失败直接放弃，旧分片保持不动
+            if (content != null && content.trim().length() >= 20) {
+                for (String piece : splitChunks(content)) {
+                    float[] vec = aiClient.embed((title != null ? title + "：" : "") + piece, userId);
+                    if (vec == null) {
+                        log.warn("日记分片嵌入失败，保留旧分片 diaryId={}", diaryId);
+                        return;
+                    }
+                    records.add(VectorRecord.forChunk(VectorCollection.DIARY, userId, "diary",
+                            diaryId, title, piece, System.currentTimeMillis(), vec));
+                }
+            }
+            // 阶段二：与删除互斥地替换；日记已删除则不再回写
+            synchronized (diaryLock(diaryId)) {
+                if (DELETED_DIARIES.containsKey(diaryId)) return;
+                vectorStore.delete(VectorCollection.DIARY, userId, diaryId);
+                for (VectorRecord record : records) {
+                    vectorStore.upsert(record);
+                }
             }
         } catch (Exception e) {
             log.error("日记分片失败, diaryId={}", diaryId, e);
         } finally {
             vectorStore.invalidate(userId);  // P1：日记分片重存后清缓存
         }
+    }
+
+    @Override
+    public void deleteDiaryChunks(String userId, String diaryId) {
+        if (userId == null || diaryId == null) return;
+        synchronized (diaryLock(diaryId)) {
+            vectorStore.delete(VectorCollection.DIARY, userId, diaryId);
+            long now = System.currentTimeMillis();
+            DELETED_DIARIES.entrySet().removeIf(e -> now - e.getValue() > DELETED_DIARY_TTL_MS);
+            DELETED_DIARIES.put(diaryId, now);
+        }
+        vectorStore.invalidate(userId);  // P1：分片删除后清缓存
     }
 
     /** 按句子切分，贪心攒成 60~110 字的片，片头保留上一片末句做上下文衔接 */

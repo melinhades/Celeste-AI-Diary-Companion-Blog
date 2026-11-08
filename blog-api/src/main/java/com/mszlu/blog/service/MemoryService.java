@@ -36,6 +36,9 @@ public interface MemoryService {
     /** 日记分片 + 向量化入库（保存日记后异步调用，覆盖旧分片） */
     void chunkDiary(String userId, String diaryId, String title, String content);
 
+    /** 删除某篇日记的全部分片，并拦截删除后才被调度执行的异步分片任务 */
+    void deleteDiaryChunks(String userId, String diaryId);
+
     /** RAG 统一检索工具：记忆 + 日记分片，按余弦相似度取 Top N */
     List<ContextChunk> searchContext(String userId, String query, int limit);
 }

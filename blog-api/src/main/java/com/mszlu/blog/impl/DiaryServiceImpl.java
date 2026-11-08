@@ -299,7 +299,11 @@ public class DiaryServiceImpl implements DiaryService {
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
         wrapper.eq(Diary::getId, diaryId);
         wrapper.eq(Diary::getUserId, userId);
-        diaryMapper.delete(wrapper);
+        int rows = diaryMapper.delete(wrapper);
+        if (rows > 0) {
+            // 日记本体删掉后同步清分片；否则已删内容仍会被 RAG 召回
+            memoryService.deleteDiaryChunks(userId, diaryId);
+        }
         return Result.success(null);
     }
 
