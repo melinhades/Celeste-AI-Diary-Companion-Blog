@@ -24,9 +24,17 @@ public class DiaryChatInterruptManager {
     /** 锁失效时长：防止异常路径漏释放导致会话永久卡住 */
     private static final long REPLY_LOCK_TTL_MS = 90_000L;
 
-    /** 标记中断（前端调用 interrupt 接口，或 companionStream 在入口检测到 interrupt=true） */
-    public void markInterrupted(String sessionId) {
+    /**
+     * 标记中断（前端调用 interrupt 接口，或 companionStream 在入口检测到 interrupt=true）。
+     * 没有回复在跑时不留下标记，否则会误杀下一轮正常消息；返回是否存在需要打断的回复。
+     */
+    public boolean markInterrupted(String sessionId) {
+        if (!isReplying(sessionId)) {
+            flags.remove(sessionId);
+            return false;
+        }
         flags.put(sessionId, Boolean.TRUE);
+        return true;
     }
 
     /** 检查是否已中断：在 streamChat 的 onDelta 回调里调用，若已中断则抛 RuntimeException 终止流 */

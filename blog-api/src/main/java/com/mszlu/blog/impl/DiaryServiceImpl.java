@@ -611,12 +611,13 @@ public class DiaryServiceImpl implements DiaryService {
         //    「边写边预跑」机制靠这条：用户中途继续写 → 前端发 interrupt + 新 draft → 后端让旧线程退出、新线程 acquire
         boolean interruptRequested = Boolean.TRUE.equals(param.getInterrupt()) || "interrupt".equals(param.getTriggerType());
         if (interruptRequested) {
-            interruptManager.markInterrupted(sessionId);
+            // 没有回复在跑时不留标记：否则会误杀紧接着的正常消息
+            boolean hasActiveReply = interruptManager.markInterrupted(sessionId);
             if (draftSnippet.isEmpty()) {
-                log.info("日记伴侣会话中断标记（纯打断） sessionId={}", sessionId);
+                log.info("日记伴侣会话中断标记（纯打断） sessionId={} active={}", sessionId, hasActiveReply);
                 return;
             }
-            log.info("日记伴侣会话中断标记（打断+重开） sessionId={}", sessionId);
+            log.info("日记伴侣会话中断标记（打断+重开） sessionId={} active={}", sessionId, hasActiveReply);
         }
 
         if (draftSnippet.isEmpty()) {
@@ -646,6 +647,8 @@ public class DiaryServiceImpl implements DiaryService {
         try {
             doCompanionReply(param, response, userId, draftSnippet, sessionId);
         } finally {
+            // 中断标志不跨轮存活：先消费再放锁，排队中的新请求不会读到上一轮的旧标记
+            interruptManager.consumeAndClear(sessionId);
             interruptManager.releaseReply(sessionId);
         }
     }
