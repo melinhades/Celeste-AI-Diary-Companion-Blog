@@ -305,6 +305,31 @@
     let chatOpen = false;
     let isTyping = false;
     let companionTimer = null;
+    // 聊天历史（与 Badeline 同一套规则：只存最近 20 条，恢复最近 6 条）
+    const CHAT_LOG_KEY = 'madelineChatLog';
+    const CHAT_LOG_MAX = 20;
+    const CHAT_LOG_RESTORE = 6;
+    let chatLog = [];
+    let chatLogLoaded = false;
+    let chatPlaceholder = null;
+
+    // 窄屏 + 虚拟键盘：把卡片限制在可视区域内，键盘弹出时整体上移
+    function syncChatViewport() {
+        const vv = window.visualViewport;
+        const h = vv ? vv.height : window.innerHeight;
+        const top = vv ? vv.offsetTop : 0;
+        const gap = Math.max(0, window.innerHeight - h - top);
+        const lift = gap > 120 ? gap : 0; // 过滤浏览器地址栏高度，只对键盘生效
+        document.documentElement.style.setProperty('--chat-vh', h + 'px');
+        document.documentElement.style.setProperty('--chat-bottom', (8 + lift) + 'px');
+        if (chatOpen) requestAnimationFrame(() => { chatMessages.scrollTop = chatMessages.scrollHeight; });
+    }
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', syncChatViewport);
+        window.visualViewport.addEventListener('scroll', syncChatViewport);
+    }
+    window.addEventListener('resize', syncChatViewport);
+    syncChatViewport();
 
     function setAvatar(emotion) {
         const src = avatarMap[emotion] || avatarMap['默认'];
@@ -481,6 +506,7 @@
                 }
                 return true;
             };
+            clearChatPlaceholder();
             newRow(emotion);
             if (useGameDialog) {
                 if (window.TextFx) { TextFx.set(gameDialogText, ''); gameDialogEl.classList.add('tfx-typing'); }
@@ -665,6 +691,8 @@
             if (!msg) continue;
             const moodQueue = plan.switches.slice();
             const fmsg = window.TextFx ? TextFx.autoMark(msg) : msg;   // 无标记台词自动补三种动画
+            // 真实气泡出现，撤掉“发送中”占位
+            clearChatPlaceholder();
             const { bubble: histBubble, avImg } = newMadelineRow(emotion);
             if (window.TextFx) TextFx.set(histBubble, fmsg); else histBubble.textContent = msg;
             let sentenceBuf = '';
@@ -741,7 +769,7 @@
             scheduleGameDialogHide();
         }
     }
-    function addUserMessage(text) {
+    function renderUserRow(text) {
         const row = document.createElement('div');
         row.className = 'msg-row user-row';
         const bubble = document.createElement('div');
@@ -751,6 +779,101 @@
         chatMessages.appendChild(row);
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
+    function addUserMessage(text) {
+        const plain = String(text || '').trim();
+        if (!plain) return;
+        renderUserRow(plain);
+        pushChatLog('user', plain);
+    }
+
+    // ===== 聊天历史持久化（与 Badeline 同一套规则：只存最近 20 条，恢复最近 6 条） =====
+    // 按账号隔离：换号后不会看到上一个账号的聊天记录（日记页未加载 Store，直接复用 __account）
+    function chatLogStorageKey() {
+        try { return CHAT_LOG_KEY + ':' + (localStorage.getItem('__account') || 'guest'); } catch (e) { return CHAT_LOG_KEY; }
+    }
+    function readChatLog() {
+        try {
+            const arr = JSON.parse(localStorage.getItem(chatLogStorageKey()) || '[]');
+            return Array.isArray(arr) ? arr : [];
+        } catch (e) { return []; }
+    }
+    function saveChatLog() {
+        try { localStorage.setItem(chatLogStorageKey(), JSON.stringify(chatLog.slice(-CHAT_LOG_MAX))); } catch (e) { /* 隐私模式静默降级 */ }
+    }
+    function ensureChatLogLoaded() {
+        if (chatLogLoaded) return;
+        chatLogLoaded = true;
+        chatLog = readChatLog();
+    }
+    function pushChatLog(role, content, emotion) {
+        const text = String(content || '').trim();
+        if (!text) return;
+        ensureChatLogLoaded();
+        const entry = { role: role, content: text };
+        if (role === 'assistant') entry.emotion = emotion || '默认';
+        chatLog.push(entry);
+        saveChatLog();
+    }
+    // 去掉 AI 的 [m:情绪] 标记与括号动作描述，存“用户实际看到的那句话”
+    function loggedSpeech(text) {
+        let t = String(text == null ? '' : text);
+        if (window.MadelineMood && MadelineMood.parsePlan) t = MadelineMood.parsePlan(t).clean;
+        return t.replace(/[（(][^（）()]*[）)]/g, '').trim();
+    }
+    function renderAssistantRow(text, emotion) {
+        const plain = String(text || '').trim();
+        if (!plain) return;
+        const { bubble } = newMadelineRow(emotion || '默认');
+        if (window.TextFx) {
+            TextFx.set(bubble, TextFx.autoMark(plain));
+            bubble.classList.remove('tfx-typing');
+        } else {
+            bubble.textContent = plain;
+        }
+    }
+    function renderChatHistory() {
+        ensureChatLogLoaded();
+        chatLog.slice(-CHAT_LOG_RESTORE).forEach(m => {
+            if (!m || !m.content) return;
+            if (m.role === 'assistant') renderAssistantRow(m.content, m.emotion);
+            else renderUserRow(m.content);
+        });
+    }
+
+    // ===== 发送占位：头像 + 跳动省略号；所有结束分支统一收口 =====
+    function showChatPlaceholder() {
+        clearChatPlaceholder();
+        const row = document.createElement('div');
+        row.className = 'msg-row madeline-row typing-placeholder';
+        const avWrap = document.createElement('div');
+        avWrap.className = 'msg-avatar-wrap';
+        const avImg = document.createElement('img');
+        avImg.src = avatarMap[currentEmotion] || avatarMap['默认'];
+        avWrap.appendChild(avImg);
+        const bubble = document.createElement('div');
+        bubble.className = 'msg-bubble';
+        bubble.innerHTML = '<span class="typing-dots"><i></i><i></i><i></i></span>';
+        row.appendChild(avWrap);
+        row.appendChild(bubble);
+        chatMessages.appendChild(row);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        chatPlaceholder = { row, bubble };
+        return chatPlaceholder;
+    }
+    function clearChatPlaceholder() {
+        if (!chatPlaceholder) return;
+        chatPlaceholder.row.remove();
+        chatPlaceholder = null;
+    }
+    function failChatPlaceholder(message) {
+        if (!chatPlaceholder) showChatPlaceholder();
+        const bubble = chatPlaceholder.bubble;
+        bubble.textContent = message;
+        chatPlaceholder.row.classList.add('chat-error');
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        chatPlaceholder = null;
+    }
+    renderChatHistory();
 
     function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
@@ -760,25 +883,32 @@
         if (!text) return;
         quickInput.value = '';
         addUserMessage(text);
-        chatOpen = true;
-        chatDialog.classList.add('show');
-        quickInputBox.style.display = 'none';
-        chatInput.focus();
+        toggleChat(true);
+        showChatPlaceholder();
+        let handedOff = false;
 
         try {
             const res = await api('/chat', 'POST', { content: text });
-            if (res.success && res.data) {
-                addMadelineMessage(res.data.content || '...', res.data.emotion || '默认', true);
-                // AI 主动发起金羽毛：不 await、不入说话队列——工具类会把建议台词排在
-                // 当前回复之后（说完才淡入游戏），对正在进行的对话零打断
-                if (res.data.feather && window.featherTrigger) {
-                    window.featherTrigger.requestFromAI(res.data.emotion || '不安');
-                }
-            } else {
-                addMadelineMessage('Hmm... I didn\'t catch that. Say it again?', '默认', true);
+            const raw = res && res.success && res.data ? res.data.content : '';
+            const display = loggedSpeech(raw);
+            if (!display) {
+                failChatPlaceholder('她好像没听清…再说一次？');
+                return;
+            }
+            const emotion = res.data.emotion || '默认';
+            addMadelineMessage(raw, emotion, true);
+            pushChatLog('assistant', display, emotion);
+            handedOff = true;
+            // AI 主动发起金羽毛：不 await、不入说话队列——工具类会把建议台词排在
+            // 当前回复之后（说完才淡入游戏），对正在进行的对话零打断
+            if (res.data.feather && window.featherTrigger) {
+                window.featherTrigger.requestFromAI(res.data.emotion || '不安');
             }
         } catch (e) {
-            addMadelineMessage('Network issue... try again?', '默认', true);
+            failChatPlaceholder('网络断开了…等一下再试？');
+        } finally {
+            // 已经交给说话队列时，由 doAddMadelineMessage 在真实气泡出现时移除占位
+            if (!handedOff) clearChatPlaceholder();
         }
     }
 
@@ -800,17 +930,23 @@
     async function replyViaChat(text) {
         try {
             const res = await api('/chat', 'POST', { content: text });
-            if (res.success && res.data) {
-                addMadelineMessage(res.data.content || '...', res.data.emotion || '默认');
-                // AI 主动发起金羽毛：排队等当前回复说完，对正在进行的对话零打断
-                if (res.data.feather && window.featherTrigger) {
-                    window.featherTrigger.requestFromAI(res.data.emotion || '不安');
-                }
-            } else {
-                addMadelineMessage('Hmm... I didn\'t catch that. Say it again?', '默认');
+            const raw = res && res.success && res.data ? res.data.content : '';
+            const display = loggedSpeech(raw);
+            if (!display) {
+                failChatPlaceholder('她好像没听清…再说一次？');
+                return false;
             }
+            const emotion = res.data.emotion || '默认';
+            addMadelineMessage(raw, emotion);
+            pushChatLog('assistant', display, emotion);
+            // AI 主动发起金羽毛：排队等当前回复说完，对正在进行的对话零打断
+            if (res.data.feather && window.featherTrigger) {
+                window.featherTrigger.requestFromAI(res.data.emotion || '不安');
+            }
+            return true;
         } catch (e) {
-            addMadelineMessage('Network issue... try again?', '默认');
+            failChatPlaceholder('网络断开了…等一下再试？');
+            return false;
         }
     }
 
@@ -822,6 +958,8 @@
 
     let agentStepRow = null; // 步骤播报行：同一时刻只保留一条，新 step 替换旧的
     function showAgentStep(say, mood) {
+        // 第一条 agent-step 到达即视为“已有真实内容”，撤掉发送占位
+        clearChatPlaceholder();
         // 情绪联动：像素小人/立绘立刻反应（与 [m:情绪] 标记同通道的效果）
         if (window.MadelineMood && mood) pmReactToEmotion(MadelineMood.normalize(mood));
         if (!agentStepRow) {
@@ -948,7 +1086,10 @@
         clearAgentStep();
         if (polishData && polishData.tool === 'polishText') renderPolishCard(polishData);
         const fullText = raw.trim();
-        if (fullText && !isRepeatedSpeech(fullText)) rememberSpeech(fullText);
+        if (fullText) {
+            pushChatLog('assistant', fullText, emotion);
+            if (!isRepeatedSpeech(fullText)) rememberSpeech(fullText);
+        }
     }
 
     async function sendChatMessage() {
@@ -958,27 +1099,36 @@
         addUserMessage(text);
         if (nightCareSaid && /再写|再待|一会|再陪我|不困|不想睡|睡不着|还早/.test(text)) {
             nightCareSaid = false;
-            addMadelineMessage('嗯，那我陪着你。不过写完这一段，真的要睡哦。', '可爱');
+            const reply = '嗯，那我陪着你。不过写完这一段，真的要睡哦。';
+            addMadelineMessage(reply, '可爱');
+            pushChatLog('assistant', reply, '可爱');
             return;
         }
         isTyping = true;
         chatSendBtn.disabled = true;
+        showChatPlaceholder();
+        let handedOff = false;
 
-        // 任务意图（润色/评估）进 agent 工具循环；链路失败回退普通聊天，保证她一定回话
-        if (isAgentTaskIntent(text)) {
-            try {
-                await runAgentStream(text);
-                isTyping = false;
-                chatSendBtn.disabled = false;
-                return;
-            } catch (e) {
-                console.warn('agent 链路失败，回退 /chat:', e);
-                clearAgentStep();
+        try {
+            // 任务意图（润色/评估）进 agent 工具循环；链路失败回退普通聊天，保证她一定回话
+            if (isAgentTaskIntent(text)) {
+                try {
+                    await runAgentStream(text);
+                    return;
+                } catch (e) {
+                    console.warn('agent 链路失败，回退 /chat:', e);
+                    clearAgentStep();
+                    // step 行已撤掉，回退到 /chat 时重新挂一个等待占位
+                    showChatPlaceholder();
+                }
             }
+            handedOff = await replyViaChat(text);
+        } finally {
+            isTyping = false;
+            chatSendBtn.disabled = false;
+            // 真实气泡会由 doAddMadelineMessage 在创建时撤掉占位；其余分支在这里兜底
+            if (!handedOff) clearChatPlaceholder();
         }
-        await replyViaChat(text);
-        isTyping = false;
-        chatSendBtn.disabled = false;
     }
 
     chatSendBtn.addEventListener('click', sendChatMessage);
@@ -993,6 +1143,7 @@
         if (chatOpen) {
             quickInputBox.style.display = 'none';
             chatInput.focus();
+            syncChatViewport();
         } else {
             showQuickInput(true);
         }
@@ -2386,7 +2537,8 @@ function inferReplyEmotion(text) {
         hopT: -1,
         poseUntil: 0,
         poseReturn: '',
-        wasHopping: false
+        wasHopping: false,
+        nextMurmur: 0
     };
 
     // ===== Badeline 替班（临时测试版）=====
@@ -2626,6 +2778,7 @@ function inferReplyEmotion(text) {
     const canInterrupt = pmCore.canInterrupt;
     const tryInterrupt = pmCore.tryInterrupt;
     const requestMode = pmCore.requestMode;
+    const pmCurrentAction = pmCore.currentAction;
     // fall（摔一跤）：贴地短动作，播放 fallPose 帧序列（pmSetSrc 拦截帧播放），低频随机触发
     PM_MODES.fall = { src: 'fall', movable: false, canHop: false, priority: 15, ground: true, dur: () => 620 };
 
@@ -2646,8 +2799,9 @@ function inferReplyEmotion(text) {
         // 过滤掉不满足前置条件的（如 sit/bounce/fall 需贴地）
         const pool = weights.filter(([k]) =>
             (k === 'sit' || k === 'bounce' || k === 'fall') ? nearGround : true);
-        // 传入当前模式作 avoidKey：权重相同时不再连续选中同一动作
-        enterMode(weightedPick(pool, pmState.mode), now);
+        // avoidKey 用具体动作名：fun/look 落地成 idle/lookaround，
+        // 用 pmState.mode 永远排除不到真正的上一个动作
+        enterMode(weightedPick(pool, pmCurrentAction()), now);
     }
 
     // ===== 正向情绪触发：开心蹦跳（bounceline）——经中断优先级判定 =====
@@ -2674,6 +2828,13 @@ function inferReplyEmotion(text) {
             requestMode('sit', now);
         }
     }
+    // 进入睡眠：每次入睡都重新起算梦话计时（醒来不清的话，第二次睡下会立刻冒梦话）
+    function pmEnterSleep(now) {
+        pmState.mode = 'sleep';
+        pmState.modeUntil = now + 20000 + Math.random() * 25000;
+        pmState.nextMurmur = now + 12000 + Math.random() * 15000;
+        pmSetSrc(PM_SRC.sleep);
+    }
     function pmThink(now) {
         const e0 = companionState.currentEmotion;
         if (companionState.isTyping && pmState.mode !== 'celebrate') {
@@ -2698,12 +2859,9 @@ function inferReplyEmotion(text) {
         }
         if (pmState.mode === 'peek') { pmState.mode = 'idle'; pmState.modeUntil = 0; }
 
-        if (pmState.mode === 'sleep') {
-            if (!pmState.nextMurmur) pmState.nextMurmur = now + 12000 + Math.random() * 15000;
-            if (now >= pmState.nextMurmur) {
-                pmState.nextMurmur = now + 18000 + Math.random() * 22000;
-                addMadelineMessage(dreamLines[Math.floor(Math.random() * dreamLines.length)], '默认');
-            }
+        if (pmState.mode === 'sleep' && now >= pmState.nextMurmur) {
+            pmState.nextMurmur = now + 18000 + Math.random() * 22000;
+            addMadelineMessage(dreamLines[Math.floor(Math.random() * dreamLines.length)], '默认');
         }
 
         if (now >= pmState.modeUntil) {
@@ -2712,9 +2870,7 @@ function inferReplyEmotion(text) {
                 const hour = new Date().getHours();
                 const sleepy = (hour >= 23 || hour < 6 || e === '悲伤' || e === '孤独') ? 0.4 : 0.2;
                 if (Math.random() < sleepy) {
-                    pmState.mode = 'sleep';
-                    pmState.modeUntil = now + 20000 + Math.random() * 25000;
-                    pmSetSrc(PM_SRC.sleep);
+                    pmEnterSleep(now);
                 } else if (Math.random() < 0.5) {
                     // 坐下后起身张望（用 fun 素材）
                     pmState.mode = 'lookaround';

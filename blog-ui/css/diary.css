@@ -650,6 +650,7 @@ body::before {
     background: url('../celeste-portraits/textbox/madeline.webp') center / 100% 100% no-repeat;
     opacity: 0;
     pointer-events: none;
+    cursor: pointer;
     transition: opacity .25s ease, transform .25s ease;
 }
 #gameDialog.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
@@ -668,6 +669,10 @@ body::before {
     font-size: 14px;
     line-height: 1.7;
     word-break: break-word;
+}
+@media (max-width: 640px) {
+    #gameDialog { padding: 14px 18px; min-height: 104px; gap: 12px; }
+    #gameDialogPortrait { width: 72px; height: 72px; }
 }
 @keyframes pageIn {
     from { transform: perspective(800px) rotateX(-38deg) translateY(-8px); opacity: 0; }
@@ -878,4 +883,63 @@ body::before {
 #featherGameBtn:hover {
     transform: scale(1.2) translateY(-4px);
     filter: drop-shadow(0 8px 20px rgba(255,170,60,.9)) drop-shadow(0 0 30px rgba(255,140,40,.5));
+}
+
+/* ===== 聊天发送占位（头像 + 跳动省略号）===== */
+.typing-placeholder .msg-bubble { min-width: 44px; }
+.typing-dots { display: inline-flex; align-items: center; gap: 3px; height: 16px; }
+.typing-dots i {
+    width: 4px; height: 4px; border-radius: 50%;
+    background: #3a2e2a; opacity: .3;
+    animation: chatDot 1.2s infinite ease-in-out;
+}
+.typing-dots i:nth-child(2) { animation-delay: .2s; }
+.typing-dots i:nth-child(3) { animation-delay: .4s; }
+@keyframes chatDot {
+    0%, 60%, 100% { opacity: .25; transform: translateY(0); }
+    30% { opacity: 1; transform: translateY(-2px); }
+}
+.msg-row.chat-error .msg-bubble {
+    color: #8a2f2f;
+    background: rgba(196,74,74,.10);
+    border: 1px dashed rgba(196,74,74,.45);
+}
+
+/* ===== 窄屏 / 虚拟键盘 ===== */
+@media (max-width: 560px) {
+    #madeline-wrapper {
+        left: 8px;
+        right: 8px;
+        bottom: calc(var(--chat-bottom, 8px) + env(safe-area-inset-bottom, 0px));
+    }
+    #madeline-chat-dialog {
+        width: calc(100vw - 16px);
+        height: min(500px, calc(var(--chat-vh, 100vh) - 16px));
+        max-height: calc(var(--chat-vh, 100vh) - 16px);
+        transform-origin: 50% 100%;
+    }
+    #madeline-chat-dialog .chat-header {
+        padding: 10px 12px 8px 12px;
+        gap: 8px;
+    }
+    #madeline-chat-dialog .chat-header .close-btn {
+        width: 28px; height: 28px;
+    }
+    #madeline-chat-dialog .chat-messages {
+        padding: 10px 12px 8px 12px;
+        gap: 8px;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+    #madeline-chat-dialog .msg-bubble {
+        max-width: calc(100vw - 90px);
+    }
+    #madeline-chat-dialog .chat-input {
+        padding: 8px 10px 8px 10px;
+        gap: 6px;
+    }
+    #madeline-chat-dialog .chat-input input {
+        min-width: 0;
+        font-size: 16px; /* 小于 16px 时 iOS 聚焦会自动放大页面 */
+    }
 }

@@ -82,6 +82,7 @@
             now = now || performance.now();
             state.enteredAt = now;                                  // 记录进入时刻，供最小驻留判定
             if (def.ground && state.y <= deps.groundY() - 60) return;   // 需贴地但在空中：放弃
+            state.action = key;                                     // 记录具体动作名（fun/look 落地为 idle/lookaround）
             if (def.route) {                                        // walk / celebrate 需要选路
                 if (key === 'celebrate' && deps.celebrate) { deps.celebrate(); }
                 else {
@@ -101,9 +102,17 @@
             deps.setSrc(deps.src[def.src]);
         }
 
+        // 当前动作的具体键：别名（fun/look）落地成 idle/lookaround 后仍返回别名本身，
+        // 供复读排除和优先级判定使用；手动改 mode 导致别名与落地值不符时回落到 state.mode
+        function currentAction() {
+            const a = state.action;
+            if (a && modes[a] && (modes[a].mode || a) === state.mode) return a;
+            return state.mode;
+        }
+
         function canInterrupt(key, now) {
             now = now || performance.now();
-            const cur = modes[state.mode] || { priority: 0 };
+            const cur = modes[currentAction()] || { priority: 0 };
             const nxt = modes[key] || { priority: 0 };
             if (nxt.priority < cur.priority) return false;
             // 最小驻留：模式刚开始时同级触发不打断；优先级差距足够大才硬打断
@@ -130,6 +139,7 @@
         return {
             modes: modes,
             enterMode: enterMode,
+            currentAction: currentAction,
             canInterrupt: canInterrupt,
             tryInterrupt: tryInterrupt,
             requestMode: requestMode,
