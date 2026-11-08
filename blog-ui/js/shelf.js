@@ -1274,6 +1274,9 @@ function stopPeSnow() {
         blInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') blSendMsg(); });
 
         function openChat() {
+            // 进入聊天面板：唯一放大入口（换动作图不再改尺寸）
+            var bImg = document.getElementById('badelineImg');
+            if (bImg) bImg.classList.add('big');
             if (!blHist.length) {
                 var line = LINES[Math.floor(Math.random() * LINES.length)];
                 blAdd('assistant', line);
@@ -1495,12 +1498,11 @@ function stopPeSnow() {
         if (!room || !mirror || !wrap || !img) return;
 
         var DIR = 'celeste-player/badeline/';
-        // gif 动作表（*_f.gif = 重编码修复 delay）
+        // gif 动作表（*_f.gif = 重编码修复 delay）；key = 模式名，必须与 MODE_HANDLERS 一一对应
         var GIF = {
             roam: 'spin_f.gif',              // 25 FPS 流畅版（原 spin.gif 200ms delay = 5FPS 卡死）
             lookUp: 'lookingUp_f.gif',        // 裁白边重排到 32×32 画布，与其他动作同规格
             sleep: 'sleep_f.gif',
-            pretendDead: 'pretendDead.gif',
             roll: 'roll_f.gif',
             rollGetUp: 'rollGetUp_f.gif'
         };
@@ -1510,7 +1512,7 @@ function stopPeSnow() {
         var EMO_TO_MODE = {
             angry: 'roll', angryAlt: 'roll', yell: 'roll',
             freakA: 'roll', freakB: 'roll', freakC: 'roll',
-            sad: 'pretendDead', upset: 'pretendDead', sigh: 'pretendDead',
+            sad: 'roll', upset: 'roll', sigh: 'roll',   // 躺倒那套（roll 链），不再指向无处理分支的 pretendDead
             worried: 'lookUp', worriedAlt: 'lookUp', concerned: 'lookUp',
             serious: 'lookUp', scoff: 'roam', normal: 'roam'
         };
@@ -1553,33 +1555,50 @@ function stopPeSnow() {
                 'translate(' + st.x + 'px,' + st.y + 'px) translate(-50%,-50%)' +
                 ' scaleX(' + st.dir + ')';
         }
-        // 切模式（对齐 write 页：只换素材/目标/时长，不做 transition 位移）
-        function enterMode(name) {
-            st.mode = name;
-            var now = performance.now();
-            img.classList.remove('big');
-            if (name === 'roam') {
-                img.src = DIR + GIF.roam;
+        // 模式处理分支表：每个模式必须同时拥有 GIF 资源与这里的处理函数（启动自检会核对）
+        // 只负责换图后的目标点/到期时间；尺寸（.big）只在进出聊天面板时切换，动作切换绝不碰它
+        var MODE_HANDLERS = {
+            roam: function (now) {
                 var t = pickTarget();
                 st.tx = t.x; st.ty = t.y;
                 st.modeUntil = now + ROAM_SAFETY;
-            } else if (name === 'lookUp') {
-                img.src = DIR + GIF.lookUp;
-                img.classList.add('big');
+            },
+            lookUp: function (now) {
                 st.tx = st.ty = null;
                 st.modeUntil = now + DUR.lookUp[0] + Math.random() * (DUR.lookUp[1] - DUR.lookUp[0]);
-            } else if (name === 'sleep') {
-                img.src = DIR + GIF.sleep;
+            },
+            sleep: function (now) {
                 st.tx = st.ty = null;
                 st.modeUntil = now + DUR.sleep[0] + Math.random() * (DUR.sleep[1] - DUR.sleep[0]);
-            } else if (name === 'roll') {
-                img.src = DIR + GIF.roll;
+            },
+            roll: function (now) {
                 st.tx = st.ty = null;
                 st.modeUntil = now + ROLL_MS;
-            } else if (name === 'rollGetUp') {
-                img.src = DIR + GIF.rollGetUp;
+            },
+            rollGetUp: function (now) {
                 st.modeUntil = now + GETUP_MS;
             }
+        };
+        // 启动自检：EMO_TO_MODE 的每个值都必须同时存在动作资源与处理分支，缺失立刻报错，不静默空转
+        (function selfCheckEmotionMap() {
+            var missing = [];
+            Object.keys(EMO_TO_MODE).forEach(function (emo) {
+                var m = EMO_TO_MODE[emo];
+                if (!GIF[m]) missing.push(emo + '→' + m + '（缺动作资源）');
+                if (!MODE_HANDLERS[m]) missing.push(emo + '→' + m + '（缺处理分支）');
+            });
+            Object.keys(MODE_HANDLERS).forEach(function (m) {
+                if (!GIF[m]) missing.push(m + '（处理分支缺动作资源）');
+            });
+            if (missing.length) console.error('[Badeline] 情绪→动作映射自检失败：' + missing.join('，'));
+        })();
+        // 切模式（只换素材/目标/时长，不碰尺寸）
+        function enterMode(name) {
+            var handle = MODE_HANDLERS[name];
+            if (!handle) { console.error('[Badeline] enterMode 未知动作：' + name + '（缺处理分支）'); return; }
+            st.mode = name;
+            img.src = DIR + GIF[name];
+            handle(performance.now());
         }
         // 常态加权选模式（排除当前模式，不连续重复）
         function pickMode() {
@@ -1593,9 +1612,16 @@ function stopPeSnow() {
             }
             enterMode(pool[0][0]);
         }
+        function inRollChain() { return st.mode === 'roll' || st.mode === 'rollGetUp'; }
         function enterRollChain() {
             pendingRoll = false;
+            if (inRollChain()) return;   // 已在播：绝不重播，也不从中间打断
             enterMode('roll');
+        }
+        // 对话结束恢复：生气躺倒链若还没播完，交给 think() 收尾；积压的 roll 只补一次
+        function resumeAfterChat() {
+            if (inRollChain()) { pendingRoll = false; return; }
+            if (pendingRoll) enterRollChain(); else enterMode('roam');
         }
         function think(now) {
             if (!roaming || inDialog || now < st.modeUntil) return;
@@ -1673,6 +1699,7 @@ function stopPeSnow() {
             wrap.style.left = '';
             wrap.style.top = '';
             wrap.style.transform = '';
+            img.classList.remove('big');     /* 离房复位尺寸：下次进房/开面板重新进入放大态 */
             wrap.classList.add('done');      /* 回镜面：加驻留态，由 CSS 接管 transform（含 --glass-scale） */
             mirror.appendChild(wrap);   // DOM 移回 #shelfMirror
         }
@@ -1703,38 +1730,34 @@ function stopPeSnow() {
         // closeChat 钩子：模式 A 返回 'summoned'（让外部走 byeSheLeaves 让她走）；模式 B 返回 'free'（恢复游荡）
         // Canvas 模式例外：镜子已碎、她常驻房间，关面板不退场（旧版失误），双击本人可重开聊天面板
         window.__badelineCloseChat = function () {
+            img.classList.remove('big');  // 退出聊天面板：尺寸切回常态
             if (!roaming) return 'summoned';
             if (summonedMode && !window.__CANVAS_MIRROR) {
                 stopFreeRoam();           // 模式 A：DOM 复位回 #shelfMirror，让 byeSheLeaves 的 .bye 动画接管
                 return 'summoned';
             }
-            inDialog = false;             // 模式 B / canvas 常驻：恢复游荡（若积了生气情绪 → 先 roll）
-            if (pendingRoll) enterRollChain(); else enterMode('roam');
+            inDialog = false;             // 模式 B / canvas 常驻：恢复游荡（生气躺倒链不半路打断）
+            resumeAfterChat();
             return 'free';
         };
-        // 情绪事件：通用 emo → 大立绘 mode（无论对话/游荡）；ANGRY 额外记账 pendingRoll（对话结束补 rollChain）
+        // 情绪事件：通用 emo → 大立绘 mode（无论对话/游荡）
+        // ANGRY 在对话期间只记账 pendingRoll，绝不当场播 —— 否则关闭对话框时 roll 链会播第二遍
         window.__badelineOnEmotion = function (emo) {
-            // 通用：对话期间也切大立绘！（之前只处理 ANGRY 且对话期间完全冻结大立绘）
-            var targetMode = EMO_TO_MODE[emo];
-            if (targetMode && !inDialog) {
-                // 游荡中 → 正常 enterMode
-                enterMode(targetMode);
-            } else if (targetMode && inDialog && roaming) {
-                // 对话期间也切大立绘 GIF（用 enterMode 但跳过 think 的动作树流程）
-                enterMode(targetMode);
-            }
-            // ANGRY 类 → 对话结束后补一个 rollChain（翻滚战斗态）
             if (ANGRY[emo]) {
                 if (!roaming || inDialog) { pendingRoll = true; return; }
-                if (st.mode === 'roll' || st.mode === 'rollGetUp') return;
-                enterRollChain();
+                enterRollChain();         // 游荡中：当场播，enterRollChain 自带防重播
+                return;
             }
+            var targetMode = EMO_TO_MODE[emo];
+            if (!targetMode) return;
+            if (inRollChain()) return;    // 生气躺倒链进行中：不切别的动作，避免播到一半被打断
+            enterMode(targetMode);
         };
-        // quickTalk（单击）演出结束回调 → 恢复游荡（若积了生气情绪 → 先 roll）
+        // quickTalk（单击）演出结束回调 → 恢复游荡（生气躺倒链不半路打断）
         window.__badelineTalkEnded = function () {
             if (!inDialog) return;
             inDialog = false;
-            if (pendingRoll) enterRollChain(); else enterMode('roam');
+            resumeAfterChat();
         };
         // 进镜之房间时随机选模式
         window.__badelineEnterRoom = function () {
@@ -1773,9 +1796,9 @@ function stopPeSnow() {
             if (inDialog || !roaming) return;
             inDialog = true;
             facePlayer();
-            img.src = DIR + GIF.lookUp;
-            img.classList.add('big');
-            if (window.__badelineOpenChat) window.__badelineOpenChat();
+            // 只换动作图（不碰尺寸）；生气躺倒链正在播时保持原图，不从中间打断
+            if (!inRollChain()) enterMode('lookUp');
+            if (window.__badelineOpenChat) window.__badelineOpenChat();   // 面板打开时才放大（见 openChat）
         }
         var clickTimer = null;
         img.addEventListener('click', function (e) {

@@ -288,9 +288,8 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     -webkit-user-drag: none;
 }
 #badelineImg.big {
-    width: calc(var(--bd-size, 128px) * var(--bd-body-scale));
-    height: calc(var(--bd-size, 128px) * var(--bd-body-scale));
-}   /* lookingUp 和 spin/sleep/roll 同尺寸 */
+    --bd-body-scale: 1;   /* 聊天面板展开时的放大态（常态 0.70）；只由面板进出切换，动作切换不碰 */
+}
 
 /* ===== Badeline 聊天面板：镜子召唤后出现 ===== */
 #blChat {
@@ -357,10 +356,10 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
     transition: opacity .25s ease, transform .25s ease;
 }
 #badelineDialog.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
-#badelineDialogPortrait { width: 92px; height: 92px; flex-shrink: 0; border-radius: 6px; overflow: hidden; background: rgba(0,0,0,.4); }
-#badelineDialogPortrait img { width: 100%; height: 100%; object-fit: cover; display: block; image-rendering: pixelated; }
-#badelineDialogName { color: #cdb6ff; font-family: 'Renogare','CelesteZH','Microsoft YaHei',sans-serif; font-size: 13px; letter-spacing: 2px; margin-bottom: 5px; text-shadow: 0 0 10px rgba(205,182,255,.45); }
-#badelineDialogText { color: #f2ecff; font-family: 'Renogare','CelesteZH','Microsoft YaHei',sans-serif; font-size: 14px; line-height: 1.7; word-break: break-word; min-height: 48px; white-space: pre-wrap; }
+#badelineDialogPortrait { width: 92px; height: 92px; flex-shrink: 0; border-radius: 6px; overflow: hidden; }
+#badelineDialogPortrait img { width: 100%; height: 100%; object-fit: cover; display: block; }
+#badelineDialogName { color: #cdb6ff; font-family: 'Press Start 2P', monospace; font-size: 13px; margin-bottom: 5px; }
+#badelineDialogText { color: #f2ecff; font-family: 'Renogare','CelesteZH','Microsoft YaHei',sans-serif; font-size: 14px; line-height: 1.7; word-break: break-word; }
 #blChat.dialog-live { bottom: 178px; }
 @media (max-width: 640px) {
     #badelineDialog { padding: 14px 18px; min-height: 104px; gap: 12px; }
