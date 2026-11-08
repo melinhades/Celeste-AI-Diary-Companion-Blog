@@ -159,7 +159,6 @@ public class DiaryServiceImpl implements DiaryService {
             content = content.substring(0, MAX_CONTENT_LENGTH);
         }
         diary.setContent(content);
-        diary.setCreateDate(now);
         diary.setUpdateDate(now);
 
         if (param.getId() != null && !param.getId().isEmpty()) {
@@ -175,7 +174,8 @@ public class DiaryServiceImpl implements DiaryService {
                 return Result.fail(404, "日记不存在");
             }
         } else {
-            // 新增
+            // 新增：只有新增才写创建时间，编辑不改写（否则时间衰减/昨日日报/情绪轨迹都会错位）
+            diary.setCreateDate(now);
             diaryMapper.insert(diary);
             try {
                 sysUserService.grantDiaryBerry(userId);
