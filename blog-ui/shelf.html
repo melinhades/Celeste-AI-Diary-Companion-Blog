@@ -8,7 +8,7 @@
     <link rel="icon" href="icon/OIP.webp?v=20261105a" type="image/webp">
 <!-- 字体全部走 css/shelf.css 里的本地 @font-face，不再引 Google Fonts（外链 render-blocking，被墙会导致整页字体回退） -->
 <link rel="stylesheet" href="css/text-fx.css?v=20261004a">
-<link rel="stylesheet" href="css/shelf.css?v=20261108e">
+<link rel="stylesheet" href="css/shelf.css?v=20261108f">
 <link rel="stylesheet" href="css/badeline-panel.css?v=20261108a">
 </head>
 <body>
@@ -20,19 +20,8 @@
     <div class="ds-world">
         <div class="ds-left">
             <div class="ds-astars" id="dsAStars" aria-hidden="true"></div>
-            <!-- 雪脊上的鸟群（js/dream-birds.js）：金羽毛鸟 + 普通鸟 + 蹦跳小鸟 + 巡航鸟，
-                 单画布一次绘制；金鸟第一次进梦会啄地叫你并弹出 #dsBirdTip -->
+            <!-- 雪脊上的鸟（js/dream-birds.js）：一只大蓝鸟 + 五只蹦跳小鸟，单画布一次绘制 -->
             <canvas id="dsBirds" aria-hidden="true"></canvas>
-            <div id="dsBirdTip" role="dialog" aria-label="梦境里能做什么">
-                <div class="bt-head"><i></i>GOLDEN BIRD · 这样玩</div>
-                <ul>
-                    <li><b>篝火</b><span>点火焰 → 趁热把这个梦写下来</span></li>
-                    <li><b>金羽毛</b><span>点它 → 化身星飞（方向键 / WASD，Esc 收回）</span></li>
-                    <li><b>Madeline</b><span>点她或按 Esc → 叫醒她，回书架</span></li>
-                    <li><b>心门</b><span>四颗水晶心点亮后点门 → 镜之房间</span></li>
-                </ul>
-                <div class="bt-foot">点这里收起 · 只说这一次</div>
-            </div>
             <!-- 金羽毛：随机散布天空（≤6 根）；点击 → 星飞光球（方向键/WASD 操控，Esc 收回） -->
             <div id="dsFeathers" aria-hidden="false"></div>
             <img id="dsFire" src="celeste-gui/campfire/dream00.png" alt="" decoding="async" onerror="if(!this.dataset.r){this.dataset.r=1;var s=this.src,t=this;setTimeout(function(){t.src=s;},300);}">
@@ -220,7 +209,7 @@
 <!-- 雪脊鸟群：bird-motion.js 是和圆桌会议主持鸟共用的运动引擎（拖尾 / 变体音效池 / 曲线原语），
      dream-birds.js 监听 dream:entered / dream:exiting，必须排在 shelf.js 之前注册监听 -->
 <script src="js/bird-motion.js?v=20261031c"></script>
-<script src="js/dream-birds.js?v=20261107a"></script>
+<script src="js/dream-birds.js?v=20261108b"></script>
 <script src="js/badeline-crawlout.js?v=20261107b"></script>
 <script src="js/badeline-panel.js?v=20261108b"></script>
 <script src="js/shelf.js?v=20261108c"></script>
