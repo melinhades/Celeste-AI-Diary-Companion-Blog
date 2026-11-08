@@ -35,6 +35,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -320,9 +321,13 @@ public class MemoryServiceImpl implements MemoryService {
     private static final int CHUNKS_PER_DIARY = 8;
     /** 同一篇日记的「替换分片 / 删除分片」互斥，固定数量避免锁对象无限增长 */
     private static final Object[] DIARY_LOCKS = new Object[64];
-    /** 已删除日记的短期墓碑：拦住删除之后才被调度执行的异步分片任务 */
-    private static final Map<String, Long> DELETED_DIARIES = new ConcurrentHashMap<>();
-    private static final long DELETED_DIARY_TTL_MS = 30 * 60 * 1000L;
+    /**
+     * 已删除日记的墓碑：拦住删除之后才被调度执行的异步分片任务。
+     * 日记 id 为插入时生成、永不复用，因此墓碑常驻进程内、不设过期——
+     * 一旦按时间过期，积压超过该时长的异步任务就会把已删日记的分片重新写回去。
+     * 条目数只与「删除过的日记数」同阶，每个仅一个 id 字符串。
+     */
+    private static final Set<String> DELETED_DIARIES = ConcurrentHashMap.newKeySet();
 
     static {
         for (int i = 0; i < DIARY_LOCKS.length; i++) {
@@ -354,7 +359,7 @@ public class MemoryServiceImpl implements MemoryService {
             }
             // 阶段二：与删除互斥地替换；日记已删除则不再回写
             synchronized (diaryLock(diaryId)) {
-                if (DELETED_DIARIES.containsKey(diaryId)) return;
+                if (DELETED_DIARIES.contains(diaryId)) return;
                 vectorStore.delete(VectorCollection.DIARY, userId, diaryId);
                 for (VectorRecord record : records) {
                     vectorStore.upsert(record);
@@ -372,9 +377,7 @@ public class MemoryServiceImpl implements MemoryService {
         if (userId == null || diaryId == null) return;
         synchronized (diaryLock(diaryId)) {
             vectorStore.delete(VectorCollection.DIARY, userId, diaryId);
-            long now = System.currentTimeMillis();
-            DELETED_DIARIES.entrySet().removeIf(e -> now - e.getValue() > DELETED_DIARY_TTL_MS);
-            DELETED_DIARIES.put(diaryId, now);
+            DELETED_DIARIES.add(diaryId);
         }
         vectorStore.invalidate(userId);  // P1：分片删除后清缓存
     }
