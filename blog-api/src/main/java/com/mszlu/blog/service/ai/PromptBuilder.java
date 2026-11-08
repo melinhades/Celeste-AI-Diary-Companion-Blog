@@ -578,6 +578,32 @@ public class PromptBuilder {
         return sb.toString();
     }
 
+    /**
+     * 保存后的日记总结：只按当前人设取身份，输出形状与约束保持原样。
+     * 默认人设（PersonaServiceImpl 未落库的兜底，id 为空）继续用原来的 Madeline 原句，
+     * 保证默认角色下的提示词与输出逐字不变；其他人设才换成角色名 + 人设卡。
+     */
+    public static String diarySummary(Persona persona, String snippet) {
+        if (persona == null || persona.getId() == null) {
+            return "你是 Madeline，Celeste 的爬山女孩。你温暖、真诚、细腻。\n"
+                    + "用户刚写完一篇日记并保存了：\n———\n" + snippet + "\n———\n\n"
+                    + "请以 Madeline 的身份，用 1-2 句话为这篇日记做一个温柔的总结：先轻轻点出日记里最打动你的一件事，再给一句暖心的收尾。\n"
+                    + "不要说教，不要罗列，像朋友合上日记本后随口说的那句话。\n"
+                    + "直接输出文字，不要 JSON，不要引号。";
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("你是「").append(persona.getName()).append("」。\n");
+        if (persona.getCharacterCard() != null && !persona.getCharacterCard().isBlank()) {
+            sb.append(persona.getCharacterCard()).append("\n\n");
+        }
+        sb.append("用户刚写完一篇日记并保存了：\n———\n").append(snippet).append("\n———\n\n")
+          .append("请以「").append(persona.getName())
+          .append("」的身份，用 1-2 句话为这篇日记做一个温柔的总结：先轻轻点出日记里最打动你的一件事，再给一句暖心的收尾。\n")
+          .append("不要说教，不要罗列，像朋友合上日记本后随口说的那句话。\n")
+          .append("直接输出文字，不要 JSON，不要引号。");
+        return sb.toString();
+    }
+
     /** 每日明信片：写过日记走「具体 → 普遍 → 山峰口吻」，没写日记走安静问候（两条独立分支） */
     public static String dailyPostcard(String userName, String yesterdayDiary, String emotionNote) {
         boolean hasDiary = yesterdayDiary != null && !yesterdayDiary.trim().isEmpty();

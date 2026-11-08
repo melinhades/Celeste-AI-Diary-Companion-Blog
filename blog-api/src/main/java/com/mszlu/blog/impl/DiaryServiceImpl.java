@@ -1217,11 +1217,7 @@ public class DiaryServiceImpl implements DiaryService {
         String content = param.getContent() == null ? "" : param.getContent();
         if (content.isEmpty()) return Result.fail(400, "内容为空");
         String snippet = content.substring(0, Math.min(600, content.length()));
-        String prompt = "你是 Madeline，Celeste 的爬山女孩。你温暖、真诚、细腻。\n"
-                + "用户刚写完一篇日记并保存了：\n———\n" + snippet + "\n———\n\n"
-                + "请以 Madeline 的身份，用 1-2 句话为这篇日记做一个温柔的总结：先轻轻点出日记里最打动你的一件事，再给一句暖心的收尾。\n"
-                + "不要说教，不要罗列，像朋友合上日记本后随口说的那句话。\n"
-                + "直接输出文字，不要 JSON，不要引号。";
+        String prompt = PromptBuilder.diarySummary(personaService.getActive(user.getId()), snippet);
         String reply = aiClient.chat(new java.util.ArrayList<>(java.util.Arrays.asList(
                 new AiMessage("user", prompt))));
         if (reply == null || reply.isEmpty()) {
