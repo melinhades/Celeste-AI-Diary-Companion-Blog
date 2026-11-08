@@ -4,10 +4,8 @@ import com.mszlu.blog.dao.mapper.DocumentChunkMapper;
 import com.mszlu.blog.dao.mapper.MemoryMapper;
 import com.mszlu.blog.dao.pojo.Memory;
 import com.mszlu.blog.service.ai.AiClient;
-import com.mszlu.blog.vo.ContextChunk;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -25,6 +23,9 @@ import static org.mockito.Mockito.when;
  * RAG 评测：5 组真实场景（精确匹配/语义泛化/时间优先/重要性/降级）。
  * 改动后对比此基准，确保检索质量不退化。
  * 标注 BLOCKED：需真实 AI embedding 服务可用，CI 环境不可用时跳过。
+ * <p>
+ * 走真实召回链路：MemoryServiceImpl 持有真实的 MysqlVectorStore（mapper / AI 均为 mock），
+ * 打分公式（时间衰减 / 重要性融合 / 阈值）由 MysqlVectorStore 生效。
  */
 class RAGEvalTest {
 
@@ -35,15 +36,29 @@ class RAGEvalTest {
     @Mock
     private AiClient aiClient;
 
-    @InjectMocks
+    /** 被测召回链路的存储层：真实实现 + mock 依赖 */
+    private MysqlVectorStore vectorStore;
+    /** 被测召回链路 */
     private MemoryServiceImpl memoryService;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        // 单测不经过 Spring 容器，@Value 不会注入；补齐衰减与相似度阈值
-        ReflectionTestUtils.setField(memoryService, "decayTauDays", 30);
-        ReflectionTestUtils.setField(memoryService, "similarityThreshold", 0.3);
+
+        vectorStore = new MysqlVectorStore();
+        ReflectionTestUtils.setField(vectorStore, "memoryMapper", memoryMapper);
+        ReflectionTestUtils.setField(vectorStore, "chunkMapper", chunkMapper);
+        // 单测不经过 Spring 容器，@Value 不会注入；补齐衰减、相似度阈值与召回上限
+        ReflectionTestUtils.setField(vectorStore, "decayTauDays", 30);
+        ReflectionTestUtils.setField(vectorStore, "similarityThreshold", 0.3);
+        ReflectionTestUtils.setField(vectorStore, "memoryRecallLimit", 200);
+        ReflectionTestUtils.setField(vectorStore, "diaryRecallLimit", 300);
+        ReflectionTestUtils.setField(vectorStore, "loreRecallLimit", 500);
+
+        memoryService = new MemoryServiceImpl();
+        ReflectionTestUtils.setField(memoryService, "memoryMapper", memoryMapper);
+        ReflectionTestUtils.setField(memoryService, "aiClient", aiClient);
+        ReflectionTestUtils.setField(memoryService, "vectorStore", vectorStore);
     }
 
     /**
@@ -83,7 +98,7 @@ class RAGEvalTest {
 
         // 断言：「李明」记忆应排在前面（或至少被召回）
         assertFalse(result.isEmpty(), "应至少召回1条记忆");
-        assertTrue(result.stream().anyMatch(m -> m.getContent().contains("李明")), 
+        assertTrue(result.stream().anyMatch(m -> m.getContent().contains("李明")),
                    "应召回包含「李明」的记忆");
     }
 
@@ -219,7 +234,7 @@ class RAGEvalTest {
 
         // 断言：即使向量不可用，也应通过 2-gram 降级召回
         assertFalse(result.isEmpty(), "降级策略应召回至少1条记忆");
-        assertTrue(result.stream().anyMatch(mem -> mem.getContent().contains("李明")), 
+        assertTrue(result.stream().anyMatch(mem -> mem.getContent().contains("李明")),
                    "应通过关键词匹配召回");
     }
 }

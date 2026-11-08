@@ -2,8 +2,6 @@ package com.mszlu.blog.impl;
 
 import com.mszlu.blog.dao.mapper.DocumentChunkMapper;
 import com.mszlu.blog.dao.mapper.MemoryMapper;
-import com.mszlu.blog.dao.pojo.Memory;
-import com.mszlu.blog.service.ai.AiClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -11,15 +9,11 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import java.util.Arrays;
-import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
 
 /**
- * MemoryServiceImpl 核心算法单测：向量解析、余弦相似度、时间衰减、重要性融合。
+ * MysqlVectorStore 核心算法单测：向量解析、余弦相似度、时间衰减、重要性融合。
+ * 这些方法随向量检索下沉到存储实现，测试目标同步迁移。
  * 不依赖数据库和真实 AI 服务，用 mock 隔离外部依赖。
  */
 class MemoryServiceImplTest {
@@ -28,17 +22,15 @@ class MemoryServiceImplTest {
     private MemoryMapper memoryMapper;
     @Mock
     private DocumentChunkMapper chunkMapper;
-    @Mock
-    private AiClient aiClient;
 
     @InjectMocks
-    private MemoryServiceImpl memoryService;
+    private MysqlVectorStore vectorStore;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
         // 单测不经过 Spring 容器，@Value 不会注入；显式给 30 天，避免 tau=0 时衰减恒为 0
-        ReflectionTestUtils.setField(memoryService, "decayTauDays", 30);
+        ReflectionTestUtils.setField(vectorStore, "decayTauDays", 30);
     }
 
     @Test
@@ -120,9 +112,9 @@ class MemoryServiceImplTest {
     // ===== 反射调用 private 方法用于测试 =====
     private double invokeCosine(float[] a, float[] b) {
         try {
-            var method = MemoryServiceImpl.class.getDeclaredMethod("cosine", float[].class, float[].class);
+            var method = MysqlVectorStore.class.getDeclaredMethod("cosine", float[].class, float[].class);
             method.setAccessible(true);
-            return (double) method.invoke(memoryService, a, b);
+            return (double) method.invoke(vectorStore, a, b);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -130,9 +122,9 @@ class MemoryServiceImplTest {
 
     private double invokeTimeDecay(Long timestampMs) {
         try {
-            var method = MemoryServiceImpl.class.getDeclaredMethod("timeDecay", Long.class);
+            var method = MysqlVectorStore.class.getDeclaredMethod("timeDecay", Long.class);
             method.setAccessible(true);
-            return (double) method.invoke(memoryService, timestampMs);
+            return (double) method.invoke(vectorStore, timestampMs);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -140,9 +132,9 @@ class MemoryServiceImplTest {
 
     private double invokeImportanceWeight(Integer importance) {
         try {
-            var method = MemoryServiceImpl.class.getDeclaredMethod("importanceWeight", Integer.class);
+            var method = MysqlVectorStore.class.getDeclaredMethod("importanceWeight", Integer.class);
             method.setAccessible(true);
-            return (double) method.invoke(memoryService, importance);
+            return (double) method.invoke(vectorStore, importance);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -150,9 +142,9 @@ class MemoryServiceImplTest {
 
     private float[] invokeParseVec(String json) {
         try {
-            var method = MemoryServiceImpl.class.getDeclaredMethod("parseVec", String.class);
+            var method = MysqlVectorStore.class.getDeclaredMethod("parseVec", String.class);
             method.setAccessible(true);
-            return (float[]) method.invoke(memoryService, json);
+            return (float[]) method.invoke(vectorStore, json);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
