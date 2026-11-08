@@ -11,6 +11,17 @@
         border: 'celeste-feather/border.png',
         box: 'celeste-feather/box.png'
     };
+    // ===== Badeline 斩断羽毛：原作第六章 BreathingMinigame 的 feather/slice + feather_half0/1，
+    // 「出手」沿用她现成的 player_badeline throw 帧，不另造帧 =====
+    const BREAK_ASSETS = {
+        half: ['celeste-feather/feather_half0.png?v=20261108a',
+            'celeste-feather/feather_half1.png?v=20261108a'],
+        slice: 'celeste-feather/slice.png?v=20261108a',
+        badeline: ['Atlases/Gameplay/characters/player_badeline/throw00.png?v=20261108a',
+            'Atlases/Gameplay/characters/player_badeline/throw01.png?v=20261108a',
+            'Atlases/Gameplay/characters/player_badeline/throw02.png?v=20261108a',
+            'Atlases/Gameplay/characters/player_badeline/throw03.png?v=20261108a']
+    };
 
     let overlay = null, canvas = null, ctx = null;
     const images = {};
@@ -610,7 +621,199 @@
         window.dispatchEvent(new CustomEvent('feather-finished'));
     }
 
-    window.FeatherGame = { open: openGame, close: closeGame, suggestThenOpen: suggestThenOpen };
+    // ================================================================
+    // ===== Badeline 斩断金羽毛（驻场拦截演出）=====
+    // 只在「她是否在场」为真时走这段；判断复用 diary.js 暴露的 isBadelineStandIn()，
+    // 不新造驻场状态。一个驻场周期只演一次，之后所有入口静默拒绝；驻场结束后自动解锁。
+    // 不进入呼吸游戏状态机，全部表现都在独立 overlay 上完成。
+    // ================================================================
+    let breakOverlay = null, breakCanvas = null, breakCtx = null;
+    let bGW = window.innerWidth, bGH = window.innerHeight;
+    let breakAssets = null, breakAssetsPromise = null;
+    let breakShown = false, breakPlaying = false, breakAnimId = null;
+
+    function ensureBreakAssets() {
+        if (breakAssets) return Promise.resolve(breakAssets);
+        if (breakAssetsPromise) return breakAssetsPromise;
+        breakAssetsPromise = Promise.all([
+            Promise.all(ASSETS.feather.map(loadImage)),
+            Promise.all(BREAK_ASSETS.half.map(loadImage)),
+            loadImage(BREAK_ASSETS.slice),
+            Promise.all(BREAK_ASSETS.badeline.map(loadImage))
+        ]).then(function (res) {
+            breakAssets = {
+                feather: res[0],
+                half: res[1],
+                slice: res[2],
+                badeline: res[3].filter(Boolean)
+            };
+            return breakAssets;
+        });
+        return breakAssetsPromise;
+    }
+
+    function buildBreakOverlay() {
+        if (breakOverlay) return;
+        breakOverlay = document.createElement('div');
+        breakOverlay.id = 'feather-break-overlay';
+        breakOverlay.innerHTML = '<canvas id="featherBreakCanvas"></canvas>';
+        const style = document.createElement('style');
+        style.id = 'feather-break-style';
+        style.textContent =
+            '#feather-break-overlay{position:fixed;inset:0;opacity:0;pointer-events:none;background:radial-gradient(ellipse at 50% 42%, rgba(52,26,54,.62), rgba(6,5,12,.97) 78%);z-index:1250;transition:opacity .38s ease;}' +
+            '#feather-break-overlay.show{opacity:1;pointer-events:auto;}' +
+            '#featherBreakCanvas{position:absolute;inset:0;width:100%;height:100%;display:block;}';
+        document.head.appendChild(style);
+        document.body.appendChild(breakOverlay);
+        breakCanvas = document.getElementById('featherBreakCanvas');
+        breakCtx = breakCanvas.getContext('2d');
+        window.addEventListener('resize', function () {
+            if (breakOverlay) resizeBreakCanvas();
+        });
+    }
+
+    function resizeBreakCanvas() {
+        // 页面在后台/隐藏标签页加载时 innerWidth 可能为 0，用文档尺寸兜底
+        bGW = window.innerWidth || document.documentElement.clientWidth || 1280;
+        bGH = window.innerHeight || document.documentElement.clientHeight || 720;
+        if (breakCanvas) { breakCanvas.width = bGW; breakCanvas.height = bGH; }
+    }
+
+    function drawBreakHalf(img, x, y, fw, fh, rot, alpha) {
+        if (!img) return;
+        breakCtx.save();
+        breakCtx.globalAlpha = alpha;
+        breakCtx.translate(x, y);
+        breakCtx.rotate(rot);
+        breakCtx.drawImage(img, -fw / 2, -fh / 2, fw, fh);
+        breakCtx.restore();
+    }
+
+    function drawFeatherBreak(t, a) {
+        const cx = bGW / 2, cy = bGH * 0.46;
+        // 与呼吸游戏同一缩放口径：256px 图 × 1.6
+        const FS = 1.6;
+        const fw = 256 * FS, fh = 256 * FS;
+        const CUT = 700;
+        breakCtx.clearRect(0, 0, bGW, bGH);
+        breakCtx.imageSmoothingEnabled = false;
+
+        if (t < CUT) {
+            const fimg = a.feather[Math.floor(t / 140) % 4];
+            const rot = 0.1 + Math.sin(t / 1000 * Math.PI * 2 * 0.4) * 0.09;
+            const bob = Math.sin(t / 1000 * Math.PI * 2 * 0.5) * 6;
+            if (fimg) {
+                breakCtx.save();
+                breakCtx.globalAlpha = Math.min(1, t / 260);
+                breakCtx.translate(cx, cy + bob);
+                breakCtx.rotate(rot);
+                breakCtx.drawImage(fimg, -fw / 2, -fh / 2, fw, fh);
+                breakCtx.restore();
+            }
+        } else {
+            const u = (t - CUT) / 1000;
+            const rotAtCut = 0.1 + Math.sin(CUT / 1000 * Math.PI * 2 * 0.4) * 0.09;
+            // 断口近似垂直羽轴：两半沿断口法线分离，同时受重力下落、逐渐淡出
+            const sep = fw * 0.24 * u + fw * 0.20 * u * u;
+            const fall = fw * 0.30 * u * u;
+            const alpha = u > 1.0 ? Math.max(0, 1 - (u - 1.0) / 0.55) : 1;
+            drawBreakHalf(a.half[0], cx - sep * 0.76, cy - sep * 0.64 + fall, fw, fh, rotAtCut - 0.28 * u, alpha);
+            drawBreakHalf(a.half[1], cx + sep * 0.76, cy + sep * 0.64 + fall, fw, fh, rotAtCut + 0.28 * u, alpha);
+
+            // 斩击瞬间：原作 feather/slice 图元，旋转到实际断口角度
+            if (u < 0.3 && a.slice) {
+                const sa = Math.max(0, 1 - u / 0.3);
+                const sw = fw * 1.18, sh = sw * (a.slice.height / a.slice.width);
+                breakCtx.save();
+                breakCtx.globalAlpha = sa;
+                breakCtx.translate(cx, cy);
+                breakCtx.rotate(rotAtCut - 0.84);
+                breakCtx.drawImage(a.slice, -sw / 2, -sh / 2, sw, sh);
+                breakCtx.restore();
+            }
+        }
+
+        // 「她出手」：沿用现成 throw 帧，从左向右掠过羽毛
+        if (t > 360 && t < 1150 && a.badeline.length) {
+            const p = Math.min(1, (t - 360) / 560);
+            const x = cx - fw * 0.70 + p * fw * 1.40;
+            const y = cy + fh * 0.12;
+            const fade = t > 980 ? Math.max(0, 1 - (t - 980) / 170) : 1;
+            const img = a.badeline[Math.floor((t - 360) / 120) % a.badeline.length];
+            const size = 256;
+            breakCtx.save();
+            breakCtx.globalAlpha = fade;
+            breakCtx.imageSmoothingEnabled = false;
+            breakCtx.drawImage(img, x - size / 2, y - size / 2, size, size);
+            breakCtx.restore();
+        }
+    }
+
+    function playFeatherBreak() {
+        if (breakPlaying) return Promise.resolve();
+        breakPlaying = true;
+        return ensureBreakAssets().then(function (a) {
+            buildBreakOverlay();
+            resizeBreakCanvas();
+            breakOverlay.classList.add('show');
+            return new Promise(function (resolve) {
+                const start = performance.now();
+                const TOTAL = 2250;
+                function frame(now) {
+                    // 隐藏标签页期间启动时画布可能是 0×0，可见后补一次尺寸
+                    if (breakCanvas && breakCanvas.width === 0 && window.innerWidth) resizeBreakCanvas();
+                    const t = now - start;
+                    drawFeatherBreak(t, a);
+                    if (t < TOTAL) {
+                        breakAnimId = requestAnimationFrame(frame);
+                        return;
+                    }
+                    breakAnimId = null;
+                    breakOverlay.classList.remove('show');
+                    setTimeout(function () {
+                        if (breakCtx) breakCtx.clearRect(0, 0, bGW, bGH);
+                        breakPlaying = false;
+                        resolve();
+                    }, 420);
+                }
+                breakAnimId = requestAnimationFrame(frame);
+            });
+        }).catch(function () {
+            breakPlaying = false;
+        });
+    }
+
+    // 所有羽毛入口的统一拦截点：在场 → 第一次演斩断，之后静默拒绝；
+    // 不在场 → 清掉本周期的已演标记，放行。
+    function featherBreakIntercept() {
+        let present = false;
+        try { present = !!(window.isBadelineStandIn && window.isBadelineStandIn()); } catch (e) {}
+        if (!present) {
+            breakShown = false;
+            return false;
+        }
+        if (breakPlaying || breakShown) return true;
+        breakShown = true;          // 先锁住本驻场周期，避免动画期间被重复触发
+        playFeatherBreak();
+        return true;
+    }
+
+    window.FeatherBreakGate = {
+        intercept: featherBreakIntercept,
+        reset: function () { breakShown = false; }
+    };
+
+    window.FeatherGame = {
+        open: function (mood) {
+            if (featherBreakIntercept()) return Promise.resolve();
+            return openGame(mood);
+        },
+        close: closeGame,
+        suggestThenOpen: function (emotion) {
+            if (featherBreakIntercept()) return Promise.resolve();
+            return suggestThenOpen(emotion);
+        }
+    };
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', bindBtn);

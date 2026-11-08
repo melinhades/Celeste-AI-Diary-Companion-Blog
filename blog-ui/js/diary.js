@@ -2651,6 +2651,8 @@ function inferReplyEmotion(text) {
         });
         document.body.appendChild(resetBtn);
     }
+    // 供羽毛拦截复用现有驻场状态（只读，不参与过期/恢复逻辑）
+    window.isBadelineStandIn = function () { return PM_BADELINE_STANDIN; };
     // ===== 布局缓存：禁区 rect / 精灵尺寸 300ms 刷新一次，帧循环不再触发强制布局 =====
     let layoutCache = { rects: [], bw: 56, bh: 56, groundY: 0, ts: -1e9 };
     function refreshLayoutCache() {
@@ -3027,18 +3029,19 @@ function inferReplyEmotion(text) {
         if (!found) { pmState.x = 8; pmState.y = 60; }
     }
     window.addEventListener('resize', () => { pmState.y = Math.min(pmState.y, pmGroundY()); });
-    // ===== 金羽毛随笔弹框：程序化控制 =====
+    // ===== 金羽毛随笔弹框：统一交给 diary-2.js 的 Vue 面板（居中弹出/退场动画）=====
+    // Vue 尚未就绪时退化为直接显形兜底，不参与动画状态
     function showFeatherNote() {
+        if (typeof window.showFeatherNote === 'function' && window.showFeatherNote !== showFeatherNote) {
+            window.showFeatherNote();
+            return;
+        }
         var box = document.getElementById('featherNoteBox');
         if (!box) return;
         box.style.display = 'block';
-        box.classList.remove('slide-in');
-        void box.offsetWidth;
         box.classList.add('slide-in');
         var input = document.getElementById('featherInput');
         if (input) { input.value = ''; input.focus(); }
-        var toast = document.getElementById('featherToast');
-        if (toast) toast.style.display = 'none';
     }
     window.showFeatherNote = showFeatherNote;
     // ===== 金羽毛“第二段”陪伴：游戏结束后，等画面淡出，Madeline 再回到日记页说一句收尾的话 =====

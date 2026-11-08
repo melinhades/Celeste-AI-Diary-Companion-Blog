@@ -38,6 +38,9 @@
                 window.showFeatherNote = openBox;
 
                 function onFeatherBtn() {
+                    // Badeline 驻场期间，右上角按钮同样是「羽毛触发入口」：
+                    // 第一次点击演斩断，之后本驻场周期内静默拒绝（随笔入口也不放行）
+                    if (window.FeatherBreakGate && window.FeatherBreakGate.intercept()) return;
                     const emo = currentMood();
                     if (isBadMood(emo)) {
                         // 情绪不好：Madeline 先说一句羽毛建议，再淡入金羽毛游戏（过渡自然）

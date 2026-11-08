@@ -54,6 +54,8 @@
             var o = options || {};
             var game = global.FeatherGame;
             if (!game) return false;
+            // Badeline 驻场：所有来源统一走斩断拦截，第一次演完即锁死本周期
+            if (global.FeatherBreakGate && global.FeatherBreakGate.intercept()) return false;
             // 防重入 / 已在游戏中：拒绝（force 也无法在游戏打开时重复打开）
             if (this.pending || this.gameOpen) return false;
             // AI 来源套用冷却；保存/手动来源是用户动作链路，不设冷却
