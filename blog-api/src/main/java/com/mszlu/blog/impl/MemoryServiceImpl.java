@@ -5,7 +5,6 @@ import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.mszlu.blog.dao.mapper.MemoryMapper;
-import com.mszlu.blog.dao.mapper.DocumentChunkMapper;
 import com.mszlu.blog.dao.pojo.Memory;
 import com.mszlu.blog.dao.pojo.DocumentChunk;
 import com.mszlu.blog.dao.pojo.SysUser;
@@ -13,6 +12,11 @@ import com.mszlu.blog.service.MemoryService;
 import com.mszlu.blog.service.ai.AiClient;
 import com.mszlu.blog.service.ai.AiMessage;
 import com.mszlu.blog.service.ai.PromptBuilder;
+import com.mszlu.blog.service.vector.VectorCollection;
+import com.mszlu.blog.service.vector.VectorHit;
+import com.mszlu.blog.service.vector.VectorQuery;
+import com.mszlu.blog.service.vector.VectorRecord;
+import com.mszlu.blog.service.vector.VectorStore;
 import com.mszlu.blog.utils.UserThreadLocal;
 import com.mszlu.blog.vo.ContextChunk;
 import com.mszlu.blog.vo.RagMetrics;
@@ -26,11 +30,11 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.AbstractMap;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -41,20 +45,8 @@ public class MemoryServiceImpl implements MemoryService {
     /** 拼进 prompt 的记忆上限，防止 token 膨胀 */
     private static final int MAX_CONTEXT_MEMORIES = 15;
 
-    // ================= P1/P2：向量缓存 + 重排参数 =================
-    /** 每个用户的向量缓存，key = 用户ID，value = (记录ID → 向量) */
-    private final ConcurrentHashMap<String, ConcurrentHashMap<String, float[]>>
-            VEC_CACHE = new ConcurrentHashMap<>();
-    /** 缓存 TTL：10 分钟（超出则丢弃，下次查询时重新解析） */
-    private static final long CACHE_TTL_MS = 10 * 60 * 1000L;
-    
-    // P2：从配置读取，支持热调优
-    @Value("${rag.similarity-threshold:0.3}")
-    private double similarityThreshold;
-    
-    @Value("${rag.decay-tau-days:30}")
-    private int decayTauDays;
-    
+    // ================= P1/P2：向量检索抽象 + 重排参数 =================
+    // 相似度阈值、时间衰减、召回上限与向量缓存均下沉到 VectorStore 实现
     @Value("${rag.quota.memory:0.4}")
     private double memoryQuota;
     
@@ -67,7 +59,7 @@ public class MemoryServiceImpl implements MemoryService {
     @Autowired
     private MemoryMapper memoryMapper;
     @Autowired
-    private DocumentChunkMapper chunkMapper;
+    private VectorStore vectorStore;
     @Autowired
     private AiClient aiClient;
 
@@ -76,6 +68,8 @@ public class MemoryServiceImpl implements MemoryService {
         long startMs = System.currentTimeMillis();
         // 用 LinkedHashMap 按插入顺序去重（key = memory id）
         Map<String, Memory> picked = new LinkedHashMap<>();
+        // 向量命中项的融合分：只用于最终排序/截断，非向量来源不参与打分
+        Map<String, Double> vectorScores = new HashMap<>();
 
         // 1. open 的 promise/event 全取 —— 未完结的事，是"翻旧账"的素材
         LambdaQueryWrapper<Memory> openWrapper = new LambdaQueryWrapper<>();
@@ -88,41 +82,33 @@ public class MemoryServiceImpl implements MemoryService {
             picked.put(m.getId(), m);
         }
 
-        // 2. RAG：当前消息向量化，与记忆向量算余弦相似度取 Top 8（用缓存 + 时间衰减 × 重要性融合）
+        // 2. RAG：当前消息向量化，交给 VectorStore 取 Top 8（内部含缓存 + 时间衰减 × 重要性融合）
         boolean vectorHit = false;
         if (userContent != null && !userContent.isEmpty()) {
             float[] queryVec = aiClient.embed(userContent, userId);
             if (queryVec != null) {
-                LambdaQueryWrapper<Memory> pool = new LambdaQueryWrapper<>();
-                pool.eq(Memory::getUserId, userId);
-                pool.isNotNull(Memory::getEmbedding);
-                pool.last("limit 200");
-                List<Map.Entry<Memory, Double>> scored = new ArrayList<>();
-                for (Memory m : memoryMapper.selectList(pool)) {
-                    float[] v = cachedVec(userId, m.getId(), m.getEmbedding());
-                    if (v == null) continue;
-                    double sim = cosine(queryVec, v);
-                    if (sim > similarityThreshold) {
-                        Long tRef = m.getLastMentionedTime() != null ? m.getLastMentionedTime() : m.getCreateDate();
-                        double finalScore = sim * timeDecay(tRef) * importanceWeight(m.getImportance());
-                        scored.add(new AbstractMap.SimpleEntry<>(m, finalScore));
-                    }
-                }
-                scored.sort((a, b) -> Double.compare(b.getValue(), a.getValue()));
-                for (int i = 0; i < Math.min(8, scored.size()); i++) {
-                    picked.putIfAbsent(scored.get(i).getKey().getId(), scored.get(i).getKey());
+                List<VectorHit> hits = vectorStore.search(
+                        VectorQuery.of(VectorCollection.MEMORY, userId, queryVec, 8));
+                for (VectorHit hit : hits) {
+                    picked.putIfAbsent(hit.getId(), hit.getMemory());
+                    vectorScores.put(hit.getId(), hit.getScore());
                     vectorHit = true;
                 }
             }
         }
 
-        // 3. 向量不可用时的降级：保留原 2-gram 关键词 LIKE
+        // 3. 向量 0 命中时的降级：按剩余槽位取关键词命中，只捞 open 记忆
         if (!vectorHit && userContent != null) {
             for (String keyword : extractKeywords(userContent)) {
+                int remaining = MAX_CONTEXT_MEMORIES - picked.size();
+                if (remaining <= 0) {
+                    break;
+                }
                 LambdaQueryWrapper<Memory> kw = new LambdaQueryWrapper<>();
                 kw.eq(Memory::getUserId, userId);
+                kw.eq(Memory::getStatus, "open");
                 kw.like(Memory::getContent, keyword);
-                kw.last("limit 3");
+                kw.last("limit " + Math.min(3, remaining));
                 for (Memory m : memoryMapper.selectList(kw)) {
                     picked.putIfAbsent(m.getId(), m);
                 }
@@ -142,6 +128,16 @@ public class MemoryServiceImpl implements MemoryService {
         }
 
         List<Memory> result = new ArrayList<>(picked.values());
+        // 截断前先排序：向量命中按融合分倒序排在最前，其余来源保持插入顺序排在后面，
+        // 这样 15 条上限砍掉的是尾部（最低分/无分）条目，而不是最后插入的条目
+        result.sort((a, b) -> {
+            Double sa = vectorScores.get(a.getId());
+            Double sb = vectorScores.get(b.getId());
+            if (sa == null && sb == null) return 0;
+            if (sa == null) return 1;
+            if (sb == null) return -1;
+            return Double.compare(sb, sa);
+        });
         
         // P2：提取检索指标（召回数/耗时/向量命中），记日志供监控
         RagMetrics metrics = extractMetrics(startMs, result.size(), vectorHit, userContent);
@@ -150,70 +146,6 @@ public class MemoryServiceImpl implements MemoryService {
         
         return result.size() > MAX_CONTEXT_MEMORIES
                 ? result.subList(0, MAX_CONTEXT_MEMORIES) : result;
-    }
-
-    private double cosine(float[] a, float[] b) {
-        if (a == null || b == null || a.length != b.length) return 0;
-        double dot = 0, na = 0, nb = 0;
-        for (int i = 0; i < a.length; i++) {
-            dot += a[i] * b[i];
-            na += a[i] * a[i];
-            nb += b[i] * b[i];
-        }
-        if (na == 0 || nb == 0) return 0;
-        return dot / (Math.sqrt(na) * Math.sqrt(nb));
-    }
-
-    private float[] parseVec(String json) {
-        try {
-            JSONArray arr = JSON.parseArray(json);
-            float[] out = new float[arr.size()];
-            for (int i = 0; i < arr.size(); i++) out[i] = arr.getFloatValue(i);
-            return out;
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    // ================= P1 新增：向量缓存 + 重排工具 =================
-    /**
-     * 带缓存的向量解析：先查 VEC_CACHE[userId][recordId]，miss 才 parseVec 并回填。
-     * lore 公共知识库用固定 key "__lore__"，不做失效（永远是同一批设定）。
-     */
-    private float[] cachedVec(String userId, String recordId, String json) {
-        String cacheKey = (userId == null || userId.isEmpty()) ? "__lore__" : userId;
-        ConcurrentHashMap<String, float[]> bucket = VEC_CACHE.get(cacheKey);
-        if (bucket != null) {
-            float[] hit = bucket.get(recordId);
-            if (hit != null) return hit;
-        }
-        float[] parsed = parseVec(json);
-        if (parsed != null) {
-            bucket = VEC_CACHE.computeIfAbsent(cacheKey, k -> new ConcurrentHashMap<>());
-            bucket.put(recordId, parsed);
-        }
-        return parsed;
-    }
-
-    /** 写入路径调此方法增量失效（doExtract / chunkDiary / markMentioned / resolve / reindex 都覆盖） */
-    private void invalidate(String userId) {
-        if (userId != null) VEC_CACHE.remove(userId);
-    }
-
-    /** 时间衰减因子：exp(-Δt / τ)，τ=30 天；Δt 用秒；返回 (0, 1] */
-    private double timeDecay(Long timestampMs) {
-        if (timestampMs == null) return 1.0;
-        double deltaSec = (System.currentTimeMillis() - timestampMs) / 1000.0;
-        if (deltaSec <= 0) return 1.0;
-        double tauSec = decayTauDays * 86400.0;
-        return Math.exp(-deltaSec / tauSec);
-    }
-
-    /** 重要性融合因子：importance 1-10，权重 0.8 + 0.2·importance/10；null 兜底 5 → 1.0 */
-    private double importanceWeight(Integer importance) {
-        if (importance == null) return 1.0;
-        int imp = Math.max(1, Math.min(10, importance));
-        return 0.8 + 0.2 * (imp / 10.0);
     }
 
     /** P1 重排：把 searchContext 的全量 scored 列表按 分源配额 × 时间衰减 × 重要性融合 重新组装 */
@@ -271,6 +203,9 @@ public class MemoryServiceImpl implements MemoryService {
             else if (di < dia.size()) out.add(dia.get(di++).getKey());
             else if (li < lor.size()) out.add(lor.get(li++).getKey());
         }
+
+        // 配额只决定「谁入选」；入选后统一按 score 倒序输出，避免低分记忆排在高分日记前面
+        out.sort(Comparator.comparingDouble(ContextChunk::getScore).reversed());
         return out;
     }
 
@@ -315,7 +250,7 @@ public class MemoryServiceImpl implements MemoryService {
                 if (vec != null) memory.setEmbedding(JSON.toJSONString(vec));
                 memoryMapper.insert(memory);
             }
-            invalidate(userId);  // P1：新记忆入库后清缓存
+            vectorStore.invalidate(userId);  // P1：新记忆入库后清缓存
         } catch (Exception e) {
             // 记忆提取失败只记日志，绝不影响主流程
             log.error("{}记忆提取失败, userId={}", source, userId, e);
@@ -334,7 +269,7 @@ public class MemoryServiceImpl implements MemoryService {
             wrapper.eq(Memory::getId, m.getId());
             memoryMapper.update(update, wrapper);
         }
-        if (uid != null) invalidate(uid);  // P1：时间戳变了，时间衰减要重算
+        if (uid != null) vectorStore.invalidate(uid);  // P1：时间戳变了，时间衰减要重算
     }
 
     @Override
@@ -356,7 +291,7 @@ public class MemoryServiceImpl implements MemoryService {
         wrapper.eq(Memory::getId, memoryId);
         wrapper.eq(Memory::getUserId, user.getId()); // 防越权
         memoryMapper.update(update, wrapper);
-        invalidate(user.getId());  // P1：状态变了，重查
+        vectorStore.invalidate(user.getId());  // P1：状态变了，重查
         return Result.success(null);
     }
 
@@ -370,15 +305,11 @@ public class MemoryServiceImpl implements MemoryService {
         for (Memory m : memoryMapper.selectList(qw)) {
             float[] vec = aiClient.embed(m.getContent(), user.getId());
             if (vec != null) {
-                Memory upd = new Memory();
-                upd.setEmbedding(JSON.toJSONString(vec));
-                LambdaQueryWrapper<Memory> uw = new LambdaQueryWrapper<>();
-                uw.eq(Memory::getId, m.getId());
-                memoryMapper.update(upd, uw);
+                vectorStore.upsert(VectorRecord.forMemory(m.getId(), user.getId(), vec));
                 done++;
             }
         }
-        invalidate(user.getId());  // P1：embedding 全量刷新后清缓存
+        vectorStore.invalidate(user.getId());  // P1：embedding 全量刷新后清缓存
         return Result.success(done);
     }
 
@@ -394,27 +325,18 @@ public class MemoryServiceImpl implements MemoryService {
             if (content == null || content.trim().length() < 20) return;
 
             // 覆盖旧分片（同一篇日记编辑重存时）
-            LambdaQueryWrapper<DocumentChunk> del = new LambdaQueryWrapper<>();
-            del.eq(DocumentChunk::getUserId, userId).eq(DocumentChunk::getRefId, diaryId);
-            chunkMapper.delete(del);
+            vectorStore.delete(VectorCollection.DIARY, userId, diaryId);
 
             for (String piece : splitChunks(content)) {
                 float[] vec = aiClient.embed((title != null ? title + "：" : "") + piece, userId);
                 if (vec == null) continue;
-                DocumentChunk c = new DocumentChunk();
-                c.setUserId(userId);
-                c.setSource("diary");
-                c.setRefId(diaryId);
-                c.setTitle(title);
-                c.setContent(piece);
-                c.setEmbedding(JSON.toJSONString(vec));
-                c.setCreateDate(System.currentTimeMillis());
-                chunkMapper.insert(c);
+                vectorStore.upsert(VectorRecord.forChunk(VectorCollection.DIARY, userId, "diary",
+                        diaryId, title, piece, System.currentTimeMillis(), vec));
             }
         } catch (Exception e) {
             log.error("日记分片失败, diaryId={}", diaryId, e);
         } finally {
-            invalidate(userId);  // P1：日记分片重存后清缓存
+            vectorStore.invalidate(userId);  // P1：日记分片重存后清缓存
         }
     }
 
@@ -448,22 +370,11 @@ public class MemoryServiceImpl implements MemoryService {
         if (qv == null) return new ArrayList<>();
 
         List<Map.Entry<ContextChunk, Double>> scored = new ArrayList<>();
-        long now = System.currentTimeMillis();
 
-        // 源1：记忆 —— sim × 时间衰减 × 重要性融合
-        LambdaQueryWrapper<Memory> mp = new LambdaQueryWrapper<>();
-        mp.eq(Memory::getUserId, userId).isNotNull(Memory::getEmbedding).last("limit 200");
-        for (Memory mem : memoryMapper.selectList(mp)) {
-            float[] v = cachedVec(userId, mem.getId(), mem.getEmbedding());
-            if (v == null) continue;
-            double sim = cosine(qv, v);
-            if (sim <= similarityThreshold) continue;
-            // 时间衰减：lastMentionedTime 优先（最近被提及=更相关），null → createDate
-            Long tRef = mem.getLastMentionedTime() != null ? mem.getLastMentionedTime() : mem.getCreateDate();
-            double timeD = timeDecay(tRef);
-            // 重要性融合
-            double impW = importanceWeight(mem.getImportance());
-            double finalScore = sim * timeD * impW;
+        // 源1：记忆 —— sim × 时间衰减 × 重要性融合（由 VectorStore 实现）
+        for (VectorHit hit : vectorStore.search(VectorQuery.of(VectorCollection.MEMORY, userId, qv, 0))) {
+            Memory mem = hit.getMemory();
+            double finalScore = hit.getScore();
             scored.add(new AbstractMap.SimpleEntry<>(
                     new ContextChunk("memory", mem.getContent(),
                             org.apache.commons.lang3.time.DateFormatUtils.format(mem.getCreateDate(), "M月d日记下的事"), finalScore),
@@ -471,15 +382,9 @@ public class MemoryServiceImpl implements MemoryService {
         }
 
         // 源2：日记分片 —— sim × 时间衰减
-        LambdaQueryWrapper<DocumentChunk> cp = new LambdaQueryWrapper<>();
-        cp.eq(DocumentChunk::getUserId, userId).isNotNull(DocumentChunk::getEmbedding).last("limit 300");
-        for (DocumentChunk c : chunkMapper.selectList(cp)) {
-            float[] v = cachedVec(userId, c.getId(), c.getEmbedding());
-            if (v == null) continue;
-            double sim = cosine(qv, v);
-            if (sim <= similarityThreshold) continue;
-            double timeD = timeDecay(c.getCreateDate());
-            double finalScore = sim * timeD;
+        for (VectorHit hit : vectorStore.search(VectorQuery.of(VectorCollection.DIARY, userId, qv, 0))) {
+            DocumentChunk c = hit.getChunk();
+            double finalScore = hit.getScore();
             scored.add(new AbstractMap.SimpleEntry<>(
                     new ContextChunk("diary", c.getContent(),
                             (c.getTitle() != null ? "《" + c.getTitle() + "》" : "日记") + "里写过", finalScore),
@@ -487,19 +392,13 @@ public class MemoryServiceImpl implements MemoryService {
         }
 
         // 源3：Celeste 公共设定知识库（userId 为空，source=lore）—— sim 直接用，公共设定不随时间过时
-        LambdaQueryWrapper<DocumentChunk> lp = new LambdaQueryWrapper<>();
-        lp.isNull(DocumentChunk::getUserId)
-          .eq(DocumentChunk::getSource, "lore")
-          .isNotNull(DocumentChunk::getEmbedding)
-          .last("limit 500");
-        for (DocumentChunk c : chunkMapper.selectList(lp)) {
-            float[] v = cachedVec(null, c.getId(), c.getEmbedding());
-            if (v == null) continue;
-            double sim = cosine(qv, v);
-            if (sim <= similarityThreshold) continue;
+        for (VectorHit hit : vectorStore.search(VectorQuery.of(VectorCollection.LORE, null, qv, 0))) {
+            DocumentChunk c = hit.getChunk();
+            double finalScore = hit.getScore();
             scored.add(new AbstractMap.SimpleEntry<>(
                     new ContextChunk("lore", c.getContent(),
-                            c.getTitle() != null ? "Celeste设定·" + c.getTitle() : "Celeste设定", sim), sim));
+                            c.getTitle() != null ? "Celeste设定·" + c.getTitle() : "Celeste设定", finalScore),
+                    finalScore));
         }
 
         // P1 新：分源配额重排（memory 40% / diary 40% / lore 20%）
