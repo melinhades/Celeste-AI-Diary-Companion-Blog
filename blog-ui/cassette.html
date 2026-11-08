@@ -7,10 +7,18 @@
     <link rel="icon" href="icon/OIP.webp?v=20261105a" type="image/webp">
 <title>cassette.exe - BerryOS</title>
 <link rel="stylesheet" href="css/common.css?v=20261104a">
-<link rel="stylesheet" href="css/cassette.css?v=20261025a">
+<link rel="stylesheet" href="css/cassette.css?v=20261108a">
 
 </head>
 <body>
+<!-- 第六章 cassette 场景背景（bgs/06，仅背景层） -->
+<div class="cx-bg" aria-hidden="true">
+    <div class="cx-bg-layer cx-bg-bg0"></div>
+    <div class="cx-bg-layer cx-bg-bg1"></div>
+    <div class="cx-bg-layer cx-bg-fx1"></div>
+    <div class="cx-bg-layer cx-bg-bg2"></div>
+    <div class="cx-bg-layer cx-bg-fx2"></div>
+</div>
 <div class="cx-wrap">
     <header class="cx-top">
         <a class="cx-back" href="berryos.html" title="返回桌面">‹ 返回桌面</a>
@@ -131,7 +139,12 @@
     </div>
 </div>
 
+<img id="cxPixelMadeline" src="celeste-gui/madeline-move.gif" alt="" aria-hidden="true" draggable="false">
+
 <script src="js/gapless-audio.js?v=20261028b"></script>
 <script src="js/cassette.js?v=20261028b"></script>
+<script src="js/madeline-core.js?v=20261108a"></script>
+<script src="js/cassette-bg.js?v=20261108a"></script>
+<script src="js/cassette-madeline.js?v=20261108a"></script>
 </body>
 </html>

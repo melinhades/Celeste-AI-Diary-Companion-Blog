@@ -1,6 +1,6 @@
 /* cassette.exe · 磁带机环境混音台
    实体硬件方向：深夜蓝金属拉丝面板 + 内嵌磁带窗 + 粉/琥珀指示灯色。
-   在 common.css 之后加载：覆盖背景，保留其星空 ::before。 */
+   在 common.css 之后加载：背景替换为 Celeste 第六章 cassette 房间（bgs/06）多层视差。 */
 
 :root {
     --cx-face-1: #262e4a;
@@ -16,8 +16,8 @@
 }
 
 body {
-    background: linear-gradient(160deg, #0a0e22 0%, #141b36 55%, #0d1226 100%);
-    background-attachment: fixed;
+    /* 背景层由 .cx-bg 负责；这里只留同色系兜底，避免图片加载前闪白 */
+    background: #1b0d12;
 }
 /* 暗角，把视线收进机器 */
 body::after {
@@ -28,6 +28,82 @@ body::after {
     pointer-events: none;
     background: radial-gradient(120% 90% at 50% 18%, transparent 55%, rgba(4, 6, 16, 0.55) 100%);
 }
+/* 背景已换成 bgs/06，关掉 common.css 的旧星空层，避免和原作星空叠加 */
+body::before { display: none; }
+
+/* ============ 第六章 cassette 场景背景（bgs/06） ============
+   原始虚拟分辨率 320×180；bg0/bg1/bg2 为 320×180（含透明画布），fx0 为 320×200。
+   统一按 320 宽做 cover：tile 宽 = max(100vw, 100vh * 16/9)，高度随宽等比。
+   视差滚动量由 js/cassette-bg.js 写入 --cx-scroll，fx0 的 speedx 用无缝 CSS 漂移。 */
+.cx-bg {
+    --cx-tile: max(100vw, 177.7778vh);
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+    background: #1b0d12;
+}
+.cx-bg-layer {
+    position: absolute;
+    inset: 0;
+    background-repeat: repeat;
+    background-size: var(--cx-tile) auto;
+    background-position-x: 0;
+    background-position-y: calc(var(--cx-y, 0px) - var(--cx-scroll, 0px) * var(--cx-fy, 0));
+    transform: translateZ(0);
+}
+.cx-bg-bg0 {
+    background-image: url('../Atlases/Gameplay/bgs/06/bg0.png');
+    --cx-fy: 0.02;
+}
+.cx-bg-bg1 {
+    background-image: url('../Atlases/Gameplay/bgs/06/bg1.png');
+    --cx-fy: 0.1;
+    opacity: 0.8;
+}
+.cx-bg-fx1 {
+    background-image: url('../Atlases/Gameplay/bgs/06/fx0.png');
+    --cx-fy: 0.3;
+    opacity: 0.1;
+    mix-blend-mode: screen;
+    animation: cxBgDrift 106.6667s linear infinite;
+}
+.cx-bg-bg2 {
+    background-image: url('../Atlases/Gameplay/bgs/06/bg2.png');
+    --cx-fy: 0.2;
+}
+.cx-bg-fx2 {
+    background-image: url('../Atlases/Gameplay/bgs/06/fx0.png');
+    /* 原作第二次 fx0 的 y=10：10 / 320 = 1/32 个 tile */
+    --cx-y: calc(var(--cx-tile) / 32);
+    --cx-fy: 0.3;
+    opacity: 0.15;
+    mix-blend-mode: screen;
+    animation: cxBgDrift 53.3333s linear infinite;
+}
+@keyframes cxBgDrift {
+    from { background-position-x: 0; }
+    to   { background-position-x: var(--cx-tile); }
+}
+
+/* ============ Madeline：复用 diary/write 的 56px 像素角色与 MadelineCore ============ */
+#cxPixelMadeline {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 56px;
+    height: 56px;
+    z-index: 2;
+    image-rendering: pixelated;
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-drag: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+    will-change: transform;
+}
+#cxPixelMadeline.is-ready { opacity: 1; }
 
 .cx-wrap {
     position: relative;
@@ -521,4 +597,6 @@ input[type="range"]:focus-visible {
     .cx-tape img { transition: none; }
     .cx-tape.playing::after { animation: none; }
     .sr-eq i { animation: none; transform: scaleY(0.6); }
+    .cx-bg-fx1, .cx-bg-fx2 { animation: none; }
+    #cxPixelMadeline { transition: none; }
 }
