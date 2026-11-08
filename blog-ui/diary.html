@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="css/chat-widget.css?v=20261025a">
     <link rel="stylesheet" href="css/diary.css?v=20261108c">
     <link rel="stylesheet" href="css/text-fx.css?v=20261004a">
-    <link rel="stylesheet" href="css/diary-inline.css?v=20261015a">
+    <link rel="stylesheet" href="css/diary-inline.css?v=20261108b">
     <link rel="stylesheet" href="css/badeline-panel.css?v=20261108a">
     
 
@@ -43,7 +43,7 @@
         <img src="celeste-gui/loop.gif" alt="金羽毛" style="width:100%; height:100%; object-fit:contain; display:block;" loading="lazy" decoding="async">
     </button>
     <!-- 羽毛随笔弹框 -->
-    <div id="featherNoteBox" v-show="boxOpen" :class="{'slide-in': slideIn}" style="position:fixed; top:84px; right:12px; z-index:901; width:280px; padding:22px 20px 18px;">
+    <div id="featherNoteBox" v-show="boxOpen" :class="{'slide-in': slideIn, 'is-closing': boxClosing}">
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
             <span style="font-size:18px; filter:drop-shadow(0 1px 2px rgba(0,0,0,.15));">🪶</span>
             <span style="color:#5a3e36; font-size:13px; font-family:'Renogare','CelesteZH',sans-serif; letter-spacing:.06em;">Leave a feather</span>
@@ -129,7 +129,7 @@
     <script src="js/diary-1.js?v=20261015a"></script>
     <script src="js/pptgen.js?v=20261107f"></script>
 <script src="js/vue.global.prod.js?v=20261008a"></script>
-<script src="js/diary-2.js?v=20261015a"></script>
+<script src="js/diary-2.js?v=20261108c"></script>
 <script src="js/seed.js?v=20261101c"></script>
 </body>
 </html>

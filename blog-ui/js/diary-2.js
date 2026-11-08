@@ -1,6 +1,8 @@
     // 羽毛随笔弹框：开合/字数/保存状态交 Vue；FeatherGame 全局流程保持不变
     (function() {
         const { createApp, ref, nextTick } = Vue;
+        // 退场时长与每日明信片的 overlay 淡出一致（.6s）
+        const BOX_EXIT_MS = 600;
 
         function currentMood() {
             return localStorage.getItem('lastEmotion') || '默认';
@@ -12,27 +14,54 @@
         createApp({
             setup() {
                 const boxOpen = ref(false);
-                const slideIn = ref(false);
+                const slideIn = ref(false);     // 明信片同款滑入到位态
+                const boxClosing = ref(false);  // 退场淡出态
                 const featherText = ref('');
                 const toast = ref('');
                 const toastError = ref(false);
                 const saving = ref(false);
 
                 function openBox() {
-                    boxOpen.value = true;
+                    if (boxOpen.value) return;
+                    boxClosing.value = false;
                     slideIn.value = false;
                     featherText.value = '';
                     toast.value = '';
-                    // 与原实现一致：先显示无 slide-in 态，强制重排后再加 class 重放滑入
+                    boxOpen.value = true;
+                    // 预取羽毛游戏素材：随笔退场后能立刻承接游戏背景，不卡在加载
+                    if (window.FeatherGame && window.FeatherGame.preload) {
+                        try { window.FeatherGame.preload(); } catch (e) {}
+                    }
+                    // 与每日明信片一致：先渲染初始位移态，再挂 .slide-in 从左滑入
                     nextTick(() => requestAnimationFrame(() => requestAnimationFrame(() => {
+                        if (!boxOpen.value) return;
                         slideIn.value = true;
                         const inp = document.getElementById('featherInput');
                         if (inp) inp.focus();
                     })));
                 }
+                // 退场动画结束后才收起 DOM；返回 Promise 供「随笔 → 游戏」接力
                 function closeBox() {
-                    slideIn.value = false;
-                    boxOpen.value = false;
+                    if (!boxOpen.value) return Promise.resolve();
+                    return new Promise(function(resolve) {
+                        const box = document.getElementById('featherNoteBox');
+                        let settled = false;
+                        function finish() {
+                            if (settled) return;
+                            settled = true;
+                            if (box) box.removeEventListener('transitionend', onEnd);
+                            boxOpen.value = false;
+                            slideIn.value = false;
+                            boxClosing.value = false;
+                            resolve();
+                        }
+                        // 只认纸页自身的过渡，忽略内部输入框等子元素的 transitionend
+                        function onEnd(e) { if (e.target === box) finish(); }
+                        // 与明信片退场一致：保持滑入到位态，只整体淡出，不反向滑出
+                        boxClosing.value = true;
+                        if (box) box.addEventListener('transitionend', onEnd);
+                        setTimeout(finish, BOX_EXIT_MS + 80);  // transitionend 兜底
+                    });
                 }
                 // diary.js 在坏心情金羽毛落地后会调 window.showFeatherNote
                 window.showFeatherNote = openBox;
@@ -70,16 +99,15 @@
                             toastError.value = false;
                             toast.value = '羽毛已飘走～';
                             featherText.value = '';
+                            const goodMood = !isBadMood(currentMood());
                             setTimeout(function() {
-                                closeBox();
-                                toast.value = '';
+                                // 接力：随笔退场、DOM 收起之后，羽毛游戏背景才入场——
+                                // 先退后进，中间不闪白、不叠两套背景
+                                closeBox().then(function() {
+                                    if (!goodMood || !window.FeatherGame) return;
+                                    requestAnimationFrame(function() { window.FeatherGame.open(); });
+                                });
                             }, 1200);
-                            // 情绪好时：随笔写完 → 开游戏（Madeline 在游戏内陪伴）
-                            if (!isBadMood(currentMood())) {
-                                setTimeout(function() {
-                                    if (window.FeatherGame) window.FeatherGame.open();
-                                }, 800);
-                            }
                         } else {
                             toastError.value = true;
                             toast.value = (res && res.msg) ? res.msg : '没存上，再试一次吧';
@@ -92,7 +120,7 @@
                 }
 
                 return {
-                    boxOpen, slideIn, featherText, toast, toastError, saving,
+                    boxOpen, slideIn, boxClosing, featherText, toast, toastError, saving,
                     onFeatherBtn, closeBox, onFeatherKey, saveFeather
                 };
             }

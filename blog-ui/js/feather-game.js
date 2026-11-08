@@ -804,6 +804,8 @@
     };
 
     window.FeatherGame = {
+        // 随笔面板打开时预取素材，退场后能立刻承接游戏背景
+        preload: function () { return ensureAssets(); },
         open: function (mood) {
             if (featherBreakIntercept()) return Promise.resolve();
             return openGame(mood);
