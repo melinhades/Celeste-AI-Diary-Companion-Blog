@@ -675,15 +675,17 @@ public class DiaryServiceImpl implements DiaryService {
         // === v1 扩展：会话记忆 ===
         long t0 = System.currentTimeMillis();
         DiaryChatMemory.SessionBuffer buf = chatMemory.getOrCreate(userId, sessionId);
+        // 会话过期时 getOrCreate 会换新 sessionId：落库与回传都必须以 buf 为准，否则每轮都会新开孤儿会话
+        String replySessionId = buf.sessionId;
         int turnId = buf.turnCount + 1;
 
         // P3.4 续接功能：从上一轮中断点恢复
         String resumeContext = null;
-        if (Boolean.TRUE.equals(param.getResume()) && sessionId != null) {
+        if (Boolean.TRUE.equals(param.getResume()) && replySessionId != null) {
             com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<DiaryChatLog> wrapper =
                     new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<>();
             wrapper.eq(DiaryChatLog::getUserId, userId);
-            wrapper.eq(DiaryChatLog::getSessionId, sessionId);
+            wrapper.eq(DiaryChatLog::getSessionId, replySessionId);
             wrapper.isNotNull(DiaryChatLog::getFilteredResponse);
             wrapper.orderByDesc(DiaryChatLog::getTurnId);
             wrapper.last("limit 1");
@@ -693,7 +695,7 @@ public class DiaryServiceImpl implements DiaryService {
                 // 取最后 100 字作为断点上下文
                 int start = Math.max(0, lastContent.length() - 100);
                 resumeContext = lastContent.substring(start);
-                log.info("续接上一轮对话，sessionId={}, turnId={}, 断点: {}", sessionId, lastLog.getTurnId(), resumeContext);
+                log.info("续接上一轮对话，sessionId={}, turnId={}, 断点: {}", replySessionId, lastLog.getTurnId(), resumeContext);
             }
         }
 
@@ -704,7 +706,7 @@ public class DiaryServiceImpl implements DiaryService {
             response.setHeader("X-Accel-Buffering", "no");
             try {
                 sseEvent(response, "silent", "");
-                sseEvent(response, "done", "{\"silent\":true,\"sessionId\":\"" + sessionId + "\",\"turnId\":" + turnId + "}");
+                sseEvent(response, "done", "{\"silent\":true,\"sessionId\":\"" + replySessionId + "\",\"turnId\":" + turnId + "}");
             } catch (Exception ignored) {}
             return;
         }
@@ -793,7 +795,7 @@ public class DiaryServiceImpl implements DiaryService {
             response.setHeader("X-Accel-Buffering", "no");
             try {
                 sseEvent(response, "silent", "");
-                sseEvent(response, "done", "{\"silent\":true,\"sessionId\":\"" + sessionId + "\",\"turnId\":" + turnId + "}");
+                sseEvent(response, "done", "{\"silent\":true,\"sessionId\":\"" + replySessionId + "\",\"turnId\":" + turnId + "}");
             } catch (Exception ignored) {}
             return;
         }
@@ -986,7 +988,7 @@ public class DiaryServiceImpl implements DiaryService {
                 try {
                     if (!emotionEmitted[0]) sseEvent(response, "emotion", emotionOut[0]);
                     sseEvent(response, "silent", "");
-                    sseEvent(response, "done", "{\"silent\":true,\"sessionId\":\"" + sessionId + "\",\"turnId\":" + turnId + "}");
+                    sseEvent(response, "done", "{\"silent\":true,\"sessionId\":\"" + replySessionId + "\",\"turnId\":" + turnId + "}");
                 } catch (java.io.IOException ignored) {}
                 return;
             }
@@ -1012,7 +1014,7 @@ public class DiaryServiceImpl implements DiaryService {
         // === v1 扩展：全链路日志 ===
         DiaryChatLog logEntity = new DiaryChatLog();
         logEntity.setUserId(userId);
-        logEntity.setSessionId(sessionId);
+        logEntity.setSessionId(replySessionId);
         logEntity.setTurnId(turnId);
         logEntity.setTriggerType(param.getTriggerType() == null ? "save" : param.getTriggerType());
         logEntity.setTriggerDetail(String.format("字数=%d,情绪得分=%.2f,意图=%s,开口意愿=%.2f,停顿权重=%.2f,轨迹权重=%.2f,必说=%s",
@@ -1037,7 +1039,7 @@ public class DiaryServiceImpl implements DiaryService {
             sseEvent(response, "done",
                     "{\"emotion\":\"" + emotionOut[0] + "\",\"label\":\"" + emotionOut[0] + "\"" +
                     ",\"len\":" + finalText.length() +
-                    ",\"sessionId\":\"" + sessionId + "\",\"turnId\":" + turnId +
+                    ",\"sessionId\":\"" + replySessionId + "\",\"turnId\":" + turnId +
                     ",\"firstDeltaMs\":" + firstDeltaMsVal +
                     ",\"totalMs\":" + (System.currentTimeMillis() - t0) + "}");
         } catch (java.io.IOException ignored) {}
