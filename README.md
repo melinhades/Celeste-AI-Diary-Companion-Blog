@@ -45,7 +45,7 @@
 - <img src="assets/readme/icons/celeste/journal.png" height="25"> <a href="#technical-deep-dive"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t022-cropped-dark.webp"><img src="assets/readme/t022-cropped.webp" width="184" alt="Technical Deep-Dive"></picture></a>
 - <img src="assets/readme/icons/celeste/testing.png" height="23"> <a href="#testing-quality"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t023-cropped-dark.webp"><img src="assets/readme/t023-cropped.webp" width="150" alt="Testing &amp; Quality"></picture></a>
 - <img src="assets/readme/icons/celeste/berryos.png" height="25"> <a href="#deployment-guide"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t024-cropped-dark.webp"><img src="assets/readme/t024-cropped.webp" width="165" alt="Deployment Guide"></picture></a>
-- <img src="assets/readme/icons/celeste/chatroom.png" height="25"> <a href="#contribution-guide"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t025-cropped-dark.webp"><img src="assets/readme/t025-cropped.webp" width="167" alt="Contribution Guide"></picture></a>
+- <img src="assets/readme/icons/credits.png" height="25"> <a href="#contribution-guide"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t025-cropped-dark.webp"><img src="assets/readme/t025-cropped.webp" width="167" alt="Contribution Guide"></picture></a>
 - <img src="assets/readme/icons/celeste/faq.png" height="26"> <a href="#faq-troubleshooting"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t026-cropped-dark.webp"><img src="assets/readme/t026-cropped.webp" width="201" alt="FAQ &amp; Troubleshooting"></picture></a>
 - <img src="assets/readme/icons/celeste/roadmap.png" height="23"> <a href="#roadmap"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t027-cropped-dark.webp"><img src="assets/readme/t027-cropped.webp" width="87" alt="Roadmap"></picture></a>
 - <img src="assets/readme/icons/celeste/license.png" height="24"> <a href="#license-acknowledgments"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t028-cropped-dark.webp"><img src="assets/readme/t028-cropped.webp" width="250" alt="License &amp; Acknowledgments"></picture></a>
@@ -233,7 +233,7 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t127-dark.webp"><img src="assets/readme/t127.webp" width="846" alt="Enter the dream world by clicking the campfire behind the bookshelf. Madeline sleeps by the flickering flames while the aurora dances above — golden feather transformation balls float in the sky for reflective journaling. A cinematic camera pan carries you into the mirror room."></picture>
 
-### <img src="assets/readme/icons/celeste/mirror-room.png" height="22"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t128-dark.webp"><img src="assets/readme/t128.webp" width="591" alt="Mirror Room — Purple space, shattered glass, and the shadow within."></picture>
+### <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t128-dark.webp"><img src="assets/readme/t128.webp" width="591" alt="Mirror Room — Purple space, shattered glass, and the shadow within."></picture>
 
 <p align="center">
   <img src="docs/screenshots/mirror.png" alt="Mirror Room" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
@@ -245,7 +245,7 @@
 
 <a name="dream-mirror-badeline"></a>
 
-## <img src="assets/readme/icons/dream-mirror-spin.gif" height="33"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t130-dark.webp"><img src="assets/readme/t130.webp" width="238" alt="Dream Mirror &amp; Badeline"></picture>
+## <img src="assets/readme/icons/badeline-spin.gif" height="40"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t130-dark.webp"><img src="assets/readme/t130.webp" width="238" alt="Dream Mirror &amp; Badeline"></picture>
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t131-dark.webp"><img src="assets/readme/t131.webp" width="869" alt="Behind the bookshelf lies a two-part dream world — a snow-night campfire on the left and a purple mirror room on the right, joined by a cinematic one-viewport camera pan. Click the mirror to shatter it and summon Badeline, the part of you that is sharp, honest, and over-protective."></picture>
 
