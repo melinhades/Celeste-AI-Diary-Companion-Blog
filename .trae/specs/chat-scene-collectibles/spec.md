@@ -31,6 +31,8 @@
 | 用途 | 路径 | 帧 / 参数 |
 |---|---|---|
 | 草莓跟随 | `Atlases/Gameplay/collectables/strawberry/wings00..09.png` | 10 帧，40×24；Sprites.xml `flap` delay `.08`，帧序 `0-8,0-8,0-7,9` |
+| 普通莓跟随 | `Atlases/Gameplay/collectables/strawberry/normal00..07.png` | 8 帧，18×16；`idle` delay `.1`，帧序 `0-6,0-6,0-6,0-6,0-7` |
+| 金莓跟随 | `Atlases/Gameplay/collectables/goldberry/idle00..07.png` | 8 帧，18×16；`idle` delay `.08`，帧序 `0-5,0-5,0-5,0-5,0-7` |
 | 聊天草莓图标 | `celeste-collectables/strawberry.png` | 96×96（me.html 同款） |
 | 水母待机 | `Atlases/Gameplay/objects/glider/idle0..9.png` | 10 帧，48×48；`idle` delay `.1`；Justify `(0.5,0.58)` |
 | 水母持有 | `.../glider/held0.png` | 1 帧，48×48 |
@@ -87,7 +89,7 @@
 - 生成动画：`spawnT` 0→1（0.4s），缩放 `0.4→1`。
 - 不结算：无碰撞、永不消失。
 
-### 6.2 水母（移植 `Celeste.Glider` 的 `Holdable` 语义）
+## 6.2 水母（移植 `Celeste.Glider` 的 `Holdable` 语义）
 
 > 取证边界：本地 `Celeste.dll` **不存在 `Celeste.Jellyfish`**（`--type Celeste.Jellyfish` 返回 0 匹配，`unmatched_type_names: ["Celeste.Jellyfish"]`）。水母实体实际是 `Celeste.Glider`（`Holdable`，第九章 `game_10_glider_*`，素材 `Gameplay/objects/glider`），以下全部按 `Glider` 取证。
 
@@ -131,14 +133,30 @@
 - 飞行期间不检测/不生成新羽毛；结束时羽毛不重生（需再发消息）。
 - 拾起时复用 `toastEl`：`拾起「金羽毛」`（2.6s）。
 
+### 6.4 金莓 goldberry / 普通莓 plainberry（2026-11-08 追加）
+
+取证（`Celeste.dll` + `Content/Graphics/Sprites.xml`）：
+- **没有 `Goldberry` 类型**：金莓是 `Celeste.Strawberry` 的 `Golden` 分支。`.ctor`(0x6003017)：`Golden = name=="goldenBerry" || name=="memorialTextController"`（铭记房间那只正是 Golden + Winged）。
+- 会跟随的莓都是非翼：`OnPlayer`(0x600301d) 里 `Winged=false; sprite.Rate=0`，0.3s 后播 `idle`。⇒ 跟随期播 idle + 呼吸，不是 flap。
+- 呼吸：`orig_Update`(0x600302a) 非翼时 `wobble += dt*4`，`sprite.Y = sin(wobble)*2`（±2px，只偏视觉，实体仍贴 Leader 轨迹）。
+- 拾取形变：`wiggler = Wiggler(0.4s,4Hz)`，回调 `Scale = 1+0.35*Value`；`Monocle.Wiggler::Update`(0x6000776) 的 `Value = cos(2π·4·t)·(1−t/0.4)`（起点 1.35，0.4s 归正）。
+- 跟随参数同 §6.1（`FollowDelay=0.3`、`past[5*(i+1)]`、同一 Leader 队列、同一上限 10）。
+- 图层：`Depth = -100`（拾取后 `-1000000`）→ 比 Player(0) 靠前，画在人物与水母之上。
+
+素材（`Sprites.xml` L425-456，两 sprite 均 `<Center />`）：
+- `strawberry` idle：path=`normal` delay=`.1` frames=`0-6,0-6,0-6,0-6,0-7`（29 帧）→ `Atlases/Gameplay/collectables/strawberry/normal00..07`，18×16。
+- `goldberry` idle：path=`idle` delay=`.08` frames=`0-5,0-5,0-5,0-5,0-7`（32 帧）→ `Atlases/Gameplay/collectables/goldberry/idle00..07`，18×16。
+
+实现：`berries[]` 增加 `kind`（`wing`／`gold`／`plain`）；`[c:goldberry]`→`gold`、`[c:plainberry]`→`plain`；按 18×16 居中绘制，`sin(wobble)*2` 视觉偏移 + `berryWiggleScale` 弹跳。不做：`P_GoldGlow` 粒子、音效、收集结算（不扣不加、不写库、不发奖励）。
+
 ## 7. 表情与消息渲染（`messages.js`）
 
-- 新增 `EMOJI_PACKS.col = { names:['berry','jelly','feather'] }`；`seriesList` 追加 `{ key:'col', label:'收集' }`。
-- `COLLECT_SRC`：`berry → celeste-collectables/strawberry.png`、`jelly → Atlases/Gameplay/objects/glider/idle0.png`、`feather → Atlases/Gameplay/objects/flyFeather/idle00.png`。
-- `currentEmojis` 的 `col` 分支返回上述 3 项，`mark` 为 `[c:berry]` / `[c:jelly]` / `[c:feather]`。
+- 新增 `EMOJI_PACKS.col = { names:['berry','goldberry','plainberry','jelly','feather'] }`；`seriesList` 追加 `{ key:'col', label:'收集' }`。
+- `COLLECT_SRC`：`berry → celeste-collectables/strawberry.png`、`goldberry → Atlases/Gameplay/collectables/goldberry/idle00.png`、`plainberry → Atlases/Gameplay/collectables/strawberry/normal00.png`、`jelly → Atlases/Gameplay/objects/glider/idle0.png`、`feather → Atlases/Gameplay/objects/flyFeather/idle00.png`。
+- `currentEmojis` 的 `col` 分支返回上述 5 项，`mark` 为 `[c:berry]` / `[c:goldberry]` / `[c:plainberry]` / `[c:jelly]` / `[c:feather]`。
 - `renderChatContent()`（`escHtml` 之后）：
   1. 归一化原始 emoji：`🍓→[c:berry]`、`🪼→[c:jelly]`、`🪶→[c:feather]`；
-  2. 替换 `\[c:(berry|jelly|feather)\]` 为 `<img class="chat-emoji collect">`（不带 `data-series`，不进 `EmojiAnim`）。
+  2. 替换 `\[c:(berry|goldberry|plainberry|jelly|feather)\]` 为 `<img class="chat-emoji collect">`（不带 `data-series`，不进 `EmojiAnim`）。
 - 计数：`ChatScene.consume(content)` 按 token 出现次数累加；只在 SSE 实时消息调用（历史 `quiet` 不回放，符合已确认决策）。
 - 兼容：`messages.html` 仍加载同一份 `messages.js`，新增项必须不改变其现有布局与滚动行为。
 
@@ -161,17 +179,17 @@
 10. `#chatToggle`、`.chat-hint`、`#hud`（左上）、`#mute`（右上）定位；窄屏抽屉布局。
 
 **内联场景脚本**
-11. `preload()` 追加：`berry0..9`（wings）、`jelly0..9` + `jellyHeld` + `jellyFall0..2` + `jellyFallLoop0..1` + `jellyDeath0..7`、`feather0..41`（21 idle + 21 flash）、`orb`（starFly00）、`morph0..3`（startStarFly）。
-12. 新增状态：`leader = { past:[], acc:0 }`、`berries=[]`、`jellies=[]`、`heldJelly=null`、`feathers=[]`、`fly=null`、`collectCounts={berry,jelly,feather}`，以及 `GLIDER` 常量表（§6.2 数值与 `celeste-dash-反编译研究.md` §25.7）。
-13. 新增函数：`toScreen` 复用；`stepLeader(dt)`、`addBerry(n)`、`spawnJelly()`（生成悬浮锚 `homeX/homeY/bobPhase`，`bubble=true`）、`gliderSolidAt()`、`inPickupRange()`、`tryPickupJelly()`（`checkStamina()<20` 拒绝、成功后 `bubble=false`、只清水母自身速度）、`releaseJelly(dirX,dirY)`、`throwJelly(drop)`、`stepFollowers(dt)`、`stepJellies(dt)`（含 `bubble` 的 SineWave 悬浮分支）、`jellyImage(j)`、`stepFeathers(dt)`、`startFly()`、`stepFly(dt)`、`endFly()`、`drawBerries()`、`drawJellies()`、`drawFeathers()`、`drawFly()`、`updateHud()`、`consume(content)`。
+11. `preload()` 追加：`berry0..9`（wings）、`gold0..7`（goldberry idle）、`plain0..7`（strawberry normal）、`jelly0..9` + `jellyHeld` + `jellyFall0..2` + `jellyFallLoop0..1` + `jellyDeath0..7`、`feather0..41`（21 idle + 21 flash）、`orb`（starFly00）、`morph0..3`（startStarFly）。
+12. 新增状态：`leader = { past:[], acc:0 }`、`berries=[]`（每项含 `kind:'wing'|'gold'|'plain'`）、`jellies=[]`、`heldJelly=null`、`feathers=[]`、`fly=null`、`collectCounts={berry,jelly,feather}`，以及 `GLIDER` 常量表（§6.2 数值与 `celeste-dash-反编译研究.md` §25.7）。
+13. 新增函数：`toScreen` 复用；`stepLeader(dt)`、`addBerry(kind)`、`spawnJelly()`（生成悬浮锚 `homeX/homeY/bobPhase`，`bubble=true`）、`gliderSolidAt()`、`inPickupRange()`、`tryPickupJelly()`（`checkStamina()<20` 拒绝、成功后 `bubble=false`、只清水母自身速度）、`releaseJelly(dirX,dirY)`、`throwJelly(drop)`、`stepFollowers(dt)`（含 gold/plain 的 `animT`/`wobble`/`wiggleT`）、`berryWiggleScale(b)`、`stepJellies(dt)`（含 `bubble` 的 SineWave 悬浮分支）、`jellyImage(j)`、`stepFeathers(dt)`、`startFly()`、`stepFly(dt)`、`endFly()`、`drawBerries()`（翼草莓）、`drawFrontBerries()`（金莓/普通莓）、`drawJellies()`、`drawFeathers()`、`drawFly()`、`updateHud()`、`consume(content)`。
 14. `tick(dt)`：**持有水母段**在 `m.update` 之前：`minHoldTimer` 递减；`!grabHeld && minHoldTimer<=0` → `throwJelly(input.down)`；地面按 ↓且 `vy>=0` 且 `!m.holdCannotDuck` → `throwJelly(true)`；未持有时按住抓取键 → `tryPickupJelly()`；随后 `m.holdSlowFall = !!heldJelly`，并把传给引擎的 `grabHeld` 强制为 `false`（等价 `Holding != null` 跳过攀爬）。之后 `if (fly) stepFly(dt); else m.update(...)`；再 `updateCam`；再 `stepLeader/stepFollowers/stepJellies/stepFeathers`；空无与坠落判定在飞行时跳过。`reset()` / `respawn()` 同时清 `holdSlowFall` 与 `holdCannotDuck`。
-15. `render()`：`m.draw` 之前插入 `drawFeathers(); drawBerries();`；`m.draw` **之后**插入 `drawJellies()`（水母 `Depth = player.Depth - 1`，盖在人物之上）；飞行时用 `drawFly()` 替代 `m.draw`。
+15. `render()`：`m.draw` 之前插入 `drawFeathers(); drawBerries();`；`m.draw` **之后**插入 `drawJellies()`（水母 `Depth = player.Depth - 1`）与 `drawFrontBerries()`（金莓/普通莓 `Depth -100`，盖在人物之上）；飞行时用 `drawFly()` 替代 `m.draw`。
 16. 同步暴露 `window.ChatScene = { consume, revealChat, reset, stats, ready:false, __test }`（在 IIFE 顶部定义，`main()` 完成后 `ready=true`；未就绪时 `consume` 入队，就绪后回放队列）；`stats` 含 `held` 布尔。
 17. `respawn()` / `reset()` 中追加 `endFly(true)`、清空 `fly` 与 `heldJelly`（手上的水母留在原地，不结算）；`reset()` 清空草莓/水母/羽毛并归零 HUD。
 
 ### 8.2 `blog-ui/js/messages.js`
 
-1. `COLLECT_SRC` + `EMOJI_PACKS.col` + `seriesList` 第 6 项 + `currentEmojis` 分支。
+1. `COLLECT_SRC` + `EMOJI_PACKS.col`（`berry, goldberry, plainberry, jelly, feather`）+ `seriesList` 第 6 项 + `currentEmojis` 分支。
 2. `renderChatContent`：emoji 归一化 + `[c:*]` 替换。
 3. 滚动自适应：`logScrollEl()` 检测 `#chatLog` 的 `overflow-y`；`atBottom()/scrollToBottom()` 有内部滚动时用 `scrollTop`，否则保留原 document 逻辑（兼容旧页）。
 4. 新增 `chatHidden` ref、`showChat(focus)`、`hideChat()`、`toggleChat()`。
@@ -211,6 +229,8 @@
 | D16 | `holdCannotDuck` 门控下压 Drop | 已实现：空中按 ↓ 置位、落地未按 ↓ 清除、再按才 Drop（4 条断言） | 已对齐（U10） |
 | D17 | `Throw` 播放 `throw` 精灵与音效 | 仅物理与后坐 | 引擎无 throw 动画，场景静音 |
 | D18 | 未持有的水母与玩家碰撞会销毁（`OnCollide` → `castclass 0x020004ac`） | 未启用 | 类型名未能解析，且会误伤悬浮水母（U13） |
+| D19 | 金莓/普通莓跟随时盖在人物之上（`Depth` `-100` → `-1000000`） | 画在 `m.draw` / `drawJellies` 之后 | 与原作 Depth 排序一致；翼草莓沿用旧图层不动 |
+| D20 | 金莓跟随期每 `.08s` 喷 `P_GoldGlow` 粒子、拾取音效 | 未实现 | 非跟随必需，场景静音 |
 
 ## 10. 验证
 
@@ -230,7 +250,9 @@
 
 1. 加载层正常淡出；场景、月亮生物、空无之心、BGM 均在；无 console 错误。
 2. 聊天卡在屏幕正中，左侧 rail 显示「山间聊天」，`#chatLog` 内部滚动并停在底部。
-3. 发 `🍓`×3 → 3 颗草莓跟随；再累计到 11 颗 → 停在 10；HUD 同步。
+3. 发 `🍓`×3 → 3 颗翼草莓跟随；再累计到 11 颗 → 停在 10；HUD 同步。
+3a. 发 `[c:goldberry]` → 1 颗金莓（18×16, goldberry idle）跟随：0.3s 后起步、拖尾逼近，竖直方向 `sin(wobble)*2` 呼吸，拾取瞬间 1.35 倍弹一下；与翼草莓同队列，占同一 10 上限；画在人物之上。
+3b. 发 `[c:plainberry]` → 1 颗普通莓（18×16, strawberry normal idle）跟随；视觉行为同 3a，帧率 `.1s`；与金莓/翼草莓混发时队列间距仍是 5×(i+1)。
 4. 发 `🪼` → Madeline 近身随机出现 1 只水母（左右 24–80px、上方 26–68px，避开实心块），生成后原地气泡悬浮（`y` 围绕锚点 ±1px）；累计到 5 → 停在 4；再发不新增。
 4a. 走到水母旁按住 `Shift/Z` → 抓取并携带在 `m.y-16`；持有时下落明显变慢（`maxFall` 40），空中水平速度上限 108；气泡悬浮停止。
 4b. 松开 `Shift/Z` → 水母以 `(±100,-40)` 飞出、玩家后坐 `-80`；地面按 ↓ → 零速度丢弃；0.3s 内不能立刻重抓；空中按下 ↓ 后再落地不会误丢（`holdCannotDuck`），松开 ↓ 再按才 Drop。
@@ -239,13 +261,13 @@
 5. 发 `🪶` → 视野两侧随机出现羽毛；触碰 → 变形 0.42s → 球体飞行（7 段飞行色头发）→ 2s 后落地；羽毛不重生。
 6. 按 `A` → 聊天卡淡出、胶囊出现；`Enter` → 淡入并聚焦；`Esc` → 隐藏。
 7. 第二个账号发消息 → 自动显现且不抢焦点；bird 消息不触发显现。
-8. 「收集」表情 tab 三项插入后正确渲染；直接输入 `🍓/🪼/🪶` 同样生效。
+8. 「收集」表情 tab 五项（berry / goldberry / plainberry / jelly / feather）插入后正确渲染；直接输入 `🍓/🪼/🪶` 同样生效。
 9. 820px 以下：聊天卡变底部抽屉，不遮挡角色操作区。
 10. `messages.html` 仍可打开且行为与改动前一致（共享 `messages.js` 无回归）。
 
 ### 10.3 缓存版本
 
-`auth.js?v=20261101c`（所有引用页）、`messages.js?v=20261101c`、`seed.js?v=20261101c`；demo 内联无需 bump；引擎脚本 `js/celeste-character.js?v=20261103a`（本轮新增 `holdSlowFall` 的空中 `maxRun=108` 分支与 `holdCannotDuck`）。
+`auth.js?v=20261101c`（所有引用页）、`messages.js?v=20261108a`（金莓/普通莓图标与 `[c:*]` 正则）、`seed.js?v=20261101c`；demo 内联无需 bump；引擎脚本 `js/celeste-character.js?v=20261103a`（本轮新增 `holdSlowFall` 的空中 `maxRun=108` 分支与 `holdCannotDuck`）。
 
 ## 11. 已确认决策
 

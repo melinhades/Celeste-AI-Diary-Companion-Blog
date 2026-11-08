@@ -15,10 +15,13 @@
             theo: { dir: 'theo', names: ['normal', 'excited', 'nailedit', 'serious', 'thinking', 'worried', 'wtf', 'yolo'] },
             oshiro: { dir: 'oshiro', names: ['normal', 'nervous', 'serious', 'sidehappy', 'sideworried', 'sidesuspicious', 'drama', 'lostcontrol', 'worried'] },
             // 收集品：不是头像，走单独素材映射；[c:*] 标记触发场景互动
-            col: { dir: '', names: ['berry', 'jelly', 'feather'] }
+            col: { dir: '', names: ['berry', 'goldberry', 'plainberry', 'jelly', 'feather'] }
         };
         const COLLECT_SRC = {
             berry: 'celeste-collectables/strawberry.png',
+            // 金莓 / 普通莓用游戏图集原始帧（18×16），与场景里跟随的精灵同源
+            goldberry: 'Atlases/Gameplay/collectables/goldberry/idle00.png',
+            plainberry: 'Atlases/Gameplay/collectables/strawberry/normal00.png',
             jelly: 'Atlases/Gameplay/objects/glider/idle0.png',
             feather: 'Atlases/Gameplay/objects/flyFeather/idle00.png'
         };
@@ -161,7 +164,7 @@
             let s = escHtml(text);
             // 收集品：原始 emoji 先归一化成标记，再统一替换成 atlases 素材
             s = s.replace(/🍓/g, '[c:berry]').replace(/🪼/g, '[c:jelly]').replace(/🪶/g, '[c:feather]');
-            s = s.replace(/\[c:(berry|jelly|feather)\]/g, (m, name) =>
+            s = s.replace(/\[c:(berry|goldberry|plainberry|jelly|feather)\]/g, (m, name) =>
                 `<img class="chat-emoji collect" loading="lazy" src="${COLLECT_SRC[name]}" alt="c:${name}" decoding="async">`);
             s = s.replace(/\[(mad|bade|granny|theo|oshiro):([a-zA-Z]+)\]/g, (m, series, name) => {
                 const pack = EMOJI_PACKS[series];

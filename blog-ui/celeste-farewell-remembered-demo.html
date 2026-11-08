@@ -337,6 +337,12 @@
       // 聊天互动素材：草莓 wings 10 帧（flap）· 水母 glider idle 10 / held 1 / fall 3 / fallLoop 2
       // · 金羽毛 idle/flash 各 21 帧 · 星飞球体 starFly00 · 变形 startStarFly 4 帧
       for (let i = 0; i < 10; i++) put('berry' + i, BASE + 'collectables/strawberry/wings0' + i + '.png');
+      // 金莓 / 普通莓：Sprites.xml L450-456 `goldberry`（18×16, idle 0-5×4+0-7 @.08）
+      // 与 L425-428 `strawberry`（18×16, idle path=normal 0-6×4+0-7 @.1）
+      for (let i = 0; i < 8; i++) {
+        put('gold' + i, BASE + 'collectables/goldberry/idle' + String(i).padStart(2, '0') + '.png');
+        put('plain' + i, BASE + 'collectables/strawberry/normal0' + i + '.png');
+      }
       for (let i = 0; i < 10; i++) put('jelly' + i, BASE + 'objects/glider/idle' + i + '.png');
       put('jellyHeld', BASE + 'objects/glider/held0.png');
       for (let i = 0; i < 3; i++) put('jellyFall' + i, BASE + 'objects/glider/fall' + i + '.png');
@@ -884,6 +890,9 @@
     //     第 i 个 follower 取 PastPoints[5*(i+1)]，num 每次 +=5
     //   · Follower::Update 只看 DelayTimer；Strawberry::Added 设 FollowDelay=0.3
     //   · 逼近：Position += (target - Position) * (1 - pow(0.01, dt))
+    //   · Strawberry::Golden 不是独立类型：金莓 = Strawberry(name="goldenBerry") → sprite goldberry；
+    //     Strawberry::orig_Update 非翼时 wobble += dt*4、sprite.Y = sin(wobble)*2（±2px 呼吸，只偏视觉）
+    //   · Strawberry::OnPlayer：wiggler = Wiggler(0.4s,4Hz)，Scale = 1+0.35*Value；拾取后 Winged=false
     //   · Glider idle delay 0.1s（Sprites.xml）；FlyFeather idle/flash 各 21 帧 0.06s
     //   · Player.StStarFly：StartStarFly → StarFlyCoroutine(0.42s) → StarFlyUpdate(timer 2s) → StarFlyEnd
     const FOLLOW = { sample: 0.02, minDist: 3, maxPoints: 350, stepIndex: 5, delay: 0.3 };
@@ -933,6 +942,15 @@
     };
     // Strawberry wings：Sprites.xml <Loop id="flap" delay=".08" frames="0-8,0-8,0-7,9"/>
     const BERRY_SEQ = [0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 9];
+    // 金莓 / 普通莓 idle（Sprites.xml L428 `strawberry` / L453 `goldberry`，origin 均 <Center />）
+    //   strawberry: path=normal delay=.1 frames="0-6,0-6,0-6,0-6,0-7"
+    //   goldberry : path=idle   delay=.08 frames="0-5,0-5,0-5,0-5,0-7"
+    const BERRY_PLAIN_SEQ = [0, 1, 2, 3, 4, 5, 6, 0, 1, 2, 3, 4, 5, 6, 0, 1, 2, 3, 4, 5, 6, 0, 1, 2, 3, 4, 5, 6, 0, 1, 2, 3, 4, 5, 6, 7];
+    const BERRY_GOLD_SEQ = [0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5, 6, 7];
+    // 会跟随的莓都是非翼（OnPlayer 里 Winged=false）：18×16、中心原点，只播 idle + 呼吸
+    const BERRY_SIZE = { w: 18, h: 16 };
+    // wiggler = Wiggler(0.4s, 4Hz)，Monocle.Wiggler::Update 的 Value = cos(2π·4·t)·(1−t/0.4)
+    const BERRY_WIGGLE = { time: 0.4, freq: 4, amp: 0.35 };
 
     const leader = { past: [], acc: 0 };
     const berries = [], jellies = [], feathers = [];
@@ -1004,11 +1022,17 @@
       if (leader.past.length > FOLLOW.maxPoints) leader.past.length = FOLLOW.maxPoints;
     }
 
-    function addBerry() {
+    // kind：'wing' 翼草莓（现有物件，行为不动）/ 'gold' 金莓（Strawberry Golden=true）/ 'plain' 普通莓
+    function addBerry(kind) {
       if (berries.length >= CAP.berry) return;   // 超出的 token 直接忽略（不排队）
       const idx = Math.min(FOLLOW.stepIndex * (berries.length + 1), leader.past.length - 1);
       const p = (idx >= 0 && leader.past[idx]) || { x: m.x, y: m.y - 10 };
-      berries.push({ x: p.x, y: p.y, spawnT: 0, delay: FOLLOW.delay, phase: Math.random() * 2.4 });
+      berries.push({
+        kind: kind || 'wing',
+        x: p.x, y: p.y, spawnT: 0, delay: FOLLOW.delay,
+        phase: Math.random() * 2.4,          // 翼草莓走共享时钟 time + phase
+        animT: 0, wobble: 0, wiggleT: 0       // 金莓/普通莓：各自 idle 帧时钟、呼吸、拾取弹跳
+      });
       updateHud();
     }
 
@@ -1225,6 +1249,22 @@
         b.x = followerLerp(b.x, tgt.x, dt);
         b.y = followerLerp(b.y, tgt.y, dt);
       }
+      // 金莓/普通莓视觉：idle 帧时钟 + sin(wobble)*2 呼吸 + 拾取 0.4s 弹跳（不影响跟随坐标）
+      for (const b of berries) {
+        if (b.kind === 'wing') continue;
+        b.animT += dt;
+        b.wobble += dt * 4;                                  // Strawberry::orig_Update
+        if (b.wiggleT >= 0) {
+          b.wiggleT += dt;
+          if (b.wiggleT >= BERRY_WIGGLE.time) b.wiggleT = -1;
+        }
+      }
+    }
+    // Monocle.Wiggler::Update：Value = cos(2π·freq·t)·(1 − t/time)；OnPlayer 回调 Scale = 1 + 0.35·Value
+    function berryWiggleScale(b) {
+      if (b.wiggleT < 0) return 1;
+      const v = Math.cos(Math.PI * 2 * BERRY_WIGGLE.freq * b.wiggleT) * (1 - b.wiggleT / BERRY_WIGGLE.time);
+      return 1 + BERRY_WIGGLE.amp * v;
     }
 
     function stepFeathers() {
@@ -1375,7 +1415,11 @@
     function consumeText(text) {
       const s = String(text || '');
       const nb = (s.match(/🍓|\[c:berry\]/g) || []).length;
-      for (let i = 0; i < nb; i++) addBerry();
+      for (let i = 0; i < nb; i++) addBerry('wing');
+      const ng = (s.match(/\[c:goldberry\]/g) || []).length;
+      for (let i = 0; i < ng; i++) addBerry('gold');
+      const np = (s.match(/\[c:plainberry\]/g) || []).length;
+      for (let i = 0; i < np; i++) addBerry('plain');
       const nj = (s.match(/🪼|\[c:jelly\]/g) || []).length;
       for (let i = 0; i < nj; i++) spawnJelly();
       const nf = (s.match(/🪶|\[c:feather\]/g) || []).length;
@@ -1383,9 +1427,16 @@
     }
 
     function berryFrame(t) { return BERRY_SEQ[Math.floor(t / 0.08) % BERRY_SEQ.length]; }
+    function berryIdleFrame(b) {
+      const gold = b.kind === 'gold';
+      const seq = gold ? BERRY_GOLD_SEQ : BERRY_PLAIN_SEQ;
+      const step = gold ? 0.08 : 0.1;
+      return (gold ? 'gold' : 'plain') + seq[Math.floor(b.animT / step) % seq.length];
+    }
 
-    function drawBerries() {
+    function drawBerries() {   // 翼草莓（现有，Depth -100 但沿用旧图层：人物之下）
       for (const b of berries) {
+        if (b.kind !== 'wing') continue;
         const img = IMG['berry' + berryFrame(time + b.phase)];
         if (!img) continue;
         const p = toScreen(b);
@@ -1393,6 +1444,21 @@
         const w = 40 * Z * sc, h = 24 * Z * sc;
         if (p.x < -w || p.x > W + w || p.y < -h || p.y > H + h) continue;
         ctx.drawImage(img, Math.round(p.x - w / 2), Math.round(p.y - h / 2), Math.round(w), Math.round(h));
+      }
+    }
+
+    // 金莓 / 普通莓：Strawberry Depth -100（拾取后 -1000000）→ 比 Player(0) 更靠前，盖在人物与水母之上
+    function drawFrontBerries() {
+      for (const b of berries) {
+        if (b.kind === 'wing') continue;
+        const img = IMG[berryIdleFrame(b)];
+        if (!img) continue;
+        const p = toScreen(b);
+        const sc = berryWiggleScale(b);   // Wiggler：拾取瞬间 1.35 → 0.4s 归正
+        const w = BERRY_SIZE.w * Z * sc, h = BERRY_SIZE.h * Z * sc;
+        const bobY = Math.sin(b.wobble) * 2 * Z;   // orig_Update：sprite.Y 只偏视觉，实体仍贴 Leader 轨迹
+        if (p.x < -w || p.x > W + w || p.y + bobY < -h || p.y + bobY > H + h) continue;
+        ctx.drawImage(img, Math.round(p.x - w / 2), Math.round(p.y + bobY - h / 2), Math.round(w), Math.round(h));
       }
     }
 
@@ -1469,7 +1535,12 @@
       get ready() { return sceneReady; },
       get flying() { return !!fly; },
       get stats() {
-        return { berry: berries.length, jelly: jellies.length, feather: feathers.length, flying: !!fly, held: !!heldJelly };
+        return {
+          berry: berries.length, jelly: jellies.length, feather: feathers.length,
+          goldberry: berries.filter(b => b.kind === 'gold').length,
+          plainberry: berries.filter(b => b.kind === 'plain').length,
+          flying: !!fly, held: !!heldJelly
+        };
       },
       consume(content) {
         const t = String(content || '');
@@ -1666,12 +1737,13 @@
       drawHeart();
       drawDust();
       drawParticles();
-      // 聊天互动物件：羽毛/草莓在人物之下；水母 Depth -5 → 人物之上
+      // 聊天互动物件：羽毛/翼草莓在人物之下；水母 Depth -5、金莓/普通莓 Depth -100 → 人物之上
       drawFeathers();
       drawBerries();
       const inBubble = bubbleFlying();
       if (fly) drawFly(); else if (!inBubble) m.draw(ctx, toScreen, Z);
       drawJellies();
+      drawFrontBerries();
       drawForegrounds();                             // purplesunset（additive .25）盖在关卡之上
       // FormationBackdrop（depth -1999900）：fade 3/s 升到 1，黑 rect 的 alpha = fade * 0.5 * 0.85
       // 覆盖整个世界，泡泡玩家（depth -2000000）画在它之上。
@@ -2367,7 +2439,7 @@
   <script src="js/felt-piano.js?v=20261003"></script>
   <script src="js/vue.global.prod.js?v=20261008a"></script>
   <script src="js/badeline-crawlout.js?v=20261107b"></script>
-<script src="js/messages.js?v=20261106d"></script>
+<script src="js/messages.js?v=20261108a"></script>
   <script src="js/seed.js?v=20261101c"></script>
   <script>
     // v-cloak 兜底：Vue 挂载后由这里清掉，避免面板一直隐藏
