@@ -23,10 +23,23 @@ public class UserController {
         return sysUserService.berryBalance(token);
     }
 
-    /** 草莓籽收集奖励：服务端按 6 小时冷却发放，客户端不能传金额 */
+    /**
+     * 草莓籽收集奖励：服务端按 6 小时冷却发放，客户端不能传金额。
+     * batchId 用于幂等——同一批次重复提交只回报「已发放」，不会重复 +1。
+     */
     @PostMapping("berry/seed-claim")
-    public Result claimSeedBerry(@RequestHeader("Authorization") String token) {
-        return sysUserService.claimSeedBerry(token);
+    public Result claimSeedBerry(@RequestHeader("Authorization") String token,
+                                 @RequestBody(required = false) java.util.Map<String, String> body) {
+        return sysUserService.claimSeedBerry(token, body == null ? null : body.get("batchId"));
+    }
+
+    /**
+     * 服务端时钟：仅供前端判定草莓籽刷新（滚动 6 小时，不涉及时区/自然日）。
+     * 不读用户数据、不需要 token，未登录也能拿到，避免本地时钟偏快/偏慢导致节奏漂移。
+     */
+    @GetMapping("berry/seed-clock")
+    public Result seedClock() {
+        return Result.success(java.util.Map.of("serverTime", System.currentTimeMillis()));
     }
 
     /** 更新个性签名（空串/null 清空） */

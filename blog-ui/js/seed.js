@@ -1,6 +1,10 @@
 /* ===== 草莓籽收集系统（全局·跨页面分布） =====
-   - 每 6 小时刷新 3-5 颗草莓籽，每颗绑定一个不同页面（排除 berryos/demo），
-     只在它所属的页面出现；去哪些页面找，由 diary 页 Madeline 聊天给线索
+   - 刷新口径：本轮结算成功后满 6 小时，且下次加载页面时才生成下一批（3-5 颗，每颗绑定一个
+     不同页面，排除 berryos/demo）；只要还有籽没收集，就永不刷新、原样留着
+   - 刷新判定用服务端时钟（/users/berry/seed-clock），不按自然日/时区，也不用本地时钟做主
+   - 结算幂等：每批籽带一个 batchId，领奖励时一并提交；服务端按「用户 + 批次」记住已发放，
+     同一批重试只回报「已发放」，不会多给一颗
+   - 籽只在它所属的页面出现；去哪些页面找，由 diary 页 Madeline 聊天给线索
    - 鼠标点击后跟随鼠标走，表示收集到了；收集状态持久化，切页面保留
    - 在任意页面集齐最后一颗 → 其他页面已收集的籽以视觉粒子方式临时归场，
      旋转汇聚 + 音效组合成一颗草莓
@@ -35,8 +39,35 @@
   var BERRY_FRAME_PREFIX = 'celeste-collectables/strawberry/normal';
   var BERRY_FRAME_COUNT = 7;          // idle 循环只用 0-6
   var BERRY_FRAME_MS = 100;           // delay=".1"
-  var REFRESH_INTERVAL = 6 * 60 * 60 * 1000;  // 6 小时
+  var REFRESH_INTERVAL = 6 * 60 * 60 * 1000;  // 刷新间隔：以「本轮结算成功」为起点滚动 6 小时
   var STORAGE_KEY = 'seedState_v2';   // v2：seed 增加 page 字段，v1 旧状态自然作废重刷
+
+  // ===== 时钟：刷新判定以服务端时间为准 =====
+  // serverOffset = 服务端 epoch − 本地 epoch；拿不到时保持 0，退化为本地时钟
+  // offset 缓存在 sessionStorage，避免每次翻页都等一次请求
+  var CLOCK_CACHE_KEY = 'seedClockOffset';
+  var CLOCK_CACHE_MS = 10 * 60 * 1000;
+  var serverOffset = 0;
+  var clockSynced = false;   // 是否真的拿到了服务端时间（缓存或接口），用于老状态换算与标记
+  function nowMs() { return Date.now() + serverOffset; }
+  function syncServerClock() {
+    try {
+      var c = JSON.parse(sessionStorage.getItem(CLOCK_CACHE_KEY) || 'null');
+      if (c && typeof c.off === 'number' && Math.abs(Date.now() - c.at) < CLOCK_CACHE_MS) {
+        serverOffset = c.off;
+        clockSynced = true;
+        return Promise.resolve();
+      }
+    } catch (e) {}
+    if (typeof api !== 'function') return Promise.resolve();
+    return api('/users/berry/seed-clock', 'GET', null, 1500).then(function (res) {
+      if (res && res.success && res.data && typeof res.data.serverTime === 'number') {
+        serverOffset = res.data.serverTime - Date.now();
+        clockSynced = true;
+        try { sessionStorage.setItem(CLOCK_CACHE_KEY, JSON.stringify({ off: serverOffset, at: Date.now() })); } catch (e) {}
+      }
+    }).catch(function () {});
+  }
 
   // ===== 原作常量（逐项来自 IL / Sprites.xml，改手感就调这里） =====
   var PX = 3;                     // 世界像素 → 屏幕像素（16px 图集帧渲染成 48px，整数倍缩放才不发虚）
@@ -107,13 +138,20 @@
   function saveState(s) {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch (e) {}
   }
+  // 批次编号：随状态持久化，结算时提交给服务端做幂等（同批次重试不会重复发放）
+  function newBatchId() {
+    return 'b' + nowMs().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
+  }
 
-  // 是否该刷新：无记录/超过 6 小时/全部收集完且超过 6 小时
+  // 是否该刷新（口径：本轮结算成功后满 6 小时，且只在下次加载页面时判定）
+  //   · 还有籽没收集 → 永不刷新，未收完的籽一直保留
+  //   · 已收齐但还没结算成功（等待补领）→ 不刷新，避免把待领记录冲掉
   function shouldRefresh(s) {
     if (!s.lastRefresh) return true;
-    if (!s.seeds.length) return Date.now() - s.lastRefresh >= REFRESH_INTERVAL;
+    if (isPendingClaim(s)) return false;
+    if (!s.seeds.length) return nowMs() - s.lastRefresh >= REFRESH_INTERVAL;
     if (s.seeds.some(function (x) { return !x.collected; })) return false;
-    return Date.now() - s.lastRefresh >= REFRESH_INTERVAL;
+    return nowMs() - s.lastRefresh >= REFRESH_INTERVAL;
   }
 
   // 生成 3-5 颗籽：每颗绑定一个互不重复的页面，位置为该页内的随机点（百分比）
@@ -693,7 +731,6 @@
         op = 1 - tf;
         if (tf >= 1) {
           if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
-          saveState({ lastRefresh: Date.now(), seeds: [], credited: false });
           combining = false;
           return;                            // 结束循环，不再排下一帧
         }
@@ -710,14 +747,55 @@
     }
     requestAnimationFrame(run);
 
-    // 领取草莓籽奖励（仅当 api.js 已加载）；奖励由服务端按 6 小时冷却发放，
-    // credited 仅用于防止中断后重复触发，最终由服务端冷却兜底
-    if (typeof window.claimSeedBerry === 'function') {
-      try { window.claimSeedBerry(); } catch (e) {}
+    // 集齐即请求结算；本地这批籽是否清空由请求结果决定（见 settleClaim）
+    settleClaim(false);
+  }
+
+  // ===== 结算：本地状态跟随请求结果，不提前写 credited =====
+  // 状态约定：
+  //   · 全部 collected 且 !credited = 本轮已收齐、等待结算（下次加载可重试）
+  //   · seeds 清空 + lastRefresh = 本轮已结算，下一批在 6 小时后、下次加载时生成
+  //   · credited 只作为旧版本兼容标记读取，本版不再写入 true
+  var settling = false;
+  function isPendingClaim(s) {
+    return !!(s && s.seeds.length && !s.credited &&
+      s.seeds.every(function (x) { return x.collected; }));
+  }
+  function seedToast(msg) {
+    if (typeof showToast === 'function') { showToast(msg, 'info'); }
+    else if (window.console) { console.info('[seed]', msg); }
+  }
+  function clearBatch() {
+    // legacyClockFixed：本版写下的 lastRefresh 已是服务端时间；没同步到服务端时钟时留待下次换算
+    saveState({ lastRefresh: nowMs(), seeds: [], credited: false, legacyClockFixed: clockSynced });
+  }
+  function settleClaim(fromLoad) {
+    if (settling) return;
+    // 只有「已收齐 + 未结算」才发请求：老版本留下的批次没有编号，补一个并落盘，
+    // 本次与后续重试复用同一个编号；已被另一个 tab 结算/换批则直接返回，避免给空批次发奖
+    var st = loadState();
+    if (!isPendingClaim(st)) return;
+    if (typeof window.claimSeedBerry !== 'function') { clearBatch(); return; }
+    if (!st.batchId) {
+      st.batchId = newBatchId();
+      saveState(st);
     }
-    var cs2 = loadState();
-    cs2.credited = true;
-    saveState(cs2);
+    var batchId = st.batchId;
+    settling = true;
+    Promise.resolve(window.claimSeedBerry(batchId)).then(function (r) {
+      settling = false;
+      r = r || {};
+      if (!r.ok) {
+        // 网络/服务端失败：保留「已收齐 + 未结算」，下次加载自动重试
+        if (!fromLoad) seedToast('奖励发放失败，下次打开页面会自动重试');
+        return;
+      }
+      // alreadyGranted：这一批服务端早已发过（上次响应丢了）。按已结算收尾，清空并开始 6 小时计时。
+      if (r.granted || r.anonymous || r.alreadyGranted) { clearBatch(); return; }
+      // granted=false：6 小时冷却内已领过（多见于另一台设备）。不清空这批籽，
+      // 明确告知用户，冷却结束后下次加载会自动补领，避免这一轮白收。
+      if (!fromLoad) seedToast('本轮奖励已在 6 小时冷却内领取过，冷却结束后再打开页面可自动补领');
+    }).catch(function () { settling = false; });
   }
 
   // ===== 新籽位置提示：diary 页由 Madeline 在聊天中自然说出「散落在哪些页面」 =====
@@ -751,20 +829,30 @@
 
   function init() {
     injectStyle();
+    // 刷新判定用服务端时钟；拿不到（离线/无 api）就保持本地时钟，最多等 1.5s
+    syncServerClock().then(boot);
+  }
+
+  function boot() {
     var s = loadState();
 
-    // 中断恢复：上次籽已全部收集（螺旋汇聚途中刷新/关页）且未入账 → 重新领取
-    // 服务端 6 小时冷却兜底，重复触发不会重复发放
-    if (s.seeds.length > 0 && s.seeds.every(function (x) { return x.collected; }) && !s.credited) {
-      if (typeof window.claimSeedBerry === 'function') {
-        try { window.claimSeedBerry(); } catch (e) {}
-      }
-      saveState({ lastRefresh: Date.now(), seeds: [], credited: false });
-      s = loadState();
+    // 老状态里的 lastRefresh 是本地时钟写的：拿到服务端时间后按差值换算一次并打标记。
+    // 服务端时间拿不到时保持原值（不置 0、不乱算），下次加载再试。
+    if (!s.legacyClockFixed && clockSynced
+        && typeof s.lastRefresh === 'number' && s.lastRefresh > 0) {
+      s.lastRefresh = s.lastRefresh + serverOffset;
+      s.legacyClockFixed = true;
+      saveState(s);
     }
 
+    // 已收齐但还没结算成功（关页中断 / 上次请求失败 / 冷却中）→ 重新请求，不先清空
+    if (isPendingClaim(s)) settleClaim(true);
+
     if (shouldRefresh(s)) {
-      s = { lastRefresh: Date.now(), seeds: genSeeds(), credited: false, hintPending: true };
+      s = {
+        lastRefresh: nowMs(), seeds: genSeeds(), credited: false, hintPending: true,
+        batchId: newBatchId(), legacyClockFixed: clockSynced
+      };
       saveState(s);
       // 位置提示统一由 diary 聊天给出（本页是 diary 立即说，其他页留待进入 diary 补说）
       speakSeedHintIfNeeded(true);
@@ -776,6 +864,37 @@
     restoreFollowers(s);   // 已收集的籽在新页面重建为 follower（跨页面跟随）
     requestAnimationFrame(tick);
   }
+
+  // ===== 多 tab 同步：另一个标签页收集/结算/换批后，本页以存储为准收敛 =====
+  // 存储里的籽已不存在（被另一 tab 结算换批）→ 撤掉本页元素；
+  // 已被另一 tab 收走 → 撤掉待收集点；本页没渲染过的新籽交给 render() 补上。
+  window.addEventListener('storage', function (e) {
+    if (e.key !== STORAGE_KEY || combining) return;
+    var s = loadState();
+    var changed = false;
+    Object.keys(itemEls).forEach(function (id) {
+      var it = itemEls[id];
+      if (!it) return;
+      var exists = s.seeds.some(function (x) { return x.id === id; });
+      var pending = s.seeds.some(function (x) { return x.id === id && !x.collected; });
+      if (!exists || (!pending && !it.follow)) {
+        if (it.el.parentNode) it.el.parentNode.removeChild(it.el);
+        delete itemEls[id];
+        changed = true;
+      }
+    });
+    if (changed) {
+      // chain 只保留仍然存在的 follower，并按新顺序重排 fi
+      chain.length = 0;
+      s.seeds.forEach(function (x) {
+        var it = itemEls[x.id];
+        if (it && it.follow) { it.fi = chain.length; chain.push(x.id); }
+      });
+    }
+    render();
+    // 另一 tab 已收走的籽，在本页补成 follower，保持「已收集的籽都跟着光标」一致
+    restoreFollowers(s);
+  });
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);

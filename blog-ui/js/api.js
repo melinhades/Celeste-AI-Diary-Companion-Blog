@@ -65,20 +65,29 @@ function syncBerryBalance() {
     });
 }
 /**
- * 领取草莓籽奖励：服务端按 6 小时冷却发放。
- * granted=false 表示冷却期内已领过，同样用返回的权威余额刷新本地，不报错。
+ * 领取草莓籽奖励：服务端按 6 小时冷却发放；同一批次编号重复提交是幂等的。
+ * 返回 { ok, granted, alreadyGranted, anonymous }：
+ *   ok             请求是否成功到达服务端（网络错误/5xx 为 false，调用方应保留状态下次重试）
+ *   granted        本次是否真的 +1（冷却期内为 false）
+ *   alreadyGranted 这一批此前已经发放过（响应丢失后重试）：调用方应按「已结算」收尾，不再重试
+ *   anonymous      未登录，本地玩法照旧但没有奖励
  */
-function claimSeedBerry() {
-    if (!localStorage.getItem('token')) return Promise.resolve(false);
-    return api('/users/berry/seed-claim', 'POST').then(res => {
+function claimSeedBerry(batchId) {
+    if (!localStorage.getItem('token')) return Promise.resolve({ ok: true, granted: false, alreadyGranted: false, anonymous: true });
+    return api('/users/berry/seed-claim', 'POST', { batchId: batchId || '' }, 8000).then(res => {
         if (res && res.data && typeof res.data.berry === 'number') {
             localStorage.setItem('berryBalance', String(res.data.berry));
             emitBerriesChange(res.data.berry);
         }
-        return !!(res && res.success && res.data && res.data.granted);
+        return {
+            ok: !!(res && res.success),
+            granted: !!(res && res.success && res.data && res.data.granted),
+            alreadyGranted: !!(res && res.success && res.data && res.data.alreadyGranted),
+            anonymous: false
+        };
     }).catch(e => {
         console.warn('claimSeedBerry failed:', e);
-        return false;
+        return { ok: false, granted: false, alreadyGranted: false, anonymous: false };
     });
 }
 window.claimSeedBerry = claimSeedBerry;
@@ -87,12 +96,15 @@ window.claimSeedBerry = claimSeedBerry;
 // 这些 key 是「某个账号的」数据，存在全局 localStorage 里，换账号不清理就会出现
 // 「登录 test 却看到上个账号的明信片署名 / 已点亮的心门」这类串号。
 const USER_SCOPED_KEYS = [
-    'badelineChatLog', 'berryBalance', 'berryOwned',
+    'badelineChatLog', 'badelineDiaryStandInV1', 'berryBalance', 'berryOwned',
     'crystalHeart', 'dailyPostcardCache', 'diaryChatSessionId', 'diaryFarewell',
     'diaryLastSaveDate', 'diarySaveCount', 'diarySnapshots', 'diaryStreak', 'diaryUnsaved',
     'heartCrystalDay', 'heartDoorHearts', 'heartDoorLit', 'heartDoorSplit',
     'lastEmotion', 'madeline_emotion', 'mirrorBroken', 'dreamDash',
-    'pmLastVisit', 'postcardDate'
+    'pmLastVisit', 'postcardDate',
+    // 草莓籽：籽的位置/收集进度属于「这台设备上的这个账号」，换号必须清掉，
+    // 否则新账号会继承上一个人的已收集进度。同账号登录不会触发清理（bindAccount 只在切号时清）。
+    'seedState_v2'
 ];
 /** 纯展示/缓存类：登出即作废，避免下一个账号看到上一个人的明信片 */
 const SESSION_DISPLAY_KEYS = ['dailyPostcardCache', 'postcardDate', 'pmLastVisit',

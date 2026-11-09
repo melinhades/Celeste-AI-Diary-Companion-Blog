@@ -23,8 +23,11 @@ public interface SysUserService {
     /** 新日记保存成功后的服务端权威奖励（+1 草莓，仅内部调用） */
     void grantDiaryBerry(String userId);
 
-    /** 草莓籽收集奖励领取：服务端按 6 小时冷却发放 +1，客户端不能传金额 */
-    Result claimSeedBerry(String token);
+    /**
+     * 草莓籽收集奖励领取：服务端按 6 小时冷却发放 +1，客户端不能传金额。
+     * batchId 为前端批次编号，用于幂等：同一批次重复领取只回报「已发放」，不再加余额。
+     */
+    Result claimSeedBerry(String token, String batchId);
 
     /** 更新当前登录用户的个性签名（null/空串=清空，最长 30 字） */
     Result updateSignature(String token, String signature);

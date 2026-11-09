@@ -24,7 +24,11 @@ import java.util.concurrent.TimeUnit;
 public class SysUserServiceImpl implements SysUserService {
 
     private static final String SEED_CLAIM_KEY_PREFIX = "berry_seed_claim_";
+    /** 幂等键：berry_seed_batch_<userId>_<batchId>，记录「这一批已经发过」，防止响应丢失后重试重复 +1 */
+    private static final String SEED_BATCH_KEY_PREFIX = "berry_seed_batch_";
     private static final long SEED_CLAIM_COOLDOWN_HOURS = 6;
+    /** 幂等标记比冷却活得久，覆盖「冷却过后前端仍在重试同一批」的情况 */
+    private static final long SEED_BATCH_TTL_DAYS = 30;
 
     @Autowired
     private SysUserMapper sysUserMapper;
@@ -118,46 +122,109 @@ public class SysUserServiceImpl implements SysUserService {
     }
 
     @Override
-    public Result claimSeedBerry(String token) {
+    public Result claimSeedBerry(String token, String batchId) {
         SysUser loginUser = tokenService.checkToken(token);
         if (loginUser == null) {
             return Result.fail(ErrorCode.TOKEN_ERROR.getCode(), ErrorCode.TOKEN_ERROR.getMsg());
         }
-        String key = SEED_CLAIM_KEY_PREFIX + loginUser.getId();
+        String userId = loginUser.getId();
+        String normalizedBatch = normalizeSeedBatchId(batchId);
+        String batchKey = normalizedBatch == null ? null : SEED_BATCH_KEY_PREFIX + userId + "_" + normalizedBatch;
+
+        // 幂等前置检查：这一批已经发过 → 只回报「已发放」，余额一分不动。
+        // 覆盖「奖励已入账但响应丢失、前端重试」的场景，避免多给一颗。
+        if (batchKey != null) {
+            try {
+                if (Boolean.TRUE.equals(redisTemplate.hasKey(batchKey))) {
+                    return seedClaimResult(userId, false, true);
+                }
+            } catch (Exception e) {
+                log.warn("草莓籽批次幂等校验失败 userId={}", userId, e);
+                return Result.fail(503, "奖励暂不可用，请稍后再试");
+            }
+        }
+
+        String key = SEED_CLAIM_KEY_PREFIX + userId;
         Boolean firstClaim;
         try {
             firstClaim = redisTemplate.opsForValue()
                     .setIfAbsent(key, "1", SEED_CLAIM_COOLDOWN_HOURS, TimeUnit.HOURS);
         } catch (Exception e) {
             // 冷却状态无法确认时拒绝发放，绝不 fail-open
-            log.warn("草莓籽领取冷却校验失败 userId={}", loginUser.getId(), e);
+            log.warn("草莓籽领取冷却校验失败 userId={}", userId, e);
             return Result.fail(503, "奖励暂不可用，请稍后再试");
         }
 
         boolean granted = Boolean.TRUE.equals(firstClaim);
+        if (granted && batchKey != null) {
+            // 先落幂等标记再动余额：标记写不进去就不发放，否则重试会重复 +1
+            Boolean batchFirst;
+            try {
+                batchFirst = redisTemplate.opsForValue()
+                        .setIfAbsent(batchKey, "1", SEED_BATCH_TTL_DAYS, TimeUnit.DAYS);
+            } catch (Exception e) {
+                log.warn("草莓籽批次幂等标记写入失败 userId={}", userId, e);
+                deleteSeedClaimKey(key);
+                return Result.fail(503, "奖励暂不可用，请稍后再试");
+            }
+            if (!Boolean.TRUE.equals(batchFirst)) {
+                // 冷却刚好过期、但这一批早已发过：归还刚占用的冷却，按已发放返回
+                deleteSeedClaimKey(key);
+                return seedClaimResult(userId, false, true);
+            }
+        }
+
         if (granted) {
             LambdaUpdateWrapper<SysUser> uw = new LambdaUpdateWrapper<>();
-            uw.eq(SysUser::getId, loginUser.getId());
+            uw.eq(SysUser::getId, userId);
             uw.setSql("berry = COALESCE(berry, 0) + 1");
             try {
                 int rows = sysUserMapper.update(null, uw);
                 if (rows == 0) {
                     deleteSeedClaimKey(key);
+                    deleteSeedBatchKey(batchKey);
                     return Result.fail(400, "用户不存在");
                 }
             } catch (Exception e) {
-                log.warn("草莓籽奖励发放失败 userId={}", loginUser.getId(), e);
+                log.warn("草莓籽奖励发放失败 userId={}", userId, e);
                 deleteSeedClaimKey(key);
+                deleteSeedBatchKey(batchKey);
                 return Result.fail(500, "奖励发放失败，请稍后再试");
             }
         }
 
-        SysUser fresh = sysUserMapper.selectById(loginUser.getId());
-        java.util.Map<String, Object> data = new java.util.HashMap<>();
+        return seedClaimResult(userId, granted, false);
+    }
+
+    /** 统一返回余额 + 本次发放结果 + 该批次是否早已发放 */
+    private Result seedClaimResult(String userId, boolean granted, boolean alreadyGranted) {
+        SysUser fresh = sysUserMapper.selectById(userId);
         Integer berry = fresh == null ? null : fresh.getBerry();
+        java.util.Map<String, Object> data = new java.util.HashMap<>();
         data.put("berry", berry == null ? Integer.valueOf(0) : berry);
         data.put("granted", granted);
+        data.put("alreadyGranted", alreadyGranted);
         return Result.success(data);
+    }
+
+    /** 批次编号会拼进 Redis key：只接受字母/数字/下划线/短横线，最长 64，异常值按老协议处理 */
+    private String normalizeSeedBatchId(String batchId) {
+        if (batchId == null) {
+            return null;
+        }
+        String v = batchId.trim();
+        if (v.isEmpty() || v.length() > 64) {
+            return null;
+        }
+        for (int i = 0; i < v.length(); i++) {
+            char c = v.charAt(i);
+            boolean ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+                    || (c >= '0' && c <= '9') || c == '_' || c == '-';
+            if (!ok) {
+                return null;
+            }
+        }
+        return v;
     }
 
     /** 发放失败时尽力回滚冷却标记，失败只记日志不抛出 */
@@ -166,6 +233,18 @@ public class SysUserServiceImpl implements SysUserService {
             redisTemplate.delete(key);
         } catch (Exception e) {
             log.warn("草莓籽冷却标记回滚失败 key={}", key, e);
+        }
+    }
+
+    /** 发放失败时尽力回滚幂等标记，失败只记日志不抛出 */
+    private void deleteSeedBatchKey(String key) {
+        if (key == null) {
+            return;
+        }
+        try {
+            redisTemplate.delete(key);
+        } catch (Exception e) {
+            log.warn("草莓籽批次幂等标记回滚失败 key={}", key, e);
         }
     }
 
