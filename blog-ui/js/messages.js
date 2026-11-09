@@ -201,6 +201,15 @@
                 let lastCrawlAt = 0;   // Badeline 爬出气泡的冷却，避免表情包连发时刷屏
                 let myUserId = null;
                 let myNickname = null;
+                // 本地缓存自己的用户 id（按 token 归属：换了账号 token 不同，缓存自然作废）。
+                // 只用于 currentUser 请求失败时兜底，绝不按昵称判断“是不是我发的”。
+                const ME_CACHE_KEY = 'chat:me';
+                let cachedMe = null;
+                try { cachedMe = JSON.parse(localStorage.getItem(ME_CACHE_KEY) || 'null'); } catch (e) {}
+                if (cachedMe && cachedMe.token === token && cachedMe.id != null) {
+                    myUserId = String(cachedMe.id);
+                    myNickname = cachedMe.name || null;
+                }
                 const seenIds = {};   // 简单去重（历史和实时推送可能重叠）
                 const seenLikeIds = new Set();   // 点赞刷心事件去重（重连不重复刷）
                 let unreadTimer = null;          // 场景页未读轮询（复用 auth.js refreshBell）
@@ -296,7 +305,13 @@
                     if (seenIds[m.id]) return;
                     seenIds[m.id] = true;
                     const ts = Number(m.ts) || Date.now();
-                    const mine = String(m.userId) === String(myUserId);
+                    // 只认服务端持久化的 userId：myUserId 还没解析出来时不能当成“别人”，
+                    // 否则自己的历史消息会被放到左边。缺发送者标识的消息走中性行，不做默认左。
+                    const idKnown = myUserId != null;
+                    const isBirdMsg = String(m.userId) === BIRD_ID;
+                    const mine = idKnown && String(m.userId) === String(myUserId);
+                    // 缺发送者 id、或自己是谁还没确认：无法判定左右 → 中性居中，不默认放左边
+                    const unknown = !isBirdMsg && (m.userId == null || !idKnown);
                     const sender = mine ? '__me__' : String(m.userId);
 
                     // 距上一条 >10 分钟 → 插入时间分隔（同时打断连续消息合并）
@@ -311,7 +326,7 @@
 
                     const it = {
                         t: 'msg', key: 'm' + (++seq), ik: 'ik' + seq,
-                        mine, chain, isBird: false,
+                        mine, unknown, chain, isBird: false,
                         name: '', initial: '?', hue: 0,
                         title: fmtFull(ts), html: renderChatContent(m.content || '')
                     };
@@ -631,13 +646,20 @@
                         }
                     }
                     if (!loggedIn.value) return;
-                    // 当前用户 id + 昵称（区分自己/他人气泡，渲染自己的头像与名字）
-                    api('/users/currentUser', 'GET').then(res => {
-                        if (res.success && res.data) {
-                            myUserId = res.data.id;
+                    // 先确认“我是谁”，再拉历史 / 建 SSE。
+                    // 旧代码两支并行，history 往往先回来，此时 myUserId 还是 null，
+                    // pushMsg 就会把自己的消息当成别人 → 重进聊天室后自己的话全在左边。
+                    const meReady = api('/users/currentUser', 'GET').then(res => {
+                        if (res.success && res.data && res.data.id != null) {
+                            myUserId = String(res.data.id);
                             myNickname = res.data.nickname || res.data.account || '我';
+                            try {
+                                localStorage.setItem(ME_CACHE_KEY, JSON.stringify({
+                                    token, id: myUserId, name: myNickname
+                                }));
+                            } catch (e) {}
                         }
-                    });
+                    }).catch(() => { /* 取不到就退回按 token 校验过的本地缓存；再无则走中性行 */ });
                     // 历史点赞补刷：默认关闭，仅 ?heartbackfill=1 时按通知里的点赞条数一次刷出
                     if (LIKE_HEART_BACKFILL) {
                         api('/notifications/list', 'GET').then(res => {
@@ -648,25 +670,27 @@
                             }
                         });
                     }
-                    // 历史消息（早 -> 晚）
-                    api('/realtime-chat/history', 'GET').then(res => {
-                        if (res.success && Array.isArray(res.data)) {
-                            items.value = [];
-                            seq = 0;
-                            lastTs = 0; lastSender = null;
-                            if (res.data.length === 0) {
-                                logStatus.value = 'empty';
+                    meReady.then(() => {
+                        // 历史消息（早 -> 晚）
+                        api('/realtime-chat/history', 'GET').then(res => {
+                            if (res.success && Array.isArray(res.data)) {
+                                items.value = [];
+                                seq = 0;
+                                lastTs = 0; lastSender = null;
+                                if (res.data.length === 0) {
+                                    logStatus.value = 'empty';
+                                } else {
+                                    // 批量入列：每条都量高度/回底会强制 N 次 layout
+                                    res.data.forEach(m => pushMsg(m, true));
+                                    logStatus.value = 'ok';
+                                }
+                                nextTick(() => { scrollToBottom(); bindEmojis(); });
                             } else {
-                                // 批量入列：每条都量高度/回底会强制 N 次 layout
-                                res.data.forEach(m => pushMsg(m, true));
-                                logStatus.value = 'ok';
+                                logStatus.value = 'error';
                             }
-                            nextTick(() => { scrollToBottom(); bindEmojis(); });
-                        } else {
-                            logStatus.value = 'error';
-                        }
+                        });
+                        connect();
                     });
-                    connect();
                     nextTick(() => {
                         const inp = document.getElementById('chatInput');
                         if (inp) FeltPiano.bind(inp, { enterSend: true });

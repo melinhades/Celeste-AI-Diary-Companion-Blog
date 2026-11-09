@@ -197,6 +197,13 @@
     }
     .chat-msg.me .bubble:hover { border:0; }
 
+    /* 历史消息缺少发送者 id（或本地身份未取到）：无法判定该在左还是右。
+       居中用中性气泡，绝不默认放左边把别人的话摆成自己的对立面。 */
+    .chat-msg.unknown { justify-content:center; }
+    .chat-msg.unknown .av { display:none; }
+    .chat-msg.unknown .nm { justify-content:center; margin:0 0 3px; }
+    .chat-msg.unknown .bubble { border-radius:22px; }
+
     /* 正在输入指示器 */
     .chat-msg.typing-row .typing-bubble { padding:13px 17px 11px; }
     .chat-msg.typing-row .typing-bubble i {
