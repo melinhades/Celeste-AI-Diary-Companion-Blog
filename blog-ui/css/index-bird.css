@@ -50,6 +50,13 @@
     transition: filter .18s ease;
     display: block;
 }
+/* 钥匙图标的视觉中线对齐鸟：.api-key-icon 是行内 <img>，按文字基线排布，
+   下方留出 descender 空隙（按钮因此被撑到 36.8px），光学中心比按钮/鸟高 4.4px；
+   只把这个图标下移同样的距离，按钮尺寸与 header 行高不变 */
+.user-info .api-key-icon {
+    position: relative;
+    top: 4.4px;
+}
 /* 悬停只加亮：喊叫由 js/index-bird.js 轮播 crow00..13 完成，不做位移/缩放 */
 .chat-crow:hover .chat-crow-box img,
 .chat-crow:focus-visible .chat-crow-box img {
