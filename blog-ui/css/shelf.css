@@ -100,14 +100,24 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 /* ===== hover 金色书签竖条 ===== */
 .shelf-row::before { content:''; position:absolute; left:0; top:24%; width:3px; height:52%; background:linear-gradient(#e8c15a,#c8932c); box-shadow:0 0 5px rgba(216,169,58,.55); transform:scaleY(0); transform-origin:center; transition:transform .22s ease; z-index:1; }
 .shelf-row:hover::before { transform:scaleY(1); }
-/* ===== 空态像素山插画 ===== */
-.empty-pix { width:84px; height:63px; image-rendering:pixelated; display:block; margin:0 auto 14px; opacity:.95; filter:drop-shadow(0 4px 10px rgba(0,0,0,.4)); }
 .detail.anim-up { animation:slideUpIn .45s cubic-bezier(.22,1,.36,1); }
 .detail.anim-down { animation:slideDownIn .45s cubic-bezier(.22,1,.36,1); }
 @keyframes slideUpIn { from { opacity:0; transform:translateY(46px); } to { opacity:1; transform:translateY(0); } }
 @keyframes slideDownIn { from { opacity:0; transform:translateY(-46px); } to { opacity:1; transform:translateY(0); } }
 .empty { text-align:center; color:rgba(255,255,255,.85); background:rgba(22,34,60,.75); border:1px solid rgba(255,230,109,.2); border-radius:10px; padding:60px 24px; font-size:14px; line-height:2.2; backdrop-filter:blur(4px); }
 .empty .em { display:block; font-size:28px; margin-bottom:14px; opacity:.9; }
+/* 加载 / 空态 / 失败三态共用：直接落在书架背景上，不再垫深色卡片。
+   亮部靠深色投影压出轮廓，暗部靠暖白字色提亮，两头都能读。 */
+#diaryVue > .empty {
+    background:transparent; border:0; border-radius:0; backdrop-filter:none;
+    color:#fff3cf; font-weight:600; letter-spacing:.4px;
+    -webkit-text-stroke:.4px rgba(38,24,9,.55); paint-order:stroke fill;
+    text-shadow:
+        0 1px 2px rgba(24,14,4,.95),
+        0 0 6px rgba(24,14,4,.72),
+        0 2px 16px rgba(24,14,4,.42);
+}
+#diaryVue > .empty .em { -webkit-text-stroke:0; text-shadow:0 2px 8px rgba(24,14,4,.6); }
 .detail { display:none; background:linear-gradient(160deg, rgba(22,34,60,.95) 0%, rgba(14,22,44,.95) 100%); border:2px solid rgba(255,230,109,.45); border-radius:10px; padding:26px 28px; box-shadow:0 20px 50px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.06); }
 .detail.show { display:block; }
 .detail-nav { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:16px; }
@@ -149,7 +159,6 @@ h1 { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-family
 .sb-scene::before{content:'';position:absolute;left:50%;bottom:-8px;transform:translateX(-50%);width:220px;height:64px;background:radial-gradient(ellipse at center,rgba(255,150,50,.35) 0%,rgba(255,150,50,.12) 45%,transparent 70%);pointer-events:none;animation:sbGlow 1.6s ease-in-out infinite alternate;}
 @keyframes sbGlow{from{opacity:.7}to{opacity:1}}
 .sb-madeline{width:74px;height:auto;image-rendering:pixelated;filter:drop-shadow(0 3px 6px rgba(0,0,0,.5));}
-.sb-flag{width:30px;height:auto;image-rendering:pixelated;align-self:flex-end;margin:0 -2px 2px 0;filter:drop-shadow(0 0 4px rgba(125,207,255,.5));}
 .sb-flash{position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:80px;height:auto;image-rendering:pixelated;pointer-events:none;z-index:2;}
 .sb-fire{position:relative;display:flex;align-items:flex-end;justify-content:center;}
 .sb-fire img{display:block;height:auto;image-rendering:pixelated;filter:drop-shadow(0 0 14px rgba(255,150,50,.65));}
@@ -658,16 +667,6 @@ body:has(.ds-world.panned) #strawberryBonfire { opacity:0; pointer-events:none; 
 
 /* 星飞光球画布：挂在 .ds-left 内 → 随镜头平移、被左屏裁切（等同游戏房间边界） */
 #featherFlyCanvas { position:absolute; inset:0; z-index:12; pointer-events:none; image-rendering:pixelated; }
-#featherFlyHint {
-    position:absolute; left:50%; bottom:26px; z-index:13; transform:translateX(-50%);
-    padding:6px 16px; pointer-events:none; white-space:nowrap;
-    font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif;
-    font-size:12px; letter-spacing:2px; color:rgba(255,232,168,.92);
-    background:rgba(9,7,26,.55); border:1px solid rgba(255,208,110,.28);
-    text-shadow:0 0 10px rgba(255,196,84,.6);
-    opacity:0; transition:opacity .3s ease;
-}
-#featherFlyHint.show { opacity:1; }
 /* level.Shake(0.3)：左屏整块抖动（世界动、相机不动） */
 .ds-left.ff-shake { animation:ffShake .34s cubic-bezier(.36,.07,.19,.97); }
 @keyframes ffShake {

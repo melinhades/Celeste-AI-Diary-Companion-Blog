@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
@@ -8,7 +8,7 @@
     <link rel="icon" href="icon/OIP.webp?v=20261105a" type="image/webp">
 <!-- 字体全部走 css/shelf.css 里的本地 @font-face，不再引 Google Fonts（外链 render-blocking，被墙会导致整页字体回退） -->
 <link rel="stylesheet" href="css/text-fx.css?v=20261004a">
-<link rel="stylesheet" href="css/shelf.css?v=20261108f">
+<link rel="stylesheet" href="css/shelf.css?v=20261109a">
 <link rel="stylesheet" href="css/badeline-panel.css?v=20261108a">
 </head>
 <body>
@@ -114,7 +114,6 @@
 <div id="strawberryBonfire">
     <div class="sb-scene">
         <img class="sb-madeline" src="celeste-gui/madeline-sitdown.gif" alt="Madeline" fetchpriority="high" decoding="async" onerror="if(!this.dataset.r){this.dataset.r=1;var s=this.src,t=this;setTimeout(function(){t.src=s;},300);}">
-        <img id="sbFlag" class="sb-flag" alt="" style="display:none;" decoding="async">
         <div class="sb-fire" id="sbFire"><img id="sbFlameImg" alt="" fetchpriority="high" decoding="async" onerror="if(!this.dataset.r){this.dataset.r=1;var s=this.src,t=this;setTimeout(function(){t.src=s;},300);}"></div>
     </div>
 </div>
@@ -134,19 +133,11 @@
             <div id="cards" class="cards">
                 <!-- 快照卡槽：保留 vanilla insertAdjacentHTML（情绪聚合 IIFE 维护） -->
                 <div id="snapSlot"></div>
-                <!-- 日记列表：Vue 接管渲染（loading/empty/error/head+月份分隔+日记行） -->
+                <!-- 日记列表：Vue 接管渲染（loading/error/ok+月份分隔+日记行；empty 留白） -->
                 <div id="diaryVue">
                     <div v-if="status==='loading'" class="empty"><span class="em">📖</span>正在搬书……</div>
-                    <div v-else-if="status==='empty'" class="empty"><svg class="empty-pix" viewBox="0 0 32 24" shape-rendering="crispEdges" aria-hidden="true">
-                        <rect x="5" y="3" width="1" height="1" fill="#ffe66d"/><rect x="16" y="4" width="1" height="1" fill="#a78bfa"/><rect x="27" y="5" width="1" height="1" fill="#ffe66d"/><rect x="3" y="7" width="1" height="1" fill="#ffffff"/>
-                        <rect x="10" y="6" width="1" height="1" fill="#ffffff"/><rect x="9" y="7" width="3" height="1" fill="#ffffff"/>
-                        <rect x="8" y="8" width="1" height="1" fill="#e8ecff"/><rect x="9" y="8" width="3" height="1" fill="#56508f"/><rect x="12" y="8" width="1" height="1" fill="#e8ecff"/>
-                        <rect x="8" y="9" width="5" height="1" fill="#56508f"/><rect x="7" y="10" width="7" height="1" fill="#4a4580"/><rect x="6" y="11" width="9" height="1" fill="#413c72"/><rect x="5" y="12" width="11" height="1" fill="#3a3665"/>
-                        <rect x="22" y="9" width="1" height="1" fill="#ffffff"/><rect x="21" y="10" width="3" height="1" fill="#dfe6ff"/><rect x="20" y="11" width="5" height="1" fill="#4a4580"/><rect x="19" y="12" width="7" height="1" fill="#3a3665"/><rect x="18" y="13" width="9" height="1" fill="#322f58"/>
-                        <rect x="2" y="14" width="28" height="1" fill="#2a2848"/><rect x="2" y="15" width="28" height="1" fill="#232242"/><rect x="2" y="16" width="28" height="6" fill="#1b1c38"/>
-                    </svg>书架还空着。<br>写下第一篇，它就有了位置。</div>
                     <div v-else-if="status==='error'" class="empty"><span class="em">🌫️</span>书架暂时打不开（{{ errMsg }}）</div>
-                    <template v-else>
+                    <template v-else-if="status==='ok'">
                         <div class="cards-head"><div class="ch-title"><span class="ch-en">Memory Index</span><span class="ch-cn">记忆目录</span></div><span class="ch-stat">共 <b>{{ totalPosts }}</b> 篇 · <b>{{ totalDays }}</b> 天</span></div>
                         <template v-for="g in viewGroups" :key="g.key">
                             <div v-if="g.divider" class="month-divider"><span class="md-name">{{ g.monEn }} {{ g.year }}</span><span class="md-cn">{{ g.monCn }}</span><span class="md-line"></span><span class="md-cnt">{{ g.monthCnt }} 篇</span></div>
@@ -192,11 +183,11 @@
         <div id="badelineDialogText"></div>
     </div>
 </div>
-<script src="js/api.js?v=20261106a"></script>
+<script src="js/api.js?v=20261109d"></script>
 <!-- 地基层：本地状态 / 日记接口 / 音效池，均需先于 shelf.js 加载 -->
 <script src="js/lib/store.js?v=20261106a"></script>
 <script src="js/lib/diaryApi.js?v=20261108a"></script>
-<script src="js/lib/sfx.js?v=20261031a"></script>
+<script src="js/lib/sfx.js?v=20261108a"></script>
 <script src="js/text-fx.js?v=20261005b"></script>
 <script src="js/badeline-voice.js"></script>
 <script src="js/lib/emotion-map.js?v=20261108a"></script>
@@ -204,15 +195,17 @@
 <script src="js/gapless-audio.js?v=20261028b"></script>
 <script src="js/cassette.js?v=20261028b"></script>
 <script src="js/celeste-hair.js?v=20261026a"></script>
+<script src="js/celeste-character.js?v=20261109a"></script>
 <script src="js/celeste-mirror-map.js?v=20261030a"></script>
-<script src="js/celeste-mirror.js?v=20261107e"></script>
+<script src="js/celeste-mirror.js?v=20261110a"></script>
 <!-- 雪脊鸟群：bird-motion.js 是和圆桌会议主持鸟共用的运动引擎（拖尾 / 变体音效池 / 曲线原语），
      dream-birds.js 监听 dream:entered / dream:exiting，必须排在 shelf.js 之前注册监听 -->
-<script src="js/bird-motion.js?v=20261031c"></script>
-<script src="js/dream-birds.js?v=20261108b"></script>
+<script src="js/bird-motion.js?v=20261109a"></script>
+<script src="js/dream-birds.js?v=20261109a"></script>
 <script src="js/badeline-crawlout.js?v=20261107b"></script>
 <script src="js/badeline-panel.js?v=20261108b"></script>
-<script src="js/shelf.js?v=20261108c"></script>
-<script src="js/seed.js?v=20261101c"></script>
+<script src="js/lib/png-anim.js?v=20261109a"></script>
+<script src="js/shelf.js?v=20261109c"></script>
+<script src="js/seed.js?v=20261109b"></script>
 </body>
 </html>

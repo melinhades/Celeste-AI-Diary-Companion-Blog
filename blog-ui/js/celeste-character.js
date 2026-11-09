@@ -217,6 +217,17 @@
         duck:       { path: 'duck',       delay: 0,    frames: [0],         loop: true },
         // Sprites.xml L11：<Anim id="pickUp" path="pickup" delay="0.06" />（StPickup 0.16s）
         pickUp:     { path: 'pickup',     delay: 0.06, frames: range(0, 4),  goto: null },
+        // 水母/可举物持有姿态，逐字取自 Sprites.xml L7-10：
+        //   <Loop id="idle_carry" path="idle_carry" delay="0.1" />
+        //   <Anim id="runSlow_carry" path="run_carry" delay="0.07" />（无 goto，UpdateSprite 每帧续播）
+        //   <Loop id="jumpSlow_carry" path="jump_carry" delay="0.1" frames="0,1" />
+        //   <Anim id="fallSlow_carry" path="jump_carry" delay="0.1" frames="2,3" />
+        idleCarry:      { path: 'idle_carry', delay: 0.10, frames: range(0, 8),  loop: true },
+        runSlowCarry:   { path: 'run_carry',  delay: 0.07, frames: range(0, 11), loop: true },
+        jumpSlowCarry:  { path: 'jump_carry', delay: 0.10, frames: [0, 1],       loop: true },
+        fallSlowCarry:  { path: 'jump_carry', delay: 0.10, frames: [2, 3],       goto: null },
+        // <Anim id="throw" path="throw" delay="0.06" goto="idle" />：松手投掷时一次性播 4 帧
+        throw:          { path: 'throw',      delay: 0.06, frames: range(0, 3),  goto: 'idle' },
         // 冲刺 / 蹲滑 / 力竭：逐字取自 Sprites.xml
         //   <Loop id="dash"  path="dash"  delay="0.09" />   全帧 0-3
         //   <Loop id="slide" path="slide" delay="0.03" />   全帧 0-2
@@ -274,6 +285,11 @@
         duck:   parseHair('0,3'),
         // Sprites.xml L130：<Frames path="pickup" hair="2,0|1,-1|0,-2|0,-2|0,-2"/>
         pickup: parseHair('2,0|1,-1|0,-2|0,-2|0,-2'),
+        // Sprites.xml L127-129、L131
+        idle_carry: parseHair('0,-2|0,-2|0,-2|0,-2|0,-1|0,-1|0,-1|0,-1|0,-1'),
+        jump_carry: parseHair('1,-3|1,-3|1,-2|0,-2'),
+        run_carry:  parseHair('1,-2|1,-1|1,-1|1,-1|1,-3|1,-2|1,-1|1,-1|1,-1|1,-1|1,-3|1,-2'),
+        throw:      parseHair('0,-3|2,-2|2,-2|1,-2'),
         // 以下五条逐字复制 Sprites.xml 的 <Metadata><Frames path="…" hair="…">
         dash:   parseHair('2,0|2,0|2,0|2,1'),
         slide:  parseHair('0,3|0,3|0,3'),
@@ -289,6 +305,13 @@
         runStumble: parseHair('1,1|1,2|1,2|1,0|1,-2|1,-2|1,-1|1,-1|1,-1|1,-1|1,-3|1,-2'),
         // 逐字复制本地 Sprites.xml L111：<Frames path="dreamDash" hair="…"/>（21 条 = 帧 0-20）
         dreamDash: parseHair('2,0|1,0|0,0|0,0|1,1|2,1|2,1|2,0|1,0|1,0|1,0|1,0|1,0|1,0|1,0|1,0|1,0|0,0|1,0|1,0|2,1')
+    };
+
+    const CARRY = {
+        // Sprites.xml L127-129 的 carry 元数据：持有物相对手部的逐帧 Y 偏移
+        idle_carry: [-1, -1, -1, 0, 0, 0, 0, 0, -1],
+        jump_carry: [-3, -3, -1, -1],
+        run_carry:  [-1, 0, 0, 0, -3, -2, -1, 0, 0, 0, -3, -1]
     };
 
     class Sprite {
@@ -332,6 +355,12 @@
             // 而 dangling 用到帧 9），否则会在帧尾突然秃头。
             const m = t[Math.min(this.frameFileIndex(), t.length - 1)];
             return m || { x: 0, y: 0, bang: 0, hide: true };
+        }
+        // 原作 Sprite.CarryYOffset：当前帧把持有物再往下/上挪几像素
+        carryYOffset() {
+            const t = CARRY[this.anim.path];
+            if (!t) return 0;
+            return t[Math.min(this.frameFileIndex(), t.length - 1)] || 0;
         }
         update(dt) {
             if (!this.animating) return;
@@ -403,6 +432,10 @@
             this.maxDashes = 1;
             this.dashTime = 0;
             this.dashDir = { x: 1, y: 0 };
+            // 原作 gliderBoostTimer / gliderBoostDir（StartDash / SuperJump / SuperWallJump）：
+            // 拾取水母时用它决定 PickupCoroutine 的上升助推（240*|dirY|）
+            this.gliderBoostTimer = 0;
+            this.gliderBoostDir = { x: 0, y: 0 };
             this.dashCooldownTimer = 0;
             this.dashRefillCooldownTimer = 0;
             this.dashAttackTimer = 0;
@@ -778,6 +811,11 @@
             this.wallBoostTimer = 0;
             this.vx = SUPER_JUMP_H * this.facing;
             this.vy = SUPER_JUMP_SPEED;
+            // Player.SuperJump L1835/L1843-1847：0.55s 窗口，方向 -45°；蹲跳 -3π/16
+            this.gliderBoostTimer = 0.55;
+            this.gliderBoostDir = this.ducking
+                ? { x: Math.cos(-3 * Math.PI / 16), y: Math.sin(-3 * Math.PI / 16) }
+                : { x: Math.SQRT1_2, y: -Math.SQRT1_2 };
             if (this.ducking) {
                 this.ducking = false;
                 this.vx *= DUCK_SUPER_JUMP_X_MULT;
@@ -794,6 +832,9 @@
         // dir = 运动方向 = 背离墙的方向
         superWallJump(dir) {
             this.ducking = false;
+            // Player.SuperWallJump L1906-1907：0.55s 窗口，方向正上
+            this.gliderBoostTimer = 0.55;
+            this.gliderBoostDir = { x: 0, y: -1 };
             this.jumpBufferTimer = 0;
             this.jumpGraceTimer = 0;
             this.varJumpTimer = SUPER_WALL_JUMP_VAR_TIME;
@@ -828,7 +869,8 @@
             this.scaleX = 0.6; this.scaleY = 1.4;
             this.onGround = false;
             this.forceMoveX = -wallDir;
-            this.forceMoveXTimer = WALL_JUMP_FORCE_TIME;
+            // 原作 orig_WallJump：Holding.SlowFall → forceMoveXTimer = 0.26f，否则 0.16f
+            this.forceMoveXTimer = this.holdSlowFall ? 0.26 : WALL_JUMP_FORCE_TIME;
             this.dashSpeedSet = false;
             // 原作 WallJump 的调用点一律 return StNormal；这里统一收口，
             // 使 HitSquash / RedDash 等状态调墙跳后也能正确回到 Normal。
@@ -1012,6 +1054,7 @@
                 this.refillDash();
             }
             if (this.dashAttackTimer > 0) this.dashAttackTimer -= dt;
+            if (this.gliderBoostTimer > 0) this.gliderBoostTimer -= dt;
             if (this.varJumpTimer > 0) this.varJumpTimer -= dt;
             if (this.autoJumpTimer > 0) this.autoJumpTimer -= dt;
             if (this.forceMoveXTimer > 0) this.forceMoveXTimer -= dt;
@@ -1303,7 +1346,8 @@
             // —— maxFall 过渡 + 快落拉伸 ——
             // 原作 IL 1530-1713：Holding.SlowFall 分支优先于普通快落逻辑
             //   GliderMoveY == 1 → 120；== -1 → 24；否则 40（windMovedUp 分支本场景无风，gap）
-            if (this.holdSlowFall) {
+            //   原作 IL 2969 还要求 forceMoveXTimer <= 0（墙跳后的 0.26s 内按普通 maxFall）
+            if (this.holdSlowFall && this.forceMoveXTimer <= 0) {
                 const slowMax = moveY === 1 ? 120 : moveY === -1 ? 24 : 40;
                 this.maxFall = approach(this.maxFall, slowMax, 300 * dt);
             } else if (moveY === 1 && this.vy >= MAX_FALL) {
@@ -1346,7 +1390,8 @@
                     this.wallSlideDir = 0;
                     const half = (Math.abs(this.vy) < HALF_GRAV_THRESHOLD && (input.jumpHeld || this.autoJump)) ? 0.5 : 1;
                     // IL 2419-2515：Holding.SlowFall && forceMoveXTimer<=0 → Gravity 乘 0.5
-                    this.vy = approach(this.vy, this.maxFall, GRAVITY * half * (this.holdSlowFall ? 0.5 : 1) * dt);
+                    const slowHalf = this.holdSlowFall && this.forceMoveXTimer <= 0 ? 0.5 : 1;
+                    this.vy = approach(this.vy, this.maxFall, GRAVITY * half * slowHalf * dt);
                 }
             } else {
                 this.wallSlideDir = 0;
@@ -1947,6 +1992,9 @@
             if (this.state === ST_CASSETTE_FLY) return;
             const S = this.sprite;
             const moveX = this._moveX, moveY = this._moveY;
+            // 原作 IL 6328：Sprite.CurrentAnimationID != "throw" 才允许状态机改动画；
+            // throw 是 4 帧一次性动作（0.24s），播完 goto idle 后自然交还。
+            if (S.current === 'throw') return;
 
             // —— State 2 / 5（Dash / RedDash）——
             // IL 228-234：DashAttacking && onGround && DashDir.Y==0 && !Ducking
@@ -2015,8 +2063,8 @@
             // —— State 0：地面 ——
             if (this.onGround) {
                 this.fastJump = false;
-                // ① push：朝墙推（原作 CollideCheck<Solid>(Position + UnitX*moveX)）
-                if (moveX !== 0 && moveX === this.facing && this.bodySolidAt(moveX, 0)) {
+                // ① push：朝墙推（原作要求 Holding == null；举着水母时不播推墙）
+                if (!this.holdSlowFall && moveX !== 0 && moveX === this.facing && this.bodySolidAt(moveX, 0)) {
                     S.play('push');
                     return;
                 }
@@ -2024,6 +2072,11 @@
                 //    原作三个探针 = CollideCheck<Solid>(Position + (Facing*2, 2)) / (Facing*4, 2) 等：
                 //    身体整体前移并下探 2px 后全空 = 只有一点点搭在悬崖上 → 探身看边缘
                 if (Math.abs(this.vx) <= 25 && moveX === 0) {
+                    // 原作 IL 6428：举着物件原地站着 → idle_carry（不再播 edge/lookUp/idle）
+                    if (this.holdSlowFall) {
+                        S.play('idleCarry');
+                        return;
+                    }
                     const f = this.facing;
                     if (!this.bodySolidAt(f * 2, 2) && !this.bodySolidAt(f * 4, 2)) {
                         S.play('edge');
@@ -2036,29 +2089,38 @@
                     }
                     return;
                 }
-                // ③ 反向急转
+                // ③ 举着物件移动：原作 IL 6452 的 Holding 分支在急转之前 → 只播 runSlow_carry
+                if (this.holdSlowFall) {
+                    S.play('runSlowCarry');
+                    return;
+                }
+                // ④ 反向急转
                 if (moveX !== 0 && Math.sign(this.vx) === -moveX) {
                     S.play(Math.abs(this.vx) > MAX_RUN ? 'skid' : 'flip');
                     return;
                 }
-                // ④ 跑
+                // ⑤ 跑
                 if (!S.running) S.play(Math.abs(this.vx) < 45 ? 'runSlow' : 'runFast');
                 return;
             }
 
             // —— State 0：空中 ——
             // wallslide 优先（IL：wallSlideDir != 0 && !Holding → wallslide，力竭时 tired）
-            if (this.wallSlideDir !== 0) {
+            if (this.wallSlideDir !== 0 && !this.holdSlowFall) {
                 S.play(this.isTired ? 'tired' : 'wallslide');
                 return;
             }
             if (this.vy < 0) {
-                if (this.fastJump || Math.abs(this.vx) > MAX_RUN) {
+                if (this.holdSlowFall) {
+                    S.play('jumpSlowCarry');
+                } else if (this.fastJump || Math.abs(this.vx) > MAX_RUN) {
                     this.fastJump = true;
                     S.play('jumpFast');
                 } else {
                     S.play('jumpSlow');
                 }
+            } else if (this.holdSlowFall) {
+                S.play('fallSlowCarry');
             } else if (this.fastJump || this.vy >= MAX_FALL) {
                 this.fastJump = true;
                 if (S.last !== 'fallFast') S.play('fallFast');

@@ -877,11 +877,6 @@ function stopPeSnow() {
             lb.className = 'sb-label';
             lb.textContent = 'Day ' + s;
             fire.appendChild(lb);
-            const flag = document.getElementById('sbFlag');
-            if (s >= 30) { flag.src = 'celeste-gui/checkpoint/flag30.png'; flag.title = 'Day ' + s; flag.style.display = ''; }
-            else if (s >= 7) { flag.src = 'celeste-gui/checkpoint/flag7.png'; flag.title = 'Day ' + s; flag.style.display = ''; }
-            else if (s >= 3) { flag.src = 'celeste-gui/checkpoint/flag3.png'; flag.title = 'Day ' + s; flag.style.display = ''; }
-            else { flag.style.display = 'none'; }
         }
         updateBonfire();
         // 注意：#strawberryBonfire 的 click 已用作 dream 模式入口（见 dream IIFE），
@@ -1030,7 +1025,7 @@ function stopPeSnow() {
                 var c = Store.getJson(Store.KEYS.CRYSTAL_HEART, null);
                 h = c ? [c] : [];
             }
-            return JSON.stringify(Array.isArray(h) ? h.slice(-4) : []);
+            return Array.isArray(h) ? h.slice(-4) : [];
         }
         var blApi = BadelinePanel.mount({
             openingLines: LINES,
@@ -1108,6 +1103,13 @@ function stopPeSnow() {
         });
 
         function summon() {
+            // Canvas 模式：Badeline 直接站在默认落点进入可操控态（走/跳/冲刺/抓墙），
+            // 不弹聊天面板、不启 DOM 自由游荡 —— 后续交互全部交给 MirrorScene 的物理层
+            if (CANVAS_MIRROR && window.MirrorScene && window.MirrorScene.playStart) {
+                window.MirrorScene.playStart();
+                if (window.__mirrorBGM) window.__mirrorBGM.refresh(); // 切入阶段2（2:11–4:25）
+                return;
+            }
             // 影子离开镜面
             maskImgs.forEach(function (im) { im.style.display = 'none'; });
             // DOM 回退模式才持久化破碎态；canvas 模式不持久化 —— 刷新后镜子永远完好，重演过场
@@ -1183,6 +1185,8 @@ function stopPeSnow() {
                             // 过场期间 Badeline 由 canvas 按世界坐标绘制（绝对锚定在镜心），
                             // 不再用 DOM wrap 相对 #shelfMirror 定位 —— 相机 zoom/pan 时不会脱节
                             drawBadeline: true, autoStart: false,
+                            // 镜头只在穿块那一下短促上抬：同步 DOM 镜子命中区，避免抬升期间点击错位
+                            onCam: function () { if (msInited) msPosition(); },
                             // 真实碎裂帧：写入不可逆事实（镜子已破 + 梦块已激活），并让本次停留剩余时间
                             // 按已破处理 —— 之后再敲镜只召唤，不再重播完整过场
                             onBreak: function () {
@@ -1209,7 +1213,8 @@ function stopPeSnow() {
                     // 梦块激活不受 5:5 影响：只要事实发生过，房间里的果冻就保持已激活的彩色终态。
                     var brokenFact = Store.getFlag(Store.KEYS.MIRROR_BROKEN);
                     var dashFact = Store.getFlag(Store.KEYS.DREAM_DASH) || brokenFact;
-                    roomShowsBroken = brokenFact && Math.random() < 0.5;
+                    // 已碎镜不再 5:5 重演：本次进房固定按已破呈现，直接出人（不重播碎镜动画）
+                    roomShowsBroken = brokenFact;
                     window.__mirrorRoomBroken = roomShowsBroken;
                     window.MirrorScene.applyState(roomShowsBroken, dashFact);
                     // 重置 DOM 镜子态：上次召唤后未告别就回书架，重进时她不在场 + 对话/演出收起
@@ -1220,6 +1225,7 @@ function stopPeSnow() {
                     if (window.__badelineLeaveRoom) window.__badelineLeaveRoom();   // 行为树复位（wrap 移回镜面）
                     badelineWrap.style.display = '';   // 剧情穿走后隐藏过的立绘，重新进房时复位
                     if (window.MirrorScene.storyEnter) window.MirrorScene.storyEnter();   // 持久化剧情：dived→出场
+                    if (roomShowsBroken) summon();   // 重复进入：已碎镜直接出人，不重播碎镜动画
                     busy = false;   // 每次进入都可敲镜：完好渲染→重演完整过场；已破渲染→直接召唤
                     var tries = 0;
                     (function align() {   // 等房间布局完成（canvas 有非零尺寸）再摆镜子命中区
@@ -1231,335 +1237,6 @@ function stopPeSnow() {
             };
             window.addEventListener('resize', function () { if (msInited) msPosition(); });
         }
-    })();
-
-    // ===== Badeline 动作树：镜之房间内自由游荡（5 套 gif + 状态机 + 全屏定位）=====
-    (function () {
-        var room = document.getElementById('mirrorRoom');
-        var mirror = document.getElementById('shelfMirror');
-        var wrap = mirror ? mirror.querySelector('.badeline-wrap') : null;
-        var img = document.getElementById('badelineImg');
-        if (!room || !mirror || !wrap || !img) return;
-
-        var DIR = 'celeste-player/badeline/';
-        // gif 动作表（*_f.gif = 重编码修复 delay）；key = 模式名，必须与 MODE_HANDLERS 一一对应
-        var GIF = {
-            roam: 'spin_f.gif',              // 25 FPS 流畅版（原 spin.gif 200ms delay = 5FPS 卡死）
-            lookUp: 'lookingUp_f.gif',        // 裁白边重排到 32×32 画布，与其他动作同规格
-            sleep: 'sleep_f.gif',
-            roll: 'roll_f.gif',
-            rollGetUp: 'rollGetUp_f.gif'
-        };
-        // 生气类情绪 → 才有 roll 链（战斗态立绘：亮紫发+红眼）
-        var ANGRY = { angry:1, angryAlt:1, yell:1, freakA:1, freakB:1, freakC:1 };
-        // emo → 大立绘 GIF mode 映射（对话期间也能驱动，不再只是右下角小头像切表情）
-        var EMO_TO_MODE = {
-            angry: 'roll', angryAlt: 'roll', yell: 'roll',
-            freakA: 'roll', freakB: 'roll', freakC: 'roll',
-            sad: 'roll', upset: 'roll', sigh: 'roll',   // 躺倒那套（roll 链），不再指向无处理分支的 pretendDead
-            worried: 'lookUp', worriedAlt: 'lookUp', concerned: 'lookUp',
-            serious: 'lookUp', scoff: 'roam', normal: 'roam'
-        };
-        // 常态动作时长（ms）
-        var DUR = {
-            lookUp: [2000, 4000],
-            sleep:  [3000, 6000]
-        };
-        // roll 链各段时长 = gif 实际时长
-        var ROLL_MS = 650, GETUP_MS = 610, ROAM_SAFETY = 12000;
-
-        var st = {
-            x: 0, y: 0, dir: 1,
-            mode: 'lookUp', modeUntil: 0,
-            tx: null, ty: null
-        };
-        var roaming = false, inDialog = false, summonedMode = false, pendingRoll = false;
-        var rafId = null, lastNow = performance.now();
-
-        // 6 gif 预加载
-        Object.keys(GIF).forEach(function (k) { var im = new Image(); im.src = DIR + GIF[k]; });
-
-        function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
-        // 活动边界（房间 px）：x 10–90%、y 22–76%，与旧版一致
-        function bounds() {
-            return {
-                minX: room.clientWidth * .10, maxX: room.clientWidth * .90,
-                minY: room.clientHeight * .22, maxY: room.clientHeight * .76
-            };
-        }
-        function pickTarget() {
-            var b = bounds();
-            return {
-                x: b.minX + Math.random() * (b.maxX - b.minX),
-                y: b.minY + Math.random() * (b.maxY - b.minY)
-            };
-        }
-        function render() {
-            wrap.style.transform =
-                'translate(' + st.x + 'px,' + st.y + 'px) translate(-50%,-50%)' +
-                ' scaleX(' + st.dir + ')';
-        }
-        // 模式处理分支表：每个模式必须同时拥有 GIF 资源与这里的处理函数（启动自检会核对）
-        // 只负责换图后的目标点/到期时间；尺寸（.big）只在进出聊天面板时切换，动作切换绝不碰它
-        var MODE_HANDLERS = {
-            roam: function (now) {
-                var t = pickTarget();
-                st.tx = t.x; st.ty = t.y;
-                st.modeUntil = now + ROAM_SAFETY;
-            },
-            lookUp: function (now) {
-                st.tx = st.ty = null;
-                st.modeUntil = now + DUR.lookUp[0] + Math.random() * (DUR.lookUp[1] - DUR.lookUp[0]);
-            },
-            sleep: function (now) {
-                st.tx = st.ty = null;
-                st.modeUntil = now + DUR.sleep[0] + Math.random() * (DUR.sleep[1] - DUR.sleep[0]);
-            },
-            roll: function (now) {
-                st.tx = st.ty = null;
-                st.modeUntil = now + ROLL_MS;
-            },
-            rollGetUp: function (now) {
-                st.modeUntil = now + GETUP_MS;
-            }
-        };
-        // 启动自检：EMO_TO_MODE 的每个值都必须同时存在动作资源与处理分支，缺失立刻报错，不静默空转
-        (function selfCheckEmotionMap() {
-            var missing = [];
-            Object.keys(EMO_TO_MODE).forEach(function (emo) {
-                var m = EMO_TO_MODE[emo];
-                if (!GIF[m]) missing.push(emo + '→' + m + '（缺动作资源）');
-                if (!MODE_HANDLERS[m]) missing.push(emo + '→' + m + '（缺处理分支）');
-            });
-            Object.keys(MODE_HANDLERS).forEach(function (m) {
-                if (!GIF[m]) missing.push(m + '（处理分支缺动作资源）');
-            });
-            if (missing.length) console.error('[Badeline] 情绪→动作映射自检失败：' + missing.join('，'));
-        })();
-        // 切模式（只换素材/目标/时长，不碰尺寸）
-        function enterMode(name) {
-            var handle = MODE_HANDLERS[name];
-            if (!handle) { console.error('[Badeline] enterMode 未知动作：' + name + '（缺处理分支）'); return; }
-            st.mode = name;
-            img.src = DIR + GIF[name];
-            handle(performance.now());
-        }
-        // 常态加权选模式（排除当前模式，不连续重复）
-        function pickMode() {
-            var pool = [['roam', .42], ['sleep', .30], ['lookUp', .28]]
-                .filter(function (p) { return p[0] !== st.mode; });
-            var total = pool.reduce(function (s, p) { return s + p[1]; }, 0);
-            var r = Math.random() * total, acc = 0;
-            for (var i = 0; i < pool.length; i++) {
-                acc += pool[i][1];
-                if (r < acc) { enterMode(pool[i][0]); return; }
-            }
-            enterMode(pool[0][0]);
-        }
-        function inRollChain() { return st.mode === 'roll' || st.mode === 'rollGetUp'; }
-        function enterRollChain() {
-            pendingRoll = false;
-            if (inRollChain()) return;   // 已在播：绝不重播，也不从中间打断
-            enterMode('roll');
-        }
-        // 对话结束恢复：生气躺倒链若还没播完，交给 think() 收尾；积压的 roll 只补一次
-        function resumeAfterChat() {
-            if (inRollChain()) { pendingRoll = false; return; }
-            if (pendingRoll) enterRollChain(); else enterMode('roam');
-        }
-        function think(now) {
-            if (!roaming || inDialog || now < st.modeUntil) return;
-            if (st.mode === 'roll') enterMode('rollGetUp');
-            else if (st.mode === 'rollGetUp') enterMode('roam');
-            else pickMode();
-        }
-        // 单主循环：时间差驱动，速度与 write 页 Madeline 一致（85 px/s）
-        function loop(now) {
-            var dt = Math.min(.05, (now - lastNow) / 1000);
-            lastNow = now;
-            think(now);
-            if (roaming && !inDialog && st.mode === 'roam' && st.tx !== null) {
-                var dx = st.tx - st.x, dy = st.ty - st.y;
-                var dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist > 5) {
-                    if (dx > .5) st.dir = 1; else if (dx < -.5) st.dir = -1;
-                    st.x += dx / dist * 85 * dt;
-                    st.y += dy / dist * 85 * dt;
-                } else {
-                    pickMode();   // 走到目标 → 停下选下一个动作（write 同款）
-                }
-            }
-            if (roaming) render();
-            rafId = requestAnimationFrame(loop);
-        }
-        // 看门狗：rAF 在后台/headless 标签被饿死时，用定时器踢帧（防止她莫名定住、速度卡死）
-        setInterval(function () {
-            if (roaming && performance.now() - lastNow > 300) {
-                lastNow = performance.now();
-                loop(lastNow);
-            }
-        }, 250);
-        window.addEventListener('resize', function () {
-            if (!roaming) return;
-            var b = bounds();
-            st.x = clamp(st.x, b.minX, b.maxX);
-            st.y = clamp(st.y, b.minY, b.maxY);
-        });
-
-        // ===== 自由游荡模式启动：DOM 移到 #mirrorRoom 子级，开启 .free 类 =====
-        var storyHidden = false;   // 剧情穿走后压制 DOM 立绘（重进房间时由 stopFreeRoam 解除）
-        function startFreeRoam(initialX, initialY, withFade, fromSummon) {
-            if (roaming || storyHidden) return;
-            wrap.classList.remove('done');    /* 离镜面：移除驻留态，由 inline transform 接管 */
-            room.appendChild(wrap);
-            wrap.classList.add('free');
-            var b = bounds();
-            st.x = clamp(room.clientWidth * initialX / 100, b.minX, b.maxX);
-            st.y = clamp(room.clientHeight * initialY / 100, b.minY, b.maxY);
-            st.tx = st.ty = null;
-            st.dir = 1;
-            wrap.style.transition = 'opacity .8s ease';   /* 位置全由 rAF transform 驱动，杜绝 left/top transition */
-            wrap.style.left = '0';
-            wrap.style.top = '0';
-            wrap.style.display = '';
-            render();
-            if (withFade) {
-                wrap.style.opacity = '0';
-                requestAnimationFrame(function () { wrap.style.opacity = '1'; });
-            }
-            roaming = true; inDialog = false;
-            summonedMode = !!fromSummon;
-            pendingRoll = false;
-            enterMode('roam');
-        }
-        function stopFreeRoam() {
-            roaming = false; inDialog = false; summonedMode = false; pendingRoll = false;
-            storyHidden = false;   // 进房/离房复位：下次敲镜可正常召唤
-            if (rafId) { /* 主循环保留，供下次进房复用 */ }
-            st.tx = st.ty = null;
-            wrap.classList.remove('free');
-            wrap.style.opacity = '';
-            wrap.style.transition = '';
-            wrap.style.left = '';
-            wrap.style.top = '';
-            wrap.style.transform = '';
-            img.classList.remove('big');     /* 离房复位尺寸：下次进房/开面板重新进入放大态 */
-            wrap.classList.add('done');      /* 回镜面：加驻留态，由 CSS 接管 transform（含 --glass-scale） */
-            mirror.appendChild(wrap);   // DOM 移回 #shelfMirror
-        }
-
-        // ===== 钩子暴露 =====
-        window.__badelineStartFreeRoam = startFreeRoam;
-        window.__badelineLeaveRoom = stopFreeRoam;
-        // 梦境剧情（mirror 房间测试版）：把 DOM 立绘的当前位置（房间 CSS px，脚底）交给 canvas，
-        // 穿走时由 canvas 接管演出，DOM 立绘就地隐藏，避免出现两个 Badeline。
-        if (window.MirrorScene && window.MirrorScene.setHostBadeline) {
-            window.MirrorScene.setHostBadeline(function () {
-                if (!roaming || storyHidden) return null;
-                var size = wrap.offsetHeight || 128;
-                return { x: st.x, y: st.y + size / 2 };
-            }, function () {
-                stopFreeRoam();
-                storyHidden = true;
-                wrap.style.display = 'none';
-                // 穿走这一段是安静的：收起对话面板与字幕，不留任何气泡
-                var blp = document.getElementById('blChat');
-                if (blp) blp.classList.remove('vis', 'show');
-                if (window.__blDialogKill) window.__blDialogKill();
-            }, function () {
-                // 穿越演完再切场景：回雪夜 → 由 dream 场景播 Badeline 出场与台词
-                if (window.__heartDoorGoBack) window.__heartDoorGoBack();
-            });
-        }
-        // closeChat 钩子：模式 A 返回 'summoned'（让外部走 byeSheLeaves 让她走）；模式 B 返回 'free'（恢复游荡）
-        // Canvas 模式例外：镜子已碎、她常驻房间，关面板不退场（旧版失误），双击本人可重开聊天面板
-        window.__badelineCloseChat = function () {
-            img.classList.remove('big');  // 退出聊天面板：尺寸切回常态
-            if (!roaming) return 'summoned';
-            if (summonedMode && !window.__CANVAS_MIRROR) {
-                stopFreeRoam();           // 模式 A：DOM 复位回 #shelfMirror，让 byeSheLeaves 的 .bye 动画接管
-                return 'summoned';
-            }
-            inDialog = false;             // 模式 B / canvas 常驻：恢复游荡（生气躺倒链不半路打断）
-            resumeAfterChat();
-            return 'free';
-        };
-        // 情绪事件：通用 emo → 大立绘 mode（无论对话/游荡）
-        // ANGRY 在对话期间只记账 pendingRoll，绝不当场播 —— 否则关闭对话框时 roll 链会播第二遍
-        window.__badelineOnEmotion = function (emo) {
-            if (ANGRY[emo]) {
-                if (!roaming || inDialog) { pendingRoll = true; return; }
-                enterRollChain();         // 游荡中：当场播，enterRollChain 自带防重播
-                return;
-            }
-            var targetMode = EMO_TO_MODE[emo];
-            if (!targetMode) return;
-            if (inRollChain()) return;    // 生气躺倒链进行中：不切别的动作，避免播到一半被打断
-            enterMode(targetMode);
-        };
-        // quickTalk（单击）演出结束回调 → 恢复游荡（生气躺倒链不半路打断）
-        window.__badelineTalkEnded = function () {
-            if (!inDialog) return;
-            inDialog = false;
-            resumeAfterChat();
-        };
-        // 进镜之房间时随机选模式
-        window.__badelineEnterRoom = function () {
-            var modeA = Math.random() < .5;
-            if (modeA) {
-                stopFreeRoam();                                    // 模式 A：留镜子里，等敲镜子召唤
-                img.src = DIR + GIF.lookUp;
-            } else {
-                var ix = 20 + Math.random() * 60;                  // 模式 B：直接破镜出来游荡
-                var iy = 30 + Math.random() * 35;
-                startFreeRoam(ix, iy, true, false);
-            }
-        };
-
-        // ===== 点击 Badeline 本人（对齐 write 页 Madeline）：单击=原作对话框，双击=历史面板 =====
-        var PET_LINES = [
-            '……别乱戳，我又不会跑。',
-            '哼，你闲得慌？写你的去。',
-            '又找我？行吧，听着呢。',
-            '放心，有我盯着，出不了事。',
-            '写累了就歇会儿，别硬撑。'
-        ];
-        function facePlayer() {
-            st.tx = st.ty = null;
-            st.dir = st.x < room.clientWidth / 2 ? 1 : -1;   // 朝向房间中央的玩家
-            render();
-        }
-        function beginQuickTalk() {
-            inDialog = true;
-            facePlayer();
-            var line = PET_LINES[Math.floor(Math.random() * PET_LINES.length)];
-            if (window.__badelineQuickTalk) window.__badelineQuickTalk(line);
-            else { inDialog = false; enterMode('roam'); }   /* 钩子缺失的兜底 */
-        }
-        function openFullChat() {
-            if (inDialog || !roaming) return;
-            inDialog = true;
-            facePlayer();
-            // 只换动作图（不碰尺寸）；生气躺倒链正在播时保持原图，不从中间打断
-            if (!inRollChain()) enterMode('lookUp');
-            if (window.__badelineOpenChat) window.__badelineOpenChat();   // 面板打开时才放大（见 openChat）
-        }
-        var clickTimer = null;
-        img.addEventListener('click', function (e) {
-            if (!roaming) return;   // 模式 A 未召唤时不响应（点镜子才召唤）
-            e.stopPropagation();
-            if (clickTimer) return;
-            clickTimer = setTimeout(function () { clickTimer = null; beginQuickTalk(); }, 260);
-        });
-        img.addEventListener('dblclick', function (e) {
-            if (!roaming) return;
-            e.stopPropagation();
-            if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
-            openFullChat();
-        });
-
-        // 启动主循环（空闲时只转 rAF，开销可忽略）
-        rafId = requestAnimationFrame(loop);
     })();
 
     // ===== 紫色空间粒子：3 类星点 PNG 纯竖直下落 + 独立切帧 + 蓝色拖尾 =====
@@ -1822,7 +1499,12 @@ function stopPeSnow() {
             dsStory.timers.push(setTimeout(function () {
                 b.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 500, easing: 'ease-in', fill: 'forwards' });
             }, 4250));
-            dsStory.timers.push(setTimeout(function () { if (b.parentNode) b.remove(); }, 4850));
+            dsStory.timers.push(setTimeout(function () {
+                // 已开始睡醒演出（waking）或已被别处退出 dream（scene 已收起）→ 都不再走自动退出，避免重复 exitDream
+                if (waking || !scene.classList.contains('show')) return;
+                if (b.parentNode) b.remove();
+                exitDream();                              // 自动路径：不叫醒 Madeline（保持睡姿）直接退出 dream
+            }, 4850));
         }
         // dived → 播 REA 出场；appeared → 静态补位（不重复演出）
         function dsMaybeStory() {
@@ -1878,9 +1560,12 @@ function stopPeSnow() {
             }, 520));
             // 出场播完（0.9s）写入 appeared；台词随后出现并持续约 3.4s
             dsStory.timers.push(setTimeout(function () {
+                if (waking) return;                       // 已开始睡醒演出：不再补出场/台词
                 dsStory.shown = true;
                 dsStory.playing = false;
                 if (window.MirrorScene && window.MirrorScene.storyMark) window.MirrorScene.storyMark('appeared');
+                // diary 持久接管：独立键、无过期；唯一出口是日记页「恢复 Madeline」
+                try { localStorage.setItem('badelineDiaryStandInV1', '1'); } catch (e) {}
                 dsSyncResetBtn(true);
                 dsShowBubble(p.footX, p.footBottom + p.mr.height + 8);
             }, 900));
@@ -1993,6 +1678,8 @@ function stopPeSnow() {
         function wakeMadeline() {
             if (waking || !scene.classList.contains('show')) return;
             waking = true;
+            // 手动提前走：可操控段立刻收手（人物消失、按键解绑），睡醒演出照旧在镜之房间上播
+            if (window.MirrorScene && window.MirrorScene.playStop) window.MirrorScene.playStop();
             if (dsMadeline) {
                 dsMadeline.classList.add('waking');
                 madelineIntent = WAKE_GIF;
@@ -2155,7 +1842,8 @@ function stopPeSnow() {
         // 像素倍率：场景其它美术都是 3 倍（篝火 64→~200px、Madeline 32→~100px），
         // 所以原图 32px 对应 CSS 96px；canvas 再按 devicePixelRatio 取整数倍，保证一个美术像素=整数设备像素
         var DPR = 1, SPR_S = 3, FSIZE = 96, PXF = 3;
-        var GAP_MIN = 144, GAP_MAX = 288, GAP_FLOOR = 101;
+        var FEATHER_N = 3;              // dream 场景固定 3 根金羽毛
+        var MIN_GAP = 144;              // 两根羽毛锚点之间的最小像素距离（updateSizes 里按 FSIZE 重算）
         // ---- 星飞视觉常量（Player / PlayerHair / Sprites.xml 取证） ----
         var STAR_COLOR = '#ffd65c';    // Player::starFlyColor = HexToColor("ffd65c")
         var NORMAL_HAIR = '#ac3232';   // Player::NormalHairColor = HexToColor("AC3232")（.cctor）
@@ -2204,7 +1892,7 @@ function stopPeSnow() {
         var keys = {}, keysActive = false;
         var jumpEdge = false, dashEdge = false;   // Input.Jump.Pressed / Input.Dash.Pressed 边沿
         var ptr = null, ptrLast = null;    // 指针速度（≈ 原作的 player.Speed，决定 SlashFx 朝向）
-        var cv = null, ctx2 = null, hint = null, shakeTimer = null;
+        var cv = null, ctx2 = null, shakeTimer = null;
         var starGlow = null, starGlowSize = 0;   // starFlyBloom 的柔光贴图（随 FSIZE 重建）
         var TINTS = {};
         var DIR_KEYS = { arrowup: 1, arrowdown: 1, arrowleft: 1, arrowright: 1, w: 1, a: 1, s: 1, d: 1 };
@@ -2229,9 +1917,7 @@ function stopPeSnow() {
             SPR_S = Math.max(2, Math.round(96 * DPR / 32));
             FSIZE = 32 * SPR_S / DPR;
             PXF = FSIZE / 32;
-            GAP_MIN = Math.round(FSIZE * 1.5);
-            GAP_MAX = Math.round(FSIZE * 3);
-            GAP_FLOOR = Math.round(FSIZE * 1.05);
+            MIN_GAP = Math.round(FSIZE * 1.8);
         }
         function nowMs() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
         function orbRadius() {
@@ -2382,10 +2068,9 @@ function stopPeSnow() {
                 L.slow.volume = v0s * k; L.fast.volume = v0f * k;
             }, 25);
         }
-        // 进 dream 时把一次性音效建成实例（循环轨 12s 大文件，起播那刻再拉也够快，这里一并预热）
+        // 进 dream 时只预热一次性音效；两条 12s 循环轨（各 2.3MB）留到 startLoops 真正起播时再建
         function preheatSfx() {
             Sfx.preload(Object.keys(ONESHOT).map(function (k) { return ONESHOT[k]; }), { dir: SND_F });
-            ensureLoops();
         }
 
         // ---------- 画布 / 提示 ----------
@@ -2407,15 +2092,6 @@ function stopPeSnow() {
             starGlowSize = 0;
             painted = false;       // 改画布尺寸本身就会清空
             TINTS = {};            // PXF 变了 → 染色/描边缓存全部作废
-        }
-        function showHint(on) {
-            if (!hint) {
-                hint = document.createElement('div');
-                hint.id = 'featherFlyHint';
-                hint.textContent = '方向键 / WASD 操控 · 空格跳 · Shift 抓 · X 冲刺 · Esc 让羽毛回来';
-                scene.appendChild(hint);
-            }
-            hint.classList.toggle('show', !!on);
         }
         // level.Shake(0.3)：无参 = 随机抖（收集）；传方向 = DirectionalShake(dir, 0.3)（发射）
         function shake(dx, dy) {
@@ -2496,19 +2172,28 @@ function stopPeSnow() {
             return c;
         }
         // ---------- 羽毛（FlyFeather） ----------
-        function randPos(need, ignoreMax) {
-            for (var t = 0; t < 300; t++) {
-                var x = 4 + Math.random() * 66, y = 7 + Math.random() * 28, ok = true, near = Infinity;
+        // 3 根按横向三段铺开（段心 17 / 40 / 63 vw，段内 ±3vw 抖动），y 也分段错开，
+        // 三段之间天然拉开 ≈23vw；slotPos 再做一次 MIN_GAP 距离校验，随机后也不会挨在一起。
+        var FEATHER_SLOTS = [
+            { x: [14, 20], y: [8, 14] },
+            { x: [37, 43], y: [19, 26] },
+            { x: [60, 66], y: [10, 17] }
+        ];
+        function slotPos(i) {
+            var s = FEATHER_SLOTS[i % FEATHER_SLOTS.length];
+            var p = { x: 0, y: 0 };
+            for (var t = 0; t < 20; t++) {
+                p.x = s.x[0] + Math.random() * (s.x[1] - s.x[0]);
+                p.y = s.y[0] + Math.random() * (s.y[1] - s.y[0]);
+                var ok = true;
                 for (var k = 0; k < placed.length; k++) {
-                    var dx = (x - placed[k].x) * innerWidth / 100;
-                    var dy = (y - placed[k].y) * innerHeight / 100;
-                    var d2 = dx * dx + dy * dy;
-                    if (d2 < need * need) { ok = false; break; }
-                    if (d2 < near * near) near = Math.sqrt(d2);
+                    var dx = (p.x - placed[k].x) * innerWidth / 100;
+                    var dy = (p.y - placed[k].y) * innerHeight / 100;
+                    if (dx * dx + dy * dy < MIN_GAP * MIN_GAP) { ok = false; break; }
                 }
-                if (ok && (ignoreMax || !placed.length || near <= GAP_MAX)) return { x: x, y: y };
+                if (ok) break;
             }
-            return null;
+            return p;
         }
         function applyScale(f) {
             f.sprS = SPR_S;
@@ -2520,11 +2205,8 @@ function stopPeSnow() {
             f.ctx.imageSmoothingEnabled = false;
             f.drawn = -1;
         }
-        function addFeather() {
-            var need = GAP_MIN, p = null;
-            while (need > GAP_FLOOR && !(p = randPos(need))) need = Math.round(need * 0.8);
-            if (!p) p = randPos(GAP_FLOOR, true);
-            if (!p) return;
+        function addFeather(i) {
+            var p = slotPos(i);
             placed.push(p);
             var b = document.createElement('button');
             b.type = 'button';
@@ -2657,7 +2339,6 @@ function stopPeSnow() {
                 orb.hair.push({ x: c.x + bx * hi * HAIR_SEG * PXF, y: c.y - 5 * PXF + by * hi * HAIR_SEG * PXF });
             }
             collect(f, false, slashAngle(f, e));         // 同一个协程：Shake → 隐藏 → 0.05s → 粒子 + SlashFx
-            showHint(true);
             bindActive(true);
             ensureCanvas();
         }
@@ -2809,7 +2490,6 @@ function stopPeSnow() {
         function endFly(silent, mode, wallDir) {
             var ax = axisX(), ay = axisY(), din = inputDir();   // 必须在 bindActive(false) 清空 keys 之前读
             bindActive(false);
-            showHint(false);
             stopLoops();               // 飞行循环 0.2s 淡出（silent 的 exitDream 也要停）
             jumpEdge = dashEdge = false;
             if (!orb) return;
@@ -3110,12 +2790,6 @@ function stopPeSnow() {
         }
 
         // ---------- dream 进出 ----------
-        function countFeathers(done) {
-            DiaryApi.featherCount().then(function (res) {
-                var n = (res && res.success && res.data && res.data.count) || 0;
-                done(n > 0 ? Math.min(n, 6) : 3);         // 有记录 → min(n,6)；空 → 3 根
-            }).catch(function () { done(3); });
-        }
         function enterDream() {
             if (active) return;
             active = true;
@@ -3127,10 +2801,7 @@ function stopPeSnow() {
             document.addEventListener('pointermove', onPointer, { passive: true });
             host.innerHTML = '';
             feathers = []; placed = []; parts = []; slashes = []; exits = []; orb = null;
-            countFeathers(function (n) {
-                if (!active) return;
-                for (var k = 0; k < n; k++) addFeather();
-            });
+            for (var k = 0; k < FEATHER_N; k++) addFeather(k);
             startLoop();
         }
         function exitDream() {
@@ -3447,12 +3118,20 @@ function stopPeSnow() {
         if (document.documentElement && document.documentElement.scrollLeft) document.documentElement.scrollLeft = 0;
     }, true);
 
-    // ===== 心门音效：7 个 WAV 预加载 + 按需触发（避开 BGM 音量） =====
+    // ===== 心门音效：按需预载 + 按需触发（避开 BGM 音量） =====
     (function () {
         var DIR = 'heartdoor/sounds/';
-        var NAMES = ['heartdoor_entry','heartdoor_slam','frontdoor_heartfill_1','frontdoor_heartfill_2','frontdoor_heartfill_3','frontdoor_heartfill_4','frontdoor_unlock'];
+        var NAMES = ['heartdoor_entry','frontdoor_heartfill_1','frontdoor_heartfill_2','frontdoor_heartfill_3','frontdoor_heartfill_4','frontdoor_unlock'];
         var VOL = 0.7;
-        Sfx.preload(NAMES, { dir: DIR, volume: VOL });   // 先建实例触发下载，首次点击零延迟
+        var warmed = false;
+        // 这些 WAV 合计约 3MB：不再随页面加载无差别预载，只在心门真正要响时才拉
+        // （进入梦境场景，或点亮/填充动画即将开始）
+        function warm() {
+            if (warmed) return;
+            warmed = true;
+            Sfx.preload(NAMES, { dir: DIR, volume: VOL });
+        }
+        document.addEventListener('dream:entered', warm);
         // play 支持多实例：每次新建 Audio 避免同标签重入打断
         function play(name) {
             if (NAMES.indexOf(name) === -1) return;
@@ -4012,6 +3691,7 @@ function stopPeSnow() {
             // 门已经开过（分裂已播）：之后再有任何变化都只静默更新显示，
             // 不重播 entry / heartfill / unlock，也不走逐颗填充动画
             if (splitDone) animate = false;
+            if (animate && target > litNow) warm();     // 即将逐颗填充 → 现在拉音效
             // 第一次有心点亮 → heartdoor_entry
             if (animate && !entryPlayed && litNow === 0 && target > 0 && window.__hdSfx) {
                 entryPlayed = true;
@@ -4086,6 +3766,15 @@ function stopPeSnow() {
             // Canvas 镜子房间：先挂载/复位（完好镜 + 重置 DOM 镜子态 → Badeline 只在破镜后由 summon() 出场），
             // 再让 BGM 进场（phaseOf 读 .summoned 决定 p1/p2，完好镜必须从 p1 起播）
             if (window.__mirrorScene) {
+                // 剧情宿主接线：可操控 Badeline 穿块结束后（playDiveDone 写 dived）需要一条回 dream 场景的路，
+                // 由 goBack() 把 .ds-world 从 panned 复位 → 'mirrorstory:back' → dream 场景播出场+台词
+                if (window.MirrorScene && window.MirrorScene.setHostBadeline) {
+                    window.MirrorScene.setHostBadeline(
+                        function () { return dsWorld.classList.contains('panned'); },
+                        function () { },
+                        function () { goBack(); }
+                    );
+                }
                 window.__mirrorScene.enter();
                 if (window.__mirrorBGM) window.__mirrorBGM.enter();
             } else {
@@ -4205,7 +3894,11 @@ function stopPeSnow() {
         var room = document.getElementById('mirrorRoom');
         if (room) {
             room.addEventListener('click', function (e) {
-                if (e.target === room) goBack();
+                if (e.target !== room) return;
+                // 可操控期间背景不再当退房键：走/跳/冲刺时点到空白不再误退
+                // （手动退出仍走 Esc / 点睡着的 Madeline）
+                if (window.__mirrorScene && window.__mirrorScene.isPlaying && window.__mirrorScene.isPlaying()) return;
+                goBack();
             });
         }
     })();

@@ -44,8 +44,9 @@
         return c;
     }
 
-    // 加载 hair00 + bangs00~02，并预生成 5 套发色版 + 黑色描边版
-    async function load(base, color) {
+    // 加载 hair00 + bangs00~02，并预生成 5 套发色版 + 描边版
+    // outlineColor 只影响描边色（缺省沿用原作黑色），不影响发色/物理/绘制顺序
+    async function load(base, color, outlineColor) {
         const [hair, b0, b1, b2] = await Promise.all([
             loadImage(base + '/hair00.png'),
             loadImage(base + '/bangs00.png'),
@@ -53,14 +54,15 @@
             loadImage(base + '/bangs02.png')
         ]);
         const bangs = [b0, b1, b2].filter(Boolean);
+        const outline = outlineColor || '#000000';
         // 顺序：normal / used / flash / two / fly（必须与 HAIR_COLORS 一致）
         const baseColors = [color || MADELINE, USED_HAIR, FLASH_HAIR, TWO_DASHES_HAIR, FLY_POWER_HAIR];
         function tintSet(c) {
             return {
                 hair: tint(hair, c),
                 bangs: bangs.map(b => tint(b, c)),
-                hairOutline: tint(hair, '#000000'),
-                bangsOutline: bangs.map(b => tint(b, '#000000'))
+                hairOutline: tint(hair, outline),
+                bangsOutline: bangs.map(b => tint(b, outline))
             };
         }
         return baseColors.map(tintSet);

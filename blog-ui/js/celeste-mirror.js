@@ -25,7 +25,7 @@ var ctx_ready = false;
 var W = 0, H = 0, Z = 1;
 // 嵌入模式配置：drawBadeline=false 屏蔽自带 BadelineDummy（交 DOM 版）；
 // onBreak=碎裂帧回调；onEnd=EndCutscene/OnEnd 帧回调（音乐起播点）；onDone=收尾归位后回调
-var SCENE = { drawBadeline: true, onBreak: null, onEnd: null, onDone: null, autoStart: true, sting1Src: null, booted: false };
+var SCENE = { drawBadeline: true, onBreak: null, onEnd: null, onDone: null, onCam: null, autoStart: true, sting1Src: null, booted: false };
 var _assetsReady = false, _sceneReady = false;
 
 /* =====================================================================
@@ -1000,6 +1000,7 @@ function storyEnsureHit() {
   dreamHit.style.cssText = 'position:absolute;z-index:11;pointer-events:auto;';
   parent.appendChild(dreamHit);
   function diveFrom() {
+    if (PLAY.active) return;                  // 可操控段：穿块由物理驱动，旧 DOM 穿走不再触发
     if (!storyCanDive()) return;
     var h = STORY.hostGet ? STORY.hostGet() : null;
     var from = null;
@@ -1026,6 +1027,20 @@ function storyEnsureHit() {
 }
 function storySyncHit() {
   if (!dreamHit) return;
+  // 可操控期间梦块是实体（交给 celeste-character 物理），旧「点块脚本穿走」热区必须让位
+  if (PLAY.active) {
+    if (dreamHitSig !== 'play') {
+      dreamHitSig = 'play';
+      dreamHit.style.pointerEvents = 'none';
+      dreamHit.style.opacity = '0';
+    }
+    return;
+  }
+  if (dreamHitSig === 'play') {
+    dreamHitSig = '';
+    dreamHit.style.pointerEvents = 'auto';
+    dreamHit.style.opacity = '';
+  }
   var p = toScreen(DREAM.x - DREAM_HIT_PAD, DREAM.y - DREAM_HIT_PAD);
   var w = Math.round(S(DREAM.w + DREAM_HIT_PAD * 2)), h = Math.round(S(DREAM.h + DREAM_HIT_PAD * 2));
   var armed = storyCanDive();
@@ -1046,6 +1061,330 @@ function worldFromScreen(sx, sy) {
     x: cam.x + (sx - W / 2 - cam.sx) / z,
     y: cam.y + (sy - H / 2 - cam.sy) / z
   };
+}
+
+
+/* =====================================================================
+   8.5 可操控 Badeline（碎镜后站在默认落点；键盘 + 鼠标）
+   ---------------------------------------------------------------------
+   复用 celeste-character.js（只读，不改引擎）。碰撞按 MIRROR_MAP.solids 的 8px tile
+   重建（身体盒 8×11），唯一 DreamBlock = DREAM；`dreamDashEnabled = true`。
+   穿块 → 离开梦块自动播 dreamDashOut → 末帧直接消失（不淡出/不缩放）→ 剧情推进到
+   dived，宿主据此 goBack 回 dream 场景。
+   ===================================================================== */
+var PLAY_BASE = 'Atlases/Gameplay/characters/player_badeline';   // player 超集图集
+var PLAY_COLOR = '#9B3FB5';                                       // BadelineOldsite.HairColor（同镜面倒影 L477）
+var PLAY_SPAWN = { x: MIRROR.x, y: MIRROR.y };                    // 脚底 = 镜座台面 (160,264)
+var PLAY_CAM_REST = 216;                                          // 常驻取景 = 进房机位（与改动前一致）
+var PLAY_CAM_DIVE = 190;                                          // 只在穿块那一下上抬：人体 32px 高、脚正好在块顶 128，
+                                                                  // 216 的视口顶是 126 → 要整只人露出来至少要 190
+var PLAY_CAM_UP_TIME = 0.08;                                      // 上抬时长（进块瞬间开始，只占穿块的十分之一）
+var PLAY_CAM_DOWN_TIME = 0.14;                                    // 落回时长（dreamDashOut 末帧开始）
+var PLAY_VOID = 1e9;
+var PLAY = {
+  active: false, removed: true, frozen: false, freezeNext: false,
+  dived: false, ch: null, loading: null, gen: 0,
+  camLift: 0, camLiftTo: 0, feetPrev: PLAY_SPAWN.y
+};
+var PLAY_PENDING = false;
+var playKeys = { left: 0, right: 0, up: 0, down: 0, jump: 0, jumpEdge: 0, dash: 0, dashEdge: 0, grab: 0 };
+var PLAY_KEYMAP = {
+  arrowleft: 'left', a: 'left', arrowright: 'right', d: 'right',
+  arrowup: 'up', w: 'up', arrowdown: 'down', s: 'down',
+  c: 'jump', ' ': 'jump', x: 'dash', z: 'grab', shift: 'grab'
+};
+
+function playTyping() {
+  var a = document.activeElement;
+  if (!a) return false;
+  var t = (a.tagName || '').toUpperCase();
+  return t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT' || a.isContentEditable === true;
+}
+function playResetInput() {
+  for (var k in playKeys) playKeys[k] = 0;
+}
+document.addEventListener('keydown', function (e) {
+  if (!PLAY.active || PLAY.frozen || playTyping()) return;
+  var slot = PLAY_KEYMAP[(e.key || '').toLowerCase()];
+  if (!slot) return;
+  e.preventDefault();
+  if (e.repeat) return;
+  if (!playKeys[slot]) {
+    playKeys[slot] = 1;
+    if (slot === 'jump') playKeys.jumpEdge = 1;
+    if (slot === 'dash') playKeys.dashEdge = 1;
+  }
+}, true);
+document.addEventListener('keyup', function (e) {
+  var slot = PLAY_KEYMAP[(e.key || '').toLowerCase()];
+  if (slot) playKeys[slot] = 0;
+}, true);
+window.addEventListener('blur', playResetInput);
+
+/* ---------- 碰撞：8px tile + 唯一梦块 ---------- */
+function playTile(tx, ty) { return tileSolid(MAP.solids, tx, ty); }
+
+function playDreamAt(x, feetY) {                   // 按 0.5 内缩，与 internet_cafe 同口径
+  var x0 = x - 3.5, x1 = x + 3.5, y0 = feetY - 10.5, y1 = feetY - 0.5;
+  if (x1 > DREAM.x && x0 < DREAM.x + DREAM.w && y1 > DREAM.y && y0 < DREAM.y + DREAM.h) return DREAM;
+  return null;
+}
+function playBandY(feetY) {
+  var r0 = Math.floor((feetY - 10.5) / TILE), r1 = Math.floor((feetY - 0.5) / TILE);
+  if (r0 < 0) r0 = 0;
+  if (r1 >= ROWS) r1 = ROWS - 1;
+  return [r0, r1];
+}
+function playBodySolid(x, feetY) {
+  var c0 = Math.floor((x - 4) / TILE), c1 = Math.floor((x + 3.999) / TILE);
+  var rr = playBandY(feetY);
+  for (var tx = c0; tx <= c1; tx++)
+    for (var ty = rr[0]; ty <= rr[1]; ty++)
+      if (playTile(tx, ty)) return true;
+  return !!playDreamAt(x, feetY);
+}
+function playGroundY(x) {
+  var ref = PLAY.ch ? Math.min(PLAY.ch.y, PLAY.feetPrev) : PLAY_SPAWN.y;
+  var best = PLAY_VOID;
+  var c0 = Math.floor((x - 4) / TILE), c1 = Math.floor((x + 3.999) / TILE);
+  var r0 = Math.floor(ref / TILE);
+  if (r0 < 0) r0 = 0;
+  for (var tx = c0; tx <= c1; tx++) {
+    for (var ty = r0; ty < ROWS; ty++) {
+      if (!playTile(tx, ty)) continue;
+      var top = ty * TILE;
+      if (top < ref - 1) continue;
+      if (top < best) best = top;
+    }
+  }
+  if (x + 4 > DREAM.x && x - 4 < DREAM.x + DREAM.w) {
+    if (DREAM.y >= ref - 1 && DREAM.y < best) best = DREAM.y;
+  }
+  return best;
+}
+function playWallCollideAt(edgeX, feetY, dir) {
+  var rr = playBandY(feetY), y0 = feetY - 10.5, y1 = feetY - 0.5;
+  var tx;
+  if (dir > 0) {
+    if (edgeX >= ROOM_W) return ROOM_W;
+    tx = Math.floor(edgeX / TILE);
+    for (var ty = rr[0]; ty <= rr[1]; ty++) if (playTile(tx, ty)) return tx * TILE;
+  } else {
+    if (edgeX <= 0) return 0;
+    tx = Math.floor(edgeX / TILE);
+    for (var ty2 = rr[0]; ty2 <= rr[1]; ty2++) if (playTile(tx, ty2)) return (tx + 1) * TILE;
+  }
+  if (y1 > DREAM.y && y0 < DREAM.y + DREAM.h && edgeX > DREAM.x && edgeX < DREAM.x + DREAM.w)
+    return dir > 0 ? DREAM.x : DREAM.x + DREAM.w;
+  return null;
+}
+// 宽容贴墙检测：探针落在身体边缘（WALL_PROBE = 4），零外延 —— 与铭记页 wallAtFn 同语义，
+// 「贴到墙才算」，不再从边缘额外外扫。边界包含性按 tile 处理：dir<0 时取边缘内侧 0.001
+// 所在的列，保证身体边缘正好压在墙面（tile 边界）上时仍判定为贴墙。
+var PLAY_WALL_PROBE = 4;
+function playWallAt(x, feetY, dir) {
+  var rr = playBandY(feetY), y0 = feetY - 10.5, y1 = feetY - 0.5;
+  var edge = x + dir * PLAY_WALL_PROBE;
+  if (dir > 0) { if (edge >= ROOM_W) return ROOM_W; }
+  else if (edge <= 0) return 0;
+  var probe = dir > 0 ? edge : edge - 0.001;
+  var tx = Math.floor(probe / TILE);
+  for (var ty = rr[0]; ty <= rr[1]; ty++)
+    if (playTile(tx, ty)) return dir > 0 ? tx * TILE : (tx + 1) * TILE;
+  // 梦块侧面（含边界：贴在块面上时也要算贴墙）
+  if (y1 > DREAM.y && y0 < DREAM.y + DREAM.h && edge >= DREAM.x && edge <= DREAM.x + DREAM.w)
+    return dir > 0 ? DREAM.x : DREAM.x + DREAM.w;
+  return null;                                      // 契约：null = 附近没有墙（见 setWallAt 注释）
+}
+function playCeilingY(x, feetY) {
+  var head = feetY - 11;
+  var c0 = Math.floor((x - 4) / TILE), c1 = Math.floor((x + 3.999) / TILE);
+  var r0 = Math.floor(head / TILE), r1 = Math.floor((feetY - 0.001) / TILE);
+  if (r0 < 0) r0 = 0;
+  var best = null;
+  // 扫整个身体占据的行；取「最靠下」的底边（向上移动时最先撞到的那个），与铭记页 ceilingY 一致
+  for (var tx = c0; tx <= c1; tx++) {
+    for (var ry = r0; ry <= r1 && ry < ROWS; ry++) {
+      if (ry * TILE >= feetY) continue;             // 顶面在脚底或以下 → 那是地板，不是天花板
+      if (!playTile(tx, ry)) continue;
+      var bottom = (ry + 1) * TILE;
+      if (bottom <= head + 0.01) continue;          // 底边还在头顶上方 → 没重叠
+      if (best === null || bottom > best) best = bottom;
+    }
+  }
+  // 梦块底面：必须用「身体盒上移 1px 后与之重叠」语义（同 internet_cafe 注释），
+  // 否则上冲刺撞块底时不会触发 dreamDashCheck
+  var headUp = head - 1, feetUp = feetY - 1;
+  if (x + 4 > DREAM.x && x - 4 < DREAM.x + DREAM.w &&
+      DREAM.y + DREAM.h > headUp && DREAM.y < feetUp) {
+    var db = DREAM.y + DREAM.h;
+    if (best === null || db > best) best = db;
+  }
+  return best;
+}
+
+/* ---------- 角色装载 / 起停 / 绘制 ---------- */
+function playEnsureLoaded() {
+  if (PLAY.ch) return Promise.resolve(PLAY.ch);
+  if (PLAY.loading) return PLAY.loading;
+  if (!window.CelesteCharacter || !window.CelesteHair) return Promise.resolve(null);
+  PLAY.loading = window.CelesteCharacter.create({
+    base: PLAY_BASE, color: PLAY_COLOR,
+    x: PLAY_SPAWN.x, y: PLAY_SPAWN.y, facing: -1
+  }).then(function (ch) {
+    ch.setGround(playGroundY);
+    ch.setWallAt(playWallAt);
+    ch.setWallCollideFn(playWallCollideAt);
+    ch.setCeiling(playCeilingY);
+    ch.setBodySolid(playBodySolid);
+    ch.setDreamBlockFn(playDreamAt);
+    ch.dreamDashEnabled = true;
+    // 落地尘：判定与铭记页一致（落地竖向速度 >= 80），观感见 playDustSpawn
+    ch.onLand = function (vy) { if (vy >= 80) playDustSpawn(ch.x, ch.y, 8); };
+    ch.onDreamDashEnter = function () { PLAY.dived = true; PLAY.camLiftTo = 1; };
+    ch.onDreamDashExit = function () { PLAY.freezeNext = true; };   // 下一帧原地定格
+    ch.onDreamDashDeath = function () { playDiveDone(); };         // 撞墙脱困失败：直接收尾，避免卡死
+    var orig = ch.sprite.onLastFrame;
+    ch.sprite.onLastFrame = function (id) {
+      if (orig) orig.call(this, id);
+      if (id === 'dreamDashOut' && PLAY.dived && !PLAY.removed) playDiveDone();
+    };
+    PLAY.ch = ch;
+    return ch;
+  }).catch(function (e) {
+    PLAY.loading = null;
+    if (window.console) console.error('[mirror] playable badeline load failed', e);
+    return null;
+  });
+  return PLAY.loading;
+}
+function playPlace(ch) {
+  ch.x = PLAY_SPAWN.x; ch.y = PLAY_SPAWN.y;
+  ch.vx = 0; ch.vy = 0; ch.facing = -1;
+  ch.scaleX = 1; ch.scaleY = 1; ch.spriteY = 0;
+  ch.dashTime = 0; ch.dashAttackTimer = 0;
+  ch.dashes = ch.maxDashes;
+  ch.stamina = 110;
+  ch.onGround = false;
+  if (window.CelesteCharacter.ST && ch.setState) ch.setState(window.CelesteCharacter.ST.Normal);
+  if (ch.hair) ch.hair.reset(ch.x, ch.y, ch.facing);
+  ch.sprite.play('idle');
+  PLAY.feetPrev = ch.y;
+  PLAY.frozen = false; PLAY.freezeNext = false;
+  PLAY.dived = false; PLAY.removed = false;
+  PLAY_DUST.length = 0;
+  playResetInput();
+}
+function playDiveDone() {
+  if (!PLAY.active || PLAY.removed) return;
+  PLAY.removed = true; PLAY.frozen = true; PLAY.active = false;
+  PLAY.camLiftTo = 0;                     // dreamDashOut 末帧：镜头落回常驻机位
+  playResetInput();
+  // 与 storyDive 尾部一致：写回 dived + 通知宿主回 dream 场景
+  sbClear();
+  storyWrite('dived');
+  storySyncBar();
+  if (STORY.hostDone) setTimeout(STORY.hostDone, 0);
+}
+function playStart() {
+  if (!_sceneReady) { PLAY_PENDING = true; return false; }
+  if (PLAY.active) return true;
+  PLAY.active = true; PLAY.removed = false;
+  PLAY.gen++;
+  playResetInput();
+  PLAY.camLift = 0; PLAY.camLiftTo = 0; cam.y = PLAY_CAM_REST;   // 常驻取景，不因可操控而上抬
+  PLAY.feetPrev = PLAY_SPAWN.y;
+  if (PLAY.ch) { playPlace(PLAY.ch); return true; }
+  playEnsureLoaded().then(function (ch) {
+    if (!ch || !PLAY.active) return;
+    playPlace(ch);
+  });
+  return true;
+}
+function playStop() {
+  PLAY.active = false; PLAY.removed = true; PLAY.gen++;
+  PLAY.frozen = false; PLAY.freezeNext = false; PLAY.dived = false;
+  PLAY.camLift = 0; PLAY.camLiftTo = 0; cam.y = PLAY_CAM_REST;   // 收手即回常驻取景
+  PLAY_DUST.length = 0;
+  playResetInput();
+  if (PLAY.ch) {
+    PLAY.ch.x = PLAY_SPAWN.x; PLAY.ch.y = PLAY_SPAWN.y;
+    PLAY.ch.vx = 0; PLAY.ch.vy = 0;
+  }
+}
+// 任何路径离开 dream（自动退出 / 手动睡醒 / 其它收起）都收手：避免人物/按键残留在书架正页
+document.addEventListener('dream:exiting', function () { if (PLAY.active) playStop(); });
+// 穿块专用镜头：camLift 0→1 抬到 PLAY_CAM_DIVE，1→0 落回 PLAY_CAM_REST。
+// 独立于 PLAY.active（末帧落回时人物已经收了），只在有落差时写 cam.y。
+function playCamUpdate(dt) {
+  if (PLAY.camLift === PLAY.camLiftTo) return;
+  var dur = PLAY.camLiftTo > PLAY.camLift ? PLAY_CAM_UP_TIME : PLAY_CAM_DOWN_TIME;
+  var step = dur > 0 ? dt / dur : 1;
+  PLAY.camLift = PLAY.camLiftTo > PLAY.camLift
+    ? Math.min(PLAY.camLiftTo, PLAY.camLift + step)
+    : Math.max(PLAY.camLiftTo, PLAY.camLift - step);
+  var e = PLAY.camLift * PLAY.camLift * (3 - 2 * PLAY.camLift);   // smoothstep
+  cam.y = PLAY_CAM_REST + (PLAY_CAM_DIVE - PLAY_CAM_REST) * e;
+  if (PLAY.camLift === PLAY.camLiftTo) cam.y = PLAY.camLift === 1 ? PLAY_CAM_DIVE : PLAY_CAM_REST;
+  if (SCENE.onCam) { try { SCENE.onCam(); } catch (e2) { /* ignore */ } }
+}
+function playUpdate(dt) {
+  if (!PLAY.active) return;
+  var ch = PLAY.ch;
+  if (!ch || PLAY.removed) return;
+  if (PLAY.frozen) {
+    // 定格在梦块出口，只推进 dreamDashOut 的 4 帧；末帧回调里直接消失
+    ch.sprite.update(dt);
+    if (ch.hair) ch.hair.update(Math.round(ch.x), Math.round(ch.y), ch.facing, 0, 0, dt, 1);
+    return;
+  }
+  var input = {
+    left: !!playKeys.left, right: !!playKeys.right,
+    up: !!playKeys.up, down: !!playKeys.down,
+    jumpHeld: !!playKeys.jump, jumpPressed: !!playKeys.jumpEdge,
+    dashPressed: !!playKeys.dashEdge, grabHeld: !!playKeys.grab,
+    aimX: (playKeys.right ? 1 : 0) - (playKeys.left ? 1 : 0),
+    aimY: (playKeys.down ? 1 : 0) - (playKeys.up ? 1 : 0)
+  };
+  playKeys.jumpEdge = 0; playKeys.dashEdge = 0;
+  ch.update(dt, input);
+  PLAY.feetPrev = ch.y;
+  if (PLAY.freezeNext) { PLAY.freezeNext = false; PLAY.frozen = true; }
+}
+/* ---------- 落地尘（观感对齐铭记页 spawnDust / drawDust） ---------- */
+var PLAY_DUST = [], PLAY_DUST_MAX = 120;
+function playDustSpawn(x, y, n) {
+  for (var i = 0; i < n; i++) {
+    if (PLAY_DUST.length >= PLAY_DUST_MAX) break;
+    var a = -Math.PI / 2 + (Math.random() - 0.5) * 1.9;
+    var sp = 18 + Math.random() * 34;
+    PLAY_DUST.push({
+      x: x, y: y - 1,
+      vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.6,
+      life: 0.3 + Math.random() * 0.35
+    });
+  }
+}
+function updatePlayDust(dt) {
+  for (var i = PLAY_DUST.length - 1; i >= 0; i--) {
+    var d = PLAY_DUST[i];
+    d.x += d.vx * dt; d.y += d.vy * dt; d.vy += 240 * dt; d.life -= dt;
+    if (d.life <= 0) PLAY_DUST.splice(i, 1);
+  }
+}
+function drawPlayDust() {
+  if (!PLAY_DUST.length) return;
+  ctx.fillStyle = '#c6ecff';
+  for (var i = 0; i < PLAY_DUST.length; i++) {
+    var d = PLAY_DUST[i], p = toScreen(d.x, d.y);
+    ctx.globalAlpha = Math.max(0, Math.min(1, d.life / 0.4));
+    ctx.fillRect(Math.round(p.x), Math.round(p.y), 3, 3);
+  }
+  ctx.globalAlpha = 1;
+}
+function playDraw() {
+  if (!PLAY.active || PLAY.removed || !PLAY.ch) return;
+  PLAY.ch.draw(ctx, function (p) { return toScreen(p.x, p.y); }, Z * cam.zoom);
 }
 
 
@@ -1560,6 +1899,8 @@ function render() {
   drawDream();
   bdDraw();
   sbDraw();
+  drawPlayDust();
+  playDraw();
   drawParts();
   drawFgDecals();
 
@@ -1593,6 +1934,9 @@ function update(dt) {
   sbUpdate(dt);
   updateParts(dt);
   updateCamShake(dt);
+  playCamUpdate(dt);
+  playUpdate(dt);
+  updatePlayDust(dt);
 }
 
 var lastT = 0, AUTO_FREEZE = false;      // AUTO_FREEZE：?auto= 快进后定格，供无头截图逐帧核对
@@ -1614,6 +1958,7 @@ function hideHint() { var h = hintEl(); if (h) { h.style.transition = 'none'; h.
 function showHint() { var h = hintEl(); if (h) { h.style.transition = ''; h.style.opacity = '1'; } }
 
 function resetScene() {
+  playStop();
   coros.length = 0;
   parts.length = 0;
   rings.length = 0;
@@ -1679,6 +2024,8 @@ function boot() {
   storyEnsureHit();
   SCENE.booted = true;
   if (PENDING_STORY_ENTER) { PENDING_STORY_ENTER = false; storyEnter(); }
+  // 刷新后首次进房：宿主在 init 完成前就要求「已碎镜直接出人」，这里补上
+  if (PLAY_PENDING) { PLAY_PENDING = false; playStart(); }
   // 测试入口：?story=dived 预置状态（独立页验证用，不影响正常进入）
   if (SCENE.autoStart) {
     var qs = /[?&]story=(dived)/.exec(location.search);
@@ -1767,12 +2114,13 @@ function initScene(canvasEl, opts) {
   SCENE.onBreak = opts.onBreak || null;
   SCENE.onEnd = opts.onEnd || null;
   SCENE.onDone = opts.onDone || null;
+  SCENE.onCam = opts.onCam || null;
   SCENE.autoStart = opts.autoStart !== undefined ? !!opts.autoStart : true;
   // 音源钩子：pt1 sting 本地仓库缺失（见 docs/celeste-shelf-mirror-rea.md），
   // 宿主可通过 opts.sting1Src 注入同名事件的音频；不注入则保持静默，不拿别的曲子顶替。
   SCENE.sting1Src = opts.sting1Src || null;
   if (SCENE.sting1Src) mkSfx('sting1', SCENE.sting1Src, 0.5);
-  var go = function () { if (!_sceneReady) { _sceneReady = true; boot(); } };
+  var go = function () { if (!_sceneReady) { _sceneReady = true; boot(); playEnsureLoaded(); } };
   if (_assetsReady) go();
   else loadAll(function () { _assetsReady = true; go(); });
 }
@@ -1794,6 +2142,21 @@ window.MirrorScene = {
   },
   resize: function () { resize(); },
   isReady: function () { return _sceneReady; },
+  // —— 可操控 Badeline（碎镜后）——
+  // 宿主在过场结束 / 已破镜重进时调用：站在默认落点 (160,264)，直接可操控
+  playStart: playStart,
+  playStop: playStop,
+  isPlaying: function () { return PLAY.active; },
+  playDbg: function () {
+    return {
+      active: PLAY.active, removed: PLAY.removed, frozen: PLAY.frozen, dived: PLAY.dived,
+      loaded: !!PLAY.ch, x: PLAY.ch ? +PLAY.ch.x.toFixed(1) : null, y: PLAY.ch ? +PLAY.ch.y.toFixed(1) : null,
+      onGround: PLAY.ch ? !!PLAY.ch.onGround : null, state: PLAY.ch ? PLAY.ch.state : null,
+      stamina: PLAY.ch ? +PLAY.ch.stamina.toFixed(1) : null, dust: PLAY_DUST.length,
+      lift: +PLAY.camLift.toFixed(2), liftTo: PLAY.camLiftTo,
+      cam: [+cam.x.toFixed(1), +cam.y.toFixed(1)]
+    };
+  },
   // —— 梦境剧情（测试版）——
   // 重进房间时由宿主调用：按 localStorage 状态播出场 / 补位
   storyEnter: storyEnter,
