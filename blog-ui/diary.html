@@ -8,9 +8,9 @@
     <title>Madeline - 写日记</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Patrick+Hand&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/chat-widget.css?v=20261025a">
-    <link rel="stylesheet" href="css/diary.css?v=20261108c">
+    <link rel="stylesheet" href="css/diary.css?v=20261109b">
     <link rel="stylesheet" href="css/text-fx.css?v=20261004a">
-    <link rel="stylesheet" href="css/diary-inline.css?v=20261108b">
+    <link rel="stylesheet" href="css/diary-inline.css?v=20261109d">
     <link rel="stylesheet" href="css/badeline-panel.css?v=20261108a">
     
 
@@ -42,6 +42,10 @@
     <button id="featherGameBtn" title="金羽毛" style="position:fixed; top:14px; right:16px; z-index:900; width:64px; height:64px; padding:0; background:transparent; border:none; cursor:pointer; transition:transform .3s ease, filter .3s ease; filter:drop-shadow(0 4px 12px rgba(255,170,60,.6));" @click="onFeatherBtn">
         <img src="celeste-gui/loop.gif" alt="金羽毛" style="width:100%; height:100%; object-fit:contain; display:block;" loading="lazy" decoding="async">
     </button>
+    <!-- 随笔框弹出期间的页面压暗层（参数与 #postcard-overlay 一致） -->
+    <div id="featherNoteOverlay">
+        <canvas id="featherNoteSnowCanvas"></canvas>
+    </div>
     <!-- 羽毛随笔弹框 -->
     <div id="featherNoteBox" v-show="boxOpen" :class="{'slide-in': slideIn, 'is-closing': boxClosing}">
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
@@ -111,12 +115,12 @@
         </div>
     </div>
 
-    <script src="js/api.js?v=20261106a"></script>
+    <script src="js/api.js?v=20261109d"></script>
     <script src="js/lib/diaryApi.js?v=20261108b"></script>
-    <script src="js/lib/sfx.js?v=20261031a"></script>
+    <script src="js/lib/sfx.js?v=20261108a"></script>
     <script src="js/badeline-voice.js"></script>
     <script src="js/lib/emotion-map.js?v=20261108a"></script>
-    <script src="js/badeline-panel.js?v=20261108b"></script>
+    <script src="js/badeline-panel.js?v=20261109a"></script>
     <script src="js/text-fx.js?v=20261102a"></script>
     <script src="js/feather-game.js?v=20261108b"></script>
     <script src="js/feather-trigger.js?v=20261108a"></script>
@@ -124,12 +128,13 @@
     <script src="js/madeline-mood.js?v=20261009a"></script>
     
 <script src="js/snow-effect.js?v=20261106c"></script><script src="js/snow-bgm.js?v=20261106c"></script>
-    <script src="js/diary.js?v=20261108i"></script>
+    <script src="js/lib/png-anim.js?v=20261109b"></script>
+    <script src="js/diary.js?v=20261109i"></script>
     <script src="js/detect.js?v=20261107a"></script>
     <script src="js/diary-1.js?v=20261015a"></script>
     <script src="js/pptgen.js?v=20261107f"></script>
 <script src="js/vue.global.prod.js?v=20261008a"></script>
-<script src="js/diary-2.js?v=20261108c"></script>
-<script src="js/seed.js?v=20261101c"></script>
+<script src="js/diary-2.js?v=20261109b"></script>
+<script src="js/seed.js?v=20261109b"></script>
 </body>
 </html>

@@ -15,7 +15,7 @@
             flex-direction:column;
             justify-content:center;
             padding:18px 30px;
-            z-index:901;
+            z-index:10001;
             background:url('../celeste-gui/poempage.webp') center/100% 100% no-repeat;
             border:none;
             border-radius:0;
@@ -36,6 +36,27 @@
             opacity:0;
             pointer-events:none;
             transition:opacity .6s ease;
+        }
+        /* ===== 随笔框背后的页面压暗层：参数照 #postcard-overlay（z 10000，压住整页 UI） ===== */
+        #featherNoteOverlay {
+            position:fixed;
+            inset:0;
+            background:rgba(5,5,20,0.95);
+            z-index:10000;
+            display:none;
+            align-items:center;
+            justify-content:center;
+            flex-direction:column;
+        }
+        #featherNoteOverlay.show { display:flex; }
+        /* 随笔遮罩自己的雪花画布：尺寸/层级写法照 #snowCanvas */
+        #featherNoteSnowCanvas {
+            position:absolute;
+            inset:0;
+            width:100%;
+            height:100%;
+            pointer-events:none;
+            z-index:0;
         }
         #featherSave:hover { background:#c4a882 !important; color:#fff !important; }
         #featherCancel:hover { background:rgba(180,160,140,.25) !important; border-color:#a89080 !important; }

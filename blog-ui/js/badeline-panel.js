@@ -12,7 +12,7 @@
  *   }
  *   opts:
  *     openingLines   开场白数组（缺省用书架页那四句）
- *     payload()      每次请求前现算的心光谱载荷（JSON 字符串）
+ *     payload()      每次请求前现算的心光谱载荷（数组）
  *     onOpen()       面板打开（书架页在这里放大立绘）
  *     onClose()      面板关闭后调用，返回 'summoned' / 'free'（决定页面怎么演出）
  *     onSummoned()   onClose 返回 'summoned' 时调用（书架页让她退场）
@@ -126,7 +126,7 @@ window.BadelinePanel = (function () {
         var quickMode = false;
 
         function payload() {
-            return opts.payload ? opts.payload() : '[]';
+            return opts.payload ? opts.payload() : [];
         }
         function persist() { writeHist(historyKey, hist, historyMax); }
         function push(role, text) {
@@ -139,6 +139,15 @@ window.BadelinePanel = (function () {
         }
         function normalizeEmotion(raw) {
             return (window.BadelineVoice && BadelineVoice.normalize) ? BadelineVoice.normalize(raw) : raw;
+        }
+        // 并集键：保留 "surprised"/"peaceful" 这类 Badeline 15 键里没有的原义，
+        // 供页面层（动作树）区分；立绘/音效仍用 normalizeEmotion 的降级结果。
+        // 中文别名先按 badeline 解析，再补 madeline 的并集别名（如 惊讶/可爱）。
+        function unionEmotion(raw, fallback) {
+            if (!raw || !window.EmotionMap || !window.EmotionMap.normalize) return fallback || raw;
+            var k = window.EmotionMap.normalize(raw, 'badeline') ||
+                    window.EmotionMap.normalize(raw, 'madeline');
+            return k || fallback || raw;
         }
 
         function addMsg(role, text, emo) {
@@ -282,14 +291,15 @@ window.BadelinePanel = (function () {
         async function doSpeak(text, emo, aiLocked) {
             text = String(text || '').replace(/[（(][^（）()]*[）)]/g, '').trim(); // 动作旁白不上屏（对齐 Madeline）
             if (!text) return;
+            var rawEmo = emo;
             emo = normalizeEmotion(emo);
-            if (!PORTRAIT_FRAMES[emo]) { emo = inferEmotion(text); aiLocked = false; }
+            if (!PORTRAIT_FRAMES[emo]) { emo = inferEmotion(text); aiLocked = false; rawEmo = emo; }
             var my = dialogToken;
             var wasOpen = dialog.classList.contains('show');
             dialogOpen();
             startPortrait(emo);
             if (CRAWL_EMO[emo]) crawlOut(wasOpen ? 130 : 330, my);   // 等框体入场后再露头
-            if (opts.onEmotion) opts.onEmotion(emo);
+            if (opts.onEmotion) opts.onEmotion(emo, unionEmotion(rawEmo, emo));
             clearTimeout(dialogHideTimer);
             var pages = splitPages(text);
             for (var p = 0; p < pages.length; p++) {
@@ -374,11 +384,11 @@ window.BadelinePanel = (function () {
                 bodyEl.textContent = text;       // 流式阶段先走纯文本，done 再上 TextFx
                 msgs.scrollTop = msgs.scrollHeight;
             }
-            function applyEmotion(emo) {
+            function applyEmotion(emo, raw) {
                 if (!emo || !PORTRAIT_FRAMES[emo]) return;
                 aiEmo = emo;
                 if (msgEl) setMsgEmotion(msgEl, emo);
-                if (opts.onEmotion) opts.onEmotion(emo);
+                if (opts.onEmotion) opts.onEmotion(emo, unionEmotion(raw, emo));
             }
             function speakReady(force) {
                 var end = force ? text.length : nextSentenceEnd(text, spoken);
@@ -452,7 +462,7 @@ window.BadelinePanel = (function () {
                 stream = DiaryApi.badelineChatStream(v, hist, payload(), function (ev) {
                     if (finished || !ev) return;
                     if (ev.type === 'emotion') {
-                        applyEmotion(normalizeEmotion(ev.data));
+                        applyEmotion(normalizeEmotion(ev.data), ev.data);
                     } else if (ev.type === 'delta') {
                         if (!ev.data) return;
                         text += ev.data;
@@ -462,7 +472,7 @@ window.BadelinePanel = (function () {
                     } else if (ev.type === 'done') {
                         try {
                             var meta = JSON.parse(ev.data || '{}');
-                            if (!aiEmo && meta && meta.emotion) applyEmotion(normalizeEmotion(meta.emotion));
+                            if (!aiEmo && meta && meta.emotion) applyEmotion(normalizeEmotion(meta.emotion), meta.emotion);
                         } catch (e) {}
                         succeed();
                     } else if (ev.type === 'error') {

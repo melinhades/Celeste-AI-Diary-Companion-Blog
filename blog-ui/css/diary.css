@@ -613,15 +613,35 @@ body::before {
     user-select: none;
     -webkit-user-drag: none;
 }
-/* Badeline 替班：32px 原图 4 倍整数放大（与 shelf 立绘同量级），保持像素边缘 */
-#pixelMadeline[src*="badeline/"] {
+/* Badeline 替班：32px 原图 4 倍整数放大（与 shelf 立绘同量级），保持像素边缘。
+   改用 class 控制：PNG 序列走 blob URL，src 里不再有 badeline/ 字样 */
+#pixelMadeline.is-badeline {
     width: 128px !important;
     height: 128px !important;
 }
 #pixelMadeline[src*="madeline-sitdown.gif"],
 #pixelMadeline[src*="madeline-sleep.gif"],
 #pixelMadeline[src*="madeline-wakeup.gif"],
-#pixelMadeline[src*="fallPose"] { width: 100px !important; height: auto !important; }
+#pixelMadeline[src*="fallPose"],
+#pixelMadeline[src*="Atlases/Gameplay/characters/player/"] { width: 100px !important; height: auto !important; }
+/* 汗滴叠层：与本体同尺寸/同位置，只覆盖不透明汗滴像素，不拦截点击 */
+#pixelMadelineSweat {
+    position: fixed;
+    left: 0; top: 0;
+    z-index: 801;
+    display: none;
+    pointer-events: none;
+    image-rendering: pixelated;
+}
+/* 头发叠层：画在本体后面（z-index 低于 #pixelMadeline），只给缺发的 atlas 动作使用 */
+#pixelMadelineHair {
+    position: fixed;
+    left: 0; top: 0;
+    z-index: 799;
+    display: none;
+    pointer-events: none;
+    image-rendering: pixelated;
+}
 .madeline-row .msg-bubble {
     border-radius: 0;
     background: rgba(24, 12, 38, 0.92);

@@ -442,7 +442,16 @@
         closeGameDialog();
     });
     let msgQueue = Promise.resolve();
+    // Badeline 替班：面板挂载前产生的主动冒泡先排队，挂载后按顺序补说
+    const pmPendingSays = [];
     function addMadelineMessage(text, emotion, forceGameDialog) {
+        // 替班期间她的主动冒泡一律走自己的对话框（名字 / 立绘 / 音色都是她的），不再借 Madeline 的气泡
+        if (PM_BADELINE_STANDIN && !forceGameDialog) {
+            const bp = window.__diaryBadelinePanel;
+            if (bp) bp.say(text, emotion);
+            else pmPendingSays.push({ text: text, emotion: emotion });
+            return Promise.resolve();
+        }
         msgQueue = msgQueue.then(() => doAddMadelineMessage(text, emotion, forceGameDialog)).catch(e => console.warn('说话失败:', e));
         return msgQueue; // 返回队列 Promise，便于调用方 await「说完」后再做后续（如淡入金羽毛）
     }
@@ -460,6 +469,26 @@
      */
     function startStreamingMadeline(emotion) {
         emotion = moodLabel(emotion);
+        // Badeline 替班：不占用 Madeline 的对话框与历史，收完流后整段交给她自己的对话框
+        if (PM_BADELINE_STANDIN) {
+            let buf = '', cancelled = false, resolveDone;
+            const done = new Promise(function (r) { resolveDone = r; });
+            function flushSay() {
+                if (cancelled) return;
+                const txt = buf.trim();
+                if (!txt) return;
+                const p = window.__diaryBadelinePanel;
+                if (p) p.say(txt, emotion);
+                else addMadelineMessage(txt, emotion);
+            }
+            return {
+                append: function (t) { if (!cancelled) buf += t; },
+                queueMoods: function () {},
+                finish: function () { flushSay(); resolveDone(); },
+                cancel: function () { cancelled = true; resolveDone(); },
+                done: done
+            };
+        }
         let pending = '';      // 待打字的字符缓冲（已剥离情绪标记的纯文本）
         let finished = false;  // 流是否已结束（不再有新 delta）
         let typedCount = 0;    // 已打出的字符数
@@ -928,6 +957,12 @@
     quickInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendQuickMessage(); });
 
     function showQuickInput(show) {
+        // Badeline 替班：快捷输入走的是 Madeline 的 /chat，替班期间不暴露
+        if (window.isBadelineStandIn && window.isBadelineStandIn()) {
+            quickInputBox.style.display = 'none';
+            quickInputBox.classList.remove('bubble-active');
+            return;
+        }
         if (show) {
             quickInputBox.style.display = 'flex';
             quickInputBox.classList.remove('bubble-active');
@@ -1218,17 +1253,36 @@
         applyButtonPos(pos.x, pos.y);
     });
 
+    let fbClickTimer = null;
     floatButton.addEventListener('pointerup', () => {
         if (!isDragging) return;
         isDragging = false;
-        if (!dragMoved) {
-            wrapper.classList.remove('dragging');
-            toggleChat();
+        if (dragMoved) return;
+        wrapper.classList.remove('dragging');
+        if (PM_BADELINE_STANDIN) {
+            if (chatOpen) toggleChat(false);
+            if (fbClickTimer) return;
+            // 同样 260ms 防抖：单击只说一句（游戏对话框），双击才开历史面板
+            fbClickTimer = setTimeout(() => {
+                fbClickTimer = null;
+                const p = window.__diaryBadelinePanel;
+                if (p) p.quickTalk(PM_BADELINE_PET_LINES[Math.floor(Math.random() * PM_BADELINE_PET_LINES.length)]);
+            }, 260);
+            return;
         }
+        toggleChat();
     });
 
-    // 双击按钮 → 复位到右下角（防丢保险）
-    floatButton.addEventListener('dblclick', resetButtonPos);
+    // 双击按钮：替班时开她的历史面板；平时复位到右下角（防丢保险）
+    floatButton.addEventListener('dblclick', () => {
+        if (PM_BADELINE_STANDIN) {
+            if (fbClickTimer) { clearTimeout(fbClickTimer); fbClickTimer = null; }
+            const p = window.__diaryBadelinePanel;
+            if (p && !p.isOpen()) p.openChat();
+            return;
+        }
+        resetButtonPos();
+    });
 
     // 窗口缩放后按钮若跑出可视区 → 自动回位
     window.addEventListener('resize', () => {
@@ -1876,7 +1930,7 @@ function inferReplyEmotion(text) {
                 // P3.4 续接：告诉后端恢复上一轮对话
                 resume: triggerType === 'resume' ? true : undefined,
                 // v2 扩展：按键级原始事件流 + 计算好的轨迹特征
-                typingSignal: JSON.stringify((() => {
+                typingSignal: (() => {
                     const intervals = companionState.keyIntervals;
                     let avgIntervalMs = 0, deleteRetypeRatio = 0, autocorrelation = 0;
                     if (intervals.length > 2) {
@@ -1906,7 +1960,7 @@ function inferReplyEmotion(text) {
                         // R5：上传最近 50 条原始按键事件（限长避免 body 过大）
                         events: companionState.keyEvents.slice(-50)
                     };
-                })())
+                })()
             };
             // B6：请求发出后重置轨迹计数器，避免跨轮次累加导致 deleteRetypeRatio 失真
             companionState.deleteInsertPairs = 0;
@@ -2559,6 +2613,11 @@ function inferReplyEmotion(text) {
 
     let pmCurName = '';
 
+    // 新动作沿用 Celeste 原始 32×32 帧，全部走 PM_FRAMES / pmSetSrc 同一条序列播放路径
+    const PM_PLAYER = 'Atlases/Gameplay/characters/player/';
+    // 替班 Badeline：身体帧（暗紫 NPC 套）与头发贴图（亮紫、含 hair/bangs）在两个目录
+    const PM_BADELINE_BODY = 'Atlases/Gameplay/characters/badeline/';
+    const PM_BADELINE_HAIR = 'Atlases/Gameplay/characters/player_badeline';
     const PM_SRC = {
         move: 'celeste-gui/madeline-move.gif',
         fun: 'celeste-gui/madeline-fun.gif',
@@ -2566,7 +2625,13 @@ function inferReplyEmotion(text) {
         sit: 'celeste-gui/madeline-sitdown.gif',
         sleep: 'celeste-gui/madeline-sleep.gif',
         wake: 'celeste-gui/madeline-wakeup.gif',
-        fall: 'celeste-player/fallPose00.png'
+        fall: 'celeste-player/fallPose00.png',
+        idleA: PM_PLAYER + 'idleA00.png',
+        idleC: PM_PLAYER + 'idleC00.png',
+        lookUp: PM_PLAYER + 'lookUp00.png',
+        shaking: PM_PLAYER + 'shaking00.png',
+        hug: PM_PLAYER + 'hug00.png',
+        tired: PM_PLAYER + 'tired00.png'
     };
     const pmState = {
         x: window.innerWidth * 0.15,
@@ -2583,50 +2648,42 @@ function inferReplyEmotion(text) {
         nextMurmur: 0
     };
 
-    // ===== Badeline 替班（临时测试版）=====
-    // 镜之房间（celeste-mirror.js / shelf 的 mirror 房间）在 stage='appeared' 后写入标记；
-    // 日记页只替班一次（appeared → diaryShown），刷新即恢复 Madeline；
-    // 同时提供「恢复 Madeline」按钮与 1 小时自然过期，避免卡死在 Badeline 状态。
-    // 注意：键名与 stage 必须和 celeste-mirror.js 里的 STORY_KEY 保持一致。
-    const SHIFT_KEY = 'badelineMirrorStoryV1';
-    const SHIFT_TTL = 60 * 60 * 1000;
+    // ===== Badeline 替班（持久接管）=====
+    // 独立键、无过期：镜之房间 Badeline 出场完成时写入 '1'（shelf.js），日记页只认这个键。
+    // 唯一出口：右上「恢复 Madeline」按钮（清键 → 回 Madeline）。
+    const SHIFT_KEY = 'badelineDiaryStandInV1';
     function readShiftDiary() {
-        try {
-            const raw = localStorage.getItem(SHIFT_KEY);
-            if (!raw) return null;
-            const s = JSON.parse(raw);
-            if (!s || !s.stage || !s.expiresAt || Date.now() > s.expiresAt) {
-                localStorage.removeItem(SHIFT_KEY);
-                return null;
-            }
-            return s;
-        } catch (e) { return null; }
-    }
-    function saveShiftDiary(stage) {
-        try {
-            const now = Date.now();
-            localStorage.setItem(SHIFT_KEY, JSON.stringify({ stage, updatedAt: now, expiresAt: now + SHIFT_TTL }));
-        } catch (e) {}
+        try { return localStorage.getItem(SHIFT_KEY) === '1'; } catch (e) { return false; }
     }
     function clearShiftDiary() {
         try { localStorage.removeItem(SHIFT_KEY); } catch (e) {}
     }
-    let shiftState = readShiftDiary();
-    let PM_BADELINE_STANDIN = false;
-    if (shiftState && shiftState.stage === 'appeared') {
-        PM_BADELINE_STANDIN = true;
-        saveShiftDiary('diaryShown');      // 只替班这一屏，刷新后回 Madeline
-    } else if (shiftState && shiftState.stage === 'diaryShown') {
-        clearShiftDiary();                 // 第二次进入：恢复 Madeline 并清掉标记
-        shiftState = null;
-    }
+    let PM_BADELINE_STANDIN = readShiftDiary();
+    let baAnim = null;   // Badeline 替班的 PNG 序列播放器（png-anim.js）
+    let baMode = 'lookUp';
+    let baModeUntil = 0;
+    let baEmotionUntil = 0;
+    const baLastReact = { angry: -1e9, gloomy: -1e9, concerned: -1e9, positive: -1e9 };
+    let baQuickTalk = false;   // 单击台词期间忽略面板情绪，避免同一次点击既 laugh 又 tired
+    let baHoverSince = 0, baHoverCoolUntil = 0, baHoverCapUntil = 0;
     if (PM_BADELINE_STANDIN) {
+        // 尺寸改由 class 控制：序列帧是 blob URL，匹配不到 [src*="badeline/"] 的属性选择器
+        pm.classList.add('is-badeline');
         pmCurName = 'badeline';
-        pm.src = 'celeste-player/badeline/lookingUp_f.gif';
         pm.alt = 'Badeline';
         pm.title = 'Badeline 在替班';
         pmState.mode = 'badeline';
         pmState.dir = 1;
+        if (window.PngAnim) {
+            // onFrame 每帧把本体当前帧同步给头发叠层（见 baHairFrame）
+            baAnim = window.PngAnim.create(pm, { onFrame: baHairFrame });
+            pm.src = window.PngAnim.frameUrl('lookUp', 0);   // 先出首帧，避免闪一下 Madeline
+            baAnim.play('lookUp');
+            // 与常态 lookUp 时长一致，避免首帧就被动作树立刻切走
+            baModeUntil = performance.now() + 2000 + Math.random() * 2000;
+        } else {
+            pm.src = 'celeste-player/badeline/lookingUp_f.gif';   // 播放器缺席时的静态兜底
+        }
         // 128px 立绘按脚底贴地摆放（默认 y 是按 56px 算的，直接沿用会溢出屏幕）
         pmState.y = window.innerHeight - (pm.offsetHeight || 128) - 8;
         pm.style.transform = 'translate(' + Math.round(pmState.x) + 'px,' + Math.round(pmState.y) + 'px)';
@@ -2639,6 +2696,14 @@ function inferReplyEmotion(text) {
         resetBtn.addEventListener('click', () => {
             clearShiftDiary();
             PM_BADELINE_STANDIN = false;
+            if (baAnim) { baAnim.stop(); baAnim = null; }
+            // 头发贴图/颜色是按替班态载入的，回 Madeline 需要重新按 player 套装加载
+            pmHairHide();
+            pmHairReady = false; pmHairFailed = false;
+            pmHairTex = null; pmHairObj = null;
+            pmHairAct = ''; pmHairFrameSrc = ''; pmHairLastT = 0;
+            pmHairInit();
+            pm.classList.remove('is-badeline');
             pmCurName = '';
             pm.alt = 'Madeline';
             pm.title = '点我聊天';
@@ -2653,6 +2718,155 @@ function inferReplyEmotion(text) {
     }
     // 供羽毛拦截复用现有驻场状态（只读，不参与过期/恢复逻辑）
     window.isBadelineStandIn = function () { return PM_BADELINE_STANDIN; };
+
+    // ===== Badeline 替班动作树（PNG 序列）=====
+    // 结构与参数对齐 shelf 那套：常态加权轮换 idle / lookUp / tired；一次性动作播完回 lookUp；
+    // 生气类情绪打断一切，播完回落到抬头待机。差别只在本页没有游荡位移，
+    // 所以 shelf 的「走到目标后站定」换成本页的等价条件：鼠标不在头顶 + 没有情绪窗口。
+    const BA_ANGRY = {
+        angry: 1, angryAlt: 1, yell: 1, freakA: 1, freakB: 1, freakC: 1,
+        '怨恨': 1, '恼火': 1, '强压怒火': 1, '喊叫': 1, '崩溃边缘': 1, '风暴': 1, '失控': 1
+    };
+    const BA_GLOOMY = {
+        sad: 1, upset: 1, sigh: 1,
+        '低落': 1, '委屈': 1, '叹息': 1, '不开心': 1, '悲伤': 1, '孤独': 1, '难过': 1, '伤心': 1
+    };
+    // 关切/不安类：与 shelf 的 EMO_TO_MODE 一致，落到抬头
+    const BA_CONCERNED = {
+        worried: 1, worriedAlt: 1, concerned: 1, serious: 1,
+        '不安': 1, '强装镇定': 1, '关切': 1, '认真': 1
+    };
+    const BA_POSITIVE = {
+        peaceful: 1, surprised: 1,
+        '可爱': 1, '惊讶': 1, '开心': 1
+    };
+    // 常态动作时长（ms），与 shelf 的 DUR 一致
+    const BA_DUR = { lookUp: [2000, 4000], idle: [1200, 2600] };
+    const BA_ONE_SHOT = { tired: 1, laugh: 1, angry: 1 };
+    // 情绪窗口：窗口内空闲动作不抢镜
+    const BA_HOLD = { angry: 6000, gloomy: 4000, concerned: 3000, positive: 3000 };
+
+    function baClipMs(name) {
+        const p = window.PngAnim && window.PngAnim.PRESETS[name];
+        if (!p) return 0;
+        const d = Array.isArray(p.delay) ? p.delay[0] : p.delay;
+        return p.n * d;
+    }
+    function baDuration(name, now) {
+        if (name === 'lookUp' || name === 'idle') {
+            const r = BA_DUR[name];
+            return now + r[0] + Math.random() * (r[1] - r[0]);
+        }
+        return now + baClipMs(name) + 600;   // 一次性：onEnd 为主，modeUntil 只兜底
+    }
+    // 一次性动作播完：回 lookUp 待机；中途被别的模式接管则忽略旧回调
+    function baClipEnd(name) {
+        return function () {
+            if (baMode !== name || !BA_ONE_SHOT[name]) return;
+            baEnter('lookUp');
+        };
+    }
+    function baEnter(name, now) {
+        if (!baAnim || !window.PngAnim || !window.PngAnim.PRESETS[name]) return;
+        now = now || performance.now();
+        baMode = name;
+        baModeUntil = baDuration(name, now);
+        baAnim.play(name, { next: null, onEnd: baClipEnd(name) });
+    }
+    // 常态加权池：沿用 shelf 的 lookUp .24 / tired .10，roam+sleep 的份额归 idle
+    // （本页没有游荡与睡姿，站立待机就是常态）
+    function baPickMode(now) {
+        const pool = [['idle', .66], ['lookUp', .24], ['tired', .10]]
+            .filter(p => p[0] !== baMode);
+        const total = pool.reduce((s, p) => s + p[1], 0);
+        let r = Math.random() * total;
+        for (const [k, w] of pool) {
+            r -= w;
+            if (r <= 0) { baEnter(k, now); return; }
+        }
+        baEnter(pool[0][0], now);
+    }
+    // 头顶悬停区：参数与 Madeline 的 PM_LOOK 完全一致
+    // （左右各半宽 +24px、头顶上方 4–160px、停留 500ms、冷却 900ms、单次上限 30s）
+    function baLookZone() {
+        const bw = layoutCache.bw, bh = layoutCache.bh;
+        const cx = pmState.x + bw * 0.44;     // 32×32 帧的可视身体中心
+        const headTop = pmState.y + bh * 0.47;
+        const dx = Math.abs(pmPointer.x - cx);
+        const dy = pmPointer.y - headTop;
+        return pmPointer.valid && dx <= bw / 2 + PM_LOOK.side &&
+               dy <= -PM_LOOK.aboveMin && dy >= -PM_LOOK.aboveMax;
+    }
+    function baHoverTick(now) {
+        if (!pmPointer.valid) { baHoverSince = 0; return false; }
+        if (baMode === 'lookUp' && baHoverCapUntil) {
+            if (!baLookZone()) {
+                // 鼠标离开头顶：立刻收回站定，并按 PM_LOOK 冷却
+                baHoverCapUntil = 0;
+                baHoverCoolUntil = now + PM_LOOK.cooldown;
+                baEnter('idle', now);
+            } else if (now >= baHoverCapUntil) {
+                // 单次抬头上限：退出后进入冷却
+                baHoverCapUntil = 0;
+                baHoverCoolUntil = now + PM_LOOK.cooldown;
+                baEnter('idle', now);
+            }
+            return true;
+        }
+        if (!baLookZone() || now < baEmotionUntil) { baHoverSince = 0; return false; }
+        if (BA_ONE_SHOT[baMode]) return true;   // 一次性动作/情绪反应不打断
+        if (!baHoverSince) baHoverSince = now;
+        if (now - baHoverSince < PM_LOOK.dwell) return true;
+        if (now < baHoverCoolUntil) return true;
+        baEnter('lookUp', now);
+        baHoverCapUntil = now + PM_LOOK.cap;
+        baHoverSince = 0;
+        return true;
+    }
+    function baReactToEmotion(raw, fallbackRaw) {
+        if (!PM_BADELINE_STANDIN || !baAnim || baQuickTalk) return;
+        const emo = String(raw == null ? '' : raw).trim();
+        if (!emo) return;
+        const now = performance.now();
+        let kind = '', name = '';
+        if (BA_ANGRY[emo]) { kind = 'angry'; name = 'angry'; }
+        else if (BA_GLOOMY[emo]) { kind = 'gloomy'; name = 'tired'; }
+        else if (BA_CONCERNED[emo]) { kind = 'concerned'; name = 'lookUp'; }
+        else if (BA_POSITIVE[emo]) { kind = 'positive'; name = 'laugh'; }
+        // 并集键（surprised/peaceful）优先；它不在本套里时退回 Badeline 角色键（如 panic→worried）
+        if (!kind) {
+            if (fallbackRaw && fallbackRaw !== emo) return baReactToEmotion(fallbackRaw);
+            return;
+        }
+        if (baMode === name) {   // 同一种反应正在播：只续情绪窗口，不重启帧表
+            baEmotionUntil = Math.max(baEmotionUntil, now + BA_HOLD[kind]);
+            return;
+        }
+        if (now - baLastReact[kind] < 2500) return;   // 反应式冷却，防连续消息刷屏
+        if (baMode === 'angry') return;               // 生气反应优先，不被别的情绪顶掉
+        baLastReact[kind] = now;
+        baEmotionUntil = Math.max(baEmotionUntil, now + BA_HOLD[kind]);
+        baHoverSince = 0;
+        baEnter(name, now);
+    }
+    // 单击：先播一次身体反应（与 shelf 一致），再走 260ms 防抖的游戏对话框
+    function baLaugh() {
+        if (!baAnim || baMode === 'angry') return;
+        baHoverSince = 0;
+        baEnter('laugh', performance.now());
+    }
+    // 播放器每帧回调：把 Badeline 本体当前帧交给头发叠层（用原始帧路径查锚点元数据）
+    function baHairFrame(act, i) {
+        if (!PM_BADELINE_STANDIN || !window.PngAnim) return;
+        pmHairSwitch(act, window.PngAnim.frameUrl(act, i));
+    }
+    function baTick(now) {
+        if (!baAnim) return;
+        if (baHoverTick(now)) return;
+        if (BA_ONE_SHOT[baMode] && now >= baModeUntil) { baEnter('lookUp', now); return; }  // onEnd 失效兜底
+        if (now < baEmotionUntil) return;   // 情绪窗口内：空闲动作不抢
+        if (now >= baModeUntil) baPickMode(now);
+    }
     // ===== 布局缓存：禁区 rect / 精灵尺寸 300ms 刷新一次，帧循环不再触发强制布局 =====
     let layoutCache = { rects: [], bw: 56, bh: 56, groundY: 0, ts: -1e9 };
     function refreshLayoutCache() {
@@ -2677,15 +2891,321 @@ function inferReplyEmotion(text) {
         return layoutCache.groundY;
     }
     const PM_FRAMES = {};
+    const PM_FRAME_DELAY = {};   // 每个序列自己的帧间隔（缺省 55ms，与 fallPose 一致）
+    const PM_FRAME_LOOP = {};    // 需要循环的动作（tired）
     PM_FRAMES[PM_SRC.fall] = (function () {
         const a = [];
 
         for (let i = 0; i < 11; i++) a.push('celeste-player/fallPose' + String(i).padStart(2, '0') + '.png');
         return a;
     })();
+    function pmRegisterFrames(key, prefix, count, delay, loop) {
+        const a = [];
+        for (let i = 0; i < count; i++) a.push(PM_PLAYER + prefix + String(i).padStart(2, '0') + '.png');
+        PM_FRAMES[key] = a;
+        PM_FRAME_DELAY[key] = delay;
+        if (loop) PM_FRAME_LOOP[key] = true;
+    }
+    pmRegisterFrames(PM_SRC.idleA, 'idleA', 12, 70, false);
+    pmRegisterFrames(PM_SRC.idleC, 'idleC', 12, 70, false);
+    pmRegisterFrames(PM_SRC.lookUp, 'lookUp', 8, 90, false);
+    pmRegisterFrames(PM_SRC.tired, 'tired', 4, 160, true);
+    // ===== 头发叠层：只给缺发的 player atlas 动作补发 =====
+    // 基准来自已烘焙 GIF（madeline-move / madeline-fun / bounceline）逐帧实测：
+    //   主色 #AC3232、暗部 #5A1A1A、描边 #040000；
+    //   发顶约在头顶上方 0.25 个身体高，发尾约到头顶下方 0.66 个身体高，
+    //   发团重心向身后偏移约 0.2 个身体高。
+    // celeste-hair.js 只读引用，不修改；这里只负责锚点、朝向与画布同步。
+    const PM_HAIR_BAKED = [
+        'madeline-move.gif', 'madeline-fun.gif', 'bounceline.gif',
+        'madeline-sitdown.gif', 'madeline-sleep.gif', 'madeline-wakeup.gif',
+        'fallPose', 'halfWakeUp', 'wakeUp/'
+    ];
+    function pmNeedsHair(src) {
+        if (!src) return false;
+        if (src.indexOf(PM_BADELINE_BODY) === 0) return true;   // 替班 badeline 身体帧同样缺发
+        if (src.indexOf(PM_PLAYER) !== 0) return false;
+        for (let i = 0; i < PM_HAIR_BAKED.length; i++) {
+            if (src.indexOf(PM_HAIR_BAKED[i]) !== -1) return false;
+        }
+        return true;
+    }
+    const pmHairCanvas = document.createElement('canvas');
+    pmHairCanvas.id = 'pixelMadelineHair';
+    pmHairCanvas.width = 32;
+    pmHairCanvas.height = 32;
+    pmHairCanvas.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(pmHairCanvas);
+    const pmHairCtx = pmHairCanvas.getContext('2d');
+    const pmHairMeasureCanvas = document.createElement('canvas');
+    pmHairMeasureCanvas.width = 32;
+    pmHairMeasureCanvas.height = 32;
+    const pmHairMeasureCtx = pmHairMeasureCanvas.getContext('2d');
+    const PM_HAIR_META = Object.create(null);   // src -> {ax, ay, fx, fy}，全部在 32×32 空间
+    let pmHairTex = null, pmHairObj = null, pmHairReady = false, pmHairFailed = false;
+    let pmHairAct = '', pmHairFrameSrc = '', pmHairVisible = false, pmHairLastT = 0;
+
+    function pmHairMeasure(src, im) {
+        try {
+            if (!pmHairMeasureCtx) return;
+            pmHairMeasureCtx.clearRect(0, 0, 32, 32);
+            pmHairMeasureCtx.drawImage(im, 0, 0, 32, 32);
+            const d = pmHairMeasureCtx.getImageData(0, 0, 32, 32).data;
+            let minX = 32, minY = 32, maxX = -1, maxY = -1;
+            for (let y = 0; y < 32; y++) {
+                for (let x = 0; x < 32; x++) {
+                    if (d[(y * 32 + x) * 4 + 3] > 0) {
+                        if (x < minX) minX = x;
+                        if (x > maxX) maxX = x;
+                        if (y < minY) minY = y;
+                        if (y > maxY) maxY = y;
+                    }
+                }
+            }
+            if (maxX < 0) return;
+            // 发根 = alpha 包围盒顶行的水平中心
+            let tl = 32, tr = -1;
+            for (let x = minX; x <= maxX; x++) {
+                if (d[(minY * 32 + x) * 4 + 3] > 0) {
+                    if (x < tl) tl = x;
+                    if (x > tr) tr = x;
+                }
+            }
+            PM_HAIR_META[src] = {
+                ax: (tl + tr) / 2, ay: minY,          // 头顶中心（发根）
+                fx: (minX + maxX) / 2, fy: maxY       // 脚底中心（链式模拟的参考点）
+            };
+        } catch (e) { /* 静默：量不出来就不叠发 */ }
+    }
+    function pmHairPreload(src) {
+        if (!pmNeedsHair(src)) return;
+        const im = new Image();
+        im.onload = () => pmHairMeasure(src, im);
+        im.src = src;
+    }
+    function pmHairInit() {
+        if (pmHairReady || pmHairFailed) return;
+        try {
+            const s = document.createElement('script');
+            s.src = 'js/celeste-hair.js';
+            s.onload = () => {
+                try {
+                    if (!window.CelesteHair) { pmHairFailed = true; return; }
+                    // 替班：亮紫 player_badeline 贴图 + #672141 填充 + #23152E 描边
+                    window.CelesteHair.load(
+                        PM_BADELINE_STANDIN ? PM_BADELINE_HAIR : PM_PLAYER,
+                        PM_BADELINE_STANDIN ? '#672141' : window.CelesteHair.MADELINE,
+                        PM_BADELINE_STANDIN ? '#23152E' : '#000000'
+                    ).then(tex => {
+                        if (!tex || !tex[0] || !tex[0].hair) { pmHairFailed = true; return; }
+                        pmHairTex = tex;
+                        pmHairObj = new window.CelesteHair.Hair(tex, 4);
+                        pmHairObj.nodes = [];
+                        pmHairReady = true;
+                    }).catch(() => { pmHairFailed = true; });
+                } catch (e) { pmHairFailed = true; }
+            };
+            s.onerror = () => { pmHairFailed = true; };
+            document.head.appendChild(s);
+        } catch (e) { pmHairFailed = true; }
+    }
+    function pmHairHide() {
+        if (!pmHairVisible) return;
+        pmHairVisible = false;
+        pmHairCanvas.style.display = 'none';
+    }
+    function pmHairSwitch(act, frameSrc) {
+        if (pmHairAct !== act) {
+            pmHairAct = act;
+            pmHairLastT = 0;
+            if (pmHairObj) pmHairObj.nodes = [];
+            try { pmHairCtx.clearRect(0, 0, 32, 32); } catch (e) {}
+            pmHairHide();
+        }
+        pmHairFrameSrc = frameSrc || '';
+    }
+    function pmHairUpdate(now) {
+        try {
+            if (!pmHairReady || pmHairFailed) { pmHairHide(); return; }
+            // 替班态由 baHairFrame 直接喂帧；Madeline 仍按当前动作名判定是否缺发
+            if (!PM_BADELINE_STANDIN && !pmNeedsHair(pmCurName)) { pmHairHide(); return; }
+            if (!pmHairFrameSrc) { pmHairHide(); return; }
+            const m = PM_HAIR_META[pmHairFrameSrc];
+            if (!m) { pmHairHide(); return; }   // 该帧还没量完：静默跳过，不阻塞行为树
+            if (pmHairObj.nodes.length !== 4) {
+                pmHairObj.nodes = [];
+                for (let i = 0; i < 4; i++) pmHairObj.nodes.push({ x: m.ax - i * 2, y: m.ay + i * 2 });
+                pmHairLastT = now;
+            }
+            if (!pmHairLastT) pmHairLastT = now;
+            const dt = Math.min(0.05, Math.max(0.001, (now - pmHairLastT) / 1000));
+            pmHairLastT = now;
+            // 本体在本地空间永远朝右，朝向翻转由外层的 scaleX(-1) 统一完成
+            pmHairObj.update(m.fx, m.fy, 1, m.ax - m.fx, m.ay - (m.fy - 9), dt, 1);
+            pmHairCtx.clearRect(0, 0, 32, 32);
+            pmHairObj.draw(pmHairCtx, p => p, 1, 0, 1);
+            pmHairCanvas.style.width = layoutCache.bw + 'px';
+            pmHairCanvas.style.height = layoutCache.bh + 'px';
+            pmHairCanvas.style.transform = pm.style.transform;
+            if (!pmHairVisible) {
+                pmHairVisible = true;
+                pmHairCanvas.style.display = 'block';
+            }
+        } catch (e) { pmHairHide(); }
+    }
+    pmHairInit();
+
+    // 替班：预量 badeline 五套帧的头顶/脚底锚点（路径与 PngAnim 出帧完全一致）
+    if (PM_BADELINE_STANDIN && window.PngAnim) {
+        Object.keys(window.PngAnim.PRESETS).forEach(k => {
+            const p = window.PngAnim.PRESETS[k];
+            for (let i = 0; i < p.n; i++) pmHairPreload(window.PngAnim.frameUrl(p.anim, i));
+        });
+    }
+
+    // 预加载新帧，首次播放不闪白（PM_FRAMES 里已含 fallPose）
+    Object.values(PM_FRAMES).forEach(frames => frames.forEach(pmHairPreload));
+    [PM_SRC.shaking, PM_SRC.hug].forEach(pmHairPreload);
+
+    // ===== 汗滴叠层：独立透明 PNG，跟随本体的尺寸 / 朝向 / 抖动 / 跳跃位移 =====
+    const pmSweat = document.createElement('img');
+    pmSweat.id = 'pixelMadelineSweat';
+    pmSweat.alt = '';
+    pmSweat.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(pmSweat);
+    const PM_SWEAT = {
+        danger: { prefix: 'sweat/danger', count: 6, delay: 100 },
+        still:  { prefix: 'sweat/still',  count: 6, delay: 120 },
+        climb:  { prefix: 'sweat/climb',  count: 8, delay: 80 }
+    };
+    const pmSweatFrames = {};
+    Object.keys(PM_SWEAT).forEach(k => {
+        const d = PM_SWEAT[k];
+        const a = [];
+        for (let i = 0; i < d.count; i++) a.push(PM_PLAYER + d.prefix + String(i).padStart(2, '0') + '.png');
+        pmSweatFrames[k] = a;
+        a.forEach(s => { const im = new Image(); im.src = s; });
+    });
+    let pmSweatCur = '', pmSweatTimer = null, pmSweatIdx = 0;
+    function pmSweatStop() {
+        if (pmSweatTimer) { clearInterval(pmSweatTimer); pmSweatTimer = null; }
+        pmSweatCur = '';
+        pmSweat.style.display = 'none';
+    }
+    function pmSweatPlay(name) {
+        if (pmSweatCur === name) return;
+        pmSweatStop();
+        const frames = pmSweatFrames[name];
+        if (!frames) return;
+        pmSweatCur = name;
+        pmSweatIdx = 0;
+        pmSweat.src = frames[0];
+        pmSweat.style.display = 'block';
+        pmSweatTimer = setInterval(() => {
+            pmSweatIdx = (pmSweatIdx + 1) % frames.length;
+            pmSweat.src = frames[pmSweatIdx];
+        }, PM_SWEAT[name].delay);
+    }
+    // 只有这三类动作出汗：发抖=紧张(danger)、低落站姿=静止(still)、正向行走/庆祝=爬升(climb)
+    function pmSweatForAction() {
+        if (PM_BADELINE_STANDIN || chatOpen) return '';
+        const m = pmState.mode;
+        if (m === 'shaking') return 'danger';
+        if (m === 'tired') return 'still';
+        if (m === 'walk' || m === 'celebrate') {
+            return isPositive(companionState.currentEmotion) ? 'climb' : '';
+        }
+        return '';
+    }
+    function pmUpdateSweat() {
+        const name = pmSweatForAction();
+        if (!name) { if (pmSweatCur) pmSweatStop(); return; }
+        pmSweatPlay(name);
+        // 与本体同一块 32×32 坐标空间、同一显示尺寸与同一个 transform，像素完全对齐；
+        // 汗滴帧本身只有几颗不透明像素，其余透明，不会盖住身体。
+        pmSweat.style.width = layoutCache.bw + 'px';
+        pmSweat.style.height = layoutCache.bh + 'px';
+        pmSweat.style.transform = pm.style.transform;
+    }
+
+    // ===== 鼠标头顶悬停：lookUp 触发区（防抖 + 冷却 + 硬上限） =====
+    // 水平：以身体中心为轴，左右各 (半宽 + 24px)；垂直：头顶上方 4–160px。
+    // 连续停留 500ms 才进入；移出立即回 idle；离开后 900ms 内不重复进入；单次最长 30s。
+    const PM_LOOK = { dwell: 500, cooldown: 900, side: 24, aboveMin: 4, aboveMax: 160, cap: 30000 };
+    const pmPointer = { x: -1e9, y: -1e9, valid: false };
+    let pmDwellSince = 0;
+    let pmLookCooldownUntil = 0;
+    function pmClearPointer() { pmPointer.valid = false; pmDwellSince = 0; }
+    window.addEventListener('pointermove', e => {
+        if (e.pointerType === 'touch') { pmClearPointer(); return; }
+        pmPointer.x = e.clientX; pmPointer.y = e.clientY; pmPointer.valid = true;
+    }, { passive: true });
+    window.addEventListener('blur', pmClearPointer);
+    document.addEventListener('mouseleave', pmClearPointer);
+    document.addEventListener('pointerout', e => { if (e.relatedTarget === null) pmClearPointer(); });
+
+    function pmIsAtlasAmbient() {
+        return pmCurName === PM_SRC.idleA || pmCurName === PM_SRC.idleC || pmCurName === PM_SRC.tired;
+    }
+    // 原始 32×32 帧的可视身体中心在 x≈14/32，头发顶在 y≈15/32；GIF 从画面顶部开始。
+    function pmLookZone() {
+        const bw = layoutCache.bw, bh = layoutCache.bh;
+        const atlas = pmIsAtlasAmbient() || pmCurName === PM_SRC.lookUp;
+        const cx = pmState.x + bw * (atlas ? 0.44 : 0.5);
+        const headTop = pmState.y + bh * (atlas ? 0.47 : 0);
+        const dx = Math.abs(pmPointer.x - cx);
+        const dy = pmPointer.y - headTop;   // 负值 = 在头顶之上
+        return {
+            cx: cx, headTop: headTop,
+            inZone: pmPointer.valid && dx <= bw / 2 + PM_LOOK.side &&
+                    dy <= -PM_LOOK.aboveMin && dy >= -PM_LOOK.aboveMax
+        };
+    }
+    function pmCancelLookUp(now) {
+        if (pmState.mode === 'lookUp') {
+            pmState.mode = 'idle';
+            pmState.modeUntil = now + 600 + Math.random() * 400;
+            pmSetSrc(PM_SRC.move);
+        }
+        pmDwellSince = 0;
+        pmLookCooldownUntil = now + PM_LOOK.cooldown;
+    }
+    // 点击/对话优先：把短动作或沉郁站姿立刻收回 idle（lookUp 由 pmCancelLookUp 单独处理）
+    function pmEndSpecial(now) {
+        if (pmState.mode === 'shaking' || pmState.mode === 'hug' || pmState.mode === 'tired') {
+            pmState.mode = 'idle';
+            pmState.modeUntil = now + 600 + Math.random() * 400;
+        }
+    }
+    let pmIdleAlt = false;
+    // 站定后才播 idleA / idleC，两者严格轮流；移动由 pmStartWalk 立即改回 move
+    function pmPlayIdleAct(now) {
+        if (PM_BADELINE_STANDIN || chatOpen) return;
+        if (pmState.mode !== 'idle' || pmState.poseUntil > 0) return;
+        if (pmLookZone().inZone) return;   // 鼠标已在头顶：让 lookUp 优先
+        pmIdleAlt = !pmIdleAlt;
+        pmSetSrc(pmIdleAlt ? PM_SRC.idleA : PM_SRC.idleC);
+    }
+    function pmPointerTick(now) {
+        if (PM_BADELINE_STANDIN) return;
+        const zone = pmLookZone();
+        if (pmState.mode === 'lookUp') {
+            if (chatOpen || !zone.inZone) pmCancelLookUp(now);
+            return;
+        }
+        if (chatOpen || !pmPointer.valid || !zone.inZone || pmState.poseUntil > 0) { pmDwellSince = 0; return; }
+        if (pmState.mode !== 'idle' && pmState.mode !== 'tired') { pmDwellSince = 0; return; }
+        if (pmState.y <= pmGroundY() - 60) { pmDwellSince = 0; return; }
+        if (!pmDwellSince) pmDwellSince = now;
+        if (now - pmDwellSince < PM_LOOK.dwell) return;
+        if (now < pmLookCooldownUntil) return;
+        if (!canInterrupt('lookUp', now)) return;   // 驻留不足时保留计时，下一帧再试
+        enterMode('lookUp', now);
+        pmDwellSince = 0;
+    }
     let pmFrameTimer = null;
     function pmForceSize() {
-        // 尺寸由 CSS 属性选择器 #pixelMadeline[src*="..."] 控制，此处仅触发布局缓存刷新
+        // 尺寸由 CSS（#pixelMadeline / .is-badeline）控制，此处仅触发布局缓存刷新
         refreshLayoutCache();
     }
     function pmSetSrc(name) {
@@ -2694,15 +3214,25 @@ function inferReplyEmotion(text) {
         const frames = PM_FRAMES[name];
         if (frames) {
             let i = 0;
+            const loop = !!PM_FRAME_LOOP[name];
+            const delay = PM_FRAME_DELAY[name] || 55;
             pm.src = frames[0];
+            pmHairSwitch(name, frames[0]);
             pmFrameTimer = setInterval(() => {
                 i++;
-                if (i >= frames.length) { clearInterval(pmFrameTimer); pmFrameTimer = null; return; }
+                if (i >= frames.length) {
+                    if (!loop) { clearInterval(pmFrameTimer); pmFrameTimer = null; return; }
+                    i = 0;
+                }
                 pm.src = frames[i];
+                pmHairSwitch(name, frames[i]);
                 pmForceSize();
-            }, 55);
+            }, delay);
         } else if (pm.src.indexOf(name) === -1) {
             pm.src = name;
+            pmHairSwitch(name, name);
+        } else {
+            pmHairSwitch(name, name);
         }
         pmCurName = name;
         pmForceSize();
@@ -2825,6 +3355,11 @@ function inferReplyEmotion(text) {
     const pmCurrentAction = pmCore.currentAction;
     // fall（摔一跤）：贴地短动作，播放 fallPose 帧序列（pmSetSrc 拦截帧播放），低频随机触发
     PM_MODES.fall = { src: 'fall', movable: false, canHop: false, priority: 15, ground: true, dur: () => 620 };
+    // 新动作：同一套 PM_MODES / enterMode 规则，退出全部由 modeUntil 或鼠标条件兜底
+    PM_MODES.lookUp = { src: 'lookUp', movable: false, canHop: false, priority: 25, ground: true, dur: () => PM_LOOK.cap };
+    PM_MODES.shaking = { src: 'shaking', movable: false, canHop: false, priority: 45, ground: true, dur: () => 420 };
+    PM_MODES.hug = { src: 'hug', movable: false, canHop: false, priority: 32, ground: true, dur: () => 1600 };
+    PM_MODES.tired = { src: 'tired', movable: false, canHop: false, priority: 18, ground: true, dur: () => 3600 + Math.random() * 2400 };
 
     function pmNextMode(now) {
         const e = companionState.currentEmotion;
@@ -2839,10 +3374,11 @@ function inferReplyEmotion(text) {
             ['look',   0.12],
             ['sit',    (gloomy ? 0.24 : 0.12) + (night ? 0.15 : 0)],
             ['fall',   (lively ? 0.08 : 0.05) * (night ? 0.5 : 1)],
+            ['tired',  gloomy ? 0.16 : 0],
         ];
-        // 过滤掉不满足前置条件的（如 sit/bounce/fall 需贴地）
+        // 过滤掉不满足前置条件的（如 sit/bounce/fall/tired 需贴地）
         const pool = weights.filter(([k]) =>
-            (k === 'sit' || k === 'bounce' || k === 'fall') ? nearGround : true);
+            (k === 'sit' || k === 'bounce' || k === 'fall' || k === 'tired') ? nearGround : true);
         // avoidKey 用具体动作名：fun/look 落地成 idle/lookaround，
         // 用 pmState.mode 永远排除不到真正的上一个动作
         enterMode(weightedPick(pool, pmCurrentAction()), now);
@@ -2854,11 +3390,21 @@ function inferReplyEmotion(text) {
         tryInterrupt('bounce', performance.now());
     }
 
+    // ===== 不安情绪的短促反应：发抖（单帧 + 位移抖动，420ms 后回 idle）=====
+    function pmShake(now) {
+        if (PM_BADELINE_STANDIN || chatOpen) return;
+        if (pmState.mode === 'sleep' || pmState.mode === 'celebrate' || pmState.mode === 'peek') return;
+        if (pmState.y <= pmGroundY() - 60) return;
+        pmCancelLookUp(now);
+        enterMode('shaking', now);   // 情绪反应直接进入，避免被 800ms 最小驻留挡回去
+    }
+
     // ===== 情绪→身体：说完一句话后，用动作回应当前语气 =====
     // 走 requestMode（冷却 + 驻留仲裁）：不再裸调 enterMode，避免高优先级模式
     // （peek/celebrate）被低优先级动作瞬间顶掉，也避免连续消息导致动作刷屏
     function pmReactToEmotion(em) {
-        if (PM_BADELINE_STANDIN || chatOpen || pmState.mode === 'sleep' || pmState.mode === 'celebrate') return;
+        if (PM_BADELINE_STANDIN) { baReactToEmotion(em); return; }
+        if (chatOpen || pmState.mode === 'sleep' || pmState.mode === 'celebrate') return;
         const now = performance.now();
         if (isPositive(em)) {
             if (Math.random() < 0.5) {
@@ -2868,6 +3414,8 @@ function inferReplyEmotion(text) {
             } else {
                 pmState.hopT = 0;
             }
+        } else if (em === '不安' && Math.random() < 0.5) {
+            pmShake(now);
         } else if (isGloomy(em) && Math.random() < 0.6) {
             requestMode('sit', now);
         }
@@ -2909,6 +3457,17 @@ function inferReplyEmotion(text) {
         }
 
         if (now >= pmState.modeUntil) {
+            // 新增动作一旦到期/兜底，都先明确回到站立的 idle，再走常规轮换
+            if (pmState.mode === 'lookUp') {
+                pmCancelLookUp(now);      // 鼠标事件失效时的硬退出（30s 上限）
+                return;
+            }
+            if (pmState.mode === 'shaking' || pmState.mode === 'hug' || pmState.mode === 'tired') {
+                pmState.mode = 'idle';
+                pmState.modeUntil = now + 500 + Math.random() * 400;
+                pmSetSrc(PM_SRC.move);
+                return;
+            }
             if (pmState.mode === 'sit') {
                 const e = companionState.currentEmotion;
                 const hour = new Date().getHours();
@@ -2945,9 +3504,12 @@ function inferReplyEmotion(text) {
         const dt = Math.min(0.05, (now - pmLast) / 1000);
         pmLast = now;
 
-        // Badeline 替班：保持站位不动，不跑 Madeline 行为树
+        // Badeline 替班：保持站位不动，不跑 Madeline 行为树；只跑她自己的动作树
         if (PM_BADELINE_STANDIN) {
+            if (pmSweatCur) pmSweatStop();
+            baTick(now);
             pm.style.transform = 'translate(' + Math.round(pmState.x) + 'px,' + Math.round(pmState.y) + 'px)';
+            pmHairUpdate(now);   // 头发叠层跟随本体最终 transform
             requestAnimationFrame(pmLoop);
             return;
         }
@@ -2957,6 +3519,20 @@ function inferReplyEmotion(text) {
             pmSetSrc(pmState.poseReturn || PM_SRC.move);
         }
         const posing = pmState.poseUntil > 0;
+
+        // 对话优先：聊天打开时立刻把头顶抬头/站姿小动作收回站立
+        if (chatOpen) {
+            if (pmState.mode === 'lookUp') {
+                pmCancelLookUp(now);
+            } else if (pmIsAtlasAmbient() || pmState.mode === 'shaking' || pmState.mode === 'hug' || pmState.mode === 'tired') {
+                pmEndSpecial(now);   // 短动作 / 沉郁站姿一律收回
+                pmState.mode = 'idle';
+                pmState.modeUntil = now + 600;
+                pmSetSrc(PM_SRC.move);
+            }
+        } else {
+            pmPointerTick(now);
+        }
 
         if (!chatOpen) {
             pmThink(now);
@@ -2981,7 +3557,8 @@ function inferReplyEmotion(text) {
                     pmState.y = ny;
                 } else if (pmState.mode === 'walk') {
                     pmState.mode = 'idle';
-                    pmState.modeUntil = now + 300 + Math.random() * 700;
+                    pmState.modeUntil = now + 900 + Math.random() * 600;
+                    pmPlayIdleAct(now);   // 站定后才播 idleA / idleC；移动时不会进入
                 }else if (pmState.mode === 'celebrate') {
                     pmState.mode = 'idle';
                     pmState.modeUntil = now + 2600;
@@ -3016,7 +3593,15 @@ function inferReplyEmotion(text) {
         pmState.wasHopping = hopping;
         if (hopOffset > 0) pmSetSrc(PM_SRC.move);
 
-        pm.style.transform = 'translate(' + pmState.x + 'px,' + (pmState.y - hopOffset) + 'px)' + (pmState.dir < 0 ? ' scaleX(-1)' : '');
+        // 单帧发抖靠位移做出来：幅度随剩余时间衰减，40ms 左右的往复
+        let shakeX = 0;
+        if (pmState.mode === 'shaking' && now < pmState.modeUntil) {
+            const left = pmState.modeUntil - now;
+            shakeX = Math.sin(now * 0.09) * Math.min(3, left / 140);
+        }
+        pm.style.transform = 'translate(' + (pmState.x + shakeX) + 'px,' + (pmState.y - hopOffset) + 'px)' + (pmState.dir < 0 ? ' scaleX(-1)' : '');
+        pmUpdateSweat();   // 叠层跟随本体的最终 transform
+        pmHairUpdate(now); // 头发叠层跟随本体的最终 transform
         requestAnimationFrame(pmLoop);
     }
 
@@ -3133,6 +3718,8 @@ function inferReplyEmotion(text) {
     }
     const scoldLines = ['呀！？对、对不起！我挡到你了，马上挪开！', '呜哇！抱歉抱歉，我这就走，接下来一阵子都不靠近这里！', '噫！是我不对…我绕远路走，真的！'];
     function pmScold() {
+        pmCancelLookUp(performance.now());   // 点击优先：先退出抬头
+        pmEndSpecial(performance.now());     // 点击优先：短动作 / 沉郁站姿立即收回
         addMadelineMessage(scoldLines[Math.floor(Math.random() * scoldLines.length)], '惊讶');
         pmCaution = true;
         zoneScoldUntil = performance.now() + 3 * 60 * 1000;
@@ -3153,20 +3740,39 @@ function inferReplyEmotion(text) {
             addMadelineMessage(dreamLines[Math.floor(Math.random() * dreamLines.length)], '默认');
             return;
         }
+        const now = performance.now();
+        pmCancelLookUp(now);   // 点击优先：先退出抬头
+        pmEndSpecial(now);     // 点击优先：短动作 / 沉郁站姿立即收回
         addMadelineMessage(petLines[Math.floor(Math.random() * petLines.length)], '可爱');
-        pmState.poseUntil = performance.now() + 1300;
+        // 低落时被摸：张手抱 1600ms，然后由 pmThink 明确回 idle
+        if (isGloomy(companionState.currentEmotion) && pmState.y > pmGroundY() - 60) {
+            pmState.poseUntil = 0;
+            enterMode('hug', now);
+            return;
+        }
+        pmState.poseUntil = now + 1300;
         pmState.poseReturn = PM_SRC.move;
         pmSetSrc(PM_SRC.fun);
     }
     let pmClickTimer = null;
+    // 替班时的单击台词：与书架页同一范式，只说一句、不进历史
+    const PM_BADELINE_PET_LINES = [
+        '……别乱戳，我又不会跑。',
+        '哼，写你的去。',
+        '找我有事？说。',
+        '我在这儿，跑不了。'
+    ];
+    // 单击 = 游戏对话框（260ms 防抖），双击 = 历史面板；与 shelf.js 的 Badeline 一致
     pm.addEventListener('click', () => {
         if (PM_BADELINE_STANDIN) {
-            // 替班期间单击她本人 → 打开她自己的面板（走她的流式接口与提示词）
             if (pmClickTimer) return;
+            baLaugh();   // 被戳一下：先播身体反应，播完自己回 lookUp，不影响单击/双击判定
             pmClickTimer = setTimeout(() => {
                 pmClickTimer = null;
+                baQuickTalk = true;   // 台词期间不再让面板情绪触发身体动作
                 const p = window.__diaryBadelinePanel;
-                if (p && !p.isOpen()) p.openChat();
+                if (p) p.quickTalk(PM_BADELINE_PET_LINES[Math.floor(Math.random() * PM_BADELINE_PET_LINES.length)]);
+                else baQuickTalk = false;
             }, 260);
             return;
         }
@@ -3177,11 +3783,10 @@ function inferReplyEmotion(text) {
             else pmPet();
         }, 260);
     });
-    // 双击像素 Madeline → 开关聊天历史记录框
+    // 双击像素 Madeline → 开关聊天历史记录框；替班时开她的历史面板
     pm.addEventListener('dblclick', () => {
         if (pmClickTimer) { clearTimeout(pmClickTimer); pmClickTimer = null; }
         if (PM_BADELINE_STANDIN) {
-            // 替班期间双击也归她：不要再打开 Madeline 的聊天历史
             const p = window.__diaryBadelinePanel;
             if (p && !p.isOpen()) p.openChat();
             return;
@@ -3242,7 +3847,7 @@ function inferReplyEmotion(text) {
         const res = await api('/diary/list?page=1&pageSize=50&type=day', 'GET');
         if (res.success && res.data && Array.isArray(res.data.list)) {
             shelfData = res.data.list;
-            if (!shelfData.length) { shelfList.innerHTML = '<div class="shelf-empty">书架还空着。<br>写下第一篇，它就有了位置。</div>'; return; }
+            if (!shelfData.length) { shelfList.innerHTML = ''; return; }
             shelfList.innerHTML = shelfData.map((d, i) =>
                 '<div class="shelf-card" data-i="' + i + '">' +
                 '<div class="sc-title">' + escHtml(d.title || '无题') + '</div>' +
@@ -3388,7 +3993,7 @@ function inferReplyEmotion(text) {
         } else {
             _greet = deepNightLines[Math.floor(Math.random() * deepNightLines.length)];
         }
-        addMadelineMessage(_greet, '可爱');
+        companionSay(_greet, '可爱');
 
         // 久别重逢（超过 7 天没来）
         const _lastVisit = parseInt(localStorage.getItem('pmLastVisit') || '0');
@@ -3400,7 +4005,7 @@ function inferReplyEmotion(text) {
                 '又见到你了。这段时间发生的事，想说给我听吗？',
                 '我把本子都擦干净了，就在等你回来呀。'
             ];
-            setTimeout(() => addMadelineMessage(reunionLines[Math.floor(Math.random() * reunionLines.length)], '可爱'), 2600);
+            setTimeout(() => companionSay(reunionLines[Math.floor(Math.random() * reunionLines.length)], '可爱'), 2600);
         }
 
         // 深夜催睡（23 点后，停留满 8 分钟，只催一次）
@@ -3410,7 +4015,7 @@ function inferReplyEmotion(text) {
                 if ((h2 >= 23 || h2 < 5) && !nightCareSaid) {
                     nightCareSaid = true;
                     const careLines = ['已经好晚了……写完这一段，我们就去睡好不好？', '我都有点困了。你早点写完，早点休息哦。', '别熬太久嘛，明天我还会在这里的。'];
-                    addMadelineMessage(careLines[Math.floor(Math.random() * careLines.length)], '可爱');
+                    companionSay(careLines[Math.floor(Math.random() * careLines.length)], '可爱');
                 }
             }, 8 * 60 * 1000);
         }
@@ -3647,10 +4252,15 @@ function inferReplyEmotion(text) {
                 '这一页，比昨天诚实。',
                 '写不下去就写我。反正我也住在这儿。'
             ],
-            // 日记页没有书架那套心光谱数据；关系状态由后端从日记推导
-            payload: function () { return '[]'; },
+            // 日记页没有书架那套心光谱数据；关系状态由后端从日记推导。
+            // 注意：后端 BadelineChatParam.hearts 是 List<HeartItem>（Jackson 强类型），
+            // 必须传空数组；传字符串 "[]" 会在反序列化阶段直接失败。
+            payload: function () { return []; },
             // 日记页没有立绘尺寸切换与退场演出，面板自己成立
             onOpen: function () {},
+            // 面板说话时的情绪 → 她自己的身体动作（生气/难过/开心）
+            onEmotion: function (emo, unionEmo) { baReactToEmotion(unionEmo || emo, emo); },
+            onTalkEnd: function () { baQuickTalk = false; },
             // 关面板即收工：掐断这一轮，并把打断/继续那条控制条还原
             abortOnClose: true,
             onClose: function () {
@@ -3675,6 +4285,11 @@ function inferReplyEmotion(text) {
                 if (!aborted) companionState.abortOwner = null;  // 被打断时留给「继续」认领
             }
         });
+        // 面板挂载前排队的主动冒泡（开场问候、道别等），此时按顺序补说
+        while (pmPendingSays.length) {
+            const m = pmPendingSays.shift();
+            window.__diaryBadelinePanel.say(m.text, m.emotion);
+        }
     }
     initStrawberryShop();
     })();
