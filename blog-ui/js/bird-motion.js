@@ -73,6 +73,7 @@
                             'baby_hop_04', 'baby_hop_05', 'baby_hop_06'],
         'bird_peck':       ['peck_a_01', 'peck_a_02', 'peck_a_03', 'peck_a_04',
                             'peck_b_01', 'peck_b_02', 'peck_b_03', 'peck_b_04'],
+        'bird_in':         ['in'],                    // event:/game/general/bird_in（第一章结尾鸟入场）
         'bird_squawk':     ['squawk', 'squawk_st'],
         'bird_startle':    ['startle_01', 'startle_02', 'startle_st'],
         'bird_wingflap':   ['wingflap_01', 'wingflap_02', 'wingflap_03',

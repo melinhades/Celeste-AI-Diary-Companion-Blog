@@ -6,6 +6,8 @@
        站立时跑的是 Sprites.xml 的 `<Anim id="idle" goto="idle,peck">`：
        每 1s 用 1:1 权重在「继续站着」和「啄一下地」之间选，啄到第 6 帧播 bird_peck。
        这就是"站着站着突然啄地"的真正来源，不是 if 出来的。
+       每次进梦 1.8s 后还播一次第一章结尾的过场：飞到 Madeline 头上停一会儿再飞回原位
+       （REA 见 headPoint / updateCut 上方注释）。
        金色羽毛鸟及其首次引导（#dsBirdTip / Store.DREAM_BIRD_TIP）已整体移除。
      · FlutterBird（scenery/flutterbird/，10×10）—— 5 只。原版 idleRoutine：
        每 0.25~1.25s 一跳（0.25s 抬 14px、落地压扁 ±1.4/0.6）；指针靠近 48 世界像素
@@ -274,11 +276,38 @@
     }
     function slotX(slot) { return (SLOT_LO + (SLOT_HI - SLOT_LO) * slot) * CW; }
 
+    /* ================= 第一章结尾：大蓝鸟飞到 Madeline 头上 =================
+       REA 依据 Celeste.CS01_Ending/<EndCityTrigger>d__5::MoveNext（token 0x0600214a）：
+         bird = new BirdNPC(player.Position + (88,-200), Modes 6)
+         to   = player.Position + (1,-12)
+         循环：Position = from + (to-from) * Ease.QuadOut(percent)，percent += DeltaTime*0.5
+               percent > 0.5 起播 "fly"（之前是 "fall"）
+         到位：Play("idle") → 0.5s → Play("croak") → 0.6s → 播 bird_squawk → 0.9s
+               → Play("sleep") → 2s（原版这里 EndCutscene）
+       音效：入场 bird_in，落地后 bird_squawk。原版 Madeline 处于 sleep 姿态、无额外反应。
+       这里把起点改成它自己的雪脊站位；睡够 2s 后原版切场结束，dream 是常驻场景，
+       所以再按同一条 QuadOut 曲线飞回原位。 */
+    // madeline-sleep.gif 32×32 的 29 帧里，头顶（不透明最高行）在 y=14..19 之间起伏，中心 x=14。
+    // 取 y=18：头顶抬起时脚埋进毛线帽（被头发盖住），落下时刚好踩实，不会出现悬空。
+    var HEAD_AT = { x: 14 / 32, y: 18 / 32 };
+    function headPoint() {
+        var mad = document.getElementById('dsMadeline');
+        if (!mad) return null;
+        var lr = left.getBoundingClientRect(), mr = mad.getBoundingClientRect();
+        if (mr.width < 1) return null;
+        return {
+            x: (mr.left - lr.left) + mr.width * HEAD_AT.x,
+            y: (mr.top - lr.top) + mr.height * HEAD_AT.y + 2   // 脚底压住头顶 2px
+        };
+    }
+
     /* ================= 大鸟（BirdNPC） ================= */
     function BigBird(slot, dy) {
         this.slot = slot;
         this.dy = dy || 0;                 // 相对雪线的像素偏移（负=站在雪脊更深处）
         this.x = 0; this.y = 0;
+        this.homeX = 0; this.homeY = 0;
+        this.cut = null;                   // 第一章结尾过场状态（见 updateCut）
         this.facing = -1;                 // Facing.LEFT（素材 Scale.X = -1 即朝左）
         this.sprite = new Sprite('bird', 'idle');
         this.sx = 1; this.sy = 1; this.rot = 0;
@@ -291,8 +320,73 @@
             }
         };
     }
-    BigBird.prototype.layout = function () { this.x = slotX(this.slot); this.y = snowY + this.dy; };
-    BigBird.prototype.update = function (dt) { this.sprite.update(dt); };
+    BigBird.prototype.layout = function () {
+        this.homeX = slotX(this.slot); this.homeY = snowY + this.dy;
+        if (!this.cut) { this.x = this.homeX; this.y = this.homeY; }
+    };
+    BigBird.prototype.update = function (dt) {
+        if (this.cut) { this.updateCut(dt); return; }
+        this.sprite.update(dt);
+    };
+    // 起飞：入场音是原版的 bird_in，画布临时抬到 Madeline 之上（原版鸟是落在头上而不是藏在脑后）
+    BigBird.prototype.startHeadVisit = function () {
+        if (this.cut) return;
+        var head = headPoint();
+        if (!head) return;
+        this.cut = { phase: 'fly', t: 0, from: { x: this.x, y: this.y }, to: head };
+        this.facing = head.x >= this.x ? 1 : -1;
+        this.sprite.set('fall', true);
+        cv.style.zIndex = '4';
+        sfx('bird_in');
+    };
+    BigBird.prototype.updateCut = function (dt) {
+        var c = this.cut;
+        c.t += dt;
+
+        if (c.phase === 'fly') {
+            var p = Math.min(1, c.t / 2.0);            // MoveNext: percent += DeltaTime * 0.5
+            var e = 1 - (1 - p) * (1 - p);             // Ease.QuadOut
+            this.x = c.from.x + (c.to.x - c.from.x) * e;
+            this.y = c.from.y + (c.to.y - c.from.y) * e;
+            if (p > 0.5 && this.sprite.anim !== 'fly') this.sprite.set('fly');
+            this.sprite.update(dt);
+            if (p >= 1) {
+                this.x = c.to.x; this.y = c.to.y;
+                this.sprite.set('idle', true);
+                c.phase = 'idle'; c.t = 0;
+            }
+            return;
+        }
+
+        this.sprite.update(dt);
+        if (c.phase === 'idle') {
+            if (c.t >= 0.5) { this.sprite.set('croak', true); c.phase = 'croak'; c.t = 0; }
+        } else if (c.phase === 'croak') {
+            if (c.t >= 0.6) { sfx('bird_squawk'); c.phase = 'squawk'; c.t = 0; }
+        } else if (c.phase === 'squawk') {
+            if (c.t >= 0.9) { this.sprite.set('sleep', true); c.phase = 'sleep'; c.t = 0; }
+        } else if (c.phase === 'sleep') {
+            if (c.t >= 2.0) {
+                c.phase = 'back'; c.t = 0;
+                c.from = { x: this.x, y: this.y };
+                c.to = { x: this.homeX, y: this.homeY };
+                this.facing = c.to.x >= this.x ? 1 : -1;
+                this.sprite.set('fly', true);
+            }
+        } else if (c.phase === 'back') {
+            var q = Math.min(1, c.t / 2.0);
+            var qe = 1 - (1 - q) * (1 - q);
+            this.x = c.from.x + (c.to.x - c.from.x) * qe;
+            this.y = c.from.y + (c.to.y - c.from.y) * qe;
+            if (q >= 1) {
+                this.cut = null;
+                this.layout();
+                this.sprite.set('idle', true);
+                this.facing = 1;
+                cv.style.zIndex = '';
+            }
+        }
+    };
 
     /* ================= 小鸟（FlutterBird） ================= */
     function FlutterBird(slot, dy) {
@@ -479,6 +573,7 @@
     }
 
     /* ================= 生命周期 ================= */
+    var visitTimer = 0;
     function start() {
         if (active) return;
         buildBirds();
@@ -490,7 +585,15 @@
         for (var i = 0; i < bigs.length; i++) {
             bigs[i].sprite.set('idle', true);
             bigs[i].rot = 0; bigs[i].sx = 1; bigs[i].sy = 1;
+            bigs[i].cut = null;
+            bigs[i].facing = 1;
         }
+        cv.style.zIndex = '';
+        // 入场 1.8s 后播一次第一章结尾的"鸟落到 Madeline 头上"过场（每次进梦一次）
+        clearTimeout(visitTimer);
+        visitTimer = setTimeout(function () {
+            if (active && bigs.length) bigs[0].startHeadVisit();
+        }, 1800);
         for (var j = 0; j < flutters.length; j++) {
             var fb = flutters[j];
             fb.gone = false; fb.fly = null; fb.hop = null;
@@ -504,8 +607,11 @@
     function stop() {
         if (!active) return;
         active = false;
+        clearTimeout(visitTimer);
         cancelAnimationFrame(raf);
         raf = 0;
+        for (var i = 0; i < bigs.length; i++) { bigs[i].cut = null; bigs[i].facing = 1; }
+        cv.style.zIndex = '';
         ctx.clearRect(0, 0, CW, CH);
         if (SFX) SFX.stopAll();
     }
@@ -534,6 +640,7 @@
                 birds: bigs.length + flutters.length,
                 astars: astars.length,     // 极光星点数（现在画在画布上，不再有 DOM）
                 flying: flutters.filter(function (f) { return !!f.fly || f.gone; }).length,
+                headVisit: bigs.length && bigs[0].cut ? bigs[0].cut.phase : null,
                 colors: flutters.map(function (f) { return f.tint; }),
                 flutterK: BANKS.flutterbird.k || 1
             };
