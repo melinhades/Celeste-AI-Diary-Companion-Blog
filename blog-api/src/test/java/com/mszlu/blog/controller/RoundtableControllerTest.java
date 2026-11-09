@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -68,10 +69,19 @@ class RoundtableControllerTest {
     }
 
     @Test
-    void live_returnsOnlyRunningSessions_withAllFields() throws Exception {
-        sessions.put("a", makeSession("a", "RUNNING", "Alice", "议题A"));
-        sessions.put("b", makeSession("b", "FINISHED", "Bob", "议题B"));
+    void live_returnsOwnAndPublicRunningSessions_withAllFields() throws Exception {
+        RoundtableSession own = makeSession("a", "RUNNING", "Tester", "议题A");
+        own.setUserId("100");
+        sessions.put("a", own);
+        RoundtableSession finished = makeSession("b", "FINISHED", "Bob", "议题B");
+        finished.setUserId("100");
+        sessions.put("b", finished);
+        // 他人隐私会议：不出现在当前用户列表里
         sessions.put("c", makeSession("c", "RUNNING", "Carol", "议题C"));
+        // 他人显式公开会议：允许出现在列表中
+        RoundtableSession shared = makeSession("d", "RUNNING", "Dave", "议题D");
+        shared.setPublicVisible(true);
+        sessions.put("d", shared);
 
         mockMvc.perform(get("/roundtable/live"))
                 .andExpect(status().isOk())
@@ -81,7 +91,46 @@ class RoundtableControllerTest {
                 .andExpect(jsonPath("$.data[0].userNickname").exists())
                 .andExpect(jsonPath("$.data[0].startedAt").exists())
                 .andExpect(jsonPath("$.data[0].speechCount").exists())
-                .andExpect(jsonPath("$.data[0].observerCount").exists());
+                .andExpect(jsonPath("$.data[0].observerCount").exists())
+                .andExpect(jsonPath("$.data[0].public").exists());
+    }
+
+    @Test
+    void observe_privateSessionOfOtherUser_returns403() throws Exception {
+        sessions.put("a", makeSession("a", "RUNNING", "Alice", "议题A"));
+        SysUser me = new SysUser();
+        me.setId("100");
+        when(tokenService.checkToken("tok")).thenReturn(me);
+
+        mockMvc.perform(get("/roundtable/observe/a").param("token", "tok"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(403));
+    }
+
+    @Test
+    void setPublic_nonOwner_returns403() throws Exception {
+        sessions.put("a", makeSession("a", "RUNNING", "Alice", "议题A"));
+
+        mockMvc.perform(post("/roundtable/a/public")
+                        .contentType("application/json")
+                        .content("{\"public\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(403));
+    }
+
+    @Test
+    void setPublic_owner_togglesVisibility() throws Exception {
+        RoundtableSession s = makeSession("a", "RUNNING", "Tester", "议题A");
+        s.setUserId("100");
+        sessions.put("a", s);
+
+        mockMvc.perform(post("/roundtable/a/public")
+                        .contentType("application/json")
+                        .content("{\"public\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.public").value(true));
+        assertTrue(s.isPublicVisible());
     }
 
     @Test

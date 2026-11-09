@@ -31,6 +31,13 @@ public class RoundtableSession {
     /** RUNNING / FINISHED / ABORTED */
     private volatile String status = "RUNNING";
 
+    /**
+     * 是否公开可见：默认隐私（false）。
+     * true 时才出现在他人 live 列表并允许他人 observe；由属主通过 POST /roundtable/{id}/public 切换。
+     * 会议状态纯内存，该开关重启即失效（回到默认隐私）。
+     */
+    private volatile boolean publicVisible = false;
+
     /** owner 的 SSE 连接是否还活着（断连则引擎停止） */
     private volatile boolean ownerConnected = true;
 

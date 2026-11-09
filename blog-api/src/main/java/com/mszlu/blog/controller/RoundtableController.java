@@ -88,6 +88,14 @@ public class RoundtableController {
             return attachOwnerEmitter(existing, response, true);
         }
 
+        // 硬上限：已满且无可淘汰的已结束会议时拒绝新建，不再无限塞进内存
+        if (!ensureCapacity()) {
+            response.setStatus(429);
+            response.setContentType("application/json;charset=utf-8");
+            response.getWriter().write("{\"success\":false,\"code\":429,\"msg\":\"当前进行中的圆桌已满，请稍后再试\"}");
+            return null;
+        }
+
         RoundtableSession session = new RoundtableSession();
         session.setId(UUID.randomUUID().toString().replace("-", ""));
         session.setUserId(String.valueOf(user.getId()));
@@ -97,7 +105,6 @@ public class RoundtableController {
         session.setRounds(0);
         session.setCreatedAt(System.currentTimeMillis());
         sessions.put(session.getId(), session);
-        evictIfNeeded();
 
         SseEmitter emitter = attachOwnerEmitter(session, response, false);
         engine.run(session);
@@ -175,14 +182,17 @@ public class RoundtableController {
         return emitter;
     }
 
-    /** 全站进行中的讨论列表（登录用户可见） */
+    /** 进行中的讨论列表：只含自己的会议 + 属主显式公开的会议（隐私会议不进他人列表） */
     @GetMapping("live")
     public Result live() {
         SysUser me = UserThreadLocal.get();
         if (me == null) return Result.fail(401, "未登录");
+        String myId = String.valueOf(me.getId());
         List<Map<String, Object>> list = new java.util.ArrayList<>();
         for (RoundtableSession s : sessions.values()) {
             if (!"RUNNING".equals(s.getStatus())) continue;
+            boolean mine = myId.equals(s.getUserId());
+            if (!mine && !s.isPublicVisible()) continue;
             Map<String, Object> m = new java.util.LinkedHashMap<>();
             m.put("id", s.getId());
             m.put("topic", s.getTopic());
@@ -190,6 +200,8 @@ public class RoundtableController {
             m.put("startedAt", s.getCreatedAt());
             m.put("speechCount", s.getSpeechCount());
             m.put("observerCount", s.getBus().observerCount());
+            m.put("mine", mine);
+            m.put("public", s.isPublicVisible());
             list.add(m);
         }
         return Result.success(list);
@@ -214,6 +226,14 @@ public class RoundtableController {
             response.getWriter().write("{\"success\":false,\"code\":404,\"msg\":\"会议不存在或已结束\"}");
             return null;
         }
+        boolean owner = String.valueOf(me.getId()).equals(session.getUserId());
+        // 隐私会议默认拒绝他人旁听：旁听会回放基于属主私人日记/记忆生成的发言
+        if (!owner && !session.isPublicVisible()) {
+            response.setStatus(403);
+            response.setContentType("application/json;charset=utf-8");
+            response.getWriter().write("{\"success\":false,\"code\":403,\"msg\":\"该会议为隐私会议，不允许旁听\"}");
+            return null;
+        }
 
         response.setHeader("X-Accel-Buffering", "no");
         response.setHeader("Cache-Control", "no-cache, no-transform");
@@ -229,7 +249,7 @@ public class RoundtableController {
             meta.put("topic", snap.getTopic());
             meta.put("rounds", 0);
             meta.put("observer", true);
-            meta.put("isOwner", String.valueOf(me.getId()).equals(session.getUserId()));
+            meta.put("isOwner", owner);
             meta.put("speakers", RosterBuilder.build(session));
             emitter.send(SseEmitter.event().name("meta").data(meta));
             if (snap.getLastPulse() != null) {
@@ -320,12 +340,37 @@ public class RoundtableController {
         return Result.success(null);
     }
 
-    /** 简单有界清理：超过上限时删除最早的非进行中会议 */
-    private void evictIfNeeded() {
-        if (sessions.size() <= MAX_SESSIONS) return;
+    /** 属主切换公开可见性：默认隐私；公开后才会出现在他人 live 列表并允许他人 observe */
+    @PostMapping("{id}/public")
+    public Result setPublic(@PathVariable("id") String id,
+                            @RequestBody(required = false) Map<String, Object> body) {
+        SysUser me = UserThreadLocal.get();
+        if (me == null) return Result.fail(401, "未登录");
+        RoundtableSession session = sessions.get(id);
+        if (session == null || !"RUNNING".equals(session.getStatus())) {
+            return Result.fail(404, "会议不存在或已结束");
+        }
+        if (!session.getUserId().equals(String.valueOf(me.getId()))) {
+            return Result.fail(403, "只能修改自己的会议");
+        }
+        Object value = body == null ? null : body.get("public");
+        if (!(value instanceof Boolean)) {
+            return Result.fail(400, "缺少 public 布尔值");
+        }
+        session.setPublicVisible((Boolean) value);
+        return Result.success(Map.of("public", session.isPublicVisible()));
+    }
+
+    /**
+     * 容量控制：未满直接放行；已满先淘汰最早一场已结束会议，仍满则拒绝新建。
+     * 全部会议都在进行中时不再无限堆积，由调用方返回 429。
+     */
+    private boolean ensureCapacity() {
+        if (sessions.size() < MAX_SESSIONS) return true;
         sessions.entrySet().stream()
                 .filter(e -> !"RUNNING".equals(e.getValue().getStatus()))
                 .min(Map.Entry.comparingByValue((a, b) -> Long.compare(a.getCreatedAt(), b.getCreatedAt())))
                 .ifPresent(e -> sessions.remove(e.getKey()));
+        return sessions.size() < MAX_SESSIONS;
     }
 }
