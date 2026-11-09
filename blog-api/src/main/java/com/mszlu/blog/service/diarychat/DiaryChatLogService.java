@@ -44,10 +44,14 @@ public class DiaryChatLogService {
         );
     }
 
-    /** 按 sessionId 找到本用户最后一条日志写反馈（不依赖 logId，前端只带 sessionId 更稳） */
-    public void recordFeedbackBySession(String sessionId, String feedback) {
+    /**
+     * 按 sessionId 找到本用户最后一条日志写反馈（不依赖 logId，前端只带 sessionId 更稳）。
+     * 必须带 userId 过滤：sessionId 可被猜到/复用，不能借此改到他人的日志。
+     */
+    public void recordFeedbackBySession(String userId, String sessionId, String feedback) {
         DiaryChatLog last = logMapper.selectOne(
                 new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<DiaryChatLog>()
+                        .eq("user_id", userId)
                         .eq("session_id", sessionId)
                         .orderByDesc("id")
                         .last("LIMIT 1")

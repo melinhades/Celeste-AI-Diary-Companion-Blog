@@ -71,6 +71,15 @@ public class CommentsServiceImpl implements CommentsService {
         // 匿名评论不下发 author.id，前端回复他人时 toUserId 会是空串，一并归一成 "0"
         if (toUserId == null || toUserId.isBlank()) {
             toUserId = "0";
+        } else if (comment.getLevel() == 2) {
+            // toUserId 来自请求体，不能直接当作通知接收人：只允许指向同一文章下真实参与过评论的用户，
+            // 否则任意用户都能借评论接口给他人刷通知。找不到参与者时回落到 "0"（通知文章作者）。
+            Long participants = commentsMapper.selectCount(new LambdaQueryWrapper<Comment>()
+                    .eq(Comment::getArticleId, commentParam.getArticleId())
+                    .eq(Comment::getAuthorId, toUserId));
+            if (participants == null || participants <= 0) {
+                toUserId = "0";
+            }
         }
         comment.setToUid(toUserId);
         this.commentsMapper.insert(comment);

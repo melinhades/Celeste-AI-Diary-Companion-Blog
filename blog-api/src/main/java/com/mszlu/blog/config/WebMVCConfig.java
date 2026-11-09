@@ -58,12 +58,17 @@ public class WebMVCConfig implements WebMvcConfigurer {
                 .addPathPatterns("/roundtable/live")
                 .addPathPatterns("/roundtable/*/interject")
                 .addPathPatterns("/roundtable/*/stop")
+                .addPathPatterns("/roundtable/*/public")
                 .addPathPatterns("/roundtable/suggestions")
                 // Madeline agent：fetch POST 带 Header，走登录拦截器
                 .addPathPatterns("/agent/**")
+                // PPT 计费入口：文本/配图都会调用系统 AI Key，必须登录。
+                // GET /ppt/image/{id} 只回读已落库图片、不产生 AI 费用，且 <img src> 带不了 Header，保持公开。
+                .addPathPatterns("/ppt/generate")
+                .addPathPatterns("/ppt/image")
                 // 主动消息 SSE：EventSource 带不了 Header，stream 由 ProactiveController 用 query token 手验
-                .excludePathPatterns("/proactive/stream")
-                .excludePathPatterns("/chat/test-ai");
+                .excludePathPatterns("/proactive/stream");
+        // /chat/test-ai 已从排除列表移除：落到 /chat/** 的登录拦截器内，未登录不能再消耗系统 Key
     }
 
     @Override

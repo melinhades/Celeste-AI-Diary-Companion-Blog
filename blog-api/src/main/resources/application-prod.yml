@@ -126,16 +126,19 @@ emotion:
     disable-fusion: false      # 关闭自适应融合（退回 0.7/0.3 固定权重）
     disable-text: false        # 关闭 Plutchik AI 分析（退回关键词兜底）
 
-# Actuator & Prometheus 监控
+# Actuator & Prometheus 监控（生产最小暴露面）
+# - health：保留探活，但只返回 status（show-details=never），且不允许匿名访问其他端点
+# - prometheus：保留线上排查用的观测途径，由 ActuatorAuthFilter 要求 ACTUATOR_TOKEN
+# - info / metrics：不再对外暴露
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,prometheus,metrics
+        include: health,prometheus
       base-path: /actuator
   endpoint:
     health:
-      show-details: always
+      show-details: never
       probes:
         enabled: true
   prometheus:
@@ -147,6 +150,13 @@ management:
       enabled: true
     redis:
       enabled: true
+
+# Actuator 访问令牌（仅 prod 生效）：health 之外（尤其 prometheus）需带
+#   X-Actuator-Token: $ACTUATOR_TOKEN  或  Authorization: Bearer $ACTUATOR_TOKEN
+# 未配置时除 health 外一律拒绝；线上需显式注入该环境变量以保留观测能力。
+security:
+  actuator:
+    token: ${ACTUATOR_TOKEN:}
 
 # 日志配置
 logging:

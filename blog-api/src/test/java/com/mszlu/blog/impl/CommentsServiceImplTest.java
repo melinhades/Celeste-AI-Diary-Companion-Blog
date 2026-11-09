@@ -151,6 +151,45 @@ class CommentsServiceImplTest {
         assertEquals("9001", notif.getValue().getUserId());
     }
 
+    @Test
+    void comment_forgedToUserId_fallsBackToArticleAuthor() {
+        loginAs("1001");
+        when(articleMapper.selectById("2001")).thenReturn(articleOwnedBy("9001"));
+        when(commentsMapper.selectCount(any())).thenReturn(0L);
+
+        CommentParam p = param("刷通知", false);
+        p.setParent("500");
+        p.setToUserId("6666");   // 伪造：该用户没有参与本文评论
+        commentsService.comment(p);
+
+        ArgumentCaptor<Comment> saved = ArgumentCaptor.forClass(Comment.class);
+        verify(commentsMapper).insert(saved.capture());
+        assertEquals("0", saved.getValue().getToUid());
+
+        ArgumentCaptor<Notification> notif = ArgumentCaptor.forClass(Notification.class);
+        verify(notificationMapper).insert(notif.capture());
+        assertEquals("9001", notif.getValue().getUserId());
+    }
+
+    @Test
+    void comment_replyToRealParticipant_notifiesThatUser() {
+        loginAs("1001");
+        when(commentsMapper.selectCount(any())).thenReturn(1L);
+
+        CommentParam p = param("回复", false);
+        p.setParent("500");
+        p.setToUserId("7777");   // 本文真实评论参与者
+        commentsService.comment(p);
+
+        ArgumentCaptor<Comment> saved = ArgumentCaptor.forClass(Comment.class);
+        verify(commentsMapper).insert(saved.capture());
+        assertEquals("7777", saved.getValue().getToUid());
+
+        ArgumentCaptor<Notification> notif = ArgumentCaptor.forClass(Notification.class);
+        verify(notificationMapper).insert(notif.capture());
+        assertEquals("7777", notif.getValue().getUserId());
+    }
+
     // ===== 读库下发 =====
 
     @SuppressWarnings("unchecked")

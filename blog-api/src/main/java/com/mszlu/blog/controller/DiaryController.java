@@ -1,7 +1,9 @@
 package com.mszlu.blog.controller;
 
+import com.mszlu.blog.dao.pojo.SysUser;
 import com.mszlu.blog.service.DiaryService;
 import com.mszlu.blog.service.diarychat.DiaryChatLogService;
+import com.mszlu.blog.utils.UserThreadLocal;
 import com.mszlu.blog.vo.Result;
 import com.mszlu.blog.vo.params.BadelineChatParam;
 import com.mszlu.blog.vo.params.CompanionParam;
@@ -123,7 +125,9 @@ public class DiaryController {
         if (sessionId == null || feedback == null) {
             return Result.fail(400, "缺少 sessionId 或 feedback");
         }
-        chatLogService.recordFeedbackBySession(sessionId, feedback);
+        SysUser me = UserThreadLocal.get();
+        if (me == null) return Result.fail(401, "未登录");
+        chatLogService.recordFeedbackBySession(me.getId(), sessionId, feedback);
         return Result.success(null);
     }
 

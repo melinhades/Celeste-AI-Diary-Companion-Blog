@@ -3,6 +3,7 @@ package com.mszlu.blog.controller;
 import com.mszlu.blog.dao.pojo.SysUser;
 import com.mszlu.blog.service.ProactiveService;
 import com.mszlu.blog.service.TokenService;
+import com.mszlu.blog.utils.UserThreadLocal;
 import com.mszlu.blog.vo.Result;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,9 +31,16 @@ public class ProactiveController {
         return proactiveService.latestUnread();
     }
 
-    /** 调试专用：手动触发一次每日决策（正式环境建议删掉或加管理员校验） */
+    /**
+     * 调试/运维专用：手动触发一次每日决策（会遍历全体用户并调用系统 AI Key）。
+     * 仅管理员可用：SysUser.admin 已在登录态里，拦截器把当前用户放进 UserThreadLocal，
+     * 这里直接做管理员校验，避免任何普通用户触发全量主动消息、消耗系统 Key。
+     */
     @PostMapping("trigger")
     public Result trigger() {
+        SysUser me = UserThreadLocal.get();
+        if (me == null) return Result.fail(401, "未登录");
+        if (me.getAdmin() == null || me.getAdmin() != 1) return Result.fail(403, "需要管理员权限");
         proactiveService.dailyReachOut();
         return Result.success("已触发，看日志和 proactive_log 表");
     }
