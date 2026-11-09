@@ -1,0 +1,8 @@
+# 音效静态资源：内容不变，长缓存 + immutable
+# 文件改名才需要更新引用；HTML/JS/CSS 不加长缓存，沿用 Pages 默认的 max-age=0
+/celeste-sounds/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# 优化版音效（独立目录，manifest 缺失时不会被引用；删掉此目录即回到原文件）
+/celeste-sounds-opt/*
+  Cache-Control: public, max-age=31536000, immutable
