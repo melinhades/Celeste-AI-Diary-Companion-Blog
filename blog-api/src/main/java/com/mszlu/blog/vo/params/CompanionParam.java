@@ -23,8 +23,8 @@ public class CompanionParam {
     /** 触发类型：save（保存）/ modify（修改 debounce 2s）/ pause（停顿 >3s）/ interrupt（中断当前生成） */
     private String triggerType;
 
-    /** 打字轨迹信号 JSON 字符串：如 {"delete":5,"pause":3.2,"undo":2,"modifyFreq":6} */
-    private String typingSignal;
+    /** 打字轨迹信号：结构见 TypingSignal */
+    private TypingSignal typingSignal;
 
     /** 中断信号：为 true 时后端停止当前会话的流式生成（与 triggerType="interrupt" 配合） */
     private Boolean interrupt;

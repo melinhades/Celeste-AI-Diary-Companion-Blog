@@ -2,6 +2,8 @@ package com.mszlu.blog.vo.params;
 
 import lombok.Data;
 
+import java.util.List;
+
 /**
  * Badeline 影子聊天请求体
  */
@@ -10,9 +12,9 @@ public class BadelineChatParam {
 
     private String message;
 
-    /** JSON 数组字符串 [{role:'user'|'assistant', content:'...'}] */
-    private String history;
+    /** 对话历史 [{role:'user'|'assistant', content:'...'}] */
+    private List<ChatTurn> history;
 
-    /** JSON 数组字符串 [{color,title,desc,seq}] */
-    private String hearts;
+    /** 心之水晶 [{color,title,desc,seq}] */
+    private List<HeartItem> hearts;
 }

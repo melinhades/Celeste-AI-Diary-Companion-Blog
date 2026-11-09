@@ -2611,7 +2611,7 @@
         if (btn) btn.disabled = true;
         api('/diary/oshiro-chat', 'POST', {
             message: msg,
-            history: JSON.stringify(chatHistory.slice(-6))
+            history: chatHistory.slice(-6).map(function (x) { return JSON.stringify(x); })
         }).then(function(res) {
             if (btn) btn.disabled = false;
             if (!res || !res.success) {

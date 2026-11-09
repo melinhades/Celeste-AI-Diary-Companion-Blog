@@ -23,8 +23,11 @@ import com.mszlu.blog.dao.pojo.DiaryChatSession;
 import com.mszlu.blog.utils.EmotionKeys;
 import com.mszlu.blog.utils.UserThreadLocal;
 import com.mszlu.blog.vo.Result;
+import com.mszlu.blog.vo.params.ChatTurn;
 import com.mszlu.blog.vo.params.CompanionParam;
 import com.mszlu.blog.vo.params.DiaryParam;
+import com.mszlu.blog.vo.params.HeartItem;
+import com.mszlu.blog.vo.params.TypingSignal;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -717,7 +720,7 @@ public class DiaryServiceImpl implements DiaryService {
         final String reactSnippet = (param.getDelta() != null && !param.getDelta().isBlank())
                 ? param.getDelta().trim() : draftSnippet;
         final String finalSummary = buf.summary;
-        final String finalTypingSignal = param.getTypingSignal();
+        final TypingSignal finalTypingSignal = param.getTypingSignal();
         final String emoKey = cacheKey("emo", userId, reactSnippet);
         final String intentKey = cacheKey("int", userId, reactSnippet);
         final String ragKey = cacheKey("rag", userId, reactSnippet);
@@ -781,8 +784,9 @@ public class DiaryServiceImpl implements DiaryService {
         double readiness = emotion.getSpeakReadiness();
         double pauseWeight = 0.0;
         try {
-            if (param.getTypingSignal() != null && !param.getTypingSignal().isBlank()) {
-                double pauseSec = JSON.parseObject(param.getTypingSignal()).getDoubleValue("pause");
+            TypingSignal signal = param.getTypingSignal();
+            if (signal != null) {
+                double pauseSec = signal.getPause();
                 pauseWeight = Math.min(0.35, Math.max(0, pauseSec) / 12.0 * 0.35);
             }
         } catch (Exception ignore) { /* 轨迹缺失不影响开口判断 */ }
@@ -1020,7 +1024,7 @@ public class DiaryServiceImpl implements DiaryService {
         logEntity.setTriggerDetail(String.format("字数=%d,情绪得分=%.2f,意图=%s,开口意愿=%.2f,停顿权重=%.2f,轨迹权重=%.2f,必说=%s",
                 draftSnippet.length(), emotion.getScore(), intent, readiness, pauseWeight, trajWeight, mustSpeak));
         logEntity.setUserDraft(draftSnippet.length() > 2000 ? draftSnippet.substring(0, 2000) + "…" : draftSnippet);
-        logEntity.setTypingSignal(param.getTypingSignal());
+        logEntity.setTypingSignal(param.getTypingSignal() == null ? null : JSON.toJSONString(param.getTypingSignal()));
         logEntity.setSystemPrompt(systemPrompt.length() > 4000 ? systemPrompt.toString().substring(0, 4000) + "…" : systemPrompt.toString());
         logEntity.setModelRaw(full.length() > 2000 ? full.toString().substring(0, 2000) + "…" : full.toString());
         logEntity.setFilteredResponse(finalText);
@@ -1351,15 +1355,10 @@ public class DiaryServiceImpl implements DiaryService {
     }
 
     @Override
-    public Result oshiroChat(String message, String historyJson) {
+    public Result oshiroChat(String message, List<String> history) {
         try {
-            List<String> history;
-            if (historyJson == null || historyJson.isBlank()) {
-                history = new ArrayList<>();
-            } else {
-                history = JSON.parseArray(historyJson, String.class);
-            }
-            String prompt = PromptBuilder.oshiroChat(history);
+            List<String> historyLines = history == null ? new ArrayList<>() : history;
+            String prompt = PromptBuilder.oshiroChat(historyLines);
             String reply = aiClient.chat(new ArrayList<>(java.util.Arrays.asList(
                     new AiMessage("user", prompt))));
             if (reply == null || reply.isBlank()) {
@@ -1401,7 +1400,7 @@ public class DiaryServiceImpl implements DiaryService {
      * 近十篇日记、关系状态、历史解析、提示词、RAG、消息组装全部现算，不做任何缓存/模板复用。
      */
     private BadelinePrompt prepareBadelinePrompt(SysUser user, String message,
-                                                 String historyJson, String heartsJson) {
+                                                 List<ChatTurn> historyTurns, List<HeartItem> hearts) {
         String userId = user.getId();
         String userName = user.getNickname() != null && !user.getNickname().isBlank()
                 ? user.getNickname() : user.getAccount();
@@ -1435,21 +1434,15 @@ public class DiaryServiceImpl implements DiaryService {
         List<AiMessage> history = new ArrayList<>();
         String lastAssistant = null;
         String sessionAnchor = null;
-        if (historyJson != null && !historyJson.isBlank()) {
-            try {
-                List<JSONObject> arr = JSON.parseArray(historyJson, JSONObject.class);
-                if (arr != null) {
-                    for (JSONObject o : arr) {
-                        if (o == null) continue;
-                        String c = o.getString("content");
-                        if (c == null || c.trim().isEmpty()) continue;
-                        String r = "assistant".equals(o.getString("role")) ? "assistant" : "user";
-                        history.add(new AiMessage(r, c));
-                        if ("assistant".equals(r)) lastAssistant = c;
-                        if ("user".equals(r) && sessionAnchor == null) sessionAnchor = c.trim();
-                    }
-                }
-            } catch (Exception ignored) {
+        if (historyTurns != null) {
+            for (ChatTurn turn : historyTurns) {
+                if (turn == null) continue;
+                String c = turn.getContent();
+                if (c == null || c.trim().isEmpty()) continue;
+                String r = "assistant".equals(turn.getRole()) ? "assistant" : "user";
+                history.add(new AiMessage(r, c));
+                if ("assistant".equals(r)) lastAssistant = c;
+                if ("user".equals(r) && sessionAnchor == null) sessionAnchor = c.trim();
             }
         }
         if (history.size() > 10) {
@@ -1463,7 +1456,7 @@ public class DiaryServiceImpl implements DiaryService {
 
         String[] state = badelineState(recent, dayCount, gapDays, prevGap);
         String background = PromptBuilder.badelineBackground(userName, dayCount, state[0], gapDays,
-                state[1], state[2], state[3], badelineHeartsLine(heartsJson), lastAssistant);
+                state[1], state[2], state[3], badelineHeartsLine(hearts), lastAssistant);
 
         // ===== 组装消息：system(人设+背景) + RAG + 最近历史 + 本条 =====
         List<AiMessage> messages = new ArrayList<>();
@@ -1483,7 +1476,7 @@ public class DiaryServiceImpl implements DiaryService {
     }
 
     @Override
-    public Result badelineChat(String message, String historyJson, String heartsJson) {
+    public Result badelineChat(String message, List<ChatTurn> history, List<HeartItem> hearts) {
         SysUser user = UserThreadLocal.get();
         if (user == null) {
             return Result.fail(403, "未登录");
@@ -1491,7 +1484,7 @@ public class DiaryServiceImpl implements DiaryService {
         if (message == null || message.trim().isEmpty()) {
             return Result.fail(400, "消息不能为空");
         }
-        BadelinePrompt ctx = prepareBadelinePrompt(user, message, historyJson, heartsJson);
+        BadelinePrompt ctx = prepareBadelinePrompt(user, message, history, hearts);
 
         String reply = aiClient.chat(ctx.messages);
         String rawReply = reply;
@@ -1548,7 +1541,7 @@ public class DiaryServiceImpl implements DiaryService {
      * 准备逻辑与阻塞版共用 prepareBadelinePrompt，每次请求现算。
      */
     @Override
-    public void badelineChatStream(String message, String historyJson, String heartsJson,
+    public void badelineChatStream(String message, List<ChatTurn> history, List<HeartItem> hearts,
                                    jakarta.servlet.http.HttpServletResponse response) {
         response.setContentType("text/event-stream;charset=UTF-8");
         response.setHeader("Cache-Control", "no-cache");
@@ -1566,7 +1559,7 @@ public class DiaryServiceImpl implements DiaryService {
 
         BadelinePrompt ctx;
         try {
-            ctx = prepareBadelinePrompt(user, message, historyJson, heartsJson);
+            ctx = prepareBadelinePrompt(user, message, history, hearts);
         } catch (Exception e) {
             log.warn("badeline 流式准备失败 userId={}", user.getId(), e);
             sseError(response, "准备对话失败");
@@ -1770,7 +1763,7 @@ public class DiaryServiceImpl implements DiaryService {
      * message 为空且无历史 → 她先开口评论这个梦；情绪标记复用 [emotion:xxx] 约定驱动立绘。
      */
     @Override
-    public Result dreamNightTalk(String dreamId, String message, String historyJson) {
+    public Result dreamNightTalk(String dreamId, String message, List<ChatTurn> history) {
         SysUser user = UserThreadLocal.get();
         if (user == null) return Result.fail(403, "未登录");
         String userId = user.getId();
@@ -1797,30 +1790,26 @@ public class DiaryServiceImpl implements DiaryService {
         String dreamText = dream.getContent();
         if (dreamText.length() > 1800) dreamText = dreamText.substring(0, 1800);
 
-        List<AiMessage> history = new ArrayList<>();
-        if (historyJson != null && !historyJson.isBlank()) {
-            try {
-                List<JSONObject> arr = JSON.parseArray(historyJson, JSONObject.class);
-                if (arr != null) {
-                    for (JSONObject o : arr) {
-                        if (o == null) continue;
-                        String c = o.getString("content");
-                        if (c == null || c.trim().isEmpty()) continue;
-                        history.add(new AiMessage("assistant".equals(o.getString("role")) ? "assistant" : "user", c));
-                    }
-                }
-            } catch (Exception ignored) {
+        List<AiMessage> historyMessages = new ArrayList<>();
+        if (history != null) {
+            for (ChatTurn turn : history) {
+                if (turn == null) continue;
+                String c = turn.getContent();
+                if (c == null || c.trim().isEmpty()) continue;
+                historyMessages.add(new AiMessage("assistant".equals(turn.getRole()) ? "assistant" : "user", c));
             }
         }
-        if (history.size() > 10) history = new ArrayList<>(history.subList(history.size() - 10, history.size()));
+        if (historyMessages.size() > 10) {
+            historyMessages = new ArrayList<>(historyMessages.subList(historyMessages.size() - 10, historyMessages.size()));
+        }
 
         List<AiMessage> messages = new ArrayList<>();
         messages.add(new AiMessage("system",
                 PromptBuilder.badelineSystem(PromptBuilder.badelineDreamBackground(userName, dreamText))));
-        messages.addAll(history);
+        messages.addAll(historyMessages);
         String say = message == null ? "" : message.trim();
         if (say.isEmpty()) {
-            if (!history.isEmpty()) return Result.fail(400, "消息不能为空");
+            if (!historyMessages.isEmpty()) return Result.fail(400, "消息不能为空");
             // 开场：由 Badeline 先评论这个梦（提示词背景块里已交代开场规则）
             messages.add(new AiMessage("user", "（她刚把梦写完，抬头看见了你。）"));
         } else {
@@ -1851,7 +1840,7 @@ public class DiaryServiceImpl implements DiaryService {
             String filterReason = emptyFallback ? "empty_fallback"
                     : (blankReplyFallback ? "blank_fallback"
                     : (!emotion.isEmpty() ? "emotion_marker_stripped" : "ok"));
-            writeRawModelLog(userId, "night:" + dream.getId(), Math.max(1, history.size() / 2 + 1),
+            writeRawModelLog(userId, "night:" + dream.getId(), Math.max(1, historyMessages.size() / 2 + 1),
                     "dream_night",
                     "source=night_talk;promptHash="
                             + Integer.toHexString(messages.get(0).getContent().hashCode()),
@@ -1929,35 +1918,29 @@ public class DiaryServiceImpl implements DiaryService {
         return out;
     }
 
-    /** 四心光谱：前端心之水晶数组 → 「红x 蓝x 黄x；名字…」，解析失败返回 null */
-    private String badelineHeartsLine(String heartsJson) {
-        try {
-            if (heartsJson == null || heartsJson.isBlank()) return null;
-            List<JSONObject> arr = JSON.parseArray(heartsJson, JSONObject.class);
-            if (arr == null || arr.isEmpty()) return null;
-            int red = 0, blue = 0, yellow = 0;
-            List<String> allNames = new ArrayList<>();
-            for (JSONObject o : arr) {
-                if (o == null) continue;
-                String c = o.getString("color");
-                if ("red".equals(c)) red++;
-                else if ("yellow".equals(c)) yellow++;
-                else blue++;
-                String t = o.getString("title");
-                if (t != null && !t.isBlank()) allNames.add("「" + t.trim() + "」");
-            }
-            // 心可无限炼制：比例全量统计，名字只取最近 4 颗，避免背景块无限增长
-            List<String> names = allNames.size() > 4
-                    ? allNames.subList(allNames.size() - 4, allNames.size()) : allNames;
-            StringBuilder sb = new StringBuilder();
-            sb.append("红").append(red).append(" 蓝").append(blue).append(" 黄").append(yellow);
-            if (!names.isEmpty()) {
-                sb.append("；它们的名字").append(String.join("、", names)).append("——这些名字是你的自我意象的一部分");
-            }
-            return sb.toString();
-        } catch (Exception e) {
-            return null;
+    /** 四心光谱：前端心之水晶数组 → 「红x 蓝x 黄x；名字…」，无数据返回 null */
+    private String badelineHeartsLine(List<HeartItem> hearts) {
+        if (hearts == null || hearts.isEmpty()) return null;
+        int red = 0, blue = 0, yellow = 0;
+        List<String> allNames = new ArrayList<>();
+        for (HeartItem o : hearts) {
+            if (o == null) continue;
+            String c = o.getColor();
+            if ("red".equals(c)) red++;
+            else if ("yellow".equals(c)) yellow++;
+            else blue++;
+            String t = o.getTitle();
+            if (t != null && !t.isBlank()) allNames.add("「" + t.trim() + "」");
         }
+        // 心可无限炼制：比例全量统计，名字只取最近 4 颗，避免背景块无限增长
+        List<String> names = allNames.size() > 4
+                ? allNames.subList(allNames.size() - 4, allNames.size()) : allNames;
+        StringBuilder sb = new StringBuilder();
+        sb.append("红").append(red).append(" 蓝").append(blue).append(" 黄").append(yellow);
+        if (!names.isEmpty()) {
+            sb.append("；它们的名字").append(String.join("、", names)).append("——这些名字是你的自我意象的一部分");
+        }
+        return sb.toString();
     }
 
     @Override

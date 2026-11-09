@@ -28,7 +28,7 @@ window.DiaryApi = (function () {
         return api(path, method, body, timeoutMs);
     }
     function recentHistory(list) {
-        return JSON.stringify((Array.isArray(list) ? list : []).slice(-HISTORY_KEEP));
+        return (Array.isArray(list) ? list : []).slice(-HISTORY_KEEP);
     }
     function clamp(text, max) {
         return String(text || '').slice(0, max);

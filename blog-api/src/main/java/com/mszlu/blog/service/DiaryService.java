@@ -1,8 +1,12 @@
 package com.mszlu.blog.service;
 
 import com.mszlu.blog.vo.Result;
+import com.mszlu.blog.vo.params.ChatTurn;
 import com.mszlu.blog.vo.params.CompanionParam;
 import com.mszlu.blog.vo.params.DiaryParam;
+import com.mszlu.blog.vo.params.HeartItem;
+
+import java.util.List;
 
 /**
  * 日记服务接口
@@ -22,7 +26,7 @@ public interface DiaryService {
     Result saveDream(DiaryParam param);
 
     /** Badeline 夜话：她读你写下的梦，用影子视角回应；message 为空时由她先开口评论这个梦 */
-    Result dreamNightTalk(String dreamId, String message, String historyJson);
+    Result dreamNightTalk(String dreamId, String message, List<ChatTurn> history);
 
     /** 日记伴侣：根据草稿片段获得 Madeline 的反馈 */
     Result companion(String draftSnippet);
@@ -55,16 +59,16 @@ public interface DiaryService {
     String recentEmotionNote(String userId);
 
     /** Oshiro 旅馆聊天 */
-    Result oshiroChat(String message, String historyJson);
+    Result oshiroChat(String message, List<String> history);
 
-    /** Badeline 影子聊天：自适应人格（方案C 关系状态 + 四旋钮），hearts 为前端心之水晶 JSON 数组字符串；返回 message / emotion(立绘情绪标记，可为空) / stage */
-    Result badelineChat(String message, String historyJson, String heartsJson);
+    /** Badeline 影子聊天：自适应人格（方案C 关系状态 + 四旋钮），hearts 为前端心之水晶；返回 message / emotion(立绘情绪标记，可为空) / stage */
+    Result badelineChat(String message, List<ChatTurn> history, List<HeartItem> hearts);
 
     /**
      * Badeline 影子聊天流式版：SSE 帧 emotion / delta / done / error。
      * 准备工作每次请求现算，与阻塞版共用同一套逻辑。
      */
-    void badelineChatStream(String message, String historyJson, String heartsJson,
+    void badelineChatStream(String message, List<ChatTurn> history, List<HeartItem> hearts,
                             jakarta.servlet.http.HttpServletResponse response);
 
     Result featherKeyword();

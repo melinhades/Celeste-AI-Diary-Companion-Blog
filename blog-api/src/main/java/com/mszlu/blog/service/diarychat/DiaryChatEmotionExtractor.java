@@ -1,13 +1,13 @@
 package com.mszlu.blog.service.diarychat;
 
 import com.alibaba.fastjson.JSON;
-import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.mszlu.blog.dao.mapper.DiaryMapper;
 import com.mszlu.blog.dao.pojo.Diary;
 import com.mszlu.blog.service.ai.AiClient;
 import com.mszlu.blog.service.ai.AiMessage;
+import com.mszlu.blog.vo.params.TypingSignal;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -195,7 +195,7 @@ public class DiaryChatEmotionExtractor {
     // ────────────────────────────────────────────────────
     // 入口点：companionStream 入口处调
     // ────────────────────────────────────────────────────
-    public EmotionResult extract(String diaryText, String typingSignalJson, String userId) {
+    public EmotionResult extract(String diaryText, TypingSignal typingSignal, String userId) {
         JSONObject detail = new JSONObject();
         JSONObject ablationFlags = new JSONObject();
         ablationFlags.put("disable_text",      disableText);
@@ -279,7 +279,7 @@ public class DiaryChatEmotionExtractor {
             trajAnalysis.put("score", 0.0);
             trajAnalysis.put("ablation_note", "trajectory-module-disabled");
         } else {
-            trajAnalysis = analyzeTrajectory(typingSignalJson, userId);
+            trajAnalysis = analyzeTrajectory(typingSignal, userId);
         }
         BigDecimal trajectoryScore = trajAnalysis.getBigDecimal("score");
 
@@ -362,8 +362,8 @@ public class DiaryChatEmotionExtractor {
     }
 
     /** 向后兼容：extract 不带 userId 时（无跨日记趋势） */
-    public EmotionResult extract(String diaryText, String typingSignalJson) {
-        return extract(diaryText, typingSignalJson, null);
+    public EmotionResult extract(String diaryText, TypingSignal typingSignal) {
+        return extract(diaryText, typingSignal, null);
     }
 
     // ────────────────────────────────────────────────────
@@ -679,58 +679,52 @@ public class DiaryChatEmotionExtractor {
     // ────────────────────────────────────────────────────
     // （三）打字轨迹侧：按键级原始特征 + z-score 异常检测
     // ────────────────────────────────────────────────────
-    private JSONObject analyzeTrajectory(String typingSignalJson, String userId) {
+    private JSONObject analyzeTrajectory(TypingSignal sig, String userId) {
         JSONObject result = new JSONObject();
         result.put("score", 0.0);
 
-        if (typingSignalJson == null || typingSignalJson.isBlank()) return result;
+        if (sig == null) return result;
 
-        try {
-            JSONObject sig = JSON.parseObject(typingSignalJson);
-            result.put("delete",  sig.getIntValue("delete"));
-            result.put("undo",    sig.getIntValue("undo"));
-            result.put("pause",   sig.getDoubleValue("pause"));
-            result.put("modifyFreq", sig.getIntValue("modifyFreq"));
+        result.put("delete",  sig.getDelete());
+        result.put("undo",    sig.getUndo());
+        result.put("pause",   sig.getPause());
+        result.put("modifyFreq", sig.getModifyFreq());
 
-            // v2 前端传来的按键级轨迹特征
-            double avgIntervalMs = sig.getDoubleValue("avgIntervalMs");
-            double deleteRetypeRatio = sig.getDoubleValue("deleteRetypeRatio");
-            double autocorrelation = sig.getDoubleValue("autocorrelation");
+        // v2 前端传来的按键级轨迹特征
+        double avgIntervalMs = sig.getAvgIntervalMs();
+        double deleteRetypeRatio = sig.getDeleteRetypeRatio();
+        double autocorrelation = sig.getAutocorrelation();
 
-            if (avgIntervalMs > 0)  result.put("avg_interval_ms", avgIntervalMs);
-            if (deleteRetypeRatio > 0) result.put("delete_retype_ratio", deleteRetypeRatio);
-            if (autocorrelation > 0) result.put("autocorrelation", autocorrelation);
+        if (avgIntervalMs > 0)  result.put("avg_interval_ms", avgIntervalMs);
+        if (deleteRetypeRatio > 0) result.put("delete_retype_ratio", deleteRetypeRatio);
+        if (autocorrelation > 0) result.put("autocorrelation", autocorrelation);
 
-            // v2 原始按键事件流分析：滑动窗口情绪转折 + 犹豫循环 + 打字 burst
-            JSONArray events = sig.getJSONArray("events");
-            JSONObject eventFeats = analyzeEventsStream(events);
-            double tp  = eventFeats.getDoubleValue("turning_point");
-            double hl  = eventFeats.getDoubleValue("hesitation_loop");
-            double bst = eventFeats.getDoubleValue("burst");
-            result.put("turning_point",    tp);
-            result.put("hesitation_loop",  hl);
-            result.put("burst",            bst);
+        // v2 原始按键事件流分析：滑动窗口情绪转折 + 犹豫循环 + 打字 burst
+        JSONObject eventFeats = analyzeEventsStream(sig.getEvents());
+        double tp  = eventFeats.getDoubleValue("turning_point");
+        double hl  = eventFeats.getDoubleValue("hesitation_loop");
+        double bst = eventFeats.getDoubleValue("burst");
+        result.put("turning_point",    tp);
+        result.put("hesitation_loop",  hl);
+        result.put("burst",            bst);
 
-            // z-score 异常检测（替代硬阈值）
-            double zScore = computeZScore(avgIntervalMs, userId);
-            result.put("z_score", zScore);
+        // z-score 异常检测（替代硬阈值）
+        double zScore = computeZScore(avgIntervalMs, userId);
+        result.put("z_score", zScore);
 
-            // 综合得分：z-score + deleteRetypeRatio + undo + pause + 事件流三特征
-            double score = 0.0;
-            if (zScore > 1.5)          score = Math.max(score, 0.3 + Math.min(0.4, zScore * 0.2));
-            if (deleteRetypeRatio > 0.4) score = Math.max(score, 0.4 + deleteRetypeRatio * 0.4);
-            if (sig.getIntValue("undo") >= 2) score = Math.max(score, 0.55);
-            if (sig.getDoubleValue("pause") >= 5) score = Math.max(score, 0.35 + (sig.getDoubleValue("pause") - 5) * 0.03);
-            // 事件流特征：情绪转折 / 犹豫循环 / burst
-            if (tp  > 0.3) score = Math.max(score, 0.4 + tp  * 0.4);
-            if (hl  > 0.3) score = Math.max(score, 0.5 + hl  * 0.3);
-            if (bst > 0.3) score = Math.max(score, 0.45 + bst * 0.3);
+        // 综合得分：z-score + deleteRetypeRatio + undo + pause + 事件流三特征
+        double score = 0.0;
+        if (zScore > 1.5)          score = Math.max(score, 0.3 + Math.min(0.4, zScore * 0.2));
+        if (deleteRetypeRatio > 0.4) score = Math.max(score, 0.4 + deleteRetypeRatio * 0.4);
+        if (sig.getUndo() >= 2) score = Math.max(score, 0.55);
+        if (sig.getPause() >= 5) score = Math.max(score, 0.35 + (sig.getPause() - 5) * 0.03);
+        // 事件流特征：情绪转折 / 犹豫循环 / burst
+        if (tp  > 0.3) score = Math.max(score, 0.4 + tp  * 0.4);
+        if (hl  > 0.3) score = Math.max(score, 0.5 + hl  * 0.3);
+        if (bst > 0.3) score = Math.max(score, 0.45 + bst * 0.3);
 
-            result.put("score", clamp(score));
+        result.put("score", clamp(score));
 
-        } catch (Exception e) {
-            log.debug("打字轨迹解析失败", e);
-        }
         return result;
     }
 
@@ -759,7 +753,7 @@ public class DiaryChatEmotionExtractor {
      * 2. hesitation_loop：insert→delete→insert 连续模式频率（纠结/自我怀疑）
      * 3. burst：5s 内 ≥15 次 insert 且之后 >3s 停顿（情绪爆发后枯竭）
      */
-    private JSONObject analyzeEventsStream(JSONArray events) {
+    private JSONObject analyzeEventsStream(List<TypingSignal.Event> events) {
         JSONObject feat = new JSONObject();
         feat.put("turning_point", 0.0);
         feat.put("hesitation_loop", 0.0);
@@ -771,9 +765,11 @@ public class DiaryChatEmotionExtractor {
         long[] ts = new long[n];
         String[] actions = new String[n];
         for (int i = 0; i < n; i++) {
-            JSONObject ev = events.getJSONObject(i);
-            ts[i] = ev.getLongValue("ts");
-            actions[i] = ev.getString("action");
+            TypingSignal.Event ev = events.get(i);
+            if (ev != null) {
+                ts[i] = ev.getTs();
+                actions[i] = ev.getAction();
+            }
         }
 
         // 1. 滑动窗口情绪转折：前后两半 delete 比例差
