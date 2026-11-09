@@ -17,10 +17,6 @@
       position: fixed; inset: 0; pointer-events: none;
       background: radial-gradient(ellipse at 50% 55%, transparent 38%, rgba(3, 6, 18, .58) 100%);
     }
-    .hud {
-      position: fixed; right: clamp(20px, 4vw, 64px); bottom: 22px;
-      font-size: 11px; letter-spacing: .16em; color: #a7c2d5;
-    }
     .mute {
       position: fixed; right: clamp(20px, 4vw, 64px); top: clamp(20px, 5vh, 56px);
       width: 38px; height: 38px; border-radius: 50%; cursor: pointer;
@@ -37,15 +33,11 @@
       white-space: nowrap;
     }
     .toast.show { opacity: 1; }
-    /* 窄屏：给 HUD 换个位置，避免与右下 Toast 等元素挤压 */
-    @media (max-width: 720px) {
-      .hud { bottom: auto; top: clamp(72px, 12vh, 104px); font-size: 10px; }
-    }
   </style>
   <!-- 从 index 的鸟图标飞过来后接着显示同款加载层（视觉见 css/index-bird.css） -->
   <link rel="stylesheet" href="css/index-bird.css?v=20261107c">
   <!-- 复用原实时聊天室（messages.html）的玻璃聊天面板 -->
-  <link rel="stylesheet" href="css/messages.css?v=20261015a">
+  <link rel="stylesheet" href="css/messages.css?v=20261109a">
   <style>
     [v-cloak] { display: none !important; }
     /* 关掉 messages.css 自带的雪山底图与压暗 scrim，场景画布要当主背景 */
@@ -107,17 +99,7 @@
     }
     .chat-toggle.show { opacity: 1; pointer-events: auto; }
     .chat-toggle:hover { border-color: #a9d9db; background: rgba(18, 40, 58, .75); }
-    .scene-hint {
-      position: fixed; left: 50%; bottom: 76px; translate: -50% 0; z-index: 9;
-      font-size: 11px; letter-spacing: .14em; color: #a7c2d5;
-      opacity: 0; pointer-events: none; transition: opacity .3s ease; white-space: nowrap;
-    }
-    .scene-hint.show { opacity: 1; }
-    /* 场景 HUD / 静音 / toast 让位给居中聊天卡 */
-    #hud {
-      left: clamp(20px, 4vw, 64px); right: auto; top: clamp(20px, 5vh, 56px); bottom: auto;
-      display: flex; flex-direction: column; gap: 6px; z-index: 3;
-    }
+    /* 静音 / toast 让位给居中聊天卡 */
     #mute { left: auto; right: clamp(20px, 4vw, 64px); z-index: 4; }
     .toast { left: clamp(20px, 4vw, 64px); transform: none; z-index: 4; }
     @media (max-width: 820px) {
@@ -128,11 +110,9 @@
       .chat-head { padding: 12px 14px 0; }
       #chatLog { padding: 4px 12px 0; }
       .chat-input-row { margin: 8px 10px 10px; }
-      #hud { top: 16px; left: 16px; font-size: 10px; }
       #mute { top: 16px; right: 16px; }
       .toast { left: 16px; bottom: calc(62vh + 14px); }
       .chat-toggle { bottom: 18px; }
-      .scene-hint { bottom: 64px; font-size: 10px; }
     }
   </style>
 </head>
@@ -149,7 +129,6 @@
   </div>
   <canvas id="scene" aria-label="第九章铭记场景：明亮星海中的浮空跳板与月球生物"></canvas>
   <div class="vignette"></div>
-  <div class="hud" id="hud"><span id="hudHeart">虚空&nbsp; 0 / 1</span><span id="hudCollect">草莓 0/10 · 水母 0/4 · 羽毛 0/6</span></div>
   <button class="mute" id="mute" type="button" title="静音（M）">&#9835;</button>
   <div class="toast" id="toast">拾起「虚空」</div>
   <!-- messages.js 的雪花层：场景之上、聊天下方 -->
@@ -158,7 +137,6 @@
   <!-- ===== 实时聊天室（原 messages.html 的 UI，去掉左栏通知，只留山间聊天） ===== -->
   <div id="chatContainer" v-cloak>
     <button id="chatToggle" class="chat-toggle" :class="{show: chatHidden}" type="button" @click="toggleChat">山间聊天</button>
-    <div class="scene-hint" :class="{show: chatHidden}">A / D 移动 · Space 跳 · X 冲刺 · Shift/Z 抓水母 · Enter 聊天</div>
     <div class="chat-login-tip" v-if="!loggedIn">
       请先<a href="login.html" style="color:#ffe36d">登录</a>，才能进入实时聊天。
     </div>
@@ -185,7 +163,7 @@
                 <template v-for="it in items" :key="it.key">
                   <div v-if="it.t === 'time'" class="chat-time"><span>{{ it.label }}</span></div>
                   <div v-else-if="it.t === 'sys'" class="chat-sys">{{ it.text }}</div>
-                  <div v-else-if="it.t === 'msg'" class="chat-msg" :class="it.mine ? 'me' : 'other'" :data-key="it.ik">
+                  <div v-else-if="it.t === 'msg'" class="chat-msg" :class="[it.mine ? 'me' : 'other', it.unknown ? 'unknown' : '']" :data-key="it.ik">
                     <template v-if="it.mine">
                       <div class="body">
                         <div v-if="!it.chain" class="nm">{{ it.name }}</div>
@@ -240,9 +218,9 @@
     </div>
   </div>
 
-  <script src="js/lib/sfx.js?v=20261107a"></script>
+  <script src="js/lib/sfx.js?v=20261108a"></script>
   <script src="js/celeste-hair.js"></script>
-  <script src="js/celeste-character.js?v=20261107e"></script>
+  <script src="js/celeste-character.js?v=20261109a"></script>
   <script src="js/bird-motion.js?v=20261031a"></script>
   <script src="js/page-loading.js?v=20261107b"></script>
   <script>
@@ -255,9 +233,6 @@
 
     const cv = document.getElementById('scene');
     const ctx = cv.getContext('2d');
-    const hudEl = document.getElementById('hud');
-    const hudHeartEl = document.getElementById('hudHeart');
-    const hudCollectEl = document.getElementById('hudCollect');
     const toastEl = document.getElementById('toast');
     const muteBtn = document.getElementById('mute');
     let W = 0, H = 0, dpr = 1;
@@ -353,6 +328,18 @@
       }
       put('orb', BASE + 'characters/player/starFly00.png');
       for (let i = 0; i < 4; i++) put('morph' + i, BASE + 'characters/player/startStarFly0' + i + '.png');
+      // 鸟教程：49 帧 crow 素材（idle 0 / croak 0-13 / peck 14-26）+ 键帽 GUI
+      for (let i = 0; i <= 48; i++) put('crow' + String(i).padStart(2, '0'), BASE + 'characters/bird/crow' + String(i).padStart(2, '0') + '.png');
+      // bird 图集的 fly 是独立贴图（Sprites.xml：<Loop id="fly" frames="fly03,fly00,fly01,fly02"/>）
+      for (let i = 0; i < 4; i++) put('birdFly' + i, BASE + 'characters/bird/fly0' + i + '.png');
+      put('guiBase', 'Atlases/Gui/controls/keyboard/base.png');
+      put('guiBase2', 'Atlases/Gui/controls/keyboard/base2.png');
+      put('guiA', 'Atlases/Gui/controls/keyboard/a.png');
+      put('guiD', 'Atlases/Gui/controls/keyboard/D.png');
+      put('guiX', 'Atlases/Gui/controls/keyboard/x.png');
+      put('guiSpace', 'Atlases/Gui/controls/keyboard/space.png');
+      put('guiShift', 'Atlases/Gui/controls/keyboard/LeftShift.png');
+      put('guiEnter', 'Atlases/Gui/controls/keyboard/enter.png');
       return Promise.all(jobs);
     }
 
@@ -589,6 +576,7 @@
       if (first && (k === 'x' || k === 'k')) dashEdge = true;
       if (k === 'r') respawn();
       if (k === 'm') toggleMute();
+      if (k === 'escape') tutorialClose();   // 教程面板的显式关闭键
       startAudio();
     });
     window.addEventListener('keyup', e => {
@@ -616,6 +604,7 @@
     }
     muteBtn.addEventListener('click', e => { e.stopPropagation(); toggleMute(); });
     window.addEventListener('pointerdown', startAudio);
+    cv.addEventListener('pointerdown', () => tutorialClose());   // 点画布也可关闭教程面板
 
     // ===== 背景：逐行复刻 Celeste.MapData::ParseBackdrop + Starfield/Planets/Parallax::Render =====
     // 原作在 320×180 逻辑屏上绘制背景，这里等比映射到实际画布；随机分布用固定种子，构图不随 resize 跳变
@@ -820,6 +809,275 @@
 
     const heart = { x: 320 - SPAWN.x, y: 80 - SPAWN.y - 20, collected: false, t: 0 };
 
+    // ===== 鸟教程（移植自 celeste-bird.html 的 BirdNPC + BirdTutorialGui 链路）=====
+    // 演出：啄地 → 喊叫（croak，第 9 帧 squawk）→ 教程面板展开 → 面板轮播 → 收起回 idle。
+    // 帧表 / 音效 / 面板尺寸口径均来自原页，绘制走本页 canvas + Z 与相机，不引入新渲染栈。
+    const bird = {
+      x: -72, y: -56,          // 停在出生点左上 16×16 浮块（BLOCK_RECTS[0]）顶面
+      facing: 1,               // +1 = 素材原朝向（朝右，面向玩家）
+      anim: 'idle', frame: 0, acc: 0, img: null, rate: 1
+    };
+    const BIRD_ANIMS = {
+      idle:         { start: 0,  count: 1,  delay: 1.0,  next: 'idle' },
+      idleRarePeck: { start: 0,  count: 1,  delay: 1.0,  next: 'idleRarePeck' },
+      peck:         { start: 14, count: 13, delay: 0.08, next: 'idle' },
+      peckRare:     { start: 14, count: 13, delay: 0.08, next: 'idleRarePeck' },
+      croak:        { start: 0,  count: 14, delay: 0.08, next: 'idle' },
+      // Sprites.xml：<Anim id="jump" path="crow29-35" goto="fly"/>、
+      // <Loop id="fly" frames="fly03,fly00,fly01,fly02" delay="0.1"/>
+      jump:         { start: 29, count: 7,  delay: 0.08, next: 'fly' },
+      fly:          { frames: ['birdFly3', 'birdFly0', 'birdFly1', 'birdFly2'], delay: 0.1, next: 'fly' }
+    };
+    const BIRD_GAIN = 0.6;
+    const crowImg = i => IMG['crow' + String(i).padStart(2, '0')] || null;
+    // fly 用独立贴图，其余动画按 crow 序号取图
+    const birdImgAt = (a, i) => a.frames
+      ? (IMG[a.frames[i % a.frames.length]] || null)
+      : crowImg(a.start + i);
+    function birdPlay(name) {
+      bird.anim = name; bird.frame = 0; bird.acc = 0; bird.rate = 1;
+      bird.img = birdImgAt(BIRD_ANIMS[name], 0);
+    }
+    function birdNext(name) {
+      if (name === 'idleRarePeck') return Math.random() < 0.2 ? 'peckRare' : 'idleRarePeck'; // 1:4
+      if (name === 'idle') return Math.random() < 0.5 ? 'peck' : 'idle';                      // 1:1
+      return BIRD_ANIMS[name].next;
+    }
+    function birdStep(dt) {
+      // FlyTo 期间 Sprite.Rate = 1 - p*0.5（<FlyTo>d__39）：翅膀越飞越慢
+      bird.acc += dt * bird.rate;
+      let guard = 0;
+      while (bird.acc >= BIRD_ANIMS[bird.anim].delay && guard++ < 8) {
+        const a = BIRD_ANIMS[bird.anim];
+        bird.acc -= a.delay;
+        bird.frame++;
+        const n = a.count != null ? a.count : a.frames.length;
+        if (bird.frame >= n) { birdPlay(birdNext(bird.anim)); continue; }
+        bird.img = birdImgAt(a, bird.frame);
+        // 音效钩子与 celeste-bird.html 的 OnFrameChange / Caw 一致
+        if ((bird.anim === 'peck' || bird.anim === 'peckRare') && bird.frame === 6)
+          BirdMotion.Sfx.play('bird_peck', { gain: BIRD_GAIN });
+        if (bird.anim === 'croak' && bird.frame === 9)
+          BirdMotion.Sfx.play('bird_squawk', { gain: BIRD_GAIN });
+      }
+    }
+
+    // 教程面板：BirdTutorialGui.Render 的逐行移植（宽随 Scale 展开、高固定、下方 37 行尾鳍）
+    const GUI_FONT = '700 24px "Segoe UI", "Microsoft YaHei", system-ui, sans-serif';
+    const GUI_BG = '#061526', GUI_LINE = '#ffffff', GUI_TEXT = '#6179e2';
+    const GUI_LINE_H = 80, GUI_INFO_H = 24, GUI_PAD = 8;  // 行高取键帽 80，避免键帽压住标题
+    const GUI_KEYS = {
+      a: { glyph: 'guiA', wide: false }, D: { glyph: 'guiD', wide: false },
+      x: { glyph: 'guiX', wide: false }, space: { glyph: 'guiSpace', wide: true },
+      LeftShift: { glyph: 'guiShift', wide: true }, enter: { glyph: 'guiEnter', wide: true }
+    };
+    const TUT_PANELS = [
+      { info: '移动 / 跳跃', controls: [{ k: 'a' }, { k: 'D' }, '+', { k: 'space' }] },
+      { info: '冲刺 / 抓取', controls: [{ k: 'x' }, '+', { k: 'LeftShift' }] },
+      { info: '聊天',       controls: [{ k: 'enter' }] }
+    ];
+    const TUT_PANEL_TIME = 2.0;
+    const TUT = { state: 'wait', t: 0, panel: 0, scale: 0, armed: true, cooldown: 1.2 };
+    function guiTextWidth(s) {
+      ctx.save(); ctx.font = GUI_FONT;
+      const w = ctx.measureText(s).width; ctx.restore(); return w;
+    }
+    const tutControlWidth = c => typeof c === 'string'
+      ? guiTextWidth(c) : (GUI_KEYS[c.k].wide ? 120 : 80) + GUI_PAD * 2;
+    function tutorialUpdate(dt) {
+      if (!m) return;
+      if (TUT.cooldown > 0) TUT.cooldown -= dt;
+      const dx = Math.abs(m.x - bird.x), dy = Math.abs(m.y - bird.y);
+      if (!TUT.armed && (dx > 160 || dy > 120)) TUT.armed = true;
+      // 聊天卡盖在画布上时先不演出，等玩家收起聊天、真正看到场景再开始（与原底部操作提示同口径）
+      const chatCard = document.getElementById('chatContainer');
+      const sceneVisible = !chatCard || chatCard.classList.contains('chat-hidden');
+      if (TUT.state === 'wait') {
+        // 鸟起飞/落地途中不出教程；停稳后才接「靠近 120px」的旧触发口径
+        if (BIRD.state === 'idle' && sceneVisible && TUT.armed && TUT.cooldown <= 0 && dx < 120 && dy < 120) {
+          TUT.state = 'peck'; TUT.t = 0; birdPlay('peck');
+        }
+      } else if (TUT.state === 'peck') {
+        TUT.t += dt;
+        if (TUT.t >= BIRD_ANIMS.peck.count * BIRD_ANIMS.peck.delay) {
+          TUT.state = 'caw'; TUT.t = 0; birdPlay('croak');
+        }
+      } else if (TUT.state === 'caw') {
+        TUT.t += dt;
+        if (TUT.t >= BIRD_ANIMS.croak.count * BIRD_ANIMS.croak.delay) {
+          TUT.state = 'show'; TUT.t = 0; TUT.panel = 0; birdPlay('idleRarePeck');
+        }
+      } else if (TUT.state === 'show') {
+        TUT.t += dt;
+        if (TUT.t >= TUT_PANEL_TIME) {
+          TUT.t -= TUT_PANEL_TIME; TUT.panel++;
+          if (TUT.panel >= TUT_PANELS.length) tutorialClose(true);
+        }
+      }
+      TUT.scale = approachTo(TUT.scale, TUT.state === 'show' ? 1 : 0, dt * 8);
+      if (TUT.state !== 'show' && TUT.scale < 0.001) TUT.scale = 0;
+    }
+    function tutorialClose() {
+      if (TUT.state !== 'show' && TUT.state !== 'peck' && TUT.state !== 'caw') return;
+      TUT.state = 'wait'; TUT.armed = false; TUT.cooldown = 6;
+      if (BIRD.state === 'idle') birdPlay('idle');   // 飞行中不打断 fly 循环
+    }
+
+    // ===== 鸟的「接触 → 飞走 → 落点 → 再靠近」循环 =====
+    // 原作 BirdNPC 有两条相关协程：
+    //   <WaitRoutine>d__37（Modes.FlyAway）：|p.X - X| < 120 → Caw()；hypot(p.Center, Pos) < 32 → StartleAndFlyAway
+    //   <MoveToNodesRoutine>d__40（Modes.MoveToNodes）：玩家中心距 < 80 → Startle(0.2s) → FlyTo(节点)，
+    //     节点来自关卡 EntityData，固定顺序、不随机；跑完节点链后 Persistent 离场。
+    // 本页把两者合起来：120px 内照旧出教程（现有链路），真的贴到 32px → 惊飞并落到固定节点；
+    // 节点表循环使用，所以每次靠近新落点都能再触发教程（不复用原作「节点跑完就飞走」的收尾）。
+    const BIRD_NODES = [
+      { x: -36, y: -112 },   // BLOCK [264,264,24,24] 顶面
+      { x: 56,  y: -184 },   // BLOCK [352,192,32,24] 顶面
+      { x: -68, y: -232 },   // BLOCK [232,144,24,24] 顶面
+      { x: 24,  y: -296 }    // BLOCK [320, 80,32,24] 顶面（虚空之心下方）
+    ];
+    const BIRD_TOUCH = 32;         // WaitRoutine 的惊飞半径（玩家中心 vs 鸟 Position）
+    const BIRD_REARM = 48;         // 落地后玩家先离开 48px 才允许下一次接触
+    const BIRD_STARTLE_TIME = 0.2; // MoveToNodesRoutine：startle(…, 0.2f, …)
+    const BIRD = { state: 'idle', t: 0, dur: 0, idx: 0, from: null, to: null, ctrl: null, lock: false };
+
+    function birdReset() {
+      bird.x = -72; bird.y = -56; bird.facing = 1;
+      birdPlay('idle');
+      BIRD.state = 'idle'; BIRD.t = 0; BIRD.idx = 0; BIRD.lock = false;
+    }
+    function birdFlyToNext() {
+      const to = BIRD_NODES[BIRD.idx % BIRD_NODES.length];
+      BIRD.idx++;
+      const from = { x: bird.x, y: bird.y };
+      // <FlyTo>d__39：SimpleCurve(from, to, from + (to-from)*0.75 - UnitY*30)
+      BIRD.from = from;
+      BIRD.to = to;
+      BIRD.ctrl = {
+        x: from.x + (to.x - from.x) * 0.75,
+        y: from.y + (to.y - from.y) * 0.75 - 30
+      };
+      BIRD.dur = Math.hypot(to.x - from.x, to.y - from.y) / 100 * 0.6;  // 100px/s × durationMult 0.6
+      BIRD.t = 0; BIRD.state = 'fly';
+      if (to.x !== from.x) bird.facing = to.x > from.x ? 1 : -1;        // Facing = Sign(target.X - X)
+      birdPlay('fly');
+      BirdMotion.Sfx.play('bird_relocate', { gain: BIRD_GAIN });        // <FlyTo>d__39 的 relocate
+    }
+    function birdUpdate(dt) {
+      if (!m) return;
+      const dist = Math.hypot(m.x - bird.x, m.y - bird.y);
+      if (BIRD.lock && dist > BIRD_REARM) BIRD.lock = false;
+      if (BIRD.state === 'idle') {
+        // 「接触鸟就飞」：贴到 32px 才惊飞；只是靠近（120px）仍然只触发教程
+        if (!BIRD.lock && dist < BIRD_TOUCH) {
+          tutorialClose();                                 // 面板跟着鸟一起收，落地后再重新开
+          BIRD.state = 'startle'; BIRD.t = 0;
+          birdPlay('jump');                                // <Startle>d__38：Sprite.Play("jump")
+          BirdMotion.Sfx.play('bird_startle', { gain: BIRD_GAIN });
+        }
+      } else if (BIRD.state === 'startle') {
+        // <Startle>d__38：0.2s 内速度 (100,-100) → (20,-20)，X 分量乘 -Facing
+        BIRD.t += dt;
+        const k = Math.min(1, BIRD.t / BIRD_STARTLE_TIME);
+        const e = 1 - Math.pow(1 - k, 3);                  // Ease.CubeOut
+        bird.x += (100 + (20 - 100) * e) * -bird.facing * dt;
+        bird.y += (-100 + (-20 + 100) * e) * dt;
+        if (BIRD.t >= BIRD_STARTLE_TIME) birdFlyToNext();
+      } else if (BIRD.state === 'fly') {
+        // <FlyTo>d__39：SineInOut 走二次贝塞尔，位置逐帧 Calc.Floor（取整），Rate 随进度 1→0.5
+        BIRD.t += dt;
+        const p = Math.min(1, BIRD.t / BIRD.dur);
+        const e = (1 - Math.cos(Math.PI * p)) / 2;         // Ease.SineInOut
+        const u = 1 - e;
+        bird.x = Math.round(u * u * BIRD.from.x + 2 * u * e * BIRD.ctrl.x + e * e * BIRD.to.x);
+        bird.y = Math.round(u * u * BIRD.from.y + 2 * u * e * BIRD.ctrl.y + e * e * BIRD.to.y);
+        bird.rate = 1 - p * 0.5;
+        if (p >= 1) {
+          bird.x = BIRD.to.x; bird.y = BIRD.to.y;
+          bird.facing = -1;                                // 落地固定 Facing.Left
+          birdPlay('idle');
+          BIRD.state = 'idle'; BIRD.lock = true;
+          // 落点就是新教程位：子弹式冷却 0.8s，避免落地同一帧又触发
+          TUT.armed = true; TUT.cooldown = 0.8;
+        }
+      }
+      birdStep(dt);
+    }
+    function drawBird() {
+      const img = bird.img || birdImgAt(BIRD_ANIMS[bird.anim], bird.frame) || crowImg(0);
+      if (!img) return;
+      const p = toScreen(bird);
+      const w = 32 * Z, h = 24 * Z;
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      if (bird.facing < 0) {
+        ctx.translate(Math.round(p.x), 0); ctx.scale(-1, 1);
+        ctx.drawImage(img, Math.round(-w / 2), Math.round(p.y - h), w, h);
+      } else {
+        ctx.drawImage(img, Math.round(p.x - w / 2), Math.round(p.y - h), w, h);
+      }
+      ctx.restore();
+    }
+    function drawTutorial() {
+      if (TUT.state !== 'show' && TUT.scale <= 0.001) return;
+      const S = TUT.scale;
+      const panel = TUT_PANELS[Math.min(TUT.panel, TUT_PANELS.length - 1)];
+      ctx.save();
+      ctx.font = GUI_FONT;
+      const infoW = ctx.measureText(panel.info).width;
+      let controlsW = 0;
+      for (const c of panel.controls) controlsW += tutControlWidth(c);
+      const panelW = Math.max(controlsW, infoW) + 64;
+      const K = Math.min(Z / 3, (W - 24) / panelW) * 0.5;   // 原版 K = artScale/3；整体再缩到 50%
+      const w = panelW * S;
+      const h = GUI_INFO_H + GUI_LINE_H + 32;
+      const p = toScreen({ x: bird.x, y: bird.y - 16 });
+      const top = p.y - (h + 32) * K;
+      const dy = top < 8 ? 8 - top : 0;           // 贴顶时整体下移，避免被裁掉
+      const x = -w / 2, y = -h - 32;
+      ctx.translate(Math.round(p.x), Math.round(p.y + dy));
+      ctx.scale(K, K);
+      ctx.imageSmoothingEnabled = false;
+      // 白边 → 深底 → 下方 37 行三角尾鳍（中段挖空）
+      ctx.fillStyle = GUI_LINE; ctx.fillRect(x - 6, y - 6, w + 12, h + 12);
+      ctx.fillStyle = GUI_BG;   ctx.fillRect(x, y, w, h);
+      for (let i = 0; i <= 36; i++) {
+        const ww = (73 - i * 2) * S;
+        ctx.fillStyle = GUI_LINE; ctx.fillRect(-ww / 2, y + h + i, ww, 1);
+        if (ww > 12) { ctx.fillStyle = GUI_BG; ctx.fillRect(-ww / 2 + 6, y + h + i, ww - 12, 1); }
+      }
+      if (w > 3) {
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = GUI_TEXT;
+        ctx.save(); ctx.scale(S, 1); ctx.fillText(panel.info, 0, y + 16); ctx.restore();
+        const rowY = y + 16 + GUI_INFO_H + GUI_LINE_H * 0.5;
+        let cp = -controlsW / 2;
+        for (const c of panel.controls) {
+          if (typeof c === 'string') {
+            const tw = guiTextWidth(c);
+            ctx.save(); ctx.scale(S, 1);
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = GUI_TEXT; ctx.fillText(c, cp + tw / 2 + 1, rowY + 2);
+            ctx.fillStyle = '#ffffff'; ctx.fillText(c, cp + tw / 2 - 1, rowY - 2);
+            ctx.restore();
+            cp += tw + 1;
+          } else {
+            const g = GUI_KEYS[c.k];
+            const tw = g.wide ? 120 : 80, th = 80;
+            cp += GUI_PAD;
+            ctx.save(); ctx.scale(S, 1);
+            const base = IMG[g.wide ? 'guiBase2' : 'guiBase'];
+            if (base) ctx.drawImage(base, cp, rowY - th / 2, tw, th);
+            if (IMG[g.glyph]) ctx.drawImage(IMG[g.glyph], cp, rowY - th / 2, tw, th);
+            ctx.restore();
+            cp += tw + GUI_PAD;
+          }
+        }
+      }
+      ctx.restore();
+    }
+
     // ===== 房间里的实体（坐标原样来自 LostLevels.bin，仅平移到相对出生点）=====
     const toWorld = arr => arr.map(p => ({ x: p[0] - SPAWN.x, y: p[1] - SPAWN.y }));
     // spinner ×95：原作把它们缠在房间两侧与底部，但页面上会在底部铺成一整片「星海」，
@@ -922,17 +1180,20 @@
     //   · Glider.Update 未持有：地面 800 摩擦 + 20 侧滑；空中 200/100 重力、10/40 摩擦；
     //     Holdable.Release 的 gravityTimer=0.1 期间跳过重力与摩擦（ShouldHaveGravity）
     const GLIDER = {
-      gravAir: 200, gravAirUp: 100,
+      // Glider.Update L190-203：空中重力 num=200，vy>=-30 时 num*=0.5(=100)。
+      // 也就是“下落/慢升”100，“已经快速上升”200；原实现两项写反了。
+      gravAir: 100, gravAirUp: 200,
       frictionUp: 40, frictionDown: 10,
       groundFriction: 800, groundSlide: 20,
       pickupDelay: 0.35, releaseGravity: 0.1,
       regrabDelay: 0.3,     // Holdable..ctor(0.3) → cannotHoldDelay；Release 后 0.3s 内不可再抓
       throwX: 100, throwY: -40, recoil: 80,
-      carryY: -16,
+      carryY: -12,
       pickX: 10, pickTop: 16, pickBottom: 6,
       // Player.PickupCoroutine(L4388-4430)：0.16s CubeInOut 吸附；SimpleCurve 控制点
-      // (begin.X + sign(begin.X)*2, CarryOffsetTarget.Y-2)，CarryOffsetTarget=(0,-12)，CarryYOffset=-4
-      pickupTime: 0.16, carryCtrlX: 2, carryCtrlY: -18,
+      // (begin.X + sign(begin.X)*2, CarryOffsetTarget.Y-2)，CarryOffsetTarget=(0,-12)；
+      // 实际持有位置再加 Sprite.CarryYOffset（idle_carry/jump_carry/run_carry 逐帧 -1..-3）
+      pickupTime: 0.16, carryCtrlX: 2, carryCtrlY: -14,
       boostUp: 105,      // PickupCoroutine L4424：Speed.Y = Min(Speed.Y, -105)
       boostDash: 240,    // PickupCoroutine L4420：gliderBoostDir.Y<0 → Min(Speed.Y, -240*|dirY|)
       boostWindow: 0.55, // Player.cs L1835/L1906：StartDash → gliderBoostTimer = 0.55s
@@ -1004,11 +1265,6 @@
       return { x: x / l, y: y / l };
     }
 
-    function updateHud() {
-      hudCollectEl.textContent = '草莓 ' + berries.length + '/' + CAP.berry +
-        ' · 水母 ' + jellies.length + '/' + CAP.jelly +
-        ' · 羽毛 ' + feathers.length + '/' + CAP.feather;
-    }
 
     // Leader::Update：每 0.02s 采样一次，位移 ≥3 世界像素才插到队首，超出 350 丢队尾
     function stepLeader(dt) {
@@ -1033,7 +1289,6 @@
         phase: Math.random() * 2.4,          // 翼草莓走共享时钟 time + phase
         animT: 0, wobble: 0, wiggleT: 0       // 金莓/普通莓：各自 idle 帧时钟、呼吸、拾取弹跳
       });
-      updateHud();
     }
 
     // 水母：像金羽毛一样在相机可见区两侧随机刷新（最多 4 只），不再伴飞
@@ -1069,7 +1324,6 @@
         pickupT: 0, pickupFromX: 0, pickupFromY: 0, pickupVx: 0, pickupVy: 0, boostDirY: 0,
         minHoldTimer: 0, cannotHoldTimer: 0, animT: Math.random() * 1.2, openT: 0
       });
-      updateHud();
     }
 
     // Holdable.PickupCollider 20×22 @(-10,-16)：与 Player 8×11 身体盒重叠即进入抓取范围
@@ -1099,7 +1353,10 @@
       best.pickupFromY = best.y - m.y;
       best.pickupVx = m.vx; best.pickupVy = m.vy;
       // Player.StartDash L3761：gliderBoostDir = DashDir；冲刺中向上抓 → 拾取结束时 -240*|dirY|
-      best.boostDirY = (gliderBoostTimer > 0 && m.dashDir) ? m.dashDir.y : 0;
+      // PickupCoroutine L4416：gliderBoostDir 优先取角色刚记录的 SuperJump/SuperWallJump 方向
+      const boostDir = m.gliderBoostTimer > 0 ? m.gliderBoostDir
+        : (gliderBoostTimer > 0 ? m.dashDir : null);
+      best.boostDirY = boostDir ? boostDir.y : 0;
       best.vx = 0; best.vy = 0;
       best.gravityTimer = 0;
       best.bubble = false;                 // Glider.OnPickup：bubble = 0（此后按物理物件处理）
@@ -1107,7 +1364,6 @@
       best.x = m.x + best.pickupFromX; best.y = m.y + best.pickupFromY;
       m.vx = 0; m.vy = 0;
       m.sprite.play('pickUp');             // Player.StPickup：0.16s 拾取姿势
-      updateHud();
       return true;
     }
     // Holdable.Release：gravityTimer=0.1；Glider.OnRelease：Speed = dir × 100（Y=0 → -0.4）
@@ -1122,19 +1378,23 @@
       j.vx = dirX * GLIDER.throwX;
       j.vy = dirY !== 0 ? dirY * GLIDER.throwX : (dirX !== 0 ? GLIDER.throwY : 0);
       j.highFrictionTimer = 0.5;
-      j.x = m.x; j.y = m.y + GLIDER.carryY;
+      // Holdable.Release 保持在水母被举起时的位置（Carry 最后一帧）
+      j.x = m.x; j.y = m.y + GLIDER.carryY + m.sprite.carryYOffset();
       let tries = 0;
       while (gliderSolidAt(j.x, j.y) && tries++ < 10) j.y -= 1;   // Holdable.Release 的脱困上移
       m.holdSlowFall = false;
-      if (m.sprite.current === 'pickUp') m.sprite.play('idle');
-      updateHud();
+      if (m.sprite.current === 'pickUp') m.sprite.play('idleCarry');
     }
     // Player.Throw：Release(UnitX*Facing) + 后坐 80；下方向键则走 Player.Drop（零速度）
     function throwJelly(drop) {
       if (!heldJelly) return;
       const dir = m.facing || 1;
       releaseJelly(drop ? 0 : dir, 0);
-      if (!drop) m.vx += -GLIDER.recoil * dir;
+      if (!drop) {
+        m.vx += -GLIDER.recoil * dir;
+        // Player.Throw：非 Drop 时 Sprite.Play("throw")（4 帧 × 0.06s，goto idle）
+        m.sprite.play('throw');
+      }
     }
 
     // 水母未持有时的物理（Glider.Update IL 786-1553）
@@ -1153,23 +1413,40 @@
             j.x = m.x + u * u * j.pickupFromX + 2 * u * k * c.x;
             j.y = m.y + u * u * j.pickupFromY + 2 * u * k * c.y + k * k * GLIDER.carryY;
             if (j.pickupT === 0) {
-              j.x = m.x; j.y = m.y + GLIDER.carryY;
+              // Carry = Player.Position + (0,-12) + UnitY*Sprite.CarryYOffset
+              j.x = m.x; j.y = m.y + GLIDER.carryY + m.sprite.carryYOffset();
               // PickupCoroutine L4410-4425：恢复原速度、Y 封顶 0；冲刺拾取/上升拾取的助推
               m.vx = j.pickupVx;
               m.vy = Math.min(j.pickupVy, 0);
-              if (j.boostDirY < 0) m.vy = Math.min(m.vy, -GLIDER.boostDash * Math.abs(j.boostDirY));
+              if (j.boostDirY < 0) {
+                m.vy = Math.min(m.vy, -GLIDER.boostDash * Math.abs(j.boostDirY));
+                gliderBoostTimer = 0;
+              }
               else if (m.vy < 0) m.vy = Math.min(m.vy, -GLIDER.boostUp);
-              if (m.sprite.current === 'pickUp') m.sprite.play('idle');
+              // 拾取结束时若在地面且按住下，禁止立刻触发 Drop+Duck
+              if (m.onGround && (keys['s'] || keys['arrowdown'])) m.holdCannotDuck = true;
+              if (m.sprite.current === 'pickUp') m.sprite.play('idleCarry');
             }
             continue;
           }
           // Glider.Update：holder.Speed.Y > 20（或风向上）→ PlayOpen(fall/fallLoop)
+          const wasOpen = j.openT > 0;
           j.openT = m.vy > 20 ? j.openT + dt : 0;
-          // 持有：Carry 到 Player.Position + (0,-12) + CarryYOffset；旋转按 ClampedMap(Speed.X,-300,300,+34°/-34°)
+          // PlayOpen 只在切入瞬间把 Scale 设成 (1.5,0.6)，之后每帧按 2/s 吸附目标
+          if (!wasOpen && j.openT > 0) { j.scaleX = 1.5; j.scaleY = 0.6; }
+          let tx = 1, ty = 1;
+          if (j.openT > 0) {
+            if (keys['s'] || keys['arrowdown']) { tx = 0.7; ty = 1.4; }
+            else if (keys['w'] || keys['arrowup']) { tx = 1.2; ty = 0.8; }
+          }
+          j.scaleX = approachTo(j.scaleX, tx, 2 * dt);
+          j.scaleY = approachTo(j.scaleY, ty, 2 * dt);
+          // 持有：Carry 到 Player.Position + (0,-12) + CarryYOffset；
+          // 旋转按 ClampedMap(Speed.X,-300,300,+60°/-60°，地面 ±40°)
           const amp = m.onGround ? 0.6981317 : 1.0471976;
           const tgt = -clampN(m.vx, -300, 300) * (amp / 300);
           j.rot = approachTo(j.rot, tgt, Math.PI * dt);
-          j.x = m.x; j.y = m.y + GLIDER.carryY;
+          j.x = m.x; j.y = m.y + GLIDER.carryY + m.sprite.carryYOffset();
           continue;
         }
 
@@ -1180,12 +1457,16 @@
           j.rot = approachTo(j.rot, 0, Math.PI * dt);
           j.x = j.homeX;
           j.y = j.homeY + Math.sin((time + j.bobPhase) * GLIDER.bubbleFreq * Math.PI * 2) * GLIDER.bubbleAmp;
+          j.scaleX = approachTo(j.scaleX, 1, 2 * dt);
+          j.scaleY = approachTo(j.scaleY, 1, 2 * dt);
           continue;
         }
 
         // 未持有：旋转回正（Glider.Update 未持有 → target 0），动画继续走时
         j.animT += dt; j.openT = 0;
         j.rot = approachTo(j.rot, 0, Math.PI * dt);
+        j.scaleX = approachTo(j.scaleX, 1, 2 * dt);
+        j.scaleY = approachTo(j.scaleY, 1, 2 * dt);
 
         // 未持有：高摩擦计时 + 重新抓取冷却 + 地面侧滑
         if (j.highFrictionTimer > 0) j.highFrictionTimer -= dt;
@@ -1210,11 +1491,9 @@
         const nx = j.x + j.vx * dt;
         if (gliderSolidAt(nx, j.y)) {
           j.vx = -j.vx;
-          j.scaleX = 0.8; j.scaleY = 1.2;
         } else j.x = nx;
         const ny = j.y + j.vy * dt;
         if (gliderSolidAt(j.x, ny)) {
-          if (Math.abs(j.vy) > 8) { j.scaleX = 1.2; j.scaleY = 0.8; }
           j.vy = j.vy < 0 ? -j.vy * 0.5 : 0;
         } else j.y = ny;
 
@@ -1222,7 +1501,7 @@
         if (j.x < BOUND.x0 + 4) { j.x = BOUND.x0 + 4; j.vx = -j.vx; }
         else if (j.x > BOUND.x1 - 4) { j.x = BOUND.x1 - 4; j.vx = -j.vx; }
         if (j.y - 10 < BOUND.y0) { j.y = BOUND.y0 + 10; j.vy = -j.vy * 0.5; }
-        else if (j.y > BOUND.y1 + 16) { jellies.splice(i, 1); updateHud(); continue; }
+        else if (j.y > BOUND.y1 + 16) { jellies.splice(i, 1); continue; }
 
       }
     }
@@ -1235,7 +1514,6 @@
       const x = clampN(cam.x - SPAWN.x + fx * vw, BOUND.x0, BOUND.x1);
       const y = clampN(cam.y - SPAWN.y + vh * (0.18 + Math.random() * 0.27), -280, 40);
       feathers.push({ x: x, y: y, phase: Math.random() * Math.PI * 4 });   // SineWave.Randomize → [0,4π)
-      updateHud();
     }
 
     function stepFollowers(dt) {
@@ -1275,7 +1553,6 @@
         if (Math.abs(f.x - m.x) >= (STARFLY.hitW / 2 + 4) ||
             fy - STARFLY.hitH / 2 >= m.y || fy + STARFLY.hitH / 2 <= m.y - 11) continue;
         feathers.splice(i, 1);
-        updateHud();
         startFly(f);
         // FlyFeather.CollectRoutine：Shake → 0.05s 冻结；页面补整屏闪光与 feather_get
         hitstop = Math.max(hitstop, STARFLY.collectFreeze);
@@ -1475,6 +1752,25 @@
       }
       return IMG['jelly' + (Math.floor(j.animT / GLIDER.idleStep) % 10)];
     }
+    // Glider.Render 先调 sprite.DrawSimpleOutline()：把同一帧以黑色画在
+    // Position ±(1,0)/(0,±1) 四次，再画本体。描边来自代码，不在贴图里
+    // （实测 idle0.png 的 alpha 边缘没有任何近黑像素）。
+    const JELLY_OUTLINE = new Map();
+    const OUTLINE_DIRS = [[-1, 0], [0, -1], [1, 0], [0, 1]];
+    function jellyOutline(img) {
+      let c = JELLY_OUTLINE.get(img);
+      if (c) return c;
+      c = document.createElement('canvas');
+      c.width = img.naturalWidth || img.width;
+      c.height = img.naturalHeight || img.height;
+      const g = c.getContext('2d');
+      g.drawImage(img, 0, 0);
+      g.globalCompositeOperation = 'source-in';
+      g.fillStyle = '#000';
+      g.fillRect(0, 0, c.width, c.height);
+      JELLY_OUTLINE.set(img, c);
+      return c;
+    }
     function drawJellies() {
       for (const j of jellies) {
         const img = jellyImage(j);
@@ -1483,16 +1779,20 @@
         const spawn = 0.4 + 0.6 * j.spawnT;
         const w = 48 * Z * spawn * Math.max(Math.abs(j.scaleX), Math.abs(j.scaleY));
         if (p.x < -w || p.x > W + w || p.y < -w || p.y > H + w) continue;
-        // 持有且下落（Speed.Y > 20）时按 GliderMoveY 拉伸：↓(0.7,1.4) / ↑(1.2,0.8)
-        let sx = 1, sy = 1;
-        if (j === heldJelly && m.vy > 20) {
-          if (keys['s'] || keys['arrowdown']) { sx = 0.7; sy = 1.4; }
-          else if (keys['w'] || keys['arrowup']) { sx = 1.2; sy = 0.8; }
+        // ±1 世界像素 = ±Z 屏幕像素；偏移在旋转/缩放之外，和原作先挪 Position 再 Render 一致
+        const sil = jellyOutline(img);
+        for (const d of OUTLINE_DIRS) {
+          ctx.save();
+          ctx.translate(p.x + d[0] * Z, p.y + d[1] * Z);
+          ctx.rotate(j.rot);
+          ctx.scale(Z * spawn * j.scaleX, Z * spawn * j.scaleY);
+          ctx.drawImage(sil, -24, -GLIDER.originY, 48, 48);
+          ctx.restore();
         }
         ctx.save();
         ctx.translate(p.x, p.y);
         ctx.rotate(j.rot);
-        ctx.scale(Z * spawn * j.scaleX * sx, Z * spawn * j.scaleY * sy);
+        ctx.scale(Z * spawn * j.scaleX, Z * spawn * j.scaleY);
         ctx.drawImage(img, -24, -GLIDER.originY, 48, 48);   // Sprite origin (24, 27.8)
         ctx.restore();
       }
@@ -1554,7 +1854,6 @@
         if (m) { m.holdSlowFall = false; m.holdCannotDuck = false; }
         leader.past.length = 0; leader.acc = 0;
         endFly(true);
-        updateHud();
       },
       __test: {
         FOLLOWER: FOLLOW, CAP: CAP, STARFLY: STARFLY, GLIDER: GLIDER,
@@ -1734,6 +2033,7 @@
       drawDebris();                                  // floatingDebris
       if (DRAW_SPINNERS) drawBlades();               // spinner ×95（默认关闭：底部的星海会破坏虚空构图）
       drawCreatures();                               // moonCreature ×9
+      drawBird();                                    // 教程鸟（停在左上浮块）
       drawHeart();
       drawDust();
       drawParticles();
@@ -1760,6 +2060,7 @@
         ctx.fillRect(0, 0, W, H);
         ctx.globalAlpha = 1;
       }
+      drawTutorial();                                // 教程面板最后画，盖在闪光之上
     }
 
     // ===== 逻辑 =====
@@ -1774,7 +2075,6 @@
     function collectHeart() {
       heart.collected = true;
       flash = 0.85;
-      hudHeartEl.textContent = '虚空 1 / 1';
       toastEl.textContent = '拾起「虚空」· Empty Space';
       toastEl.classList.add('show');
       toastTimer = 2.6;
@@ -1809,6 +2109,8 @@
       dust.length = 0; particles.length = 0;
       hitstop = 0;
       gliderBoostTimer = 0;
+      birdReset();                             // 手动重来同样重建鸟与节点序列
+      TUT.state = 'wait'; TUT.scale = 0; TUT.armed = true; TUT.cooldown = 1.2;
       deathTimer = 0.45;
       flash = Math.max(flash, 0.35);
     }
@@ -1827,6 +2129,9 @@
       m.wallSlideDir = 0; m.wallSlideTimer = 1.2; m.dashAttackTimer = 0;
       hitstop = 0;
       gliderBoostTimer = 0;
+      // 房间重载（原作 LostLevels 每次死亡重建实体）：鸟回到初始浮块，节点序列归零
+      birdReset();
+      TUT.state = 'wait'; TUT.scale = 0; TUT.armed = true; TUT.cooldown = 1.2;
       flash = 0;                               // 泡泡演出不叠白闪
       // 死亡点可能已越出房间左右边界（虚空坠落发生在房间内，x 一般没问题，仍夹一下）
       m.x = Math.max(BOUND.x0, Math.min(BOUND.x1, m.x));
@@ -1868,6 +2173,9 @@
       if (deathTimer > 0) { deathTimer -= dt; return; }
       // FlyFeather.CollectRoutine：收集瞬间冻结 0.05s（原作 yield 0.05f）
       if (hitstop > 0) { hitstop -= dt; return; }
+
+      birdUpdate(dt);          // 先推进鸟（可能把 TUT 收起来），再跑教程状态
+      tutorialUpdate(dt);
 
       const input = {
         left: !!(keys['a'] || keys['arrowleft']),
@@ -2114,9 +2422,6 @@
       log('羽毛上限 6', feathers.length === CAP.feather, feathers.length);
       log('羽毛落在边界内', feathers.every(f => f.x >= BOUND.x0 && f.x <= BOUND.x1 && f.y >= BOUND.y0 && f.y <= BOUND.y1),
         feathers.map(f => f.x.toFixed(0) + ',' + f.y.toFixed(0)).join(' '));
-      log('HUD 同步收集数', hudCollectEl.textContent.indexOf('草莓 10/10') === 0
-        && hudCollectEl.textContent.indexOf('水母 4/4') > 0
-        && hudCollectEl.textContent.indexOf('羽毛 6/6') > 0, hudCollectEl.textContent);
       log('水母刷新避开实心块', jellies.every(j => !gliderSolidAt(j.x, j.y)),
         jellies.map(j => j.x.toFixed(0) + ',' + j.y.toFixed(0)).join(' '));
       log('水母刷新在 Madeline 近身', jellies.every(j => Math.hypot(j.x - m.x, j.y - m.y) <= 110),
@@ -2135,7 +2440,7 @@
       jellies.push(j1);
       log('PickupCollider 20×22 判定', inPickupRange(j1) && !inPickupRange(jellyAt(0, -60)),
         inPickupRange(j1) + ' / ' + inPickupRange(jellyAt(0, -60)));
-      log('抓取水母 → 持有并在 carry(0,-16) / bubble 结束',
+      log('抓取水母 → 持有并在 carry(0,-12+CarryYOffset) / bubble 结束',
         tryPickupJelly() && heldJelly === j1 && j1.x === 0 && j1.y === -16 && j1.bubble === false,
         'held=' + (heldJelly === j1) + ' @' + j1.x + ',' + j1.y + ' bubble=' + j1.bubble);
 
@@ -2228,17 +2533,18 @@
       const beforeDrop = jellies.length;
       stepJellies(1 / 60);
       log('掉出底部消失并释放名额', jellies.length === beforeDrop - 1 && !jellies.includes(jd) && jd.x === 0,
-        'before=' + beforeDrop + ' after=' + jellies.length + ' hud=' + hudCollectEl.textContent.indexOf('水母 0/4'));
+        'before=' + beforeDrop + ' after=' + jellies.length);
       ChatScene.reset();
 
-      // 拾取吸附：0.16s 内从抓取点曲线运动到 carry(0,-16)，结束才恢复位置
+      // 拾取吸附：0.16s 内从抓取点曲线运动到 carry(0,-12)，再叠加逐帧 CarryYOffset
       ChatScene.reset(); reset(0, 0);
       const ja = jellyAt(13.5, -6); jellies.push(ja);
       log('拾取开始于原位', tryPickupJelly() && ja.pickupT === GLIDER.pickupTime
         && Math.abs(ja.x - 13.5) < 1e-9 && Math.abs(ja.y + 6) < 1e-9,
         '@' + ja.x.toFixed(1) + ',' + ja.y.toFixed(1) + ' pickupT=' + ja.pickupT);
       for (let i = 0; i < 12; i++) stepJellies(1 / 60);
-      log('吸附到 carry(0,-16)', ja.pickupT === 0 && ja.x === m.x && ja.y === m.y + GLIDER.carryY,
+      log('吸附到 carry(0,-12)+CarryYOffset', ja.pickupT === 0 && ja.x === m.x
+        && ja.y === m.y + GLIDER.carryY + m.sprite.carryYOffset(),
         '@' + ja.x.toFixed(1) + ',' + ja.y.toFixed(1));
       // 上升拾取助推：PickupCoroutine L4422-4425 → Speed.Y = Min(Speed.Y, -105)
       ChatScene.reset(); reset(0, 0);
@@ -2382,11 +2688,15 @@
         solids: SOLIDS,
         layers: LAYERS,
         fg: FG_LAYERS,
-        get collected() { return heart.collected; }
+        get collected() { return heart.collected; },
+        bird: bird,
+        birdLoop: BIRD,
+        birdNodes: BIRD_NODES,
+        tutorial: TUT,
+        closeTutorial: tutorialClose
       };
 
       // 场景就绪：回放 messages.js 早到的实时消息，之后 consume 直接生效
-      updateHud();
       sceneReady = true;
       while (sceneQueue.length) consumeText(sceneQueue.shift());
 
@@ -2394,8 +2704,6 @@
         runSelfTest();
         // 自检跑完后把世界复位到展示状态，方便对画面做视觉核对
         heart.collected = false;
-        hudHeartEl.textContent = '虚空  0 / 1';
-        updateHud();
         toastEl.classList.remove('show');
         toastEl.style.display = 'none';
         respawn();
@@ -2434,13 +2742,13 @@
     main();
   })();
   </script>
-  <script src="js/api.js?v=20261106a"></script>
+  <script src="js/api.js?v=20261109d"></script>
   <script src="js/auth.js?v=20261104a"></script>
   <script src="js/felt-piano.js?v=20261003"></script>
   <script src="js/vue.global.prod.js?v=20261008a"></script>
   <script src="js/badeline-crawlout.js?v=20261107b"></script>
-<script src="js/messages.js?v=20261108a"></script>
-  <script src="js/seed.js?v=20261101c"></script>
+<script src="js/messages.js?v=20261109a"></script>
+  <script src="js/seed.js?v=20261109b"></script>
   <script>
     // v-cloak 兜底：Vue 挂载后由这里清掉，避免面板一直隐藏
     setTimeout(function () {
