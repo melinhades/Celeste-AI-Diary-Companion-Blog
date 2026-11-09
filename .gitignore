@@ -93,3 +93,14 @@ docs/ppt-sample/
 docs/celeste-rea/
 badeline-crawlout-scale-before-after.png
 docs/screenshots/*-compare.png
+
+### 临时补丁 / 备份 / 试验产物 ###
+# 一次性的 diff 快照，已应用后无保留价值
+/emotion-before.patch
+# 规格文档里的「改造前」备份，仅本地对照用
+.trae/specs/**/backup/
+# 优化音效试听样本：未进 manifest，页面不会引用
+blog-ui/celeste-sounds-opt/trial/
+
+### 嵌套仓库：GitHub Profile 用单独 clone 维护，不能作为子目录提交 ###
+github-profile/melinhades/
