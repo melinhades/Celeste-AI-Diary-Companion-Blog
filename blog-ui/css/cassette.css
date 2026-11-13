@@ -26,10 +26,21 @@ body::after {
     inset: 0;
     z-index: 0;
     pointer-events: none;
-    background: radial-gradient(120% 90% at 50% 18%, transparent 55%, rgba(4, 6, 16, 0.55) 100%);
+    background:
+        linear-gradient(90deg, rgba(4, 6, 16, 0) 34%, rgba(4, 6, 16, 0.28) 58%, rgba(4, 6, 16, 0.46) 100%),
+        radial-gradient(120% 90% at 50% 18%, transparent 55%, rgba(4, 6, 16, 0.55) 100%);
 }
-/* 背景已换成 bgs/06，关掉 common.css 的旧星空层，避免和原作星空叠加 */
-body::before { display: none; }
+/* vignette 已按原作 Style.Foregrounds 画进游戏图层（Misc/vignette.png，alpha 0.6，
+   屏幕空间、scroll=0），这里停用，避免叠加成双重暗角。右栏可读性靠 ::after 的 scrim。 */
+body::before {
+    content: '';
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+    background: none;
+}
 
 /* ============ 第六章 cassette 场景背景（bgs/06） ============
    原始虚拟分辨率 320×180；bg0/bg1/bg2 为 320×180（含透明画布），fx0 为 320×200。
@@ -87,27 +98,49 @@ body::before { display: none; }
     to   { background-position-x: var(--cx-tile); }
 }
 
-/* ============ Madeline：复用 diary/write 的 56px 像素角色与 MadelineCore ============ */
-#cxPixelMadeline {
+/* ============ 第六章 lvl_b-00 房间层（bg 瓦片 + 地形 + NPC，叠加在 bgs/06 上） ============ */
+.cx-room {
     position: fixed;
-    left: 0;
-    top: 0;
-    width: 56px;
-    height: 56px;
+    inset: 0;
+    z-index: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    image-rendering: pixelated;
+    /* 场景现在在角色层合成并统一做 ColorGrade；这层画布只做离屏暂存，不再压亮度/饱和度 */
+}
+
+/* ============ 第六章 lvl_b-00 水层（叠加层，不替换 bgs/06） ============ */
+.cx-water {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    image-rendering: pixelated;
+}
+
+/* ============ 可操作 Madeline（celeste-character.js 接线层） ============ */
+#cxMadeline {
+    position: fixed;
+    inset: 0;
     z-index: 2;
+    width: 100%;
+    height: 100%;
     image-rendering: pixelated;
     pointer-events: none;
     user-select: none;
     -webkit-user-drag: none;
     opacity: 0;
-    transition: opacity 0.2s;
-    will-change: transform;
+    transition: opacity 0.25s;
 }
-#cxPixelMadeline.is-ready { opacity: 1; }
+#cxMadeline.is-ready { opacity: 1; }
 
 .cx-wrap {
     position: relative;
-    z-index: 1;
+    /* UI 永远压在场景层之上：Madeline/老奶奶走到右栏下方时，文字仍清晰可读 */
+    z-index: 3;
     max-width: 1080px;
     margin: 0 auto;
     padding: 38px 24px 72px;
@@ -333,7 +366,22 @@ body::before { display: none; }
 .vol-r { text-align: right; min-width: 20px; letter-spacing: 0; }
 
 /* ============ 右：音源 / 场景 ============ */
-.cx-sources { display: flex; flex-direction: column; }
+.cx-sources { display: flex; flex-direction: column; position: relative; z-index: 0; }
+/* 右栏可读性 scrim：只压在右栏这块 UI 上，不动场景亮度/对比 */
+.cx-sources::before {
+    content: '';
+    position: absolute;
+    inset: -18px -12px;
+    z-index: -1;
+    pointer-events: none;
+    background: linear-gradient(90deg, rgba(4,6,16,0) 0%, rgba(4,6,16,0.26) 42%, rgba(4,6,16,0.46) 100%);
+}
+/* 场景精灵会走到右栏下方，给文案一层暗描边保证可读 */
+.cx-sources .sr-name,
+.cx-sources .sr-tag,
+.cx-sources .cx-lbl {
+    text-shadow: 0 1px 2px rgba(2, 4, 10, 0.85), 0 0 8px rgba(2, 4, 10, 0.55);
+}
 .cx-lbl {
     font-size: 10px;
     letter-spacing: 0.3em;

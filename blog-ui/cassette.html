@@ -7,7 +7,7 @@
     <link rel="icon" href="icon/OIP.webp?v=20261105a" type="image/webp">
 <title>cassette.exe - BerryOS</title>
 <link rel="stylesheet" href="css/common.css?v=20261104a">
-<link rel="stylesheet" href="css/cassette.css?v=20261108a">
+<link rel="stylesheet" href="css/cassette.css?v=20261110a">
 
 </head>
 <body>
@@ -19,6 +19,10 @@
     <div class="cx-bg-layer cx-bg-bg2"></div>
     <div class="cx-bg-layer cx-bg-fx2"></div>
 </div>
+<!-- 第六章 lvl_b-00 房间层：bgs/06 视差之上的 bg 瓦片 + 前景地形 + 老奶奶/光柱/瀑布（叠加，不替换上一轮背景） -->
+<canvas class="cx-room" id="cxRoom" aria-hidden="true"></canvas>
+<!-- 第六章 lvl_b-00 水层：叠加在房间地形之上 -->
+<canvas class="cx-water" id="cxWater" aria-hidden="true"></canvas>
 <div class="cx-wrap">
     <header class="cx-top">
         <a class="cx-back" href="berryos.html" title="返回桌面">‹ 返回桌面</a>
@@ -139,12 +143,14 @@
     </div>
 </div>
 
-<img id="cxPixelMadeline" src="celeste-gui/madeline-move.gif" alt="" aria-hidden="true" draggable="false">
+<canvas id="cxMadeline" aria-hidden="true"></canvas>
 
 <script src="js/gapless-audio.js?v=20261028b"></script>
 <script src="js/cassette.js?v=20261028b"></script>
-<script src="js/madeline-core.js?v=20261108a"></script>
 <script src="js/cassette-bg.js?v=20261108a"></script>
-<script src="js/cassette-madeline.js?v=20261108a"></script>
+<script src="js/lib/sfx.js?v=20261109a"></script>
+<script src="js/celeste-hair.js?v=20261109a"></script>
+<script src="js/celeste-character.js?v=20261110b"></script>
+<script src="js/cassette-madeline.js?v=20261112a"></script>
 </body>
 </html>

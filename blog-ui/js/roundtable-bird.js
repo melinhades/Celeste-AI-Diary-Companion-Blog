@@ -96,6 +96,10 @@
     var LEAVE_SPEED = 260;         // 离场爬升 px/s（引擎单位）
     var HEAT_DECAY = 0.07;         // 会场气氛每秒降温
     var LISTEN_LINGER = 1200;      // 发言结束后的倾听驻留 ms
+    // 圆桌页鸟音效总增益（不改素材，只乘在宿主距离衰减上）：
+    // 原来近处满 1.0 偏吵，统一乘 0.55；最远处保底 0.10，保证还能听见
+    var BIRD_GAIN = 0.55;
+    var BIRD_MIN_GAIN = 0.10;
 
     // ===== 甩鸟彩蛋参数（FlingBird IL 原值，1x 口径） =====
     var FLING_SPEED = { x: 380, y: -100 };   // static FlingSpeed
@@ -108,7 +112,8 @@
         angry: .30, angryAlt: .30, yell: .38, wtf: .26,
         freakA: .34, freakB: .38, freakC: .42, lostcontrol: .42,
         mock: .18, scoff: .14, worried: .14, sideworried: .14, nervous: .12,
-        sad: .10, sadder: .10, upset: .10,
+        panic: .32, worriedAlt: .14,
+        sad: .10, sadder: .10, upset: .10, peaceful: -.04,
         excited: -.10, nailedit: -.12, laugh: -.14, sidehappy: -.12,
         distracted: -.10, determined: -.06
     };
@@ -182,9 +187,10 @@
         // ★ 近似 3D 衰减（同 celeste-bird.html 口径：离注视点 520px 线性到 0.12），
         //   圆桌页没有玩家角色，注视点取视口中心
         eng.sfx.setGainSource(function () {
-            if (!actor) return 1;
+            if (!actor) return BIRD_GAIN;
             var bx = actor.pos.x * K, by = actor.pos.y * K;
-            return Math.min(1, Math.max(0.12, 1 - Math.hypot(bx - innerWidth / 2, by - innerHeight / 2) / 900));
+            var atten = Math.min(1, Math.max(0.12, 1 - Math.hypot(bx - innerWidth / 2, by - innerHeight / 2) / 900));
+            return Math.max(BIRD_MIN_GAIN, BIRD_GAIN * atten);
         });
     }
     var engineClock = 0;           // 引擎秒钟（freeze 期间不推进）

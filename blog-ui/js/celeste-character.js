@@ -214,7 +214,9 @@
         jumpFast:   { path: 'jumpFast',   delay: 0.10, frames: [0, 1],      loop: true },
         fallSlow:   { path: 'jumpSlow',   delay: 0.10, frames: [2, 3],      goto: null },
         fallFast:   { path: 'jumpFast',   delay: 0.10, frames: [2, 3],      goto: null },
-        duck:       { path: 'duck',       delay: 0,    frames: [0],         loop: true },
+        // 原作 duck 只有 1 帧，Atlas 里是单帧文件 duck.png（没有 NN 后缀）；
+        // 不加 single 会拼成 duck00.png → 静默 404，只剩头发层在画。
+        duck:       { path: 'duck',       delay: 0,    frames: [0],         loop: true, single: true },
         // Sprites.xml L11：<Anim id="pickUp" path="pickup" delay="0.06" />（StPickup 0.16s）
         pickUp:     { path: 'pickup',     delay: 0.06, frames: range(0, 4),  goto: null },
         // 水母/可举物持有姿态，逐字取自 Sprites.xml L7-10：

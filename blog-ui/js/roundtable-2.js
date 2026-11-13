@@ -648,20 +648,22 @@ initHeader();
 
     /* ===== 自然说话节拍：长台词按句截断、逐句放出，句间停顿，逐字慢放 =====
        delta 到达多快都不影响呈现——文本先入缓冲，播放器按自己的节拍消费。 */
-    function SPEAK_CHAR_MS() { return 30 + Math.random() * 22; }      // 每字 30-52ms：文字先加载到缓冲，匀速自然说出（原瞬间出字太快、52-90ms 又偏慢）
+    // 逐字节奏以 diary 页为基准：diary.js 打字机主循环统一 45 + rand*20ms
+    function SPEAK_CHAR_MS() { return 45 + Math.random() * 20; }
+    // 句间停顿同样对齐 diary 的分段间隔 240 + rand*200ms（diary.js doAddMadelineMessage）
     function speakGap(ch) {
-        if (ch === '？' || ch === '?' || ch === '！' || ch === '!') return 260 + Math.random() * 200;
-        if (ch === '…') return 220 + Math.random() * 160;
-        if (ch === '\n') return 160 + Math.random() * 140;
-        return 200 + Math.random() * 160;                              // 句号：短暂换气即可
+        if (ch === '？' || ch === '?' || ch === '！' || ch === '!') return 300 + Math.random() * 240;
+        if (ch === '…') return 260 + Math.random() * 200;
+        if (ch === '\n') return 200 + Math.random() * 160;
+        return 240 + Math.random() * 200;                              // 句号：留出和 diary 一样的换气
     }
     // 无标点长句软切：22-34 字窗口内优先在逗号切，找不到硬切 26 字
     function softCut(s) {
         var win = Math.min(s.length, 22 + Math.floor(Math.random() * 12));
         for (var i = win - 1; i >= 12; i--) {
-            if ('，,、；;'.indexOf(s[i]) !== -1) return { len: i + 1, pause: 120 + Math.random() * 100 };
+            if ('，,、；;'.indexOf(s[i]) !== -1) return { len: i + 1, pause: 160 + Math.random() * 120 };
         }
-        return { len: Math.min(s.length, 26), pause: 100 + Math.random() * 80 };
+        return { len: Math.min(s.length, 26), pause: 140 + Math.random() * 100 };
     }
     // 取一个句段 {len, pause}；null = 句子还没到齐、且长度不够软切，继续等 delta
     function nextSeg(b, waiting) {

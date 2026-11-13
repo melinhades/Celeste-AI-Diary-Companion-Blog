@@ -86,6 +86,12 @@
             <artifactId>s3</artifactId>
         </dependency>
 
+        <!-- 铭记页多人同屏：位置同步走 WebSocket（聊天/在线列表仍走 SSE） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
+
         <!-- 架构守护测试（ArchitectureTest）：包级循环依赖 + Controller 不得直连 Mapper -->
         <dependency>
             <groupId>com.tngtech.archunit</groupId>

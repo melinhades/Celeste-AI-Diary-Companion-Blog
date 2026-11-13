@@ -36,6 +36,8 @@
             oshiro:   { normal:13, nervous:8, worried:8, serious:8, sidehappy:8, sidesuspicious:8, sideworried:9, drama:6, lostcontrol:6 }
         };
         const SERIES_DIR = { mad:'madeline', bade:'ghost', granny:'granny', theo:'theo', oshiro:'oshiro' };
+        // 铭记页多人同屏复用同一份表情表（只读暴露，不影响聊天页原有行为）
+        window.ChatEmoji = window.ChatEmoji || { packs: EMOJI_PACKS, frames: EMOJI_FRAMES, dirs: SERIES_DIR };
         const EmojiAnim = (() => {
             const FRAME_MS = 110;
             const BASE = 'Atlases/Portraits/';
@@ -519,7 +521,8 @@
                             maybeBird(m);
                             // 场景互动只吃实时消息：历史回放不生成草莓/水母/羽毛
                             if (window.ChatScene) {
-                                window.ChatScene.consume(m.content || '');
+                                // 传完整消息：铭记页多人同屏需要 userId 把表情落到对应角色
+                                window.ChatScene.consume(m);
                                 // 仅真人消息把聊天框重新显现（bird 吉祥物不弹）
                                 if (String(m.userId) !== String(myUserId) && String(m.userId) !== BIRD_ID) {
                                     window.ChatScene.revealChat();

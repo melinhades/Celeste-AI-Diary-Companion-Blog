@@ -37,6 +37,7 @@ logs/
 
 ### Agent 测试产物（截图 / REA IL dump，体积大且可再生） ###
 .screenshots/
+screenshots/
 
 ### Application ###
 application-dev.properties

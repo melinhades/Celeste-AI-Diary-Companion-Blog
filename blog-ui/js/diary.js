@@ -2858,7 +2858,7 @@ function inferReplyEmotion(text) {
     // 播放器每帧回调：把 Badeline 本体当前帧交给头发叠层（用原始帧路径查锚点元数据）
     function baHairFrame(act, i) {
         if (!PM_BADELINE_STANDIN || !window.PngAnim) return;
-        pmHairSwitch(act, window.PngAnim.frameUrl(act, i));
+        pmHairSwitch(act, window.PngAnim.frameUrl(act, i), i);
     }
     function baTick(now) {
         if (!baAnim) return;
@@ -2937,44 +2937,43 @@ function inferReplyEmotion(text) {
     pmHairCanvas.setAttribute('aria-hidden', 'true');
     document.body.appendChild(pmHairCanvas);
     const pmHairCtx = pmHairCanvas.getContext('2d');
-    const pmHairMeasureCanvas = document.createElement('canvas');
-    pmHairMeasureCanvas.width = 32;
-    pmHairMeasureCanvas.height = 32;
-    const pmHairMeasureCtx = pmHairMeasureCanvas.getContext('2d');
-    const PM_HAIR_META = Object.create(null);   // src -> {ax, ay, fx, fy}，全部在 32×32 空间
+    const PM_HAIR_META = Object.create(null);   // src -> {w, h}：只记帧尺寸，锚点按原作规则算
     let pmHairTex = null, pmHairObj = null, pmHairReady = false, pmHairFailed = false;
     let pmHairAct = '', pmHairFrameSrc = '', pmHairVisible = false, pmHairLastT = 0;
 
+    // 原作 PlayerHair 的锚点只认精灵 Origin，不认像素内容：
+    //   Nodes[0] = RenderPosition(脚底) + (0,-9*Scale.Y) + HairOffset*(Facing,1)
+    // characters/player 与 characters/badeline 的帧统一 Origin (16,32)（Sprites.xml <Justify .5,1>），
+    // 所以这里只记录帧尺寸；更新时用 (宽/2, 高) 当脚底，(0,-9) 由 Hair.update 内部减。
+    // HairOffset 逐帧不同，直接抄原作 Sprites.xml <Metadata><Frames path="..." hair="x,y[:bangs]|...">：
+    //   索引 = 该动作 PNG 目录里的帧号（0 起），与 PngAnim.frameUrl / PM_FRAMES 序号一致；
+    //   x 在 Hair.update 里乘朝向；第三项 :n 指定刘海帧（bangs0n）。
+    // 两套 metadata 各自独立：替班身体帧读 badeline，Madeline 读 player。
+    const PM_HAIR_OFF_BAD = {
+        lookUp: [[0, -2], [0, -2], [0, -2], [0, -2], [-1, -1, 1], [-1, -2, 1], [-1, -2, 1], [-1, -2, 1], [-1, -3, 1]],
+        idle:   [[0, -2], [0, -2], [0, -2], [0, -2], [0, -1], [0, -1], [0, -1], [0, -1], [0, -1]],
+        tired:  [[0, 1], [0, 2], [0, 1], [0, 0]],
+        laugh:  [[0, -3], [0, -3], [0, -3], [0, -2], [0, -2], [0, -2]],
+        angry:  [[-1, -3], [-1, -3], [-1, -3], [-1, -2], [-1, -2], [-1, -2]]
+    };
+    const PM_HAIR_OFF_PLAYER = {
+        idleA:   [[0, -2], [-1, -2, 1], [-1, -2, 2], [-1, -2, 2], [-1, -2, 2], [-1, -1, 2], [-1, -1, 2], [-1, -1, 2], [-1, -1, 1], [-1, -1, 1], [-1, -1], [0, -1]],
+        idleC:   [[0, -2], [-1, -2], [-2, -2], [-2, -2], [-2, -2], [-2, -2], [1, -1], [2, 0], [0, 0], [-1, -1], [0, -1], [0, -1]],
+        lookUp:  [[0, -2], [0, -2], [0, -2], [0, -2], [-1, -2, 1], [-1, -2, 1], [-1, -2, 1], [-1, -2, 1], [-1, -3, 1]],
+        tired:   [[0, 1], [0, 2], [0, 1], [0, 0]],
+        shaking: [[0, -1]],
+        hug:     [[0, 2]]
+    };
+    function pmHairOffset(act, idx, frameSrc) {
+        const table = PM_BADELINE_STANDIN ? PM_HAIR_OFF_BAD : PM_HAIR_OFF_PLAYER;
+        const key = PM_BADELINE_STANDIN ? act
+            : String(act || frameSrc).split('/').pop().replace(/\.(png|gif)$/i, '').replace(/\d+$/, '');
+        const row = table[key];
+        return (row && (row[idx] || row[row.length - 1])) || [0, 0];
+    }
     function pmHairMeasure(src, im) {
         try {
-            if (!pmHairMeasureCtx) return;
-            pmHairMeasureCtx.clearRect(0, 0, 32, 32);
-            pmHairMeasureCtx.drawImage(im, 0, 0, 32, 32);
-            const d = pmHairMeasureCtx.getImageData(0, 0, 32, 32).data;
-            let minX = 32, minY = 32, maxX = -1, maxY = -1;
-            for (let y = 0; y < 32; y++) {
-                for (let x = 0; x < 32; x++) {
-                    if (d[(y * 32 + x) * 4 + 3] > 0) {
-                        if (x < minX) minX = x;
-                        if (x > maxX) maxX = x;
-                        if (y < minY) minY = y;
-                        if (y > maxY) maxY = y;
-                    }
-                }
-            }
-            if (maxX < 0) return;
-            // 发根 = alpha 包围盒顶行的水平中心
-            let tl = 32, tr = -1;
-            for (let x = minX; x <= maxX; x++) {
-                if (d[(minY * 32 + x) * 4 + 3] > 0) {
-                    if (x < tl) tl = x;
-                    if (x > tr) tr = x;
-                }
-            }
-            PM_HAIR_META[src] = {
-                ax: (tl + tr) / 2, ay: minY,          // 头顶中心（发根）
-                fx: (minX + maxX) / 2, fy: maxY       // 脚底中心（链式模拟的参考点）
-            };
+            PM_HAIR_META[src] = { w: im.naturalWidth || 32, h: im.naturalHeight || 32 };
         } catch (e) { /* 静默：量不出来就不叠发 */ }
     }
     function pmHairPreload(src) {
@@ -3014,7 +3013,8 @@ function inferReplyEmotion(text) {
         pmHairVisible = false;
         pmHairCanvas.style.display = 'none';
     }
-    function pmHairSwitch(act, frameSrc) {
+    let pmHairIdx = 0;   // 当前动作内的帧号（查原作逐帧 HairOffset）
+    function pmHairSwitch(act, frameSrc, idx) {
         if (pmHairAct !== act) {
             pmHairAct = act;
             pmHairLastT = 0;
@@ -3023,6 +3023,7 @@ function inferReplyEmotion(text) {
             pmHairHide();
         }
         pmHairFrameSrc = frameSrc || '';
+        pmHairIdx = idx || 0;
     }
     function pmHairUpdate(now) {
         try {
@@ -3032,18 +3033,20 @@ function inferReplyEmotion(text) {
             if (!pmHairFrameSrc) { pmHairHide(); return; }
             const m = PM_HAIR_META[pmHairFrameSrc];
             if (!m) { pmHairHide(); return; }   // 该帧还没量完：静默跳过，不阻塞行为树
+            const off = pmHairOffset(pmHairAct, pmHairIdx, pmHairFrameSrc);
+            const ax = m.w / 2 + off[0], ay = m.h - 9 + off[1];   // 原作发根：脚底(帧底边中心) - 9 + 逐帧 HairOffset
             if (pmHairObj.nodes.length !== 4) {
                 pmHairObj.nodes = [];
-                for (let i = 0; i < 4; i++) pmHairObj.nodes.push({ x: m.ax - i * 2, y: m.ay + i * 2 });
+                for (let i = 0; i < 4; i++) pmHairObj.nodes.push({ x: ax - i * 2, y: ay + i * 2 });
                 pmHairLastT = now;
             }
             if (!pmHairLastT) pmHairLastT = now;
             const dt = Math.min(0.05, Math.max(0.001, (now - pmHairLastT) / 1000));
             pmHairLastT = now;
             // 本体在本地空间永远朝右，朝向翻转由外层的 scaleX(-1) 统一完成
-            pmHairObj.update(m.fx, m.fy, 1, m.ax - m.fx, m.ay - (m.fy - 9), dt, 1);
+            pmHairObj.update(m.w / 2, m.h, 1, off[0], off[1], dt, 1);
             pmHairCtx.clearRect(0, 0, 32, 32);
-            pmHairObj.draw(pmHairCtx, p => p, 1, 0, 1);
+            pmHairObj.draw(pmHairCtx, p => p, 1, off[2] || 0, 1);
             pmHairCanvas.style.width = layoutCache.bw + 'px';
             pmHairCanvas.style.height = layoutCache.bh + 'px';
             pmHairCanvas.style.transform = pm.style.transform;
@@ -3217,7 +3220,7 @@ function inferReplyEmotion(text) {
             const loop = !!PM_FRAME_LOOP[name];
             const delay = PM_FRAME_DELAY[name] || 55;
             pm.src = frames[0];
-            pmHairSwitch(name, frames[0]);
+            pmHairSwitch(name, frames[0], 0);
             pmFrameTimer = setInterval(() => {
                 i++;
                 if (i >= frames.length) {
@@ -3225,14 +3228,14 @@ function inferReplyEmotion(text) {
                     i = 0;
                 }
                 pm.src = frames[i];
-                pmHairSwitch(name, frames[i]);
+                pmHairSwitch(name, frames[i], i);
                 pmForceSize();
             }, delay);
         } else if (pm.src.indexOf(name) === -1) {
             pm.src = name;
-            pmHairSwitch(name, name);
+            pmHairSwitch(name, name, 0);
         } else {
-            pmHairSwitch(name, name);
+            pmHairSwitch(name, name, 0);
         }
         pmCurName = name;
         pmForceSize();

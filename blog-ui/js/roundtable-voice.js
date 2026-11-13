@@ -3,8 +3,8 @@
    - 每个角色一个 blip 声道（单 Audio 复用，新声打断旧声）；新角色开口先停掉其他角色
    - 句首 per（前置音）+ mid_A/B/C 轮转，每声在 01-10 号里随机，语速/音量随情绪档位
    - 发声节拍器：SSE delta 经网络合批成涌浪到达，旧实现收到一片就同步连播，
-     共享声道互掐导致一句只剩一两声；现 pushText 只记账，泵循环按 150-210ms
-     节奏出声（对齐 write 页打字节奏），一声核销约 9 字、积压跳读、流停顿自动静音
+     共享声道互掐导致一句只剩一两声；现 pushText 只记账，泵循环按 135-195ms
+     节奏出声（对齐 diary 页「每 3 字一声」），一声核销 3 字、积压自动加快、流停顿自动静音
    - 情绪枚举与素材文件夹 1:1 冻结，按最新一句台词推断情绪逐段切换音色
    - 特殊音效（独立声道、即时预载、一场/一句最多触发一次）：
        · Theo  yolo/yolo_solo.wav   —— 散会时他最后发言透着累
@@ -26,9 +26,10 @@
     var OSHIRO_BASE = 'celeste-sounds/oshiro/';
     var ABC = ['mid_A', 'mid_B', 'mid_C'];
     /* ===== 发声节拍器：声数跟句子长度走（长句多声、短句少声），结尾补齐 ===== */
-    var BLIP_GAP = 130;            // 两声基准间隔 ms
-    var BLIP_JITTER = 50;          // 间隔抖动，避免机械感
-    var CHARS_PER_BLIP = 6;        // 约每 6 个非标点字符 1 声（长句自动多声、短句少声）
+    // diary 页：每字 45-65ms、每 3 个非标点字符一声 → 两声间隔约 135-195ms
+    var BLIP_GAP = 135;            // 两声基准间隔 ms
+    var BLIP_JITTER = 60;          // 间隔抖动，避免机械感（135-195ms 与 diary 同区间）
+    var CHARS_PER_BLIP = 3;        // 每 3 个非标点字符 1 声（与 diary 的 speakCount % 3 一致）
     var PUMP_MS = 40;              // 泵循环 tick
     var SKIP_CHARS = /[\s。！？!?…，,、；;：:（）()·—\-「」『』""'']/;   // 不发声字符
 
@@ -82,23 +83,31 @@
     }
 
     /* ============ Madeline（沿用 diary 页词表与档位） ============ */
-    var MADE_DIRS = ['determined', 'upset', 'surprised', 'angry', 'sad', 'sadder', 'deadpan', 'distracted'];
+    var MADE_DIRS = ['determined', 'upset', 'surprised', 'angry', 'sad', 'sadder', 'deadpan', 'distracted',
+                     'panic', 'peaceful'];
     var MADE_RATE = {
         determined: [0.92, 1.06], upset: [0.88, 1.0], surprised: [1.0, 1.18], angry: [0.95, 1.12],
-        sad: [0.82, 0.94], sadder: [0.8, 0.9], deadpan: [0.85, 0.95], distracted: [0.9, 1.05]
+        sad: [0.82, 0.94], sadder: [0.8, 0.9], deadpan: [0.85, 0.95], distracted: [0.9, 1.05],
+        panic: [0.86, 0.98], peaceful: [0.94, 1.08]
     };
     var MADE_VOL = {
         determined: 0.75, upset: 0.65, surprised: 0.85, angry: 0.85,
-        sad: 0.55, sadder: 0.5, deadpan: 0.6, distracted: 0.7
+        sad: 0.55, sadder: 0.5, deadpan: 0.6, distracted: 0.7,
+        panic: 0.6, peaceful: 0.8
     };
+    // 立绘有 panic / peaceful，发声目录没有同名文件夹 → 发声退到最接近的 upset / determined
+    var MADE_SOUND_DIR = { panic: 'upset', peaceful: 'determined' };
     function inferMadeline(t) {
-        if (/抱抱|哭|难过|辛苦|不容易|委屈/.test(t)) return Math.random() < 0.5 ? 'sad' : 'sadder';
+        if (/害怕|好怕|不敢|救命|慌了|恐慌|喘不过气|紧张|发抖|颤抖/.test(t)) return 'panic';
+        if (/摸摸|乖|可爱|温柔|喜欢你|最喜欢|辛苦了|休息一下|谢谢你|陪你/.test(t)) return 'peaceful';
+        if (/抱抱|哭|难过|不容易|委屈/.test(t)) return Math.random() < 0.5 ? 'sad' : 'sadder';
         if (/唉|算了|服了|离谱|无言|无语/.test(t)) return 'deadpan';
         if (/诶|居然|竟然|没想到|真的吗|天哪|真的假的/.test(t)) return 'surprised';
         if (/深呼吸|别怕|没事|慢慢来|不着急|不安|担心/.test(t)) return 'upset';
         if (/可恶|该死|凭什么|受够|生气|烦死/.test(t)) return 'angry';
         if (/哈哈|嘿嘿|哇|太棒|真好|开心|耶|加油|一起/.test(t)) return 'distracted';
-        return 'determined';
+        // 无关键词时按 diary 的默认池轻微轮换（默认 4/5、可爱 1/5），避免整场只有一个表情
+        return Math.random() < 0.8 ? 'determined' : 'peaceful';
     }
 
     /* ============ Theo（7 情绪，文件夹即枚举） ============ */
@@ -213,7 +222,7 @@
     function start(speakerId, respondTo) {
         cur = null;                 // 新开口硬切：上一人的发声余量直接作废
         if (!maySound()) return;
-        cur = { id: speakerId, seq: 0, chars: 0, full: '', ended: false, nextBlipAt: 0 };
+        cur = { id: speakerId, seq: 0, chars: 0, full: '', ended: false, nextBlipAt: 0, soloPlayed: false };
         if (speakerId === 'madeline') { silenceOthers(chMadeline); chMadeline.silence(); }
         else if (speakerId === 'theo') { silenceOthers(chTheo); chTheo.silence(); }
         else if (speakerId === 'granny') {
@@ -257,7 +266,9 @@
             else variant = (seq === 0) ? 'per' : ABC[(seq - 1) % 3];
         }
         var num = randNum(10);
-        var src = base + dir + '/' + variant + '/' + dir + '_' + variant + '_' + num + '.wav';
+        // oshiro 的切片目录是小写 mid_a/mid_b/mid_c（文件名里的 A/B/C 是大写），线上区分大小写，必须按目录真实大小写取
+        var variantDir = base === OSHIRO_BASE ? variant.toLowerCase() : variant;
+        var src = base + dir + '/' + variantDir + '/' + dir + '_' + variant + '_' + num + '.wav';
         if (base === MADE_BASE) chMadeline.play(src, rate, vol);
         else if (base === THEO_BASE) chTheo.play(src, rate, vol);
         else if (base === GRAN_BASE) chGranny.play(src, rate, vol);
@@ -284,13 +295,22 @@
     function playOne() {
         var tail = trailingSentence(cur.full || '');
         if (cur.id === 'badeline') {
-            if (window.BadelineVoice) window.BadelineVoice.play(window.BadelineVoice.infer(tail));
+            if (!window.BadelineVoice) return;
+            var bemo = window.BadelineVoice.infer(tail);
+            if (bemo === 'sad') {
+                // sad 是整段单文件 solo，不能每个 blip 重播一遍
+                if (!cur.soloPlayed) { window.BadelineVoice.play('sad'); cur.soloPlayed = true; }
+                else window.BadelineVoice.play('sigh');
+                return;
+            }
+            window.BadelineVoice.play(bemo);
             return;   // Badeline 的 per+ABC 序列由 BadelineVoice 内部维护
         }
         if (cur.id === 'madeline') {
             var md = inferMadeline(tail);
+            var mdir = MADE_SOUND_DIR[md] || md;
             lastMadelineEmotion = md;   // 供退出时写入共享情绪存储
-            playLoopBlip(MADE_BASE, md, cur.seq,
+            playLoopBlip(MADE_BASE, mdir, cur.seq,
                 pickRate(MADE_RATE[md]), MADE_VOL[md] + (Math.random() - 0.5) * 0.08, 'std');
         } else if (cur.id === 'theo') {
             var td = inferTheo(tail);

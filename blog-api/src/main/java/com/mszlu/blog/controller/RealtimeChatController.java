@@ -1,6 +1,7 @@
 package com.mszlu.blog.controller;
 
 import com.mszlu.blog.dao.pojo.SysUser;
+import com.mszlu.blog.handler.MemorialSceneWebSocketHandler;
 import com.mszlu.blog.service.TokenService;
 import com.mszlu.blog.utils.UserThreadLocal;
 import com.mszlu.blog.vo.Result;
@@ -38,6 +39,9 @@ public class RealtimeChatController {
 
     @Autowired
     private TokenService tokenService;
+
+    @Autowired
+    private MemorialSceneWebSocketHandler sceneHandler;
 
     /** 单条消息最长 500 字 */
     private static final int MAX_CONTENT_LEN = 500;
@@ -167,6 +171,17 @@ public class RealtimeChatController {
                 ? user.getNickname() : user.getAccount());
         payload.put("ts", System.currentTimeMillis());
         broadcast("typing", payload);
+        return Result.success(null);
+    }
+
+    /** pagehide 快速离开：让同屏玩家立刻看不到自己，不依赖 WebSocket 关闭检测 */
+    @PostMapping("leave")
+    public Result leave() {
+        SysUser user = UserThreadLocal.get();
+        if (user == null) {
+            return Result.fail(401, "未登录");
+        }
+        sceneHandler.leaveByUserId(String.valueOf(user.getId()));
         return Result.success(null);
     }
 

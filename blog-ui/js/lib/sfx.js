@@ -23,6 +23,7 @@ window.Sfx = (function () {
     var OPT_DIR = 'celeste-sounds-opt/';           // 优化版根目录（可整体删除）
     var OPT_MAP = null;                            // manifest 未就绪/缺失时为 null → 全部原文件
     var POOL = {};                                 // 原路径 src -> Audio
+    var LOOPS = {};                                // 循环音 src -> Audio（独立池，不与 play 抢实例）
 
     function withExt(name) {
         return /\.(wav|mp3|ogg|m4a|mp4)$/i.test(name) ? name : name + '.wav';
@@ -114,6 +115,39 @@ window.Sfx = (function () {
         });
     }
 
+    /**
+     * 循环播放：opts = { dir, volume }
+     * 与 play 分开池化，避免同名的单次音效把循环实例 seek 到 0。
+     * 文件缺失时 play() 的 Promise 被吞掉，保持静默。
+     */
+    function loop(name, opts) {
+        opts = opts || {};
+        try {
+            var src = srcOf(name, opts.dir);
+            var a = LOOPS[src];
+            if (!a) {
+                a = make(src);
+                a.loop = true;
+                a.volume = opts.volume === undefined ? 1 : opts.volume;
+                LOOPS[src] = a;
+            } else if (opts.volume !== undefined) {
+                a.volume = opts.volume;
+            }
+            if (a.paused) {
+                var p = a.play();
+                if (p && p.catch) p.catch(function () {});
+            }
+        } catch (e) { /* 无声降级 */ }
+    }
+
+    /** 停止循环（保留实例，下次 loop 可续播） */
+    function stopLoop(name, opts) {
+        try {
+            var a = LOOPS[srcOf(name, opts && opts.dir)];
+            if (a) a.pause();
+        } catch (e) { /* 无声降级 */ }
+    }
+
     /** 共享 AudioContext（首次调用创建；不支持 WebAudio 返回 null） */
     function ac() {
         if (window.__mirrorAC) return window.__mirrorAC;
@@ -128,6 +162,8 @@ window.Sfx = (function () {
         play: play,
         fire: fire,
         preload: preload,
+        loop: loop,
+        stopLoop: stopLoop,
         ac: ac,
         srcOf: srcOf
     };

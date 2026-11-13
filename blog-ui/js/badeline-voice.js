@@ -70,11 +70,20 @@
     function infer(t) {
         t = String(t || '');
         if (/！！|！{2,}|\?！|？！/.test(t) && t.length <= 26) return 'yell';
+        // 崩溃边缘：freakA/B/C 三组立绘在 roundtable 里原本永远走不到，这里补上语境分支
+        if (/崩溃|要疯|疯了|撑不住|受不了|全完了|完蛋了|彻底没救/.test(t)) {
+            return ['freakA', 'freakB', 'freakC'][Math.floor(Math.random() * 3)];
+        }
+        // 真正的低落：命中 sad 时 play() 走 sad_solo 单文件，立绘用 ghost/sad
+        if (/想哭|难过|舍不得|一个人|失去|不在了|走了|太累/.test(t)) return 'sad';
         if (/亲爱的|宝贝|真可爱|当然了|是吧\s*[？?]?\s*$/.test(t)) return 'scoff';
         if (/行吧|你赢了|随便你|无所谓/.test(t)) return 'upset';
         if (/(……[\s\S]*){2,}/.test(t) || (/^……/.test(t) && t.length <= 14)) return 'sigh';
         if (/别怕|没事的|有我在|活下来了|应得/.test(t)) return 'concerned';
         if (/对不起|抱歉|冲你发火/.test(t)) return 'worried';
+        // 冷嘲 / 隐忍的担心：对应 ghost 的 angryAlt / worriedAlt 两组素材
+        if (/冷笑|哼|活该|早说过|随你|不意外/.test(t)) return 'angryAlt';
+        if (/不安|担心|万一|发慌|心慌|紧张/.test(t)) return 'worriedAlt';
         if (/早说了|跟每次一样|想太多|别回放/.test(t)) return 'angry';
         if (/干得不错|别得意|别飘/.test(t)) return 'serious';
         return 'normal';

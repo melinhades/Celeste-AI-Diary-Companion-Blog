@@ -5,6 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>铭记 · 山间聊天室</title>
   <style>
+    /* 铭记页名字/聊天统一字体：英文 Renogare 已由 index-bird.css 提供，这里补中文子集 */
+    @font-face {
+      font-family: 'CelesteZH';
+      src: url('fonts/celeste-zh-subset.woff2') format('woff2');
+      font-display: swap;
+      font-weight: 100 900;
+    }
     :root { color-scheme: dark; }
     * { box-sizing: border-box; }
     html, body {
@@ -220,7 +227,7 @@
 
   <script src="js/lib/sfx.js?v=20261108a"></script>
   <script src="js/celeste-hair.js"></script>
-  <script src="js/celeste-character.js?v=20261109a"></script>
+  <script src="js/celeste-character.js?v=20261110b"></script>
   <script src="js/bird-motion.js?v=20261031a"></script>
   <script src="js/page-loading.js?v=20261107b"></script>
   <script>
@@ -828,7 +835,11 @@
       jump:         { start: 29, count: 7,  delay: 0.08, next: 'fly' },
       fly:          { frames: ['birdFly3', 'birdFly0', 'birdFly1', 'birdFly2'], delay: 0.1, next: 'fly' }
     };
-    const BIRD_GAIN = 0.6;
+    // 鸟音效统一增益：4 个播放点（啄地 bird_peck / 叫唤 bird_squawk / 换位 bird_relocate /
+    // 起飞 bird_startle）都走 BIRD_GAIN。原始值 0.6，本次整体降一档（×0.7 ≈ -3dB），
+    // 只改播放增益、不动资源文件，降完仍可听清。
+    const BIRD_GAIN_MASTER = 0.7;
+    const BIRD_GAIN = 0.6 * BIRD_GAIN_MASTER;   // 0.6 → 0.42
     const crowImg = i => IMG['crow' + String(i).padStart(2, '0')] || null;
     // fly 用独立贴图，其余动画按 crow 序号取图
     const birdImgAt = (a, i) => a.frames
@@ -863,7 +874,8 @@
     }
 
     // 教程面板：BirdTutorialGui.Render 的逐行移植（宽随 Scale 展开、高固定、下方 37 行尾鳍）
-    const GUI_FONT = '700 24px "Segoe UI", "Microsoft YaHei", system-ui, sans-serif';
+    const guiFontPx = px => '700 ' + px + 'px "Segoe UI", "Microsoft YaHei", system-ui, sans-serif';
+    const GUI_FONT = guiFontPx(24);
     const GUI_BG = '#061526', GUI_LINE = '#ffffff', GUI_TEXT = '#6179e2';
     const GUI_LINE_H = 80, GUI_INFO_H = 24, GUI_PAD = 8;  // 行高取键帽 80，避免键帽压住标题
     const GUI_KEYS = {
@@ -1029,49 +1041,77 @@
       for (const c of panel.controls) controlsW += tutControlWidth(c);
       const panelW = Math.max(controlsW, infoW) + 64;
       const K = Math.min(Z / 3, (W - 24) / panelW) * 0.5;   // 原版 K = artScale/3；整体再缩到 50%
-      const w = panelW * S;
-      const h = GUI_INFO_H + GUI_LINE_H + 32;
+      // 关键：整块面板不再用 ctx.scale(K) 缩放，而是换算成屏幕像素后逐项取整。
+      // K = Z/6 是 0.667 这类非整数：缩放后 1px 白边/尾鳍线会落到半像素上被抗锯齿成灰，
+      // 文字也会经过字形位图重采样 —— 这就是「缩到 50% 后发糊」的来源。
+      const bw = Math.max(2, Math.round(panelW * S * K));
+      const bh = Math.round((GUI_INFO_H + GUI_LINE_H + 32) * K);
+      const gap = Math.round(32 * K);
+      const border = Math.max(2, Math.round(6 * K));
       const p = toScreen({ x: bird.x, y: bird.y - 16 });
-      const top = p.y - (h + 32) * K;
-      const dy = top < 8 ? 8 - top : 0;           // 贴顶时整体下移，避免被裁掉
-      const x = -w / 2, y = -h - 32;
-      ctx.translate(Math.round(p.x), Math.round(p.y + dy));
-      ctx.scale(K, K);
-      ctx.imageSmoothingEnabled = false;
-      // 白边 → 深底 → 下方 37 行三角尾鳍（中段挖空）
-      ctx.fillStyle = GUI_LINE; ctx.fillRect(x - 6, y - 6, w + 12, h + 12);
-      ctx.fillStyle = GUI_BG;   ctx.fillRect(x, y, w, h);
+      const bottom = Math.round(p.y);
+      const bodyTop = bottom - gap - bh;
+      const dy = bodyTop < 8 ? 8 - bodyTop : 0;         // 贴顶时整体下移，避免被裁掉
+      const cx = Math.round(p.x);
+      const bx = cx - Math.round(bw / 2);
+      const by = bodyTop + dy;
+      // 白边 → 深底（整数矩形，边缘为实色，不出半透明灰边）
+      ctx.fillStyle = GUI_LINE;
+      ctx.fillRect(bx - border, by - border, bw + border * 2, bh + border * 2);
+      ctx.fillStyle = GUI_BG;
+      ctx.fillRect(bx, by, bw, bh);
+      // 下方 37 行三角尾鳍（中段挖空）：每行吸附到整数像素带
+      const bodyBottom = by + bh;
       for (let i = 0; i <= 36; i++) {
-        const ww = (73 - i * 2) * S;
-        ctx.fillStyle = GUI_LINE; ctx.fillRect(-ww / 2, y + h + i, ww, 1);
-        if (ww > 12) { ctx.fillStyle = GUI_BG; ctx.fillRect(-ww / 2 + 6, y + h + i, ww - 12, 1); }
+        const y0 = Math.round(bodyBottom + i * K);
+        const y1 = Math.round(bodyBottom + (i + 1) * K);
+        if (y1 <= y0) continue;
+        const ww = Math.round((73 - i * 2) * S * K);
+        if (ww <= 0) continue;
+        const wx = cx - Math.round(ww / 2);
+        ctx.fillStyle = GUI_LINE;
+        ctx.fillRect(wx, y0, ww, y1 - y0);
+        const inset = Math.round(6 * K);
+        if (ww > inset * 2) {
+          ctx.fillStyle = GUI_BG;
+          ctx.fillRect(wx + inset, y0, ww - inset * 2, y1 - y0);
+        }
       }
-      if (w > 3) {
+      if (bw > 14) {
+        // 文字按最终像素字号栅格化（不再叠加 ctx.scale），字形不经过任何重采样
+        const fs = Math.max(6, Math.round(24 * K * S));
+        ctx.font = guiFontPx(fs);
+        ctx.imageSmoothingEnabled = false;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
         ctx.fillStyle = GUI_TEXT;
-        ctx.save(); ctx.scale(S, 1); ctx.fillText(panel.info, 0, y + 16); ctx.restore();
-        const rowY = y + 16 + GUI_INFO_H + GUI_LINE_H * 0.5;
-        let cp = -controlsW / 2;
-        for (const c of panel.controls) {
-          if (typeof c === 'string') {
-            const tw = guiTextWidth(c);
-            ctx.save(); ctx.scale(S, 1);
+        ctx.fillText(panel.info, cx, Math.round(by + 16 * K));
+        const rowCy = Math.round(by + (16 + GUI_INFO_H + GUI_LINE_H * 0.5) * K);
+        const pad = Math.max(1, Math.round(GUI_PAD * K));
+        const capH = Math.max(2, Math.round(80 * K));
+        // 行内按屏幕像素排版，宽度用最终字号量；面板宽仍沿用 24px 量出的设计宽度
+        const items = panel.controls.map(c => typeof c === 'string'
+          ? { c, w: ctx.measureText(c).width + 1 }
+          : { c, w: Math.round((GUI_KEYS[c.k].wide ? 120 : 80) * K) + pad * 2 });
+        let rowW = 0;
+        for (const it of items) rowW += it.w;
+        let cp = cx - Math.round(rowW / 2);
+        for (const it of items) {
+          if (typeof it.c === 'string') {
+            const tw = ctx.measureText(it.c).width;
             ctx.textBaseline = 'middle';
-            ctx.fillStyle = GUI_TEXT; ctx.fillText(c, cp + tw / 2 + 1, rowY + 2);
-            ctx.fillStyle = '#ffffff'; ctx.fillText(c, cp + tw / 2 - 1, rowY - 2);
-            ctx.restore();
-            cp += tw + 1;
+            ctx.fillStyle = GUI_TEXT; ctx.fillText(it.c, Math.round(cp + tw / 2) + 1, rowCy + 1);
+            ctx.fillStyle = '#ffffff'; ctx.fillText(it.c, Math.round(cp + tw / 2) - 1, rowCy - 1);
+            cp += it.w;
           } else {
-            const g = GUI_KEYS[c.k];
-            const tw = g.wide ? 120 : 80, th = 80;
-            cp += GUI_PAD;
-            ctx.save(); ctx.scale(S, 1);
+            const g = GUI_KEYS[it.c.k];
+            const cw = Math.round((g.wide ? 120 : 80) * K);
+            const top = rowCy - Math.round(capH / 2);
+            cp += pad;
             const base = IMG[g.wide ? 'guiBase2' : 'guiBase'];
-            if (base) ctx.drawImage(base, cp, rowY - th / 2, tw, th);
-            if (IMG[g.glyph]) ctx.drawImage(IMG[g.glyph], cp, rowY - th / 2, tw, th);
-            ctx.restore();
-            cp += tw + GUI_PAD;
+            if (base) ctx.drawImage(base, cp, top, cw, capH);
+            if (IMG[g.glyph]) ctx.drawImage(IMG[g.glyph], cp, top, cw, capH);
+            cp += cw + pad;
           }
         }
       }
@@ -1155,6 +1195,10 @@
     //   · Player.StStarFly：StartStarFly → StarFlyCoroutine(0.42s) → StarFlyUpdate(timer 2s) → StarFlyEnd
     const FOLLOW = { sample: 0.02, minDist: 3, maxPoints: 350, stepIndex: 5, delay: 0.3 };
     const CAP = { berry: 10, jelly: 4, feather: 6 };
+    // 水母落位方式（随机二选一，fixedChance 可调）：
+    //   fixed = Glider..ctor(bubble:true)：状态锁死 + Render 的 24 点气泡圈（原作定点水母）
+    //   fall  = bubble=false：从高处按原作重力（target vy 30）飘落，落地后回到 bubble 悬浮
+    const JELLY_PLACE = { fixedChance: 0.5, fallHeight: 160, tries: 24 };
     const STARFLY = {
       chargeAnim: 0.32, chargeTotal: 0.42,
       speedStart: 250, accel: 1000, turnRate: 5.5850534,
@@ -1291,8 +1335,36 @@
       });
     }
 
-    // 水母：像金羽毛一样在相机可见区两侧随机刷新（最多 4 只），不再伴飞
-    // Glider.Update 会在未持有且与 Player 相撞时销毁，因此落点要避开实心块
+    // ===== 随机刷新落点校验（通用）=====
+    // 按实体碰撞盒与 solids（浮空块 + 门；jumpThru 是单向板，不算 solid）做重叠检测。
+    // 所有随机刷新的物品（水母 / 羽毛）都走 canPlaceAt；重试到上限仍失败就不生成，不再硬塞。
+    const PLACE_BOX = {
+      jelly: { w: 20, h: 22, ox: -10, oy: -16 },     // Glider Holdable.PickupCollider 20×22 @(-10,-16)
+      feather: { w: 20, h: 20, ox: -10, oy: -10 }    // FlyFeather Hitbox 20×20 @(-10,-10)
+    };
+    function boxHitsSolid(l, t, r, b) {
+      for (let i = 0; i < WALLS.length; i++) {
+        const q = WALLS[i];
+        if (q.x >= r || q.x + q.w <= l) continue;
+        if (q.y >= b || q.y + q.h <= t) continue;
+        return true;
+      }
+      return false;
+    }
+    function canPlaceAt(x, y, box) {
+      return !boxHitsSolid(x + box.ox, y + box.oy, x + box.ox + box.w, y + box.oy + box.h);
+    }
+    // 飘落起点下方必须有可落脚的实心面（Glider 的碰撞只认 Solids，不认 jumpThru）
+    function solidBelow(x, y) {
+      for (let i = 0; i < WALLS.length; i++) {
+        const q = WALLS[i];
+        if (x + 4 <= q.x || x - 4 >= q.x + q.w) continue;
+        if (q.y > y && q.y <= BOUND.y1) return true;
+      }
+      return false;
+    }
+
+    // Glider.Update 的碰撞盒（8×10 @(-4,-10)），物理用；刷新落点用上面的通用校验
     function gliderSolidAt(x, y) {
       const l = x - 4, r = x + 4, t = y - 10, b = y;
       for (let i = 0; i < WALLS.length; i++) {
@@ -1303,27 +1375,37 @@
       }
       return false;
     }
+
+    // 水母：收到 🪼 时在 Madeline 近身随机刷新（左右 24–80px、上方 26–68px），最多 4 只。
+    // 两种放置方式随机二选一（JELLY_PLACE.fixedChance）：
+    //   fixed → Glider(bubble:true)，原地定死 + 24 点气泡圈
+    //   fall  → bubble=false，从高处受重力飘落，落地后转回 bubble 悬浮
     function spawnJelly() {
       if (jellies.length >= CAP.jelly) return;
-      // 在 Madeline 近身随机刷新（左右 24–80px、上方 26–68px），
-      // 保证一次跳跃/冲刺就能抓到；落点避开实心块与玩家碰撞盒
-      let x = m.x, y = m.y - 40, ok = false;
-      for (let a = 0; a < 8 && !ok; a++) {
+      const falling = Math.random() >= JELLY_PLACE.fixedChance;
+      for (let a = 0; a < JELLY_PLACE.tries; a++) {
         const side = Math.random() < 0.5 ? -1 : 1;
-        x = clampN(m.x + side * (24 + Math.random() * 56), BOUND.x0 + 8, BOUND.x1 - 8);
-        y = clampN(m.y - (26 + Math.random() * 42), BOUND.y0 + 10, 40);
-        ok = !gliderSolidAt(x, y);
+        const x = clampN(m.x + side * (24 + Math.random() * 56), BOUND.x0 + 8, BOUND.x1 - 8);
+        const y = clampN(m.y - (26 + Math.random() * 42), BOUND.y0 + 10, 40);
+        if (!canPlaceAt(x, y, PLACE_BOX.jelly)) continue;
+        let sy = y;
+        if (falling) {
+          sy = Math.max(BOUND.y0 + 12, y - JELLY_PLACE.fallHeight);
+          if (!canPlaceAt(x, sy, PLACE_BOX.jelly) || !solidBelow(x, sy)) continue;
+        }
+        jellies.push({
+          x: x, y: sy, vx: 0, vy: 0, spawnT: 0, phase: Math.random() * 6,
+          // Glider..ctor(bubble=true)：未抓取前锚在 startPos + SineWave(0.3) 起伏，抓取时 bubble=false
+          bubble: !falling, place: falling ? 'fall' : 'fixed',
+          homeX: x, homeY: sy, bobPhase: Math.random() * 6.283,
+          rot: 0, scaleX: 1, scaleY: 1,
+          highFrictionTimer: 0, gravityTimer: 0,
+          pickupT: 0, pickupFromX: 0, pickupFromY: 0, pickupVx: 0, pickupVy: 0, boostDirY: 0,
+          minHoldTimer: 0, cannotHoldTimer: 0, animT: Math.random() * 1.2, openT: 0
+        });
+        return;
       }
-      if (!ok) { x = clampN(m.x + 40, BOUND.x0 + 8, BOUND.x1 - 8); y = m.y - 24; }
-      jellies.push({
-        x: x, y: y, vx: 0, vy: 0, spawnT: 0, phase: Math.random() * 6,
-        // Glider..ctor(bubble=true)：未抓取前锚在 startPos + SineWave(0.3) 起伏，抓取时 bubble=false
-        bubble: true, homeX: x, homeY: y, bobPhase: Math.random() * 6.283,
-        rot: 0, scaleX: 1, scaleY: 1,
-        highFrictionTimer: 0, gravityTimer: 0,
-        pickupT: 0, pickupFromX: 0, pickupFromY: 0, pickupVx: 0, pickupVy: 0, boostDirY: 0,
-        minHoldTimer: 0, cannotHoldTimer: 0, animT: Math.random() * 1.2, openT: 0
-      });
+      // 全部候选点都压到 solids：本次不生成（不硬塞）
     }
 
     // Holdable.PickupCollider 20×22 @(-10,-16)：与 Player 8×11 身体盒重叠即进入抓取范围
@@ -1360,6 +1442,7 @@
       best.vx = 0; best.vy = 0;
       best.gravityTimer = 0;
       best.bubble = false;                 // Glider.OnPickup：bubble = 0（此后按物理物件处理）
+      best.place = null;                   // 抓过之后不再走「落地转悬浮」的刷新逻辑
       best.scaleX = 1; best.scaleY = 1;
       best.x = m.x + best.pickupFromX; best.y = m.y + best.pickupFromY;
       m.vx = 0; m.vy = 0;
@@ -1497,6 +1580,14 @@
           j.vy = j.vy < 0 ? -j.vy * 0.5 : 0;
         } else j.y = ny;
 
+        // 自然飘落：落地（下方实心、竖向速度已归零）→ 转回常规 bubble 悬浮
+        if (j.place === 'fall' && j.vy === 0 && gliderSolidAt(j.x, j.y + 1)) {
+          j.place = 'fixed';
+          j.bubble = true;
+          j.homeX = j.x; j.homeY = j.y;
+          j.vx = 0;
+        }
+
         // 越界：左右上夹取，掉出下边界 RemoveSelf
         if (j.x < BOUND.x0 + 4) { j.x = BOUND.x0 + 4; j.vx = -j.vx; }
         else if (j.x > BOUND.x1 - 4) { j.x = BOUND.x1 - 4; j.vx = -j.vx; }
@@ -1506,14 +1597,19 @@
       }
     }
 
-    // 羽毛：只在相机可见区左右两侧刷新（居中聊天卡不会整块压住），同时最多 6 颗
+    // 羽毛：只在相机可见区左右两侧刷新（居中聊天卡不会整块压住），同时最多 6 颗。
+    // 落点同样走 canPlaceAt（FlyFeather 20×20 碰撞盒），重试用尽则不生成
     function spawnFeather() {
       if (feathers.length >= CAP.feather) return;
       const vw = W / Z, vh = H / Z;
-      const fx = Math.random() < 0.5 ? 0.06 + Math.random() * 0.24 : 0.70 + Math.random() * 0.24;
-      const x = clampN(cam.x - SPAWN.x + fx * vw, BOUND.x0, BOUND.x1);
-      const y = clampN(cam.y - SPAWN.y + vh * (0.18 + Math.random() * 0.27), -280, 40);
-      feathers.push({ x: x, y: y, phase: Math.random() * Math.PI * 4 });   // SineWave.Randomize → [0,4π)
+      for (let a = 0; a < JELLY_PLACE.tries; a++) {
+        const fx = Math.random() < 0.5 ? 0.06 + Math.random() * 0.24 : 0.70 + Math.random() * 0.24;
+        const x = clampN(cam.x - SPAWN.x + fx * vw, BOUND.x0, BOUND.x1);
+        const y = clampN(cam.y - SPAWN.y + vh * (0.18 + Math.random() * 0.27), -280, 40);
+        if (!canPlaceAt(x, y, PLACE_BOX.feather)) continue;
+        feathers.push({ x: x, y: y, phase: Math.random() * Math.PI * 4 });   // SineWave.Randomize → [0,4π)
+        return;
+      }
     }
 
     function stepFollowers(dt) {
@@ -1771,6 +1867,19 @@
       JELLY_OUTLINE.set(img, c);
       return c;
     }
+    // Glider.Render L333-339：bubble 时在 Position + PlatformAdd(i) 画 24 个白点，
+    // x 从 -12 到 +11，y 偏移 round(sin(TimeActive + i*0.2) * 1.8)，两端(i<=1/i>=22) 0.4 透明度
+    function drawJellyBubble(j) {
+      const ta = j.animT;
+      for (let i = 0; i < 24; i++) {
+        const p = toScreen({
+          x: j.x - 12 + i,
+          y: j.y - 5 + Math.round(Math.sin(ta + i * 0.2) * 1.8)
+        });
+        ctx.fillStyle = (i <= 1 || i >= 22) ? 'rgba(255,255,255,.4)' : 'rgba(255,255,255,.8)';
+        ctx.fillRect(Math.round(p.x), Math.round(p.y), Z, Z);   // Draw.Point：1 世界像素
+      }
+    }
     function drawJellies() {
       for (const j of jellies) {
         const img = jellyImage(j);
@@ -1795,6 +1904,8 @@
         ctx.scale(Z * spawn * j.scaleX, Z * spawn * j.scaleY);
         ctx.drawImage(img, -24, -GLIDER.originY, 48, 48);   // Sprite origin (24, 27.8)
         ctx.restore();
+        // 原作顺序：先描边、再本体、最后气泡圈（盖在最上层）
+        if (j.bubble) drawJellyBubble(j);
       }
     }
 
@@ -1831,6 +1942,8 @@
     }
 
     // messages.js 在场景脚本之后才加载，但 SSE 可能早到：先同步暴露 → 未就绪入队 → main() 后回放
+    const chatHooks = [];
+    const chatBacklog = [];
     window.ChatScene = {
       get ready() { return sceneReady; },
       get flying() { return !!fly; },
@@ -1842,8 +1955,31 @@
           flying: !!fly, held: !!heldJelly
         };
       },
-      consume(content) {
-        const t = String(content || '');
+      // 铭记页多人同屏：注册“实时消息”回调（需要 userId 做俯身表情）
+      onChat(fn) {
+        if (typeof fn !== 'function') return;
+        chatHooks.push(fn);
+        if (chatBacklog.length) {
+          const pending = chatBacklog.splice(0, chatBacklog.length);
+          for (const msg of pending) fn(msg);
+        }
+      },
+      toast(text, seconds) {
+        if (!toastEl) return;
+        toastEl.textContent = String(text || '');
+        toastEl.classList.add('show');
+        toastTimer = seconds || 2.6;
+      },
+      consume(msg) {
+        const isObj = msg && typeof msg === 'object';
+        const t = isObj ? String(msg.content || '') : String(msg || '');
+        if (isObj) {
+          if (chatHooks.length) { for (const fn of chatHooks) fn(msg); }
+          else {
+            chatBacklog.push(msg);
+            if (chatBacklog.length > 40) chatBacklog.shift();
+          }
+        }
         if (!sceneReady) { if (t) sceneQueue.push(t); return; }
         consumeText(t);
       },
@@ -2041,10 +2177,23 @@
       drawFeathers();
       drawBerries();
       const inBubble = bubbleFlying();
-      if (fly) drawFly(); else if (!inBubble) m.draw(ctx, toScreen, Z);
+      const mp = window.__memorialMP;
+      if (fly) {
+        if (mp) mp.drawBodies(ctx, toScreen, Z, null);
+        drawFly();
+      } else if (!inBubble) {
+        // 多人同屏：ghost 和本地角色在同一个玩家组里按脚底 y 排序
+        if (mp) mp.drawBodies(ctx, toScreen, Z, m);
+        else m.draw(ctx, toScreen, Z);
+      } else if (mp) {
+        // 泡泡暗幕下仍要推进 ghost 的插值/动画，否则会僵住
+        mp.drawBodies(ctx, toScreen, Z, null);
+      }
       drawJellies();
       drawFrontBerries();
       drawForegrounds();                             // purplesunset（additive .25）盖在关卡之上
+      // 名字/表情最后叠在角色组之上，但不盖住聊天卡和教程
+      if (mp) mp.drawOverlays(ctx, toScreen, Z, m);
       // FormationBackdrop（depth -1999900）：fade 3/s 升到 1，黑 rect 的 alpha = fade * 0.5 * 0.85
       // 覆盖整个世界，泡泡玩家（depth -2000000）画在它之上。
       if (inBubble) {
@@ -2417,15 +2566,30 @@
       consumeText('🍓'.repeat(12));
       log('草莓跟随上限 10', berries.length === CAP.berry, berries.length);
       consumeText('🪼'.repeat(6));
+      // 落点校验失败会让本次刷新不生成，多给几次调用把上限填满
+      for (let i = 0; i < 60 && jellies.length < CAP.jelly; i++) consumeText('🪼');
       log('水母上限 4', jellies.length === CAP.jelly, jellies.length);
       consumeText('🪶'.repeat(8));
+      for (let i = 0; i < 60 && feathers.length < CAP.feather; i++) consumeText('🪶');
       log('羽毛上限 6', feathers.length === CAP.feather, feathers.length);
       log('羽毛落在边界内', feathers.every(f => f.x >= BOUND.x0 && f.x <= BOUND.x1 && f.y >= BOUND.y0 && f.y <= BOUND.y1),
         feathers.map(f => f.x.toFixed(0) + ',' + f.y.toFixed(0)).join(' '));
-      log('水母刷新避开实心块', jellies.every(j => !gliderSolidAt(j.x, j.y)),
-        jellies.map(j => j.x.toFixed(0) + ',' + j.y.toFixed(0)).join(' '));
-      log('水母刷新在 Madeline 近身', jellies.every(j => Math.hypot(j.x - m.x, j.y - m.y) <= 110),
+      log('水母刷新避开实心块', jellies.every(j => canPlaceAt(j.x, j.y, PLACE_BOX.jelly)),
+        jellies.map(j => j.x.toFixed(0) + ',' + j.y.toFixed(0) + ':' + j.place).join(' '));
+      log('羽毛刷新避开实心块', feathers.every(f => canPlaceAt(f.x, f.y, PLACE_BOX.feather)),
+        feathers.map(f => f.x.toFixed(0) + ',' + f.y.toFixed(0)).join(' '));
+      log('水母刷新在 Madeline 近身', jellies.every(j => Math.abs(j.x - m.x) <= 90),
         jellies.map(j => (j.x - m.x).toFixed(0) + ',' + (j.y - m.y).toFixed(0)).join(' '));
+      // 落点校验本身：实心块内 false、空处 true
+      log('落点校验 canPlaceAt', !canPlaceAt(-72, -48, PLACE_BOX.jelly) && canPlaceAt(0, -40, PLACE_BOX.jelly),
+        '块内=' + canPlaceAt(-72, -48, PLACE_BOX.jelly) + ' 空处=' + canPlaceAt(0, -40, PLACE_BOX.jelly));
+      // 全候选点都压到 solids 时不生成（不硬塞）：Math.random 固定到右侧受压点
+      ChatScene.reset(); reset(0, 0);
+      const rndSave = Math.random;
+      Math.random = () => 0.9999;
+      for (let i = 0; i < 4; i++) spawnJelly();
+      Math.random = rndSave;
+      log('刷新全失败则不生成', jellies.length === 0, 'count=' + jellies.length);
 
       // ===== 水母：可持有物件（Glider / Holdable / Player HOLDING 分支）=====
       const jellyAt = (x, y) => ({
@@ -2467,6 +2631,15 @@
       log('未抓取水母原地悬浮（bubble）',
         jb.bubble === true && jb.x === 0 && Math.abs(jb.y - -40) <= GLIDER.bubbleAmp + 0.01 && jb.vy === 0,
         'bubble=' + jb.bubble + ' @' + jb.x + ',' + jb.y.toFixed(2) + ' vy=' + jb.vy);
+
+      // 自然飘落：place='fall' 的水母受重力下落，落地后转回 bubble 悬浮
+      ChatScene.reset(); reset(0, 0);
+      const jfall = jellyAt(0, -120); jfall.place = 'fall'; jfall.bubble = false; jellies.push(jfall);
+      const yStartFall = jfall.y;
+      for (let i = 0; i < 600 && jfall.place === 'fall'; i++) stepJellies(1 / 60);
+      log('飘落水母落地转悬浮',
+        jfall.place === 'fixed' && jfall.bubble === true && jfall.y > yStartFall && jfall.homeY === jfall.y,
+        'place=' + jfall.place + ' bubble=' + jfall.bubble + ' y=' + yStartFall + '→' + jfall.y.toFixed(1));
 
       // Player.PickupCoroutine：抓到的瞬间 Speed 清零，0.16s 吸附结束后恢复（Y 封顶 0，上升拾取 -105）
       ChatScene.reset(); reset(0, 0);
@@ -2699,6 +2872,7 @@
       // 场景就绪：回放 messages.js 早到的实时消息，之后 consume 直接生效
       sceneReady = true;
       while (sceneQueue.length) consumeText(sceneQueue.shift());
+      window.dispatchEvent(new CustomEvent('memorial:scene-ready'));
 
       if (TEST) {
         runSelfTest();
@@ -2748,6 +2922,7 @@
   <script src="js/vue.global.prod.js?v=20261008a"></script>
   <script src="js/badeline-crawlout.js?v=20261107b"></script>
 <script src="js/messages.js?v=20261109a"></script>
+<script src="js/memorial-multiplayer.js?v=20261109a"></script>
   <script src="js/seed.js?v=20261109b"></script>
   <script>
     // v-cloak 兜底：Vue 挂载后由这里清掉，避免面板一直隐藏
