@@ -369,6 +369,7 @@ public class MemorialSceneWebSocketHandler extends TextWebSocketHandler {
         try {
             if (client.session.isOpen()) client.session.close(CloseStatus.SERVER_ERROR);
         } catch (Exception ignored) {
+            // 关闭过程抛异常（底层连接已断开），此处无需处理：会话引用已从 sessions 移除
         }
         // 心跳超时/写失败时不会走 afterConnectionClosed（会话已被这里移除），
         // 必须主动广播一次 roster，否则其他人会一直看到这个 ghost
