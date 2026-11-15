@@ -11,6 +11,7 @@ import com.mszlu.blog.dao.pojo.SysUser;
 import com.mszlu.blog.service.MemoryService;
 import com.mszlu.blog.service.ai.AiClient;
 import com.mszlu.blog.service.ai.AiMessage;
+import com.mszlu.blog.service.ai.AiTraceRecorder;
 import com.mszlu.blog.service.ai.PromptBuilder;
 import com.mszlu.blog.service.vector.VectorCollection;
 import com.mszlu.blog.service.vector.VectorHit;
@@ -64,9 +65,25 @@ public class MemoryServiceImpl implements MemoryService {
     private VectorStore vectorStore;
     @Autowired
     private AiClient aiClient;
+    @Autowired
+    private AiTraceRecorder aiTraceRecorder;
 
     @Override
     public List<Memory> getRelevant(String userId, String userContent) {
+        boolean owner = aiTraceRecorder.begin("memory_retrieval", userId, null);
+        boolean ok = false;
+        try {
+            List<Memory> result = doGetRelevant(userId, userContent);
+            ok = true;
+            return result;
+        } finally {
+            if (owner) {
+                aiTraceRecorder.end(ok, null);
+            }
+        }
+    }
+
+    private List<Memory> doGetRelevant(String userId, String userContent) {
         long startMs = System.currentTimeMillis();
         // 用 LinkedHashMap 按插入顺序去重（key = memory id）
         Map<String, Memory> picked = new LinkedHashMap<>();
@@ -86,6 +103,7 @@ public class MemoryServiceImpl implements MemoryService {
 
         // 2. RAG：当前消息向量化，交给 VectorStore 取 Top 8（内部含缓存 + 时间衰减 × 重要性融合）
         boolean vectorHit = false;
+        List<Map<String, Object>> traceHits = new ArrayList<>();
         if (userContent != null && !userContent.isEmpty()) {
             float[] queryVec = aiClient.embed(userContent, userId);
             if (queryVec != null) {
@@ -95,7 +113,14 @@ public class MemoryServiceImpl implements MemoryService {
                     picked.putIfAbsent(hit.getId(), hit.getMemory());
                     vectorScores.put(hit.getId(), hit.getScore());
                     vectorHit = true;
+                    Map<String, Object> traceHit = new LinkedHashMap<>();
+                    traceHit.put("source", "memory");
+                    traceHit.put("score", hit.getScore());
+                    traceHit.put("content", hit.getMemory() == null ? null : hit.getMemory().getContent());
+                    traceHits.add(traceHit);
                 }
+                aiTraceRecorder.retrieval("记忆向量检索", userContent, 8, traceHits, startMs,
+                        "collection=MEMORY");
             }
         }
 
@@ -342,6 +367,8 @@ public class MemoryServiceImpl implements MemoryService {
     @Override
     @Async("aiExecutor")
     public void chunkDiary(String userId, String diaryId, String title, String content) {
+        boolean traceOwner = aiTraceRecorder.begin("diary_index", userId, title);
+        boolean failed = false;
         try {
             if (diaryId == null) return;
             List<VectorRecord> records = new ArrayList<>();
@@ -366,9 +393,13 @@ public class MemoryServiceImpl implements MemoryService {
                 }
             }
         } catch (Exception e) {
+            failed = true;
             log.error("日记分片失败, diaryId={}", diaryId, e);
         } finally {
             vectorStore.invalidate(userId);  // P1：日记分片重存后清缓存
+            if (traceOwner) {
+                aiTraceRecorder.end(!failed, null);
+            }
         }
     }
 
@@ -408,6 +439,21 @@ public class MemoryServiceImpl implements MemoryService {
     // ================= RAG 统一检索工具 =================
     @Override
     public List<ContextChunk> searchContext(String userId, String query, int limit) {
+        boolean owner = aiTraceRecorder.begin("rag_retrieval", userId, query);
+        boolean ok = false;
+        try {
+            List<ContextChunk> result = doSearchContext(userId, query, limit);
+            ok = true;
+            return result;
+        } finally {
+            if (owner) {
+                aiTraceRecorder.end(ok, null);
+            }
+        }
+    }
+
+    private List<ContextChunk> doSearchContext(String userId, String query, int limit) {
+        long startedAt = System.currentTimeMillis();
         float[] qv = aiClient.embed(query, userId);
         if (qv == null) return new ArrayList<>();
 
@@ -444,7 +490,23 @@ public class MemoryServiceImpl implements MemoryService {
         }
 
         // P1 新：分源配额重排（memory 40% / diary 40% / lore 20%）
-        return reRank(scored, limit);
+        List<Map<String, Object>> traceHits = new ArrayList<>();
+        for (Map.Entry<ContextChunk, Double> entry : scored) {
+            ContextChunk chunk = entry.getKey();
+            Map<String, Object> traceHit = new LinkedHashMap<>();
+            traceHit.put("source", chunk.getSource());
+            traceHit.put("score", entry.getValue());
+            traceHit.put("content", chunk.getText());
+            traceHits.add(traceHit);
+        }
+        List<ContextChunk> ranked = reRank(scored, limit);
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("memory", scored.stream().filter(e -> "memory".equals(e.getKey().getSource())).count());
+        meta.put("diary", scored.stream().filter(e -> "diary".equals(e.getKey().getSource())).count());
+        meta.put("lore", scored.stream().filter(e -> "lore".equals(e.getKey().getSource())).count());
+        meta.put("returned", ranked.size());
+        aiTraceRecorder.retrieval("RAG 混合检索", query, limit, traceHits, startedAt, meta);
+        return ranked;
     }
 
     /** 最简 2-gram 关键词提取：连续中文/英文段切成长度 2 的片 */

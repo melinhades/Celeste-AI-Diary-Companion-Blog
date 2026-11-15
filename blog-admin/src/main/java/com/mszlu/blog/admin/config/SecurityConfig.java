@@ -52,11 +52,16 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http.authorizeHttpRequests(auth -> auth
+                        // 登录页、错误页与根级静态资源：不匹配规则时会被拒绝，这里显式放行
+                        .requestMatchers("/", "/login.html", "/error", "/favicon.ico",
+                                "/darkswamp.png", "/fonts/**").permitAll()
                         .requestMatchers("/css/**", "/img/**", "/js/**", "/plugins/**").permitAll()
                         // 自定义 service 实时权限认证：超管直接放行，普通管理员按 ms_permission.path 逐条比对
                         .requestMatchers("/admin/**").access((authenticationSupplier, context) ->
                                 new AuthorizationDecision(authService.auth(context.getRequest(), authenticationSupplier.get())))
-                        .requestMatchers("/pages/**").authenticated())
+                        .requestMatchers("/pages/**").authenticated()
+                        // 兜底：其余路径不再直接 403，交给静态资源/404 处理
+                        .anyRequest().permitAll())
                 .formLogin(form -> form
                         .loginPage("/login.html")
                         .loginProcessingUrl("/login")

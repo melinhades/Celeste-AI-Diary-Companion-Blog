@@ -15,6 +15,7 @@ import com.mszlu.blog.service.ProactiveService;
 import com.mszlu.blog.service.SysUserService;
 import com.mszlu.blog.service.ai.AiClient;
 import com.mszlu.blog.service.ai.AiMessage;
+import com.mszlu.blog.service.ai.AiTraceRecorder;
 import com.mszlu.blog.service.ai.PromptBuilder;
 import com.mszlu.blog.service.ai.BadelineStageRules;
 import com.mszlu.blog.service.diarychat.*;
@@ -94,6 +95,8 @@ public class DiaryServiceImpl implements DiaryService {
 
     @Autowired
     private AiClient aiClient;
+    @Autowired
+    private AiTraceRecorder aiTraceRecorder;
 
     @Autowired
     @Qualifier("aiExecutor")
@@ -205,6 +208,8 @@ public class DiaryServiceImpl implements DiaryService {
     private void analyzeEmotionAsync(String userId, String diaryId, String content) {
         if (content == null || content.trim().isEmpty()) return;
         java.util.concurrent.CompletableFuture.runAsync(() -> {
+            boolean traceOwner = aiTraceRecorder.begin("diary_emotion", userId, diaryId);
+            boolean ok = false;
             try {
                 String snippet = content.substring(0, Math.min(1500, content.length()));
                 java.util.List<AiMessage> msgs = new java.util.ArrayList<>();
@@ -216,8 +221,20 @@ public class DiaryServiceImpl implements DiaryService {
                 upd.setEmotion(String.valueOf(data.get("topEmotion")));
                 upd.setEmotionDetail(JSON.toJSONString(data));
                 diaryMapper.updateById(upd);
+                java.util.Map<String, Object> scoreMeta = new java.util.LinkedHashMap<>();
+                scoreMeta.put("topEmotion", data.get("topEmotion"));
+                scoreMeta.put("valence", data.get("valence"));
+                scoreMeta.put("events", data.get("events"));
+                aiTraceRecorder.score("情绪强度(1-5)",
+                        data.get("intensity") == null ? null : Double.valueOf(String.valueOf(data.get("intensity"))),
+                        scoreMeta);
+                ok = true;
             } catch (Exception e) {
                 log.warn("日记情绪分析失败 userId={} diaryId={}", userId, diaryId, e);
+            } finally {
+                if (traceOwner) {
+                    aiTraceRecorder.end(ok, null);
+                }
             }
         }, aiExecutor);
     }
@@ -647,9 +664,15 @@ public class DiaryServiceImpl implements DiaryService {
             } catch (Exception ignored) {}
             return;
         }
+        boolean traceOwner = aiTraceRecorder.begin("diary_companion", userId, draftSnippet);
+        boolean traceOk = false;
         try {
             doCompanionReply(param, response, userId, draftSnippet, sessionId);
+            traceOk = true;
         } finally {
+            if (traceOwner) {
+                aiTraceRecorder.end(traceOk, null);
+            }
             // 中断标志不跨轮存活：先消费再放锁，排队中的新请求不会读到上一轮的旧标记
             interruptManager.consumeAndClear(sessionId);
             interruptManager.releaseReply(sessionId);

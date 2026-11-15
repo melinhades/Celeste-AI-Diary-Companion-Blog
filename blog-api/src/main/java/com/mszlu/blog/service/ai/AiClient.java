@@ -206,6 +206,10 @@ public class AiClient {
     @Autowired(required = false)
     private BaseMapper<SysUser> userMapper;
 
+    /** AI 流程追踪：只写不读，失败不影响业务 */
+    @Autowired(required = false)
+    private AiTraceRecorder aiTraceRecorder;
+
     /**
      * 对指定用户是否有可用 Key（用户自定义 or 系统默认）
      */
@@ -448,6 +452,23 @@ public class AiClient {
 
     /** 显式 userId 版本（异步场景 / ThreadLocal 拿不到时使用） */
     public String chat(List<AiMessage> messages, boolean jsonMode, String model, String userId) {
+        long startedAt = System.currentTimeMillis();
+        String output = null;
+        Throwable error = null;
+        try {
+            output = executeChat(messages, jsonMode, model, userId);
+            return output;
+        } catch (RuntimeException e) {
+            error = e;
+            throw e;
+        } finally {
+            if (aiTraceRecorder != null) {
+                aiTraceRecorder.llm(messages, output, model, startedAt, error, null, null);
+            }
+        }
+    }
+
+    private String executeChat(List<AiMessage> messages, boolean jsonMode, String model, String userId) {
         // 快模型独立路由：仅当本次 model 命中 ai.fast-model 且配置了 ai.fast-base-url 时生效
         boolean fastRoute = fastBaseUrl != null && !fastBaseUrl.trim().isEmpty()
                 && model != null && model.equals(fastModel);
@@ -513,6 +534,7 @@ public class AiClient {
                 }
 
                 JSONObject json = JSON.parseObject(responseBody);
+                recordUsage(json);
                 if (json.containsKey("error")) {
                     log.warn("AI 返回错误: {}", json.getString("error"));
                     onFailure();
@@ -573,6 +595,23 @@ public class AiClient {
     }
 
     public String streamChat(List<AiMessage> messages, java.util.function.Consumer<String> onDelta, String userId) {
+        long startedAt = System.currentTimeMillis();
+        String output = null;
+        Throwable error = null;
+        try {
+            output = executeStreamChat(messages, onDelta, userId);
+            return output;
+        } catch (RuntimeException e) {
+            error = e;
+            throw e;
+        } finally {
+            if (aiTraceRecorder != null) {
+                aiTraceRecorder.llm(messages, output, model, startedAt, error, null, null);
+            }
+        }
+    }
+
+    private String executeStreamChat(List<AiMessage> messages, java.util.function.Consumer<String> onDelta, String userId) {
         String resolvedKey = resolveKey(userId);
         if (resolvedKey == null) return null;
         throttle();
@@ -660,6 +699,20 @@ public class AiClient {
         return httpClient;
     }
 
+    /** 把上游返回的 token 用量回填到当前追踪链路 */
+    private void recordUsage(JSONObject json) {
+        try {
+            if (aiTraceRecorder == null || json == null) return;
+            JSONObject usage = json.getJSONObject("usage");
+            if (usage != null) {
+                aiTraceRecorder.noteUsage(usage.getInteger("prompt_tokens"),
+                        usage.getInteger("completion_tokens"));
+            }
+        } catch (Exception ignore) {
+            // 用量解析失败不影响对话
+        }
+    }
+
     // ================= embed —— 公开签名不变 =================
 
     /**
@@ -671,6 +724,23 @@ public class AiClient {
 
     public float[] embed(String text, String userId) {
         if (text == null || text.trim().isEmpty()) return null;
+        long startedAt = System.currentTimeMillis();
+        float[] vec = null;
+        Throwable error = null;
+        try {
+            vec = doEmbed(text, userId);
+            return vec;
+        } catch (RuntimeException e) {
+            error = e;
+            throw e;
+        } finally {
+            if (aiTraceRecorder != null) {
+                aiTraceRecorder.embed(text, vec == null ? null : vec.length, startedAt, error);
+            }
+        }
+    }
+
+    private float[] doEmbed(String text, String userId) {
 
         // embedding 端点：优先独立配置；未配置回落主对话地址（保持原有行为）
         String embedUrl = (embedBaseUrl != null && !embedBaseUrl.trim().isEmpty()

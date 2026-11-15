@@ -1,27 +1,22 @@
 package com.mszlu.blog.admin.controller;
 
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RestController;
 
-import java.util.HashMap;
-import java.util.Map;
-
-@RestController
+/**
+ * 根路径入口：已登录进后台主页，未登录进登录页。
+ * 原来这里返回一段 JSON，导致直接访问 localhost:8889 时既不是后台也不是登录页。
+ */
+@Controller
 public class HomeController {
 
     @GetMapping("/")
-    public Map<String, Object> home() {
-        Map<String, Object> response = new HashMap<>();
-        response.put("status", "running");
-        response.put("application", "Blog Admin API");
-        response.put("message", "Admin API is running successfully");
-        response.put("endpoints", new String[]{
-            "POST /admin/permission/list",
-            "POST /admin/permission/permissionList",
-            "POST /admin/permission/add",
-            "POST /admin/permission/update",
-            "GET /admin/permission/delete/{id}"
-        });
-        return response;
+    public String home(Authentication authentication) {
+        boolean logged = authentication != null
+                && authentication.isAuthenticated()
+                && !(authentication instanceof AnonymousAuthenticationToken);
+        return logged ? "redirect:/pages/main.html" : "redirect:/login.html";
     }
 }
