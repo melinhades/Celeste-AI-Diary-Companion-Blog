@@ -8,10 +8,12 @@ import com.mszlu.blog.dao.mapper.DiaryCompanionMapper;
 import com.mszlu.blog.dao.mapper.EmotionStateMapper;
 import com.mszlu.blog.dao.mapper.HeartCrystalMapper;
 import com.mszlu.blog.dao.pojo.*;
+import com.mszlu.blog.service.AgentTraceService;
 import com.mszlu.blog.service.DiaryService;
 import com.mszlu.blog.service.MemoryService;
 import com.mszlu.blog.service.PersonaService;
 import com.mszlu.blog.service.ProactiveService;
+import com.mszlu.blog.service.PromptVersionService;
 import com.mszlu.blog.service.SysUserService;
 import com.mszlu.blog.service.ai.AiClient;
 import com.mszlu.blog.service.ai.AiMessage;
@@ -112,6 +114,8 @@ public class DiaryServiceImpl implements DiaryService {
     @Autowired private DiaryChatInterruptManager interruptManager;
     @Autowired private DiaryChatMemory chatMemory;
     @Autowired private DiaryChatLogService chatLogService;
+    @Autowired private AgentTraceService agentTraceService;
+    @Autowired private PromptVersionService promptVersionService;
     @Autowired private DiaryChatPersonaChecker personaChecker;
     @Autowired private DiaryChatEmotionExtractor emotionExtractor;
     @Autowired private DiaryChatIntentClassifier intentClassifier;
@@ -574,6 +578,11 @@ public class DiaryServiceImpl implements DiaryService {
 
         var messages = new ArrayList<AiMessage>();
         messages.add(new AiMessage("system", PromptBuilder.diaryCompanion(persona, memories, draftSnippet, emotionNote, false, null)));
+        // 灰度中的 prompt 补丁与流式链路保持一致，避免两条入口行为分叉
+        PromptVersion liveVersion = promptVersionService.activeVersionFor(userId, "chat");
+        if (liveVersion != null && liveVersion.getPatch() != null && !liveVersion.getPatch().isBlank()) {
+            messages.add(new AiMessage("system", "【补充规则】\n" + liveVersion.getPatch()));
+        }
 
         String reply = aiClient.chat(messages, true);
         if (reply == null) {
@@ -858,6 +867,12 @@ public class DiaryServiceImpl implements DiaryService {
             systemPrompt.append("\n【本轮硬性要求】用户文本涉及自伤/极端私密内容，本轮只回复「嗯，我在听～」，不解释、不建议、不追问。\n");
         }
 
+        // 灰度中的 prompt 补丁：只对命中分桶的用户追加；版本号随日志落库，便于按版本归因
+        PromptVersion promptVersion = promptVersionService.activeVersionFor(userId, "chat");
+        if (promptVersion != null && promptVersion.getPatch() != null && !promptVersion.getPatch().isBlank()) {
+            systemPrompt.append("\n\n【补充规则】\n").append(promptVersion.getPatch());
+        }
+
         // 羽毛：不再硬注入提示词（显得死板），改由知识库 source=lore 在需要时自然检索命中；此处只保留标记用于日志
         boolean featherTriggered = Boolean.TRUE.equals(param.getFeatherTriggered());
 
@@ -940,7 +955,7 @@ public class DiaryServiceImpl implements DiaryService {
                             rawBuf.delete(0, cut);
                             String[] emitText = {""};
                             String clean = gateSentence(sentence, systemPrompt.toString(), reactSnippet,
-                                    intent, sessionId, strictCheck, mustSpeak, filterReason, emitText);
+                                    intent, userId, sessionId, strictCheck, mustSpeak, filterReason, emitText);
                             if (emitText[0].isEmpty()) continue;
                             String out = emitText[0];
                             // 只对整段回复的第一块剥离开头空白；句中开头空格是上一句留下的
@@ -982,7 +997,7 @@ public class DiaryServiceImpl implements DiaryService {
                 rawBuf.setLength(0);
                 String[] emitText = {""};
                 String clean = gateSentence(tail, systemPrompt.toString(), reactSnippet,
-                        intent, sessionId, strictCheck, mustSpeak, filterReason, emitText);
+                        intent, userId, sessionId, strictCheck, mustSpeak, filterReason, emitText);
                 if (!emitText[0].isEmpty()) {
                     String out = emitText[0];
                     if (emitted.length() == 0) {
@@ -1052,6 +1067,7 @@ public class DiaryServiceImpl implements DiaryService {
         logEntity.setModelRaw(full.length() > 2000 ? full.toString().substring(0, 2000) + "…" : full.toString());
         logEntity.setFilteredResponse(finalText);
         logEntity.setFilterReason(filterReason[0]);
+        logEntity.setPromptVersion(promptVersion == null ? null : promptVersion.getId());
         logEntity.setEmotionScore(emotion.getScore());
         logEntity.setEmotionType(emotion.getEmotionType());
         logEntity.setEmotionScoreDetail(emotion.getEmotionScoreDetail());  // v2 新增：完整 JSON 落库
@@ -1106,7 +1122,8 @@ public class DiaryServiceImpl implements DiaryService {
      * R1-R6 硬红线且没有 suggestion 时才用安全兜底句，其余未知原因放行原句。
      */
     private String gateSentence(String sentence, String systemPrompt, String reactSnippet,
-                                String intent, String sessionId, boolean strictCheck, boolean mustSpeak,
+                                String intent, String userId, String sessionId,
+                                boolean strictCheck, boolean mustSpeak,
                                 String[] filterReason, String[] emitText) {
         // 判断用 trim 文本（安全逻辑不变）；下发与落库用 raw，保留词间空格
         String raw = INLINE_MOOD_MARKER.matcher(sentence).replaceAll("");
@@ -1118,8 +1135,10 @@ public class DiaryServiceImpl implements DiaryService {
             return raw;
         }
 
+        long checkStart = System.currentTimeMillis();
         DiaryChatPersonaChecker.CheckResult check =
                 personaChecker.checkOnce(s, systemPrompt, reactSnippet, intent, mustSpeak);
+        long checkCost = System.currentTimeMillis() - checkStart;
         if (check.pass) {
             if (check.finalResponse == null || check.finalResponse.equals(s)) {
                 // 未改写 → 下发保留 [m:表情] 的原句（不能 trim，否则英文句间空格会被吃掉）
@@ -1133,6 +1152,10 @@ public class DiaryServiceImpl implements DiaryService {
 
         filterReason[0] = check.failReason;
         String reason = check.failReason == null ? "" : check.failReason.trim().toUpperCase();
+        // 失败模式留痕：S 规则在句级本就设计为放行，不算模型违反红线，不进失败池
+        if (!reason.startsWith("S")) {
+            agentTraceService.record("chat", sessionId, userId, "persona_fail", s, check.failReason, checkCost);
+        }
         // S1-S3 是「该沉默」规则：整轮危机已由 crisisRisk 前置拦截，句级再据此拦截会把
         // 正常倾诉的每一句都替换成「嗯，我在听～」，这里直接放行
         if (reason.startsWith("S")) {

@@ -1336,6 +1336,23 @@ public class PromptBuilder {
         "\"polished\":\"润色后的全文（改动过的句子用 [[ ]] 包起来，方便页面对照高亮）\",\"changeNote\":\"一句话说清最重要的改动\"}";
     }
 
+    /**
+     * 补丁提案 prompt：只允许追加约束，不许改人设、不许删既有规则。
+     * 输入是评测基准集里的失败用例摘要，输出严格 JSON。
+     */
+    public static String promptProposal(String caseDigest) {
+        return "你是 Madeline 的 prompt 维护者。下面是线上真实失败用例，请归纳失败模式并给出规则补丁。\n\n" +
+                "【约束】\n" +
+                "- 只归纳失败模式并提出「追加规则」，禁止改写人设、禁止删除既有规则\n" +
+                "- 规则要可判定（能被检查器按 R1-R6 风格执行），不要写「更温柔一点」这类空话\n" +
+                "- 补丁最多 4 条、总共 200 字以内\n\n" +
+                "【失败用例】\n" + caseDigest + "\n\n" +
+                "只输出 JSON（不要 markdown 代码块）：\n" +
+                "{\"title\":\"一句话概括\",\"patterns\":[\"失败模式1\",\"失败模式2\"]," +
+                "\"patch\":\"追加的规则文本，编号写 R7/R8 这样接在后面\"," +
+                "\"rationale\":\"为什么这么改\",\"risk\":\"会影响哪些正常场景\"}";
+    }
+
     private static String typeName(String type) {
         switch (type) {
             case "event":        return "事件";

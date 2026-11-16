@@ -6,7 +6,10 @@ import com.mszlu.blog.dao.pojo.Memory;
 import com.mszlu.blog.service.ai.AiClient;
 import com.mszlu.blog.service.ai.AiTraceRecorder;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -23,11 +26,14 @@ import static org.mockito.Mockito.when;
 /**
  * RAG 评测：5 组真实场景（精确匹配/语义泛化/时间优先/重要性/降级）。
  * 改动后对比此基准，确保检索质量不退化。
- * 标注 BLOCKED：需真实 AI embedding 服务可用，CI 环境不可用时跳过。
+ * 线上失败样本另存 ms_eval_case（EvalCaseService.promote 入池），人工补 expected 后作为回归集。
+ * 标 @Tag("eval") + -Deval=true 才执行：默认构建跳过，避免日常开发被评测噪声干扰。
  * <p>
  * 走真实召回链路：MemoryServiceImpl 持有真实的 MysqlVectorStore（mapper / AI 均为 mock），
  * 打分公式（时间衰减 / 重要性融合 / 阈值）由 MysqlVectorStore 生效。
  */
+@Tag("eval")
+@EnabledIfSystemProperty(named = "eval", matches = "true")
 class RAGEvalTest {
 
     @Mock
@@ -110,13 +116,11 @@ class RAGEvalTest {
     /**
      * 场景2：语义泛化 —— 查询「心情不好」应召回「焦虑」「难过」等情绪记忆
      * 验证点：embedding 语义相似度 > 字面匹配
-     * 标注 BLOCKED：需真实 embedding 服务
+     * 本地 mock 无法模拟语义相似度，需真实 embedding 服务，故显式跳过而不是空断言通过。
      */
     @Test
+    @Disabled("需要真实 AI embedding 服务，本地 mock 无法验证语义相似度")
     void scenario2_semanticGeneralization() {
-        // 此用例需真实 embedding，mock 无法模拟语义相似度
-        // 标注为 BLOCKED，生产环境可用集成测试验证
-        assertTrue(true, "BLOCKED: 需真实 AI embedding 服务");
     }
 
     /**

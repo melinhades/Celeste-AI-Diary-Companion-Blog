@@ -7,6 +7,7 @@ import com.mszlu.blog.dao.mapper.DocumentChunkMapper;
 import com.mszlu.blog.dao.mapper.MemoryMapper;
 import com.mszlu.blog.dao.pojo.DocumentChunk;
 import com.mszlu.blog.dao.pojo.Memory;
+import com.mszlu.blog.service.vector.RetrievalScorer;
 import com.mszlu.blog.service.vector.VectorCollection;
 import com.mszlu.blog.service.vector.VectorHit;
 import com.mszlu.blog.service.vector.VectorQuery;
@@ -57,6 +58,10 @@ public class MysqlVectorStore implements VectorStore {
 
     @Value("${rag.decay-tau-days:30}")
     private int decayTauDays;
+
+    /** 重要性融合下限：floor + (1-floor)·importance/10，1.0 表示忽略重要性 */
+    @Value("${rag.importance-floor:0.8}")
+    private double importanceFloor = 0.8;
 
     /** 单次检索从库里取的最大候选数（原写死 200 / 300 / 500） */
     @Value("${rag.recall.memory:200}")
@@ -111,12 +116,14 @@ public class MysqlVectorStore implements VectorStore {
             if (v == null) {
                 continue;
             }
-            double sim = cosine(query.getQueryVector(), v);
+            double sim = RetrievalScorer.cosine(query.getQueryVector(), v);
             if (sim <= similarityThreshold) {
                 continue;
             }
             Long tRef = m.getLastMentionedTime() != null ? m.getLastMentionedTime() : m.getCreateDate();
-            double finalScore = sim * timeDecay(tRef) * importanceWeight(m.getImportance());
+            double finalScore = sim
+                    * RetrievalScorer.timeDecay(tRef, decayTauDays, System.currentTimeMillis())
+                    * RetrievalScorer.importanceWeight(m.getImportance(), importanceFloor);
             hits.add(VectorHit.ofMemory(m, sim, finalScore));
         }
         return hits;
@@ -135,11 +142,12 @@ public class MysqlVectorStore implements VectorStore {
             if (v == null) {
                 continue;
             }
-            double sim = cosine(query.getQueryVector(), v);
+            double sim = RetrievalScorer.cosine(query.getQueryVector(), v);
             if (sim <= similarityThreshold) {
                 continue;
             }
-            double finalScore = sim * timeDecay(c.getCreateDate());
+            double finalScore = sim
+                    * RetrievalScorer.timeDecay(c.getCreateDate(), decayTauDays, System.currentTimeMillis());
             hits.add(VectorHit.ofChunk(c, sim, finalScore));
         }
         return hits;
@@ -159,7 +167,7 @@ public class MysqlVectorStore implements VectorStore {
             if (v == null) {
                 continue;
             }
-            double sim = cosine(query.getQueryVector(), v);
+            double sim = RetrievalScorer.cosine(query.getQueryVector(), v);
             if (sim <= similarityThreshold) {
                 continue;
             }
@@ -247,22 +255,6 @@ public class MysqlVectorStore implements VectorStore {
         }
     }
 
-    private double cosine(float[] a, float[] b) {
-        if (a == null || b == null || a.length != b.length) {
-            return 0;
-        }
-        double dot = 0, na = 0, nb = 0;
-        for (int i = 0; i < a.length; i++) {
-            dot += a[i] * b[i];
-            na += a[i] * a[i];
-            nb += b[i] * b[i];
-        }
-        if (na == 0 || nb == 0) {
-            return 0;
-        }
-        return dot / (Math.sqrt(na) * Math.sqrt(nb));
-    }
-
     private float[] parseVec(String json) {
         try {
             JSONArray arr = JSON.parseArray(json);
@@ -305,25 +297,5 @@ public class MysqlVectorStore implements VectorStore {
         return parsed;
     }
 
-    /** 时间衰减因子：exp(-Δt / τ)，τ=30 天；Δt 用秒；返回 (0, 1] */
-    private double timeDecay(Long timestampMs) {
-        if (timestampMs == null) {
-            return 1.0;
-        }
-        double deltaSec = (System.currentTimeMillis() - timestampMs) / 1000.0;
-        if (deltaSec <= 0) {
-            return 1.0;
-        }
-        double tauSec = decayTauDays * 86400.0;
-        return Math.exp(-deltaSec / tauSec);
-    }
-
-    /** 重要性融合因子：importance 1-10，权重 0.8 + 0.2·importance/10；null 兜底 5 → 1.0 */
-    private double importanceWeight(Integer importance) {
-        if (importance == null) {
-            return 1.0;
-        }
-        int imp = Math.max(1, Math.min(10, importance));
-        return 0.8 + 0.2 * (imp / 10.0);
-    }
+    /** 时间衰减 / 重要性融合 / 余弦统一在 RetrievalScorer，离线调参用同一套公式 */
 }

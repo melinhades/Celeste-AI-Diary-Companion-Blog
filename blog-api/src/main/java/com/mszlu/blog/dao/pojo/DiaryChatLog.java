@@ -50,6 +50,9 @@ public class DiaryChatLog {
     // 用户反馈
     private String userFeedback;      // 👍 / 👎 / null
 
+    /** 本轮命中的 prompt 补丁版本，未命中灰度为 null */
+    private String promptVersion;
+
     // 性能与状态
     private Integer firstDeltaMs;
     private Integer totalMs;
