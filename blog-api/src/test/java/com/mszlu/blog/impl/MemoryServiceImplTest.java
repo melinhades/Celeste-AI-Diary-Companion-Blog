@@ -2,21 +2,25 @@ package com.mszlu.blog.impl;
 
 import com.mszlu.blog.dao.mapper.DocumentChunkMapper;
 import com.mszlu.blog.dao.mapper.MemoryMapper;
+import com.mszlu.blog.service.vector.RetrievalScorer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * MysqlVectorStore 核心算法单测：向量解析、余弦相似度、时间衰减、重要性融合。
- * 这些方法随向量检索下沉到存储实现，测试目标同步迁移。
+ * 检索打分单测：余弦相似度、时间衰减、重要性融合（实现在 RetrievalScorer），
+ * 以及 MysqlVectorStore 的向量 JSON 解析。
  * 不依赖数据库和真实 AI 服务，用 mock 隔离外部依赖。
  */
 class MemoryServiceImplTest {
+
+    /** 离线调参前的默认值：τ=30 天、重要性下限 0.8 */
+    private static final int TAU_DAYS = 30;
+    private static final double IMPORTANCE_FLOOR = 0.8;
 
     @Mock
     private MemoryMapper memoryMapper;
@@ -29,8 +33,6 @@ class MemoryServiceImplTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        // 单测不经过 Spring 容器，@Value 不会注入；显式给 30 天，避免 tau=0 时衰减恒为 0
-        ReflectionTestUtils.setField(vectorStore, "decayTauDays", 30);
     }
 
     @Test
@@ -109,35 +111,17 @@ class MemoryServiceImplTest {
         assertNull(invokeParseVec("{}"), "非数组JSON应返回null");
     }
 
-    // ===== 反射调用 private 方法用于测试 =====
+    // ===== 打分公式已抽到 RetrievalScorer，这里直接委托，断言口径保持不变 =====
     private double invokeCosine(float[] a, float[] b) {
-        try {
-            var method = MysqlVectorStore.class.getDeclaredMethod("cosine", float[].class, float[].class);
-            method.setAccessible(true);
-            return (double) method.invoke(vectorStore, a, b);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        return RetrievalScorer.cosine(a, b);
     }
 
     private double invokeTimeDecay(Long timestampMs) {
-        try {
-            var method = MysqlVectorStore.class.getDeclaredMethod("timeDecay", Long.class);
-            method.setAccessible(true);
-            return (double) method.invoke(vectorStore, timestampMs);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        return RetrievalScorer.timeDecay(timestampMs, TAU_DAYS, System.currentTimeMillis());
     }
 
     private double invokeImportanceWeight(Integer importance) {
-        try {
-            var method = MysqlVectorStore.class.getDeclaredMethod("importanceWeight", Integer.class);
-            method.setAccessible(true);
-            return (double) method.invoke(vectorStore, importance);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        return RetrievalScorer.importanceWeight(importance, IMPORTANCE_FLOOR);
     }
 
     private float[] invokeParseVec(String json) {
