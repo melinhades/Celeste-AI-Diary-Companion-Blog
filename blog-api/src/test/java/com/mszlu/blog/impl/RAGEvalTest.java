@@ -4,6 +4,7 @@ import com.mszlu.blog.dao.mapper.DocumentChunkMapper;
 import com.mszlu.blog.dao.mapper.MemoryMapper;
 import com.mszlu.blog.dao.pojo.Memory;
 import com.mszlu.blog.service.ai.AiClient;
+import com.mszlu.blog.service.ai.AiTraceRecorder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -35,6 +36,9 @@ class RAGEvalTest {
     private DocumentChunkMapper chunkMapper;
     @Mock
     private AiClient aiClient;
+    /** AI 调用追踪不参与召回评测，mock 掉真实落库 */
+    @Mock
+    private AiTraceRecorder aiTraceRecorder;
 
     /** 被测召回链路的存储层：真实实现 + mock 依赖 */
     private MysqlVectorStore vectorStore;
@@ -59,6 +63,7 @@ class RAGEvalTest {
         ReflectionTestUtils.setField(memoryService, "memoryMapper", memoryMapper);
         ReflectionTestUtils.setField(memoryService, "aiClient", aiClient);
         ReflectionTestUtils.setField(memoryService, "vectorStore", vectorStore);
+        ReflectionTestUtils.setField(memoryService, "aiTraceRecorder", aiTraceRecorder);
     }
 
     /**
