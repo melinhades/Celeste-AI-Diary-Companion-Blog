@@ -61,6 +61,13 @@
         <Bug pattern="EI_EXPOSE_REP2"/>
     </Match>
 
+    <!-- 管理后台 Controller 的构造器注入：service 是容器单例 Bean，由 Spring 管理生命周期，
+         防御性拷贝既无意义也会破坏 DI。 -->
+    <Match>
+        <Class name="~com\.mszlu\.blog\.admin\.controller\..*"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+
     <!-- ========== 临时排除（附移除条件） ========== -->
 
     <!-- 含未提交 faceEmotion WIP 改动的冻结类，WIP 合并后逐个移除本条目 -->

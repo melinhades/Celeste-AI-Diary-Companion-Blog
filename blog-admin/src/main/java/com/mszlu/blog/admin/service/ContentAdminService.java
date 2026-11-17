@@ -220,8 +220,9 @@ public class ContentAdminService {
                 new Page<>(param.getCurrentPage(), param.getPageSize()), wrapper);
         List<Long> ids = page.getRecords().stream().map(Article::getId).collect(Collectors.toList());
 
-        Map<Long, String> categoryNames = categoryMapper.selectList(null).stream()
-                .collect(Collectors.toMap(Category::getId, Category::getCategoryName, (a, b) -> a));
+        // Article.categoryId 是 String，键必须同型，否则 get 永远拿不到值（SpotBugs GC_UNRELATED_TYPES）
+        Map<String, String> categoryNames = categoryMapper.selectList(null).stream()
+                .collect(Collectors.toMap(c -> String.valueOf(c.getId()), Category::getCategoryName, (a, b) -> a));
         Map<Long, List<String>> tagNames = new HashMap<>();
         if (!ids.isEmpty()) {
             List<ArticleTag> relations = articleTagMapper.selectList(
@@ -246,7 +247,8 @@ public class ContentAdminService {
             item.put("viewCounts", a.getViewCounts());
             item.put("commentCounts", a.getCommentCounts());
             item.put("categoryId", a.getCategoryId());
-            item.put("categoryName", a.getCategoryId() == null ? null : categoryNames.get(a.getCategoryId()));
+            item.put("categoryName", a.getCategoryId() == null ? null
+                    : categoryNames.get(String.valueOf(a.getCategoryId())));
             item.put("tags", tagNames.getOrDefault(a.getId(), Collections.emptyList()));
             item.put("publishTime", a.getPublishTime());
             item.put("sourceType", a.getSourceType());
