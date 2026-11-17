@@ -708,8 +708,9 @@ public class AiClient {
                 aiTraceRecorder.noteUsage(usage.getInteger("prompt_tokens"),
                         usage.getInteger("completion_tokens"));
             }
-        } catch (Exception ignore) {
+        } catch (Exception e) {
             // 用量解析失败不影响对话
+            log.debug("token 用量回填失败: {}", e.getMessage());
         }
     }
 

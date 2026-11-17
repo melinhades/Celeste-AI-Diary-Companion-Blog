@@ -54,6 +54,13 @@
         <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
     </Match>
 
+    <!-- Spring @Configuration 的构造器注入：handler / tokenService 是容器单例 Bean，
+         按设计持有引用并由 Spring 管理生命周期，防御性拷贝既无意义也会破坏 DI。 -->
+    <Match>
+        <Class name="com.mszlu.blog.config.MemorialSceneWebSocketConfig"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+
     <!-- ========== 临时排除（附移除条件） ========== -->
 
     <!-- 含未提交 faceEmotion WIP 改动的冻结类，WIP 合并后逐个移除本条目 -->

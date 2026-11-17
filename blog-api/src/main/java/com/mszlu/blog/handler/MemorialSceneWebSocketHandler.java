@@ -329,8 +329,15 @@ public class MemorialSceneWebSocketHandler extends TextWebSocketHandler {
     private void enqueue(SceneClient client, String msg) {
         if (client == null || !client.session.isOpen()) return;
         if (!client.queue.offer(msg)) {
-            client.queue.poll();
-            client.queue.offer(msg);
+            // 队列满（客户端消费慢）：丢最旧的一条给新包让位；
+            // 极端并发下第二次入队仍可能失败，此时丢弃本条，不让 tick 线程阻塞
+            String dropped = client.queue.poll();
+            if (dropped != null) {
+                log.debug("memorial-scene drop oldest frame user={}", client.userId);
+            }
+            if (!client.queue.offer(msg)) {
+                log.debug("memorial-scene drop frame user={} queue full", client.userId);
+            }
         }
         drain(client);
     }
