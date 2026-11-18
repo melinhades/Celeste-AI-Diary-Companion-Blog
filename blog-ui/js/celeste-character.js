@@ -284,7 +284,10 @@
         runFast: parseHair('1,-2|1,-1|1,-1|1,-1|1,-3|1,-2|1,-1|1,-1|1,-1|1,-1|1,-3|1,-2'),
         jumpSlow: parseHair('1,-3|1,-3|1,-2|0,-2'),
         jumpFast: parseHair('1,-3|1,-3|1,-2|0,-2'),
-        duck:   parseHair('0,3'),
+        // 原作 IL 785-813 的 hair 偏移是给 Sprite.Scale=(1.4,0.6) 的压扁状态配的；
+        // 本引擎蹲姿按自然比例渲染（见 normalUpdate），偏移改为 -2,-3：
+        // 刘海落在头顶而非盖住 8px 高的蹲姿身体，x 左移 2px 对齐 duck 帧的重心。
+        duck:   parseHair('-2,-3'),
         // Sprites.xml L130：<Frames path="pickup" hair="2,0|1,-1|0,-2|0,-2|0,-2"/>
         pickup: parseHair('2,0|1,-1|0,-2|0,-2|0,-2'),
         // Sprites.xml L127-129、L131
@@ -1328,7 +1331,10 @@
                     this.ducking = false; this.scaleX = 0.8; this.scaleY = 1.2;
                 }
             } else if (this.onGround && moveY === 1 && this.vy >= 0 && !this.holdSlowFall) {
-                this.ducking = true; this.scaleX = 1.4; this.scaleY = 0.6;
+                // 原作 NormalUpdate IL 785-813 / 908-942 会把 Sprite.Scale 设成 (1.4, 0.6)；
+                // 但 duck.png 本身已是 8px 蹲姿，再压扁只剩 5px 且被头发完全盖住，
+                // 这里保持自然比例，配合 HAIR.duck 的偏移让身体可见。
+                this.ducking = true;
             }
 
             // —— 水平移动 ——
