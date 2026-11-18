@@ -375,10 +375,17 @@
         if (kind === 'granny_haha') {
             silenceOthers(chGranny);
             chGranny.silence();
-            /* gap：原作事件是 event:/char/granny/laugh_firstphrase，仓库无完整 oneha 事件文件，
-               只有 oneha 单字切片（24 段 × 0.155s）；这里用 firstphrase 完整笑保证“一声笑”的听感 */
-            chGranny.playSolo(GRAN_BASE + 'laugh/first_phrase/laugh_firstphrase.wav',
-                pickRate([0.95, 1.06]), 0.9);
+            /* 原作 Hahaha.Update：每 0.4s 播一次 event:/char/granny/laugh_oneha，
+               与前端三串 HA 一一对应；仓库 oneha 切片共 24 段，逐声随机取 */
+            for (var i = 0; i < 3; i++) {
+                (function (i) {
+                    setTimeout(function () {
+                        if (!maySound()) return;
+                        chGranny.playSolo(GRAN_BASE + 'laugh/oneha/laugh_oneha_' + randNum(24) + '.wav',
+                            pickRate([0.92, 1.05]), 0.85);
+                    }, i * 400);
+                })(i);
+            }
             return true;
         }
         return false;

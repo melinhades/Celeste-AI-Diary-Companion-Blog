@@ -25,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -104,6 +105,32 @@ public class RoundtableEngine {
     private static final int SFX_MAX_PER_TURN = 1;
     /** 同一角色两次特殊音效的最小间隔（毫秒），防刷屏 */
     private static final long SFX_COOLDOWN_MS = 30_000L;
+
+    /** AI 表情标记：[emo:key]；key 必须是该角色立绘目录里存在的情绪，容错同 SFX */
+    private static final Pattern EMO_MARKER = Pattern.compile(
+            "[\\[［]\\s*emo\\s*[:：]\\s*([a-zA-Z_\\-]+)\\s*[\\]］]", Pattern.CASE_INSENSITIVE);
+    /** 各角色可用表情，与 blog-ui/Atlases/Portraits/<角色>/ 的帧目录 1:1 */
+    private static final Map<String, Set<String>> EMO_KEYS = Map.of(
+            "madeline", Set.of("normal", "angry", "deadpan", "determined", "distracted",
+                    "panic", "peaceful", "sad", "sadder", "surprised", "together", "upset"),
+            "badeline", Set.of("normal", "angry", "angryAlt", "concerned", "freakA", "freakB",
+                    "freakC", "sad", "scoff", "serious", "sigh", "upset", "worried", "worriedAlt", "yell"),
+            "granny", Set.of("normal", "laugh", "mock"),
+            "theo", Set.of("normal", "excited", "nailedit", "serious", "thinking", "worried", "wtf", "yolo"),
+            "oshiro", Set.of("normal", "nervous", "worried", "serious", "sidehappy",
+                    "sidesuspicious", "sideworried", "drama", "lostcontrol"));
+    /** speakerId → (小写 key → 规范 key)，用于大小写容错 */
+    private static final Map<String, Map<String, String>> EMO_LOOKUP = buildEmoLookup();
+
+    private static Map<String, Map<String, String>> buildEmoLookup() {
+        Map<String, Map<String, String>> out = new HashMap<>();
+        EMO_KEYS.forEach((id, keys) -> {
+            Map<String, String> m = new HashMap<>();
+            for (String k : keys) m.put(k.toLowerCase(Locale.ROOT), k);
+            out.put(id, m);
+        });
+        return out;
+    }
 
     /** 六个评分维度，顺序即前端展示顺序 */
     private static final String[] SCORE_KEYS = {"conclusion", "evidence", "diversity", "focus", "interaction", "practical"};
@@ -663,13 +690,21 @@ public class RoundtableEngine {
     /** 一条发言：turn_start →（可选特殊音效 →）若干 delta（伪流式逐字）→ turn_end，同时入逐字稿 */
     private boolean pushSpeech(RoundtableSession session,
                                RoundtablePersonas persona, String role, String content) throws InterruptedException {
-        // 先抠出 [sfx:...] 标记：正文/逐字稿只保留干净文本，音效事件单独下发
+        // 先抠出 [emo:...] / [sfx:...] 标记：正文/逐字稿只保留干净文本，事件单独下发
+        String[] emoKind = new String[1];
+        content = stripEmoMarkers(content, persona.getId(), emoKind);
         String[] sfxKind = new String[1];
         content = stripSfxMarkers(content, sfxKind);
         long ts = System.currentTimeMillis();
         if (sendEvent(session, "turn_start", mapOf(
                 "speakerId", persona.getId(), "role", role, "name", persona.getEnName(),
                 "color", persona.getColor(), "ts", ts))) return true;
+
+        // 模型显式指定的表情优先于前端关键词推断
+        if (emoKind[0] != null) {
+            if (sendEvent(session, "emo", mapOf(
+                    "speakerId", persona.getId(), "kind", emoKind[0], "ts", ts))) return true;
+        }
 
         // 冷却闸门在服务端：同一角色冷却内静默丢弃，不播也不下发
         if (sfxKind[0] != null && allowSfx(session, persona.getId(), ts)) {
@@ -722,6 +757,38 @@ public class RoundtableEngine {
         if ("granny_haha".equals(k) || "haha".equals(k) || "laugh".equals(k) || "granny_laugh".equals(k))
             return "granny_haha";
         return null;
+    }
+
+    /**
+     * 抠出 [emo:xxx] 标记并从正文删除；只取第一个该角色合法的表情，其余（含未知 key）一律剥离。
+     */
+    private static String stripEmoMarkers(String content, String speakerId, String[] outEmo) {
+        if (content == null) return "";
+        Matcher m = EMO_MARKER.matcher(content);
+        StringBuilder sb = new StringBuilder(content.length());
+        int last = 0;
+        boolean accepted = false;
+        while (m.find()) {
+            sb.append(content, last, m.start());
+            if (!accepted) {
+                String key = normalizeEmoKind(speakerId, m.group(1));
+                if (key != null) {
+                    outEmo[0] = key;
+                    accepted = true;
+                }
+            }
+            last = m.end();
+        }
+        sb.append(content, last, content.length());
+        return sb.toString().trim();
+    }
+
+    /** 表情 key 归一：忽略大小写，且必须是该角色立绘里存在的情绪 */
+    private static String normalizeEmoKind(String speakerId, String raw) {
+        if (raw == null || speakerId == null) return null;
+        Map<String, String> lookup = EMO_LOOKUP.get(speakerId);
+        if (lookup == null) return null;
+        return lookup.get(raw.toLowerCase(Locale.ROOT));
     }
 
     /** 冷却闸门：同角色冷却内直接丢弃；通过则登记本次触发时间戳 */

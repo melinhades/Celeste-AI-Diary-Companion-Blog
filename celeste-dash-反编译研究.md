@@ -2692,3 +2692,265 @@ window.CelesteComplete = {
 - 这段过场的「主体感」来自三件事：**0.5s 黑幕揭开**、**3.3s 黑场飞雪**、**1.5s SineOut + 0.75s 黑幕淡出**；而不是完成图自身的透明度动画。
 - 三个类各自的字段边界清晰：`LevelExit` 只碰「计时 + 雪 + wipe」，`AreaComplete` 只碰「交接 + 雪衰减」，`CompleteRenderer` 只碰「Scroll / fadeAlpha / 图层」。这正是可以独立封装的原因，也是本次 demo 的代码分类依据。
 - 与 `celeste-character.js` 的引擎改造一样，本轮没有引入第三方美术或在线源码；所有行为常量与帧数据都能回溯到上述 token。
+
+---
+
+## 27. 下蹲（Duck）与蹲姿渲染
+
+### 27.1 取证来源
+
+| 项 | 值 |
+|---|---|
+| 程序集 | `C:\Program Files (x86)\Steam\steamapps\common\Celeste\Celeste.dll` |
+| 方法 | `Celeste.Player::orig_UpdateSprite`、`Celeste.Player::NormalUpdate` |
+| 动画定义 | `Content\Graphics\Sprites.xml`：`<Loop id="duck" path="duck" delay="0" frames="0"/>` |
+| 贴图 | `Atlases\Gameplay\characters\player\duck.png`：32×32 帧，内容 bbox (8,24)-(20,31)，84 个不透明像素 → 13×8 |
+
+### 27.2 IL 证据
+
+- `orig_UpdateSprite` il 762-788：`if (Ducking) Sprite.Play("duck", false, false);` —— 单帧、无循环、无过渡。
+- `orig_UpdateSprite` il 1048-1087：State==0 且 Ducking 时同样 `Play("duck")`。
+- `NormalUpdate` il 785-813：`Ducking = true; Sprite.Scale = new Vector2(1.4f, 0.6f);`
+- `NormalUpdate` il 908-942：Drop 之后同样 `Ducking = true; Sprite.Scale = (1.4f, 0.6f)`。
+
+### 27.3 偏差与处理
+
+| ID | 原作行为 | 引擎原行为 | 处理 |
+|---|---|---|---|
+| D1 | 蹲下时整帧缩放 1.4×0.6 | 压扁后 duck 内容只剩 13×5，10px 的刘海把身体完全盖住，肉眼只剩头发 | 蹲姿保持 1.0；duck.png 本身已是 8px 蹲姿，压扁只损失可读性 |
+| D2 | duck 的 hair 偏移 `(0,3)`，服务于压扁状态 | 自然比例下锚点=脚底上方 6px，刘海盖住整个身体 | 改为 `(-2,-3)`：锚点=脚底上方 12px，刘海当帽子；x 左移 2px 对齐 duck 帧重心 |
+
+### 27.4 验收
+
+- 无头 Chrome 断言 11/11：`anim=duck`、`texSrc=duck.png`、`scale=1/1`、`hair=(x -2, y -12)`、起身后 `ducking=false` 且比例回正、无页面异常。
+- 截图确认：蹲下时头发位于头顶，脸部、躯干、腿均可见；起身恢复到 idle/edge 序列。
+
+### 27.5 缺口
+
+- 本机 REA 的托管反编译 provider 不可用（provider 列表只有 ghidra/hopper/ida/kuna），因此本节 IL 结论来自 `inspect-managed-members` 的 CIL anchor + 操作数解析，不是 `decompile` 输出的 C# 源码。
+- `PlayerHair.AfterUpdate` 未直接取证；锚点公式 `RenderPosition + (0, -9*Scale.Y) + HairOffset` 沿用引擎既有实现，未在本轮重新核对。
+
+---
+
+## 28. 尾声（CS08_Ending）照片变体与播放时序
+
+> 目标：搞清「按草莓数量换照片」的选片规则，以及这张照片是怎么被「播放」出来的，为 blog-ui 圆桌动画的去循环化提供依据。本轮只取证，不改代码。
+
+### 28.1 取证来源
+
+| 项 | 值 |
+|---|---|
+| 程序集 | `Celeste.dll` |
+| 类型 | `Celeste.CS08_Ending`（OnBegin / Update / Render / Cutscene）及其嵌套迭代器 `<Cutscene>d__15`、`<MaddyTurns>d__18`、`<BadelineEmerges>d__19`、`<OshiroEnters>d__20`、`<OshiroSettles>d__21` |
+| 对白 | `Content\Dialog\English.txt`：`EP_CABIN`、`EP_PIE_START`、`EP_PIE_*` |
+| 图片 | 项目已有 `blog-ui\Atlases\Portraits\final1..final5.png`、`finalbg.png`，均为 1920×1080 |
+
+### 28.2 选片规则（OnBegin）
+
+`SaveData.Instance.TotalStrawberries` 存入局部变量后按顺序比较，取第一档：
+
+| 草莓数 | 图片 | 对白 key | IL 偏移 |
+|---|---|---|---|
+| `< 20` | `final1` | `EP_PIE_DISAPPOINTED` | 24-46 |
+| `< 50` | `final2` | `EP_PIE_GROSSED_OUT` | 48-70 |
+| `< 90` | `final3` | `EP_PIE_OKAY` | 72-94 |
+| `< 150` | `final4` | `EP_PIE_REALLY_GOOD` | 96-121 |
+| `>= 150` | `final5` | `EP_PIE_AMAZING` | 123-135 |
+
+选片后从 `GFX.Portraits` 取 `finalbg` 与所选 `finalN` 各建一个 `Image`：`CenterOrigin()`、`Position = Celeste.TargetCenter`、`Visible = false`，随后 `Add(new Coroutine(Cutscene(level)))` 启动整段演出。
+
+### 28.3 播放时序（`<Cutscene>d__15::MoveNext`）
+
+1. `level.ZoomSnap(new Vector2(164, 120), 2)`，取消当前 wipe，换 `FadeWipe`。
+2. 轮询等待 `player` 出现；`player.StateMachine.State = 11`（冻结操作）；`yield return 1f`。
+3. `player.DummyWalkToExact(player.X + 16, true)`；`yield return 0.25f`。
+4. `Textbox.Say("EP_CABIN", BadelineEmerges, OshiroEnters, OshiroSettles, MaddyTurns)`：对白行推进到指定位置时触发对应协程，人物入场/转身与文字同步；`OshiroEnters` 的 MoveNext 有 175 条指令，是其中最长的一段。
+5. `new FadeWipe { Duration = 1.5f }.Wait()`，随后 `fade = 1`（Render 里用黑色矩形盖住 -10,-10,1940,1100）。
+6. `Textbox.Say("EP_PIE_START")`（Madeline：“So? How's it taste?”）；`yield return 0.5f`。
+7. 两个 Image 置 `Visible = true`：`vignettebg.Color = Black`，`vignette.Color = White * 0`；`vignette` 重新 `Add` 到场景。
+8. **淡入循环**（每帧 `p += Engine.DeltaTime`，`yield return null`，直到 `p >= 1`）：
+   - `vignette.Color = Color.White * Ease.CubeIn(p)`
+   - `vignette.Scale = Vector2.One * MathHelper.Lerp(1f, 0.25f, …)`
+   - `vignette.Rotation` 由 `0.05f` 向 `1f` 过渡（该段有 operand 未解析，见 28.5）
+9. 循环结束：两个 Image 颜色置白；`yield return 2f`（照片定格 2 秒）。
+10. **下移缩小循环**（`Ease.CubeOut`）：`Position = Vector2.Lerp(TargetCenter, TargetCenter + (0, 140), e)`；`Scale = One * MathHelper.Lerp(0.65f, 0.35f, e)`；`Rotation` 收到 `-0.025f`。
+11. `Textbox.Say(endingDialog)`：按草莓档位播放对应吐槽；`yield return 0.25f`。
+12. **回到全屏循环**（固定 `p2 = 2f` 秒，`Ease.CubeOut`）：记录当前 `posFrom / scaleFrom / rotFrom`，再 `Lerp` 回 `TargetCenter`、`Scale = 1`、`Rotation = 0`。
+13. `level.EndCutscene()`。
+
+### 28.4 对 blog-ui 圆桌动画的直接结论
+
+- 原作这张「照片」不是循环动画：它是一张静态 1920×1080 图，播放完全由**协程分阶段**驱动——淡入 → 定格 → 缩小下移 → 对白 → 拉回全屏，每阶段用 `Ease.CubeIn/CubeOut` 推进 `p`，用 `yield return null` 逐帧、`yield return 0.xf` 定格。
+- 因此「循环播放」本身不是原作行为；要贴近原作，应改成**一次性时间轴**：阶段数组 + 每阶段时长/缓动/目标值，播完停在终态，而不是让帧序列 `loop: true`。
+- 对白驱动的入场（`Textbox.Say` 的 inline 协程）也是可以照搬的结构：把「哪个字/哪一行触发哪个动画」做成回调表，而不是定时轮播。
+
+### 28.5 缺口
+
+- 本机 REA 托管反编译 provider 仍不可用；本节结论来自 `inspect-managed-members` 的 CIL anchor 与操作数解析。
+- 部分外部调用（`MathHelper.Lerp`、`Color::op_Multiply` 等）的 token 在 `member_refs` 中未解析，输出里出现空缺；第 8、10、12 步中「常量与缓动的确切配对」需要复跑一次带完整 ref 的解析，或改用可用的托管反编译器核对。
+- `CS08_Ending` 的 `EndingRoutine` 被 Everest 的 hook 拆成 `<EndingRoutine>d__2` 包装器 + `orig_EndingRoutine`，本轮未继续展开其原始 iterator。
+
+---
+
+## 29. 序幕老奶奶的 HaHa 字效
+
+> 目标：搞清 `HaHa` 是贴图、文字还是粒子，播放节奏与位移曲线是什么，为在聊天里加「人物专属字效」提供可复刻的参数。本轮只取证，不改代码。
+
+### 29.1 涉及类型
+
+| 类型 | 作用 | 关键成员 |
+|---|---|---|
+| `Celeste.Hahaha` | 字效发射器（可放在房间里的实体） | `enabled`、`ifSet`、`timer`、`counter`、`has`(List)、`autoTriggerLaughSfx`、`autoTriggerLaughOrigin` |
+| `Celeste.Hahaha/Ha` | 单个「ha」 Sprite | `Sprite`、`Percent`、`Duration` |
+| `Celeste.NPC00_Granny` | 序幕老奶奶 | `.ctor`、`Added`、`Update` |
+| `Celeste.CS00_Granny` | 序幕对话 | `Laugh`、`StopLaughing`、`LaughAndAirQuotes` |
+
+### 29.2 单个「ha」是什么
+
+`Ha..ctor`（39 条指令）：
+
+- `Sprite = new Sprite(GFX.Game, "characters/oldlady/")`
+- `Add("normal", "ha", 0.15f, 帧数组)` → `Play("normal")` → `JustifyOrigin(0.5f, 0.5f)`
+- `Duration = CurrentAnimationTotalFrames * 0.15f`
+
+帧数组从 `<PrivateImplementationDetails>::515DF08D…` 的 RVA 直接解出：
+
+```
+[0, 1, 0, 1, 0, 1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+```
+
+即前 8 帧在 0/1 之间抖动，后 8 帧按 2→9 推进；**16 帧 × 0.15s = 单个字效寿命 2.4s**。项目里 `blog-ui\Atlases\Gameplay\characters\oldlady\ha00..ha09.png` 正好 10 张，与数组里的最大索引一致。
+
+### 29.3 发射节奏（`Hahaha::Update`）
+
+- `Enabled == false` 时只做一件事：若 `ifSet` 非空且 `Session.GetFlag(ifSet)`，把自己置为启用。
+- 启用后 `timer += DeltaTime`；`timer <= 0` 时 `has.Add(new Ha())` 并 `counter++`：
+  - `counter >= 3` → `counter = 0`，`timer = 1.5f`（停顿）
+  - 否则 `timer = 0.6f`
+- 每 `Scene.OnInterval(0.4f)` 播一次 `event:/char/granny/laugh_oneha`（仅当 `autoTriggerLaughSfx`）。
+- 遍历 `has`：`Percent >= 1` 就移除，否则 `Sprite.Update()`、`Percent += DeltaTime / Duration`。
+
+也就是**每 0.6 秒吐一个「ha」，连续 3 个后停 1.5 秒**，每个字效独立存活 2.4 秒，彼此重叠。
+
+### 29.4 位移曲线（`Hahaha::Render`）
+
+每个 `Ha` 每帧执行：
+
+```
+sprite.Position = 发射器位置 + (60 * p, -10 - 16*p + sin(13*p) * 4)
+```
+
+`p = Percent`（0→1）。即横向匀速飘 60px，纵向先抬 10px、再随生命再抬 16px，叠加振幅 4px、周期约 2π/13 的正弦抖动。
+
+### 29.5 什么时候启用
+
+`NPC00_Granny::Update` 最后一条语义：
+
+```
+Hahaha.Enabled = Sprite.CurrentAnimationID == "laugh";
+```
+
+发射器在 `Added` 里以 `Position + (8, -4)` 创建（`depth = -10001`）。序幕对话触发 `Sprite.Play("laugh")` 与 `LaughSfx.FirstPlay = true` 后，字效自动跟着笑动画开关，不需要额外计时器。
+
+`Hahaha` 另一个构造器从地图实体数据读 `ifset` / `triggerLaughSfx` / `Nodes`，说明它本身就是可摆放的场景实体。
+
+### 29.6 对聊天字效的可复刻参数
+
+- 不要用「循环播放的 GIF」；每个字效是**一次性生命周期**（2.4s），到期移除。
+- 建议参数：单字 16 帧 / 0.15s；发射间隔 0.6s；每组 3 个；组间停顿 1.5s；寿命 2.4s。
+- 运动：`x += 60p`，`y = -10 -16p + 4·sin(13p)`（相对发射点）；中心对齐。
+- 触发条件绑定角色动画状态（`laugh`）而不是全局定时器，这样笑停止字效自然停发。
+- 音效可选：每 0.4s 一次 `laugh_oneha`。
+
+### 29.7 缺口
+
+- 托管反编译器仍不可用，上述来自 `inspect-managed-members` 的 CIL anchor + 常量解码；`Hahaha::.ctor` 的参数顺序（`Position`、`ifSet`、`autoTriggerLaughSfx`、`origin?`）是根据字段写入顺序推断，未逐参数核对。
+- `GrannyLaughSfx` 未展开，它可能对 `laugh_oneha` 做额外的首播/循环控制。
+- 项目侧只抽了 `ha00..ha09`，与帧数组一致；若后续要改帧序，需同步 `ANIMS`。
+
+### 29.8 落地记录（blog-ui 圆桌）
+
+- 视觉层：`roundtable-sfx.js` 的 `granny_haha` 早前已按本章参数实现（16 帧 × 0.15s、每 0.6s 一串 ×3、寿命 2.4s、位移 `60p / -10-16p+4sin(13p)`，2× 放大锚在 Granny 头像旁）。
+- 缺口在触发：此前只认模型输出里的 `[sfx:granny_haha]`，模型不写就没有演出。`roundtable-2.js` 增加文字兜底 `/哈{2,}|嘿{2,}|呵{2,}|嘻{2,}|大笑|笑出声/`，每个气泡最多触发一次，仍受 30s 同角色冷却与每轮一次限制。
+- 音效：`roundtable-voice.js` 的 `playSpecial('granny_haha')` 从「单放 `laugh_firstphrase`」改成**每 0.4s 一声 `laugh/oneha/laugh_oneha_*.wav`（24 段随机）×3**，与三串 HA 一一对应，贴合 `Hahaha.Update` 的 `OnInterval(0.4f)`。
+- 未做：字效没有绑到场景 canvas。圆桌舞台是 `mad_idle` 预渲染整图，Granny 没有独立精灵，无法像原作那样按实体坐标发射。
+
+---
+
+## 30. 尾声「大家聚在一起」的人员调度
+
+> 补充第 28 章：照片之前的聚集过程不是过场动画文件，而是 `CS08_Ending` 里四段协程按对白行触发的**硬编码调度**。本轮只取证，不改代码。
+
+### 30.1 触发结构
+
+`<Cutscene>d__15` 第 4 步：
+
+```
+Textbox.Say("EP_CABIN", BadelineEmerges, OshiroEnters, OshiroSettles, MaddyTurns)
+```
+
+对白推进到对应行时调用对应协程，顺序由文本控制，不由时间控制。
+
+### 30.2 BadelineEmerges（91 条指令）
+
+1. `Level.Displacement.AddBurst(player.Center, 0.5f, 8f, 32f, 0.5f)` —— 屏幕位移冲击。
+2. `Session.Inventory.Dashes = 1`，随后 `player.Dashes = 1`。
+3. `badeline = new BadelineDummy(player.Position)`，`Scene.Add`。
+4. `Audio.Play("event:/char/badeline/maddy_split", player.Position)`。
+5. `badeline.Sprite.Scale.X = 1`。
+6. `yield return badeline.FloatTo(player.Position + new Vector2(-12, -16))` —— 用 `FloatTo` 协程缓动到 Madeline 左上 12×16 的位置，而不是直接设坐标。
+
+### 30.3 OshiroEnters（175 条指令）
+
+1. `new FadeWipe(Level){ Duration = 1.5f }.Wait()` —— 淡出。
+2. `fade = 1`（黑幕）；`yield 0.25f`。
+3. 黑屏期间直接改坐标，而不是走过去：
+   - `player.X = granny.X + 8`
+   - `badeline.X = player.X + 12`
+   - `player.Facing` 设为朝向同伴的一侧
+   - `badeline.Sprite.Scale.X = -1`
+   - `granny.X += 8`
+   - `theo.X += 16`
+4. 造一个空的 `Entity(granny.X + 24, granny.Y + 4)`，`Scene.Add`，再 `Add(new OshiroSprite())` —— Oshiro 没有独立逻辑类，只是实体加精灵组件。
+5. `fade = 0`；`new FadeWipe{ Duration = 1f }.Wait()`；`yield 0.25f`。
+6. 循环：`while (oshiro.Y > granny.Y - 4) oshiro.Y -= 32 * DeltaTime; yield return null` —— 以 **32px/s** 匀速上浮到比奶奶高 4px。
+
+### 30.4 OshiroSettles（81 条指令）
+
+1. `from = oshiro.Position`；`to = from + (40, 8)`；`p = 0`。
+2. 循环到 `p >= 1`（`p += DeltaTime`，约 1 秒）：`oshiro.Position = Vector2.Lerp(from, to, p)`，每帧 yield。
+3. `granny.Sprite.Scale.X = 1` —— 奶奶转向他。
+
+### 30.5 MaddyTurns（46 条指令）
+
+1. `yield 0.1f`。
+2. `player.Facing = (Facings)(-(int)player.Facing)` —— 转身。
+3. `yield 0.1f`。
+
+### 30.6 场景的整体节奏
+
+- 聚集阶段（本章）：全部靠**淡入淡出 + 直接改坐标 + 少量 FloatTo/匀速位移**完成，没有骨骼、没有寻路。
+- 定格阶段（第 28 章）：`EP_PIE_START` 之后照片才淡入，定格 2s，再缩小下移、播吐槽、拉回全屏。
+- 因此「大家聚在一起」= 两段 wipe 夹一次黑屏瞬移 + 三个短协程，实现成本远低于照片本身的缩放旋转。
+
+### 30.7 缺口
+
+- 托管反编译器不可用；结论来自 CIL anchor、常量与字段写入顺序。
+- `conversions`（`conv.i4`/`neg`）等无操作数指令未纳入输出，`MaddyTurns` 的转身表达式按「取反 Facing」还原，未逐字节核对。
+- `FloatTo` 的缓动曲线来自 `BadelineDummy`，本轮未展开。
+
+### 30.8 落地记录（blog-ui）
+
+`js/roundtable-scenes.js` 已按本章与第 28 章改成一次性时间轴：
+
+| 阶段 | 时长 | 行为 |
+|---|---|---|
+| start | 1.0s | 黑场淡入，进入 `mad_idle` 待机 |
+| out | 1.5s | 淡出到全黑（对应 `FadeWipe{Duration=1.5}`） |
+| black | 0.25s | 黑屏期间直接换到 `oshiro_move` 首帧（对应原作黑屏瞬移换位） |
+| in | 1.0s | 淡入（对应 `FadeWipe{Duration=1}`） |
+| hold | 0.25s | 定格 |
+| move | 1.0s | `oshiro_move` 只播一次（30 帧 × 33.33ms） |
+| done | — | 停在末帧，**不再进入 `oshiro_idle` 循环**，rAF 自动停止 |
+
+保留的偏差：等待阶段 `mad_idle` 仍为循环待机（原作房间是静态插画，没有等价待机循环）；若要连待机一起冻结，需把 manifest 的 `mad_idle.loop` 改为 `false`，但首末帧差异 14.1%，冻结位置需要重新挑。

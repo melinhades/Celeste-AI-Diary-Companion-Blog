@@ -470,17 +470,30 @@ initHeader();
         return String(text || '').slice(-40);
     }
 
-    // 说话中：按最新一句切换气泡+席位的头像情绪
+    // 说话中：按最新一句切换气泡+席位的头像情绪（模型给了 [emo:key] 时以它为准）
     function updatePortraitEmotion(speakerId, fullText) {
         if (!window.RoundtableVoice || !window.RoundtablePortraits) return;
         // 特殊音效演出期间（yolo / laugh）不要被逐字情绪立刻顶掉头像
         if (window.RoundtableSfx && RoundtableSfx.isSuppressing(speakerId)) return;
-        const emo = RoundtableVoice.infer(speakerId, lastSentence(fullText));
+        const tagged = activeBubble && activeBubble._meta && activeBubble._meta.speakerId === speakerId
+            ? activeBubble._emoTag : null;
+        const emo = tagged || RoundtableVoice.infer(speakerId, lastSentence(fullText));
         if (!emo || !activeBubble || activeBubble._emotion === emo) return;
         activeBubble._emotion = emo;
         if (activeBubble._portrait) activeBubble._portrait.play(emo);
         if (seatAnims[speakerId]) seatAnims[speakerId].play(emo);
         // 主持鸟行为树：情绪流入会场气氛（激烈情绪可能把鸟吸引过去）
+        if (window.RoundtableBird && !replayMode) RoundtableBird.onEmotion(speakerId, emo);
+    }
+
+    // 模型显式表情事件：当前气泡锁定该表情，逐字推断不再覆盖
+    function applyEmoTag(speakerId, emo) {
+        if (!emo || !activeBubble || !activeBubble._meta || activeBubble._meta.speakerId !== speakerId) return;
+        activeBubble._emoTag = emo;
+        if (activeBubble._emotion === emo) return;
+        activeBubble._emotion = emo;
+        if (activeBubble._portrait) activeBubble._portrait.play(emo);
+        if (seatAnims[speakerId]) seatAnims[speakerId].play(emo);
         if (window.RoundtableBird && !replayMode) RoundtableBird.onEmotion(speakerId, emo);
     }
 
@@ -565,6 +578,7 @@ initHeader();
         activeBubble._dead = false;
         activeBubble._onDone = null;
         activeBubble._emotion = null;
+        activeBubble._emoTag = null;
         activeBubble._portrait = null;
         activeBubble._meta = {speakerId:ev.speakerId, name:dispName, color:sp.color, role:ev.role, ts:ev.ts};
         if (charName) {
@@ -771,6 +785,9 @@ initHeader();
 
     // [sfx:yolo] / [sfx:granny_haha] 兜底剥离：后端已单独下发 sfx 事件，正常不会漏进正文
     const SFX_TAG_RE = /[\[［]\s*sfx\s*[:：]\s*[a-zA-Z_\-]+\s*[\]］]/gi;
+    // Granny 大笑兜底：模型没带 [sfx:granny_haha] 时，按台词里的笑声词触发同一套演出
+    // （原作 GrannyLaughSfx + Hahaha 由 laugh 动画驱动，这里用文字作为等价触发信号）
+    const GRANNY_LAUGH_RE = /哈{2,}|嘿{2,}|呵{2,}|嘻{2,}|大笑|笑出声/;
 
     function appendDelta(ev) {
         replayMode = ev && Object.prototype.hasOwnProperty.call(ev, 'replay') ? !!ev.replay : false;
@@ -791,6 +808,10 @@ initHeader();
             return;
         }
         if (!b._timer && b._seg == null) pump(b);             // 播放器空闲时新 delta 唤起
+        if (!b._hahaFired && ev.speakerId === 'granny' && GRANNY_LAUGH_RE.test(b._clean)) {
+            b._hahaFired = true;
+            if (window.RoundtableSfx) RoundtableSfx.trigger('granny_haha', 'granny');
+        }
     }
 
     function endSpeech(ev) {
@@ -956,6 +977,11 @@ initHeader();
             if (replayMode) return;
             const d = JSON.parse(e.data);
             if (window.RoundtableSfx) RoundtableSfx.trigger(d.kind, d.speakerId);
+        });
+        es.addEventListener('emo', e => {
+            if (replayMode) return;
+            const d = JSON.parse(e.data);
+            applyEmoTag(d.speakerId, d.kind);
         });
         es.addEventListener('delta', e => appendDelta(JSON.parse(e.data)));
         es.addEventListener('turn_end', e => endSpeech(JSON.parse(e.data)));
