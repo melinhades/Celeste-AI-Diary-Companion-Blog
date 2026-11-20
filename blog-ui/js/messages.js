@@ -345,6 +345,8 @@
                         it.hue = hashHue(m.userId);
                     }
                     items.value.push(it);
+                    // 历史为空时 logStatus 停在 empty，新消息必须翻成 ok，否则模板一直渲染空态
+                    if (logStatus.value !== 'ok') logStatus.value = 'ok';
                     // 聊天室里出现 Badeline（她的表情包 / 署名消息）→ 从这条气泡里爬出来
                     if (!quiet && window.BadelineCrawlOut &&
                         (/badeline|暗面琳/i.test(it.name || '') || /\[bade:[a-zA-Z]+\]/.test(m.content || '')) &&
@@ -367,6 +369,7 @@
 
                 function pushSys(text) {
                     items.value.push({ t: 'sys', key: 's' + (++seq), text });
+                    if (logStatus.value !== 'ok') logStatus.value = 'ok';   // 同理：系统提示也要能顶掉空态
                     scheduleFlush();
                 }
 

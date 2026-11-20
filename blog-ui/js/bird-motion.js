@@ -247,7 +247,7 @@
         this.anim = 'hover';
         this.frame = 0;
         this.animAcc = 0;
-        this.facing = 1;                               // 1=左（素材原朝向），-1=右（scaleX(-1)）
+        this.facing = 1;                               // 1=素材原朝向（朝右），-1=镜像后朝左
         this.faceLocked = false;                       // 曲线飞行期间不翻脸（原版 moveOnCurve 恒 scale.x=1）
         this.flight = null;                            // { curve, duration, speed, onArrive }
         this.physics = null;                           // { speed, target, accel }
@@ -374,10 +374,10 @@
             this.rot = angleLerp(this.rot, 0, 1 - Math.pow(0.0001, dt));   // 收翅回正（指数平滑）
             this.scale = v2(approach(this.scale.x, 1, 4 * dt), approach(this.scale.y, 1, 4 * dt));
         }
-        // 无飞行时按速度翻脸（place 口径：向左飞=素材原朝向）
+        // 无飞行时按速度翻脸（素材原朝向朝右：向右飞保持 1，向左飞镜像）
         if (!this.flight && !this.faceLocked) {
-            if (this.physics && this.vel.x > 8) this.facing = -1;
-            else if (this.physics && this.vel.x < -8) this.facing = 1;
+            if (this.physics && this.vel.x > 8) this.facing = 1;
+            else if (this.physics && this.vel.x < -8) this.facing = -1;
         }
         // 盯人偏移：approachV(spriteOffset, target, 32·dt)，范围由 gazeRange 决定
         if (this.gazeActive && this.gazePoint) {

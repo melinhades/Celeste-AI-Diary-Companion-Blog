@@ -227,26 +227,31 @@
     }
 
     /* ===== 拼装 transform：translate → rotate → scale(flip×压扁) =====
-       引擎 rot=0 恒表示「素材原朝向（朝左）」的基准角；向右飞时先镜像再取反角，
-       两种朝向的屏幕倾角都等于切线方向（数学见 celeste-bird.html FlingBird draw 推导）。 */
+       素材原朝向朝右。飞行时朝向取曲线切线，其余按 facing；
+       目标角落在左半平面（cos<0）时镜像并取反角，避免倒飞或翻转 180°。
+       镜像与压扁必须合成同一个 scale()，分开写会互相抵消。 */
     function render() {
         if (!img || !actor) return;
         var rp = actor.renderPos();                       // 含盯人 spriteOffset（引擎单位）
         var px = rp.x * K + swayOff.x;
         var py = rp.y * K + swayOff.y + onceOffY;
-        var rotDeg = 0;
-        if (!prefersReduced) {
-            var rot = actor.rot;
-            if (actor.facing < 0) rot = -rot;              // 镜像坐标系里的角
-            if (rot > Math.PI / 2) rot -= Math.PI;          // 收进 [-90°,90°]，陡冲不陀螺
-            if (rot < -Math.PI / 2) rot += Math.PI;
-            rotDeg = rot * 180 / Math.PI;
+        var delta = actor.flight ? actor.rot : (actor.facing < 0 ? Math.PI : 0);
+        var mirrored = false;
+        var phi = 0;
+        if (prefersReduced) {
+            mirrored = !actor.flight && actor.facing < 0;
+        } else if (Math.cos(delta) < 0) {
+            mirrored = true;
+            phi = delta > 0 ? delta - Math.PI : delta + Math.PI;
+        } else {
+            phi = delta;
         }
-        var sx = Math.abs(actor.scale.x) * (actor.facing < 0 ? -1 : 1);
+        var rotDeg = phi * 180 / Math.PI;
+        var sx = Math.abs(actor.scale.x) * (mirrored ? -1 : 1);
+        var sy = actor.scale.y;
         img.style.transform = 'translate(' + Math.round(px - W / 2) + 'px,' + Math.round(py - H / 2) + 'px)' +
             (rotDeg ? 'rotate(' + rotDeg.toFixed(2) + 'deg)' : '') +
-            (sx < 0 ? ' scaleX(-1)' : '') +
-            (sx !== 1 && sx !== -1 ? ' scale(' + sx.toFixed(3) + ',' + actor.scale.y.toFixed(3) + ')' : '');
+            (sx !== 1 || sy !== 1 ? ' scale(' + sx.toFixed(3) + ',' + sy.toFixed(3) + ')' : '');
         drawTrail();
     }
 
@@ -535,7 +540,7 @@
             }
             actor.killPhysics();
             setAnim('throw'); actor.rot = 0;
-            actor.facing = unitX < 0 ? 1 : -1;     // 甩向哪边脸朝哪边
+            actor.facing = unitX < 0 ? -1 : 1;     // 甩向哪边脸朝哪边（素材原朝向朝右）
             actor.startPhysics({ x: -140, y: 140 }, { x: 0, y: 0 }, 1400);
             timeRate = 0.8;
             yield 0.1;
