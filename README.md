@@ -126,7 +126,7 @@
   <img src="docs/screenshots/namespace.png" alt="My Space" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
 </p>
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t092-dark.webp"><img src="assets/readme/t092.webp" width="810" alt="A character-themed profile dashboard against Celeste's rocky backdrop — ticket-card with collected stickers, and a stats panel tracking strawberry 🍓, cassette 📼, and chili 🌶️ balances."></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t092-dark.webp"><img src="assets/readme/t092.webp" width="810" alt="A character-themed profile dashboard against Celeste's rocky backdrop — ticket-card with collected stickers, and a stats panel tracking strawberry 🍓, cassette 📼, and feather 🪶 balances."></picture>
 
 ### <img src="assets/readme/icons/celeste/journal.png" height="24"> <picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/t093-dark.webp"><img src="assets/readme/t093.webp" width="582" alt="Write — From private thoughts to public stories — one Publish away."></picture>
 

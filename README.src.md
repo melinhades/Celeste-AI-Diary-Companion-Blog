@@ -117,7 +117,7 @@ The heart of the app — a postcard-style diary reader where Madeline presents y
   <img src="docs/screenshots/namespace.png" alt="My Space" width="760" style="border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.4);">
 </p>
 
-A character-themed profile dashboard against Celeste's rocky backdrop — ticket-card with collected stickers, and a stats panel tracking **strawberry** 🍓, **cassette** 📼, and **chili** 🌶️ balances.
+A character-themed profile dashboard against Celeste's rocky backdrop — ticket-card with collected stickers, and a stats panel tracking **strawberry** 🍓, **cassette** 📼, and **feather** 🪶 balances.
 
 ### ✍️ Write — *From private thoughts to public stories — one Publish away.*
 
