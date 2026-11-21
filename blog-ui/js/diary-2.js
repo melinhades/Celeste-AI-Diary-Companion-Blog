@@ -203,7 +203,8 @@
                 }
 
                 function onFeatherKey(e) {
-                    if (e.key === 'Enter') saveFeather();
+                    if (e.key === 'Enter') { e.preventDefault(); saveFeather(); }
+                    else if (e.key === 'Escape') { e.preventDefault(); closeBox(); }
                 }
 
                 function saveFeather() {

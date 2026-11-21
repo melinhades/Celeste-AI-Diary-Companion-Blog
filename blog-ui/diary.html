@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="css/chat-widget.css?v=20261025a">
     <link rel="stylesheet" href="css/diary.css?v=20261109b">
     <link rel="stylesheet" href="css/text-fx.css?v=20261004a">
-    <link rel="stylesheet" href="css/diary-inline.css?v=20261109d">
+    <link rel="stylesheet" href="css/diary-inline.css?v=20261110a">
     <link rel="stylesheet" href="css/badeline-panel.css?v=20261108a">
     
 
@@ -43,25 +43,14 @@
         <img src="celeste-gui/loop.gif" alt="金羽毛" style="width:100%; height:100%; object-fit:contain; display:block;" loading="lazy" decoding="async">
     </button>
     <!-- 随笔框弹出期间的页面压暗层（参数与 #postcard-overlay 一致） -->
-    <div id="featherNoteOverlay">
+    <div id="featherNoteOverlay" @click="closeBox">
         <canvas id="featherNoteSnowCanvas"></canvas>
     </div>
-    <!-- 羽毛随笔弹框 -->
+    <!-- 羽毛随笔弹框：透明卡片，只留写字区与「放下」按钮；点卡片外的暗层可退出 -->
     <div id="featherNoteBox" v-show="boxOpen" :class="{'slide-in': slideIn, 'is-closing': boxClosing}">
-        <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
-            <span style="font-size:18px; filter:drop-shadow(0 1px 2px rgba(0,0,0,.15));">🪶</span>
-            <span style="color:#5a3e36; font-size:13px; font-family:'Renogare','CelesteZH',sans-serif; letter-spacing:.06em;">Leave a feather</span>
-        </div>
-        <input id="featherInput" type="text" maxlength="100" placeholder="一句话，轻轻放下..." v-model="featherText" @keydown="onFeatherKey" style="width:100%; padding:9px 12px; border:1px solid #b8a08a; border-radius:4px; background:rgba(255,252,245,.88); color:#3a2018; font-size:13px; outline:none; font-family:'Renogare','CelesteZH',sans-serif; box-shadow:inset 0 1px 3px rgba(90,62,54,.15); transition:border-color .2s, box-shadow .2s;">
-        <div id="featherChar" style="color:#8a6f5c; font-size:11px; text-align:right; margin-top:4px; font-family:'Renogare','CelesteZH',sans-serif;">{{ featherText.length }} / 100</div>
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
-            <div style="color:#8a6f5c; font-size:11px; font-family:'Renogare','CelesteZH',sans-serif; opacity:.7;">每根羽毛都是一念</div>
-            <div style="display:flex; gap:8px;">
-                <button id="featherCancel" style="padding:5px 14px; border:1px solid #b8a08a; border-radius:4px; background:rgba(255,248,240,.5); color:#7a5e4c; cursor:pointer; font-size:12px; font-family:'Renogare','CelesteZH',sans-serif; transition:all .15s;" @click="closeBox">取消</button>
-                <button id="featherSave" style="padding:5px 16px; border:2px solid #c4a882; border-radius:4px; background:rgba(255,248,240,.9); color:#5a3e36; cursor:pointer; font-size:12px; font-weight:bold; font-family:'Renogare','CelesteZH',sans-serif; transition:all .15s;" :disabled="saving" @click="saveFeather">放下 ✨</button>
-            </div>
-        </div>
-        <div id="featherToast" v-if="toast" :style="{color: toastError ? '#c0392b' : '#5a3e36'}" style="font-size:12px; text-align:center; margin-top:10px; font-family:'Renogare','CelesteZH',sans-serif;">{{ toast }}</div>
+        <textarea id="featherInput" maxlength="100" v-model="featherText" @keydown="onFeatherKey"></textarea>
+        <button id="featherSave" :disabled="saving" @click="saveFeather">放下 ✨</button>
+        <div id="featherToast" v-if="toast" :class="{'is-error': toastError}">{{ toast }}</div>
     </div>
     </div>
     <!-- BGM 播放器（隐藏，自动播放） -->
@@ -134,7 +123,7 @@
     <script src="js/diary-1.js?v=20261015a"></script>
     <script src="js/pptgen.js?v=20261107f"></script>
 <script src="js/vue.global.prod.js?v=20261008a"></script>
-<script src="js/diary-2.js?v=20261109b"></script>
+<script src="js/diary-2.js?v=20261110a"></script>
 <script src="js/seed.js?v=20261109b"></script>
 </body>
 </html>

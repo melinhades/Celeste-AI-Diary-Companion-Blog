@@ -14,12 +14,12 @@
             display:flex;
             flex-direction:column;
             justify-content:center;
-            padding:18px 30px;
+            padding:12px 22px 48px;
             z-index:10001;
-            background:url('../celeste-gui/poempage.webp') center/100% 100% no-repeat;
+            background:none;
             border:none;
             border-radius:0;
-            filter:drop-shadow(0 8px 32px rgba(0,0,0,.6));
+            filter:none;
             opacity:0;
             /* 与 #postcard-container 相同的出场方向、位移与倾角 */
             transform:translate(-50%,-50%) translateX(-120%) rotate(-8deg);
@@ -58,7 +58,56 @@
             pointer-events:none;
             z-index:0;
         }
-        #featherSave:hover { background:#c4a882 !important; color:#fff !important; }
-        #featherCancel:hover { background:rgba(180,160,140,.25) !important; border-color:#a89080 !important; }
-        #featherInput:focus { border-color:#c4a882 !important; box-shadow:inset 0 1px 3px rgba(90,62,54,.15), 0 0 0 2px rgba(196,168,130,.2) !important; }
+        /* 透明写字区：字号跟着卡片宽度走，约 30 字正好把整张卡写满 */
+        #featherInput {
+            flex:1 1 auto;
+            width:100%;
+            min-height:0;
+            margin:0;
+            padding:0;
+            border:none;
+            outline:none;
+            background:transparent;
+            box-shadow:none;
+            resize:none;
+            overflow-y:auto;
+            scrollbar-width:none;
+            color:rgba(255,246,228,.95);
+            caret-color:#ffd96b;
+            font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif;
+            font-size:calc(min(90vw, 720px) / 9.4);
+            line-height:1.2;
+            letter-spacing:.01em;
+            text-shadow:0 2px 18px rgba(0,0,0,.5);
+        }
+        #featherInput::-webkit-scrollbar { display:none; }
+        #featherInput:focus { outline:none; }
+        #featherSave {
+            position:absolute;
+            right:22px;
+            bottom:14px;
+            padding:7px 22px;
+            border:1px solid rgba(255,220,150,.42);
+            border-radius:999px;
+            background:rgba(18,12,28,.32);
+            color:rgba(255,236,190,.95);
+            font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif;
+            font-size:14px;
+            letter-spacing:.18em;
+            cursor:pointer;
+            transition:background .18s ease, border-color .18s ease, transform .18s ease;
+        }
+        #featherSave:hover:not(:disabled) { background:rgba(255,214,110,.18); border-color:rgba(255,224,160,.8); transform:translateY(-1px); }
+        #featherSave:disabled { opacity:.5; cursor:default; }
+        #featherToast {
+            position:absolute;
+            left:50%;
+            bottom:16px;
+            transform:translateX(-50%);
+            font-family:'Renogare','CelesteZH','Microsoft YaHei',sans-serif;
+            font-size:12px;
+            letter-spacing:.08em;
+            color:rgba(255,232,168,.9);
+        }
+        #featherToast.is-error { color:#ff8a80; }
     
