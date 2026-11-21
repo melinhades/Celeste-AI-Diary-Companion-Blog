@@ -3161,6 +3161,10 @@ function stopPeSnow() {
             bridge.style.setProperty('--bridge-skin-h', dh + 'px');
             bridge.style.setProperty('--bridge-skin-x', (1 - (cw + dw) / 2) + 'px');
             bridge.style.setProperty('--bridge-skin-scale', String(bw));
+            // 同一套 cover 尺寸也交给场景内元素：篝火/Madeline 用「图内坐标」贴雪桥顶面
+            // （bottom = 0.25 × 图高），否则窗口非 16:9 时会整体偏离雪线。
+            left.style.setProperty('--scene-w', dw + 'px');
+            left.style.setProperty('--scene-h', dh + 'px');
         }
         layout();
         window.addEventListener('resize', layout);

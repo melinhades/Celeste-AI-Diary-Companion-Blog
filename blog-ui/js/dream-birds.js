@@ -168,10 +168,10 @@
     /* ================= 世界尺度 ================= */
     var S = 3;                       // 1 素材像素 = 3 CSS 像素（与金羽毛层 32→96 同口径）
     // 雪脊顶面：scene.png 是 2540×1429 的 16:9 图，按 center bottom / cover 铺，
-    // 雪线距图底 24.8%（#dsMadeline 的 bottom:24.8% 就是照这个定的）。
-    // cover 在窄屏按高铺（雪线正好 24.8% 屏高），超宽屏改按宽铺、底部对齐后雪线会被顶高，
+    // 雪线距图底 25%（图高 y=1072/1429 实测；#dsFire / #dsMadeline 的 bottom 同口径）。
+    // cover 在窄屏按高铺（雪线正好 25% 屏高），超宽屏改按宽铺、底部对齐后雪线会被顶高，
     // 所以按实际铺图高度算，不写死比例。
-    var SCENE_AR = 2540 / 1429, SNOW_FROM_BOTTOM = 0.248;
+    var SCENE_AR = 2540 / 1429, SNOW_FROM_BOTTOM = 0.25;
     var CW = 1, CH = 1, DPR = 1, ctx = cv.getContext('2d');
     var snowY = 1;
 

@@ -593,15 +593,23 @@ body:has(.ds-world.panned) #strawberryBonfire { opacity:0; pointer-events:none; 
    cover+bottom 锚定：16:9 屏零裁切，其他比例裁两侧、雪台始终贴底 */
 .ds-left {
     background:url('../celeste-gui/dream/scene.png') center bottom / cover no-repeat;
+    /* cover 实际铺出的图片尺寸（scene.png 2540×1429）。
+       雪桥顶面实测在图高 y=1072/1429 → 距图底 25%；篝火/Madeline 与雪线都用它定位，
+       不能再拿 viewport 的 % 当图内坐标：窗口非 16:9 时 cover 会按宽或按高放大，
+       图高 ≠ 100vh，百分比会整体沉进桥面（之前就是这个问题）。
+       JS（shelf.js 接缝布局）会用 clientWidth/Height 覆盖这两个兜底值。 */
+    --scene-w:max(100vw, 177.7467vh);
+    --scene-h:max(100vh, 56.2598vw);
 }
-/* 篝火：站在截图雪台面上（雪线在全高 75% 处，即底部 25%）；本身即"记梦"入口，hover 泛绿光 */
-#dsFire { position:absolute; left:50%; bottom:25%; width:clamp(162px,32.76vmin,234px);
+/* 篝火：站在截图雪台面上（雪桥顶面 = 图高 25%）；本身即"记梦"入口，hover 泛绿光 */
+#dsFire { position:absolute; left:50%; bottom:calc(var(--scene-h) * 0.25); width:clamp(162px,32.76vmin,234px);
     transform:translateX(-50%); image-rendering:pixelated;
     cursor:pointer; transition:filter .18s ease; }
 #dsFire:hover { filter:drop-shadow(0 0 14px rgba(110,255,180,.8)); }
 /* 围炉睡觉的 Madeline（篝火左侧）：可点击，hover 泛暖光提示"可叫醒" */
+/* 图中站位 = 图片 x 39%、脚底贴雪桥顶面；x 用 --scene-w 换算成图内坐标 */
 #dsMadeline {
-    position:absolute; left:39%; bottom:24.8%; z-index:3;
+    position:absolute; left:calc(50% - var(--scene-w) * 0.11); bottom:calc(var(--scene-h) * 0.25); z-index:3;
     width:clamp(81.12px,17.16vmin,131.04px); image-rendering:pixelated;
     cursor:pointer; user-select:none; -webkit-user-drag:none;
     transition:filter .2s ease, transform .15s ease;
