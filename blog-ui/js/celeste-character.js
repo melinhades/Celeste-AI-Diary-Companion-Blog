@@ -177,7 +177,9 @@
     const ST_CASSETTE_FLY = ST.CassetteFly;
 
     const SCALE_RECOVER = 1.75;
-
+    // 原作 NormalUpdate：Ducking 时 Sprite.Scale = (1.4, 0.6)，仅在渲染层叠加
+    const DUCK_SCALE_X = 1.4;
+    const DUCK_SCALE_Y = 0.6;
     function approach(v, target, step) {
         return v < target ? Math.min(v + step, target) : Math.max(v - step, target);
     }
@@ -284,10 +286,9 @@
         runFast: parseHair('1,-2|1,-1|1,-1|1,-1|1,-3|1,-2|1,-1|1,-1|1,-1|1,-1|1,-3|1,-2'),
         jumpSlow: parseHair('1,-3|1,-3|1,-2|0,-2'),
         jumpFast: parseHair('1,-3|1,-3|1,-2|0,-2'),
-        // 原作 IL 785-813 的 hair 偏移是给 Sprite.Scale=(1.4,0.6) 的压扁状态配的；
-        // 本引擎蹲姿按自然比例渲染（见 normalUpdate），偏移改为 -2,-3：
-        // 刘海落在头顶而非盖住 8px 高的蹲姿身体，x 左移 2px 对齐 duck 帧的重心。
-        duck:   parseHair('-2,-3'),
+        // 逐字复制本地 Sprites.xml：<Frames path="duck" hair="0,3"/>
+        // 该偏移是给 Sprite.Scale=(1.4,0.6) 的蹲姿配的，渲染时必须同时应用压扁，否则头发会离头
+        duck:   parseHair('0,3'),
         // Sprites.xml L130：<Frames path="pickup" hair="2,0|1,-1|0,-2|0,-2|0,-2"/>
         pickup: parseHair('2,0|1,-1|0,-2|0,-2|0,-2'),
         // Sprites.xml L127-129、L131
@@ -1331,9 +1332,9 @@
                     this.ducking = false; this.scaleX = 0.8; this.scaleY = 1.2;
                 }
             } else if (this.onGround && moveY === 1 && this.vy >= 0 && !this.holdSlowFall) {
-                // 原作 NormalUpdate IL 785-813 / 908-942 会把 Sprite.Scale 设成 (1.4, 0.6)；
-                // 但 duck.png 本身已是 8px 蹲姿，再压扁只剩 5px 且被头发完全盖住，
-                // 这里保持自然比例，配合 HAIR.duck 的偏移让身体可见。
+                // 原作 NormalUpdate IL 785-813 / 908-942：下蹲时 Sprite.Scale = (1.4, 0.6)
+                // 压扁在渲染阶段叠加（draw / updateSharedVisuals），不写进物理 scale，
+                // 否则会被每帧的 squash 回弹抵消。
                 this.ducking = true;
             }
 
@@ -1944,7 +1945,9 @@
             // 头发
             const hm = this.sprite.hairMeta();
             this.hairHidden = !!hm.hide;
-            this.hair.update(this.x, this.y, this.facing, hm.x, hm.y, dt, this.scaleY);
+            // 蹲姿压扁要同步给头发锚点：原作 RenderPosition + (0, -9*Scale.Y) + HairOffset
+            const hairScaleY = this.ducking && this.onGround ? this.scaleY * DUCK_SCALE_Y : this.scaleY;
+            this.hair.update(this.x, this.y, this.facing, hm.x, hm.y, dt, hairScaleY);
 
             // 冲刺残影（只读当前状态，不参与物理）
             this.updateDashTrail(dt);
@@ -2154,15 +2157,18 @@
                 }
                 ctx.restore();
             }
+            const dq = this.ducking && this.onGround;
+            const drawScaleX = this.scaleX * (dq ? DUCK_SCALE_X : 1);
+            const drawScaleY = this.scaleY * (dq ? DUCK_SCALE_Y : 1);
             if (!this.hairHidden)
-                this.hair.draw(ctx, toScreen, zoom, this.sprite.hairMeta().bang, this.scaleX);
+                this.hair.draw(ctx, toScreen, zoom, this.sprite.hairMeta().bang, drawScaleX);
             const img = this.sprite.texture();
             // 原作 Sprite.Y 是组件的本地偏移：bubble 时 +5（CassetteFlyBegin），到达时 -5
             const p = toScreen({ x: this.x, y: this.y + this.spriteY });
             if (img) {
                 ctx.save();
                 ctx.translate(Math.round(p.x), Math.round(p.y));
-                ctx.scale(Math.abs(this.scaleX) * this.facing * zoom, this.scaleY * zoom);
+                ctx.scale(Math.abs(drawScaleX) * this.facing * zoom, drawScaleY * zoom);
                 ctx.drawImage(img, -16, -32);
                 ctx.restore();
             }
